@@ -29,8 +29,7 @@ object WorkflowDecisionCompletionServiceOperation {
         responseDefinition == null || codec == null || questions == null ||
         instances == null || closing == null || completion == null || descriptiveAttributes == null ||
         definition.schemaVersion != GeneratedProvidedApiAbi.schemaVersion ||
-        definition.generator != GeneratedProvidedApiAbi.generatorIdentity ||
-        definition.providedOperations == null || !definition.providedOperations.contains(operation) ||
+        !definition.providesOperation(operation) ||
         !_name(definition.identity) || !_name(definition.version) ||
         !_name(operation.service) || !_name(operation.name) ||
         !_name(codec.resultTypeIdentity) || operation.inputType != Some(codec.resultTypeIdentity) ||
@@ -123,20 +122,10 @@ object WorkflowDecisionCompletionServiceOperation {
       prepared match {
         case None => Consequence.stateConflict("Decision completion has no selected closing Action")
         case Some((current, program)) => for {
-          _ <- admitIssuedC()
           owner <- component match {
             case Some(value) if value.componentId == instances.componentId => Consequence.success(value.componentId)
             case _ => Consequence.stateConflict("Decision completion Component is unavailable or differs")
           }
-          loaded <- instances.loadC(current.identity)(using executionContext)
-          stored <- loaded match {
-            case Some(value) => Consequence.success(value)
-            case _ => Consequence.stateConflict("Decision instance changed after closing selection")
-          }
-          actual <- WorkflowInstanceRecordJsonV1.encodeC(stored)
-          expected <- WorkflowInstanceRecordJsonV1.encodeC(current)
-          _ <- if (actual == expected) Consequence.unit
-            else Consequence.stateConflict("Decision instance changed after closing selection")
           completed <- completion.completeC(owner, submitted, current, program, executionContext)
           encoded <- codec.encodeAfterCommitC(completed.resume, submitted, Some(completed.instance))
         } yield encoded
@@ -148,10 +137,11 @@ object WorkflowDecisionCompletionServiceOperation {
         Consequence.stateConflict("Decision closing selection is incomplete")
       else proposed.nextInstance match {
         case Some(next) if next != null && next.history != null && next.history.nonEmpty => for {
-          projected <- current.appendC(current.revision, next.history.last)
-          actual <- WorkflowInstanceRecordJsonV1.encodeC(projected)
-          expected <- WorkflowInstanceRecordJsonV1.encodeC(next)
-          _ <- if (actual == expected) Consequence.unit
+          admitted <- next.validateC
+          projected <- current.appendC(current.revision, admitted.history.last)
+          _ <- if (admitted.identity == current.identity && admitted.revision == projected.revision &&
+              admitted.definition.workflowIdentity == current.definition.workflowIdentity &&
+              admitted.definition.workflowRevision == current.definition.workflowRevision) Consequence.unit
             else Consequence.stateConflict("Decision next instance is not the selected adjacent append")
         } yield ()
         case _ => Consequence.stateConflict("Decision completion requires an adjacent selected next instance")

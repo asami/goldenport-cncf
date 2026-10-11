@@ -7,7 +7,8 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 import org.goldenport.cncf.workflow.WorkflowResultJsonV1.{_expect, _fields, _optional, _optional_string, _string}
 
 /** Versioned persistence bytes, not an executable definition or a public Operation.
-  * Reopening requires a separately admitted, exact definition catalog.
+  * Reopening selects a separately admitted declared definition reference.
+  * Legacy fixture digests carry no reopening authority.
   * @since   Sep. 29, 2026
   * @version Oct.  8, 2026
   */
@@ -17,22 +18,33 @@ object WorkflowInstanceRecordJsonV1 {
   final class Catalog private[WorkflowInstanceRecordJsonV1] (
     private val definitions: Vector[DefinitionBinding]
   ) {
-    private[WorkflowInstanceRecordJsonV1] def resolve(json: Json): Either[String, DefinitionBinding] =
-      definitions.find(binding => definitionJson(binding) == json)
-        .toRight("persisted Workflow definition is absent from the admitted catalog")
+    private[WorkflowInstanceRecordJsonV1] def resolve(json: Json): Either[String, DefinitionBinding] = for {
+      fields <- Option(json).flatMap(_.asObject).toRight("persisted Workflow definition must be an object")
+      identity <- fields("identity").flatMap(_.asString).filter(_.trim.nonEmpty)
+        .toRight("persisted Workflow definition identity is missing")
+      revision <- fields("revision").flatMap(_.asString).filter(_.trim.nonEmpty)
+        .toRight("persisted Workflow definition revision is missing")
+      // Legacy source, ABI, producer and digest fields are ignored. They are
+      // not execution authority and do not prove unchanged content.
+      binding <- _resolve_reference(identity, revision)
+    } yield binding
+
+    private[workflow] def resolveC(binding: DefinitionBinding): Consequence[DefinitionBinding] =
+      _resolve_reference(binding.workflowIdentity.value, binding.workflowRevision.value)
+        .fold(Consequence.stateConflict(_), Consequence.success)
+
+    private def _resolve_reference(identity: String, revision: String): Either[String, DefinitionBinding] = {
+      val matches = definitions.filter(binding => binding.workflowIdentity.value == identity &&
+        binding.workflowRevision.value == revision)
+      if (matches.size == 1) Right(matches.head)
+      else Left("persisted Workflow definition reference is absent or ambiguous")
+    }
   }
 
   def catalogC(definitions: Vector[DefinitionBinding]): Consequence[Catalog] =
     if (definitions == null || definitions.isEmpty || definitions.exists(_ == null))
       Consequence.configurationInvalid("Workflow definition catalog is missing")
-    else definitions.foldLeft(Consequence.unit)((prior, binding) =>
-      prior.flatMap(_ => binding.validateC.map(_ => ()))).flatMap { _ =>
-      val keys = definitions.map(binding =>
-        (binding.workflowIdentity, binding.workflowRevision, binding.fixtureSha256))
-      if (keys.distinct.size != keys.size)
-        Consequence.configurationInvalid("Workflow definition catalog contains duplicate bindings")
-      else Consequence.success(new Catalog(definitions))
-    }
+    else Consequence.success(new Catalog(definitions.distinct))
 
   def encodeC(record: InstanceRecord): Consequence[String] =
     if (record == null) Consequence.stateConflict("Workflow instance record is missing")
@@ -75,19 +87,7 @@ object WorkflowInstanceRecordJsonV1 {
 
   private def definitionJson(binding: DefinitionBinding): Json = Json.obj(
     "identity" -> Json.fromString(binding.workflowIdentity.value),
-    "revision" -> Json.fromString(binding.workflowRevision.value),
-    "source" -> Json.obj("root" -> sourceJson(binding.sourceCorrelation.root),
-      "definition" -> sourceJson(binding.sourceCorrelation.definition)),
-    "producerAbi" -> Json.fromString(binding.producerAbiIdentity.value),
-    "workflowAbi" -> Json.fromString(binding.workflowAbiIdentity.value),
-    "bootstrapAbi" -> Json.fromString(binding.bootstrapAbiIdentity.value),
-    "producerRevision" -> Json.fromString(binding.producerRevision.value),
-    "fixtureSha256" -> Json.fromString(binding.fixtureSha256.value)
-  )
-
-  private def sourceJson(source: SourceLocation): Json = Json.obj(
-    "resource" -> Json.fromString(source.resource), "line" -> Json.fromInt(source.line),
-    "column" -> source.column.fold(Json.Null)(Json.fromInt)
+    "revision" -> Json.fromString(binding.workflowRevision.value)
   )
 
   private def suspensionJson(value: SuspensionBoundary): Json = Json.obj(

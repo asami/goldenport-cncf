@@ -6,7 +6,10 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.cncf.workflow.WorkflowResultJsonV1.*
 
-/** A WorkOrder wire projection; the claim token and progression authority stay in CNCF. */
+/** A WorkOrder wire projection; the claim token and progression authority stay in CNCF.
+  * @since   Sep. 25, 2026
+  * @version Oct.  8, 2026
+  */
 object WorkflowWorkOrderJsonV1 {
   def encodeC[W](
     interaction: WorkflowInteraction[W, Nothing],
@@ -36,7 +39,7 @@ object WorkflowWorkOrderJsonV1 {
         _ <- _expect(kind == "WORK_ORDER", "unsupported Continuation kind")
         handle <- _decodeHandle(root("handle"))
         request <- decodeRequest(root("request"), inputCodec)
-        requirement <- _decode_requirement(root("requirement"))
+        requirement <- WorkflowExecutionJsonV1.decodeRequirement(root("requirement"))
         presentation <- decodePresentation(root("presentation"))
         _ <- _expect(request.context.snapshot.workflowRevision == handle.workflowRevision.value, "WorkOrder snapshot is stale")
       } yield WorkflowInteraction[W, Nothing](
@@ -67,12 +70,7 @@ object WorkflowWorkOrderJsonV1 {
       "kind" -> Json.fromString("WORK_ORDER"),
       "handle" -> _handle(handle),
       "request" -> requestJson,
-      "requirement" -> Json.obj(
-        "capabilities" -> Json.arr(order.requirement.capabilities.map(x => Json.fromString(x.identity))*),
-        "risk" -> Json.fromString(order.requirement.risk.value),
-        "reasoning" -> Json.fromString(order.requirement.reasoning.value),
-        "reviewRequired" -> Json.fromBoolean(order.requirement.reviewRequired)
-      ),
+      "requirement" -> WorkflowExecutionJsonV1.requirement(order.requirement),
       "presentation" -> presentationJson(order.presentation)
     ).noSpaces
 
@@ -192,21 +190,6 @@ object WorkflowWorkOrderJsonV1 {
     service <- _string(fields, "service")
     operation <- _string(fields, "operation")
   } yield StateMachineOperationIdentity(service, operation)
-
-  private def _decode_requirement(json: Json): Either[String, ExecutionRequirement] = for {
-    fields <- _fields(json, Set("capabilities", "risk", "reasoning", "reviewRequired"))
-    capabilitiesJson <- fields("capabilities").asArray.toRight("capabilities must be an array")
-    capabilities <- capabilitiesJson.foldLeft[Either[String, Vector[CapabilityRequirement]]](Right(Vector.empty)) {
-      case (acc, item) => for {
-        prior <- acc
-        identity <- item.asString.filter(_.trim.nonEmpty).toRight("invalid capability")
-      } yield prior :+ CapabilityRequirement(identity)
-    }
-    risk <- _string(fields, "risk")
-    reasoning <- _string(fields, "reasoning")
-    level <- ReasoningLevel.values.find(_.value == reasoning).toRight("unsupported reasoning level")
-    review <- fields("reviewRequired").asBoolean.toRight("reviewRequired must be boolean")
-  } yield ExecutionRequirement(capabilities, RiskLevel(risk), level, review)
 
   private[workflow] def presentationJson(value: MinimalPresentation): Json = Json.obj(
     "title" -> Json.fromString(value.title),

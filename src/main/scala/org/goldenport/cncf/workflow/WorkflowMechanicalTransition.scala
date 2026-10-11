@@ -10,7 +10,7 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.TypedValue
 /**
  * Ordinary host-selected progress, with no issued AI interaction or claim.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct.  9, 2026
  */
 object WorkflowMechanicalTransition {
   final case class Reference(identity: String, revision: String)
@@ -34,23 +34,10 @@ object WorkflowMechanicalTransition {
 
   private[workflow] def admitC[A](component: ComponentId, operation: StateMachineOperationIdentity,
     intent: Intent[A]): Consequence[Receipt[A]] = guarded {
-    if (intent == null || intent.configuration == null)
+    if (intent == null)
       Consequence.stateConflict("Mechanical transition intent is missing")
-    else intent.configuration.validateC.flatMap(_ => transitionC(component, operation,
-      intent.reference, intent.current, intent.expectedRevision, intent.entry, intent.payload))
-  }
-
-  private[workflow] def validateReceiptC[A](receipt: Receipt[A]): Consequence[Receipt[A]] = guarded {
-    if (receipt == null || receipt.next == null || receipt.next.history == null || receipt.next.history.isEmpty)
-      Consequence.stateConflict("Mechanical checkpoint receipt is incomplete")
-    else for {
-      derived <- transitionC(receipt.component, receipt.operation, receipt.reference, receipt.current,
-        Option(receipt.current).map(_.revision).orNull, receipt.next.history.last, receipt.payload)
-      actual <- WorkflowInstanceRecordJsonV1.encodeC(receipt.next)
-      expected <- WorkflowInstanceRecordJsonV1.encodeC(derived.next)
-      _ <- if (actual == expected) Consequence.unit
-        else Consequence.stateConflict("Mechanical checkpoint is not exactly one append")
-    } yield receipt
+    else transitionC(component, operation, intent.reference, intent.current,
+      intent.expectedRevision, intent.entry, intent.payload)
   }
 
   private def transitionC[A](component: ComponentId, operation: StateMachineOperationIdentity,

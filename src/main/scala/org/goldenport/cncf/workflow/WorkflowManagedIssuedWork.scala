@@ -13,7 +13,7 @@ import org.goldenport.cncf.workflow.WorkflowResultJsonV1.PayloadCodec
 /** Opaque borrowed host binding. It owns no pool and retains no lease or store.
   * Issue is atomic; reads and identical retries confer no claim authority.
   * @since   Oct.  1, 2026
-  * @version Oct.  8, 2026
+  * @version Oct.  9, 2026
   */
 final class WorkflowManagedIssuedWork[W] private (
   subsystem: Subsystem,
@@ -31,8 +31,8 @@ final class WorkflowManagedIssuedWork[W] private (
     issued: WorkflowInteraction[W, Nothing],
     records: Vector[EventRecord] = Vector.empty
   )(using context: ExecutionContext): Consequence[WorkflowInstanceDataStorePersistence.PersistedSuspension] =
-    if (intent == null || intent.configuration != configuration || records == null || records.exists(_ == null))
-      Consequence.stateConflict("Managed issue requires its bound Workflow configuration")
+    if (intent == null || records == null || records.exists(_ == null))
+      Consequence.stateConflict("Managed issue requires an intent and event records")
     else withHostC { (adapter, space) =>
       for {
         prepared <- adapter.prepareSuspensionC(intent, issued, owner)

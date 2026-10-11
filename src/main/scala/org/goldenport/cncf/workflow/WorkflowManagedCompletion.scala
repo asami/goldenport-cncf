@@ -13,7 +13,7 @@ import org.goldenport.cncf.workflow.WorkflowResultJsonV1.PayloadCodec
 /** Opaque host binding. Public result requests cannot select a storage route,
   * supply a claim token or borrow a DataStoreSpace through this value.
   * @since   Oct.  1, 2026
-  * @version Oct.  8, 2026
+  * @version Oct.  9, 2026
   */
 final class WorkflowManagedCompletion[R] private (
   private[workflow] val resultTypeIdentity: String,
@@ -114,16 +114,10 @@ object WorkflowManagedCompletion {
               store <- space.dataStore(instances)
               adapter <- WorkflowCompletionDataStorePersistence.bindForKindC(store, accepted, component, operation,
                 definitions, instances, continuations, inputCodec, resultCodec, kind)
-              batch <- events(submitted, selected)
               retained <- adapter.executeSelectedClosingHostC(current, selected.nextInstance.get.history.last,
                 submitted, selected.program, closingType, bindingOwner,
-                space, batch, records => records.foldLeft(Consequence.unit)((acc, record) =>
+                space, () => events(submitted, selected), records => records.foldLeft(Consequence.unit)((acc, record) =>
                   acc.flatMap(_ => subsystem.eventBus.dispatchCommittedRecordC(record).map(_ => ()))))
-              actual <- WorkflowInstanceRecordJsonV1.encodeC(retained.instance)
-              expected <- WorkflowInstanceRecordJsonV1.encodeC(selected.nextInstance.get)
-              _ <- if (actual == expected && retained.retained.closingResult.nonEmpty) Consequence.unit
-                else org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate(
-                  "Managed completion retained result differs from selected next instance")
             } yield Completed(ContinuationRuntime.Resume(retained.continuation.continuation,
               retained.retained.closingResult.get), retained.instance)
           }

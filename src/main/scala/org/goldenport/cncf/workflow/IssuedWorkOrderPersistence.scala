@@ -9,9 +9,14 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.{WorkflowContinuation, WorkflowInteraction}
 import org.goldenport.cncf.workflow.WorkflowResultJsonV1.PayloadCodec
 
-/** Separate, non-atomic issued-WorkOrder store. A durable adapter owns its encoding and storage. */
+/** Separate, non-atomic issued-WorkOrder store. A durable adapter owns its encoding and storage.
+  * @since   Sep. 25, 2026
+  * @version Oct.  8, 2026
+  */
 trait IssuedWorkOrderPersistence[W] {
-  /** An identical retry is allowed; a different issue for the same Continuation is rejected. */
+  /** A retry selects original saved meaning for its actual target/contract.
+    * Another target or incompatible executable route is rejected; no body proof.
+    */
   def putIfAbsentC(issued: WorkflowInteraction[W, Nothing]): Consequence[WorkflowInteraction[W, Nothing]]
   def loadC(identity: ContinuationIdentity): Consequence[Option[WorkflowInteraction[W, Nothing]]]
 }
@@ -26,8 +31,12 @@ object IssuedWorkOrderPersistence {
       for {
         identity <- _identity_c(issued)
         directory <- _directory_c
-        encoded <- WorkflowWorkOrderJsonV1.encodeC(issued, codec)
-        stored <- _publish_c(directory, identity, encoded, issued)
+        existing <- _load_c(directory, identity)
+        stored <- existing match {
+          case Some(value) => selectIssuedC(value, issued)
+          case None => WorkflowWorkOrderJsonV1.encodeC(issued, codec)
+            .flatMap(encoded => _publish_c(directory, identity, encoded, issued))
+        }
       } yield stored
 
     def loadC(identity: ContinuationIdentity): Consequence[Option[WorkflowInteraction[W, Nothing]]] =
@@ -58,7 +67,7 @@ object IssuedWorkOrderPersistence {
         } catch {
           case _: FileAlreadyExistsException =>
             _load_c(directory, identity).flatMap {
-              case Some(existing) if existing == issued => Consequence.success(existing)
+              case Some(existing) => selectIssuedC(existing, issued)
               case _ => Consequence.stateConflict(s"a different WorkOrder is already issued: ${identity.value}")
             }
         }
@@ -107,8 +116,7 @@ object IssuedWorkOrderPersistence {
     def putIfAbsentC(issued: WorkflowInteraction[W, Nothing]): Consequence[WorkflowInteraction[W, Nothing]] =
       _identity_c(issued).flatMap { identity => synchronized {
         _issued.get(identity) match {
-          case Some(existing) if existing == issued => Consequence.success(existing)
-          case Some(_) => Consequence.stateConflict(s"a different WorkOrder is already issued: ${identity.value}")
+          case Some(existing) => selectIssuedC(existing, issued)
           case None =>
             _issued.update(identity, issued)
             Consequence.success(issued)
@@ -120,6 +128,17 @@ object IssuedWorkOrderPersistence {
         Consequence.stateConflict("issued WorkOrder requires a Continuation identity")
       else synchronized { Consequence.success(_issued.get(identity)) }
   }
+
+  private[workflow] def selectIssuedC[W](saved: WorkflowInteraction[W, Nothing], proposed: WorkflowInteraction[W, Nothing],
+    kind: WorkflowIssuedContinuationKind = WorkflowIssuedContinuationKind.WorkOrder): Consequence[WorkflowInteraction[W, Nothing]] =
+    for {
+      original <- WorkflowIssuedWorkDataStorePersistence.requestC(saved, kind)
+      candidate <- WorkflowIssuedWorkDataStorePersistence.requestC(proposed, kind)
+      _ <- if (saved.handle == proposed.handle && WorkflowProtocolV1.sameRequestTarget(original, candidate) &&
+          original.input != null && candidate.input != null && !candidate.input.exists(_ == null) &&
+          original.input.map(_.typeIdentity) == candidate.input.map(_.typeIdentity)) Consequence.unit
+        else Consequence.stateConflict("Saved issued work targets another instance or incompatible executable contract")
+    } yield saved
 
   private def _identity_c[W](issued: WorkflowInteraction[W, Nothing]): Consequence[ContinuationIdentity] =
     if (issued == null || issued.handle == null)

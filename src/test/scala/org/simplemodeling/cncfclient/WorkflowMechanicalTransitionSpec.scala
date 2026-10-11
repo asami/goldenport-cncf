@@ -33,7 +33,7 @@ import org.simplemodeling.model.datatype.EntityCollectionId
 /**
  * Outside private[cncf]: actual managed Service/CLI dispatch, not a provider stub.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct.  9, 2026
  */
 final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private given context: ExecutionContext = ExecutionContext.create()
@@ -95,6 +95,9 @@ final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers w
     var observed = Vector.empty[Option[Record]]
     var escaped: ComponentRecordStorage = null
     var refuseDecode = false
+    var suppliedCurrent = active
+    var suppliedExpectedRevision = active.revision
+    var suppliedConfiguration = configuration
     var task: FixtureCall => Consequence[Unit] = _ => Consequence.unit
     private val codec = new WorkflowResultJsonV1.PayloadCodec[String] {
       val typeIdentity = "planning.v1"
@@ -102,8 +105,6 @@ final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers w
       def decode(value: Json) = if (refuseDecode) Left("Injected postcommit receipt observation refusal")
         else value.asString.toRight("Expected planning text")
     }
-    private val intent = Intent(configuration, reference, active, active.revision, nextEntry,
-      TypedValue(codec.typeIdentity, "all-known planning"))
     protected def create_Component(params: ComponentCreate): Component = new Component() {}
     protected def create_Core(params: ComponentCreate, comp: Component): Component.Core = {
       val storage = take(WorkflowComponentStorage.bindC(params, owner, configuration,
@@ -123,6 +124,8 @@ final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers w
           val program = stages.foldLeft(ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](())) {
             (prior, stage) => prior.flatMap(_ => stage)
           }
+          val intent = Intent(suppliedConfiguration, reference, suppliedCurrent, suppliedExpectedRevision, nextEntry,
+            TypedValue(codec.typeIdentity, "all-known planning"))
           mechanical.executeC(intent, program).map { result => completed = Some(result); OperationResponse.Scalar("ADVANCED") }
         }
       }
@@ -351,7 +354,7 @@ final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers w
       } finally take(first.shutdownC())
     }
 
-    "refuse valid but divergent native history without rewriting it during recovery" in {
+    "observe divergent historical facts without an unchanged-prefix certificate or rewrite" in {
       Given("a genuine managed checkpoint followed by a valid but different stored history prefix")
       val first = host(Files.createTempDirectory("public-mechanical-prefix-").resolve("host.sqlite"))
       try {
@@ -364,13 +367,69 @@ final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers w
         wired.task = call => call.writeC(instancesCollection, initial.identity.value,
           Record.dataAuto("recordPayload" -> ("cncf.workflow-json.v1:" + changed)), true)
         take(invoke(first, "probe"))
-        When("public recovery compares the entire checkpoint prefix with current native history")
-        val denied = invoke(first, "recover")
-        Then("the receipt is not usable and recovery does not repair or overwrite the divergent native record")
-        denied.isSuccess shouldBe false
-        wired.retained shouldBe None
-        take(wired.instances.loadC(initial.identity)) shouldBe Some(divergent)
+        When("public recovery reads retained data and the actual current native instance")
+        val recovered = invoke(first, "recover")
+        val current = take(wired.instances.loadC(initial.identity))
+        Then("historical result data is observable without granting execution or overwriting current facts")
+        recovered.isSuccess shouldBe true
+        wired.retained.get.receipt.next shouldBe expected
+        wired.retained.get.current shouldBe divergent
+        current shouldBe Some(divergent)
       } finally take(first.shutdownC())
+    }
+
+    "derive progress from the actual stored predecessor rather than a caller's historical copy" in {
+      Vector(false, true).foreach { stale =>
+        Given("an owned active instance and caller data whose historical facts and policy copy differ")
+        val first = host(Files.createTempDirectory("public-mechanical-actual-").resolve("host.sqlite"))
+        try {
+          val wired = factory(first)
+          seed(first, wired)
+          wired.suppliedCurrent = active.copy(causation = CausationReference("diagnostic-copy"),
+            history = active.history.map(_.copy(causation = CausationReference("diagnostic-copy"))))
+          wired.suppliedConfiguration = configuration.copy(retentionPolicy = RetentionPolicy("different-copy"))
+          if (stale) wired.suppliedExpectedRevision = initialRevision
+          When("the real operation prepares and attempts its mechanical append")
+          val result = invoke(first, "advance")
+          val current = take(wired.instances.loadC(initial.identity))
+          Then("actual native state supplies the predecessor and stale expected revision still refuses all writes")
+          result.isSuccess shouldBe !stale
+          current shouldBe Some(if (stale) active else expected)
+          wired.completed.map(_.receipt.current) shouldBe (if (stale) None else Some(active))
+        } finally take(first.shutdownC())
+      }
+    }
+
+    "omit configuration copies on write and ignore them in legacy checkpoints after physical reopen" in {
+      Given("a real managed checkpoint and a legacy configuration field unrelated to execution authority")
+      val path = Files.createTempDirectory("public-mechanical-legacy-").resolve("host.sqlite")
+      val first = host(path)
+      var fields = Set.empty[String]
+      try {
+        val wired = factory(first)
+        seed(first, wired)
+        take(invoke(first, "advance"))
+        wired.task = call => call.readC(checkpoints, take(keyC(reference))).flatMap { row =>
+          fields = row.get.fields.map(_.key).toSet
+          call.writeC(checkpoints, take(keyC(reference)), Record.dataAuto(
+            "configurationPayload" -> "legacy diagnostic policy, not a matching certificate"), true)
+        }
+        When("the managed fixture observes the new envelope and adds ignored legacy material")
+        val changed = invoke(first, "probe")
+        Then("new storage has only its actual key, revision and payload, with no full policy copy")
+        changed.isSuccess shouldBe true
+        fields shouldBe Set("id", "cncf_revision", "mechanicalPayload")
+      } finally take(first.shutdownC())
+      When("an independently reopened host recovers the legacy envelope")
+      val reopened = host(path)
+      try {
+        val wired = factory(reopened)
+        val result = invoke(reopened, "recover")
+        Then("the current owning host, not the legacy configuration copy, selects the actual retained result")
+        result.isSuccess shouldBe true
+        wired.retained.get.receipt.next shouldBe expected
+        wired.retained.get.current shouldBe expected
+      } finally take(reopened.shutdownC())
     }
   }
 }

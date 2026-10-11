@@ -14,7 +14,7 @@ import org.simplemodeling.model.datatype.EntityRevision
 
 /*
  * @since   Sep. 29, 2026
- * @version Oct.  5, 2026
+ * @version Oct.  9, 2026
  */
 /** Borrowed two-record completion. No closing program, external effect, UoW,
   * admission payload or production claim/Operation service is inferred.
@@ -22,6 +22,8 @@ import org.simplemodeling.model.datatype.EntityRevision
 final class WorkflowCompletionDataStorePersistence[W, R] private (
   store: DataStore & EntityConditionalUpdateDataStore,
   configuration: Configuration,
+  component: ComponentId,
+  completionoperation: StateMachineOperationIdentity,
   instances: WorkflowInstanceDataStorePersistence,
   continuations: WorkflowContinuationDataStorePersistence,
   issued: WorkflowIssuedWorkDataStorePersistence[W],
@@ -31,8 +33,7 @@ final class WorkflowCompletionDataStorePersistence[W, R] private (
   kind: WorkflowIssuedContinuationKind
 )(using ExecutionContext) {
   import WorkflowCompletionDataStorePersistence.*
-  import WorkflowInstanceDataStorePersistence.{configurationField, configurationJson, storageText, storageJsonC}
-  private val policyBytes = storageText(configurationJson(configuration).noSpaces)
+  import WorkflowInstanceDataStorePersistence.{storageText, storageJsonC}
 
   /** The host owns this intent and token; the submitted result grants no authority. */
   def completeC(intent: Intent[R], owner: DataStoreComponentOwner): Consequence[PersistedCompletion[R]] =
@@ -76,9 +77,21 @@ final class WorkflowCompletionDataStorePersistence[W, R] private (
       space: DataStoreSpace, records: Vector[org.goldenport.cncf.event.EventRecord],
       delivery: Vector[org.goldenport.cncf.event.EventRecord] => Consequence[Unit]):
       Consequence[PersistedCompletion[R]] =
+    executeSelectedClosingHostC(current, entry, submitted, program, expectedClosingType,
+      owner, space, () => Consequence.success(records), delivery)
+
+  /** Defer event preparation until native source, result, owner and status are selected.
+    * The eager-vector entry remains compatible; neither entry creates an admission mark.
+    */
+  private[cncf] def executeSelectedClosingHostC(current: InstanceRecord, entry: HistoryEntry,
+      submitted: ContinuationResult[R], program: ExecUowM[ActionExecution],
+      expectedClosingType: StateMachineResultTypeReference, owner: DataStoreComponentOwner,
+      space: DataStoreSpace, prepareEvents: () => Consequence[Vector[org.goldenport.cncf.event.EventRecord]],
+      delivery: Vector[org.goldenport.cncf.event.EventRecord] => Consequence[Unit]):
+      Consequence[PersistedCompletion[R]] =
     if (current == null || entry == null || submitted == null || program == null ||
         expectedClosingType == null || expectedClosingType.value == null || expectedClosingType.value.trim.isEmpty ||
-        owner == null || space == null || records == null || records.exists(_ == null) || delivery == null ||
+        owner == null || space == null || prepareEvents == null || delivery == null ||
         entry.suspension == null || entry.suspension.nonEmpty)
       Consequence.configurationInvalid("Managed selected completion requires complete host bindings")
     else for {
@@ -92,6 +105,9 @@ final class WorkflowCompletionDataStorePersistence[W, R] private (
       _ <- if (selected.source._1.status == ContinuationRuntimePersistence.Status.Available &&
           selected.source._1.claimId.isEmpty) Consequence.unit
         else Consequence.stateConflict("Single-user completion requires an unclaimed Available Continuation")
+      records <- prepareEvents()
+      _ <- if (records != null && !records.contains(null)) Consequence.unit
+        else Consequence.configurationInvalid("Managed event batch is not representable")
       result <- executeSelectedC(selected, program,
         expectedClosingType, owner, space, records, delivery)
     } yield result
@@ -153,21 +169,18 @@ final class WorkflowCompletionDataStorePersistence[W, R] private (
   private def selectCompletionC(suppliedCurrent: InstanceRecord, expectedRevision: InstanceRevision,
       entry: HistoryEntry, submitted: ContinuationResult[R]): Consequence[CompletionSelection] =
     for {
-      _ <- WorkflowCompletionRecordJsonV1.encodeC(
-        WorkflowCompletionRecordJsonV1.Record(entry.revision, submitted), resultCodec).map(_ => ())
       loaded <- instances.load(configuration, suppliedCurrent.identity)
       current <- requiredC(loaded, "Completion instance is unavailable")
-      actual <- WorkflowInstanceRecordJsonV1.encodeC(current)
-      supplied <- WorkflowInstanceRecordJsonV1.encodeC(suppliedCurrent)
-      _ <- if (actual == supplied && current.lifecycle == Lifecycle.Active &&
-          entry.suspension.isEmpty) Consequence.unit
-        else Consequence.stateConflict("Completion requires the exact active suspended instance and unsuspended host entry")
-      work <- issued.loadC(submitted.continuationId).flatMap(requiredC(_, "Completion WorkOrder was not atomically issued"))
+      _ <- if (entry.suspension.isEmpty) Consequence.unit
+        else Consequence.stateConflict("Completion requires an unsuspended host entry")
+      next <- current.appendC(expectedRevision, entry)
+      selected <- issued._load_selected_c(submitted.continuationId, current)
+        .flatMap(requiredC(_, "Completion WorkOrder was not atomically issued"))
+      work = selected._1
+      source = selected._2
       request <- WorkflowIssuedWorkDataStorePersistence.requestC(work, kind)
       _ <- matchingBoundaryC(current, request)
-      _ <- admitResultC(work, submitted).map(_ => ())
-      source <- continuations.loadStoredC(submitted.continuationId).flatMap(requiredC(_, "Completion Continuation is unavailable"))
-      next <- current.appendC(expectedRevision, entry)
+      _ <- _admit_native_result_c(work, request, source._1.continuation, submitted).map(_ => ())
     } yield new CompletionSelection(current, next, work, source, submitted)
 
   /** Mechanical storage preparation consumes the admitted selection, rather
@@ -182,22 +195,20 @@ final class WorkflowCompletionDataStorePersistence[W, R] private (
     for {
       resultbytes <- WorkflowCompletionRecordJsonV1.encodeC(
         WorkflowCompletionRecordJsonV1.Record(next.revision, selected.result, closingresult), resultCodec)
-      retained <- WorkflowCompletionRecordJsonV1.decodeC(resultbytes, resultCodec)
       encoded <- WorkflowInstanceRecordJsonV1.encodeC(next)
       completed = source._1.copy(status = ContinuationRuntimePersistence.Status.Completed)
       completedbytes <- ContinuationRecordJsonV1.encodeC(completed)
       expected <- EntityRevision.createC(current.revision.value + 1L)
       nextinstancerevision <- expected.nextC
       nextcontinuationrevision <- source._2.nextC
-      policy <- DataStoreConditionalValue.from(policyBytes)
       root <- DataStoreConditionalRoot.create(owner, instanceCollection,
         DataStore.StringEntryId(current.identity.value), WorkflowInstanceDataStorePersistence.revisionField,
-        Some(expected), Vector(DataStoreConditionalExpectedField(configurationField, policy)),
+        Some(expected), Vector.empty,
         DataRecord.dataAuto(WorkflowInstanceDataStorePersistence.recordField -> storageText(encoded)), nextinstancerevision)
       second <- DataStoreConditionalRoot.create(owner, continuationCollection,
         WorkflowContinuationDataStorePersistence.id(selected.result.continuationId),
         WorkflowContinuationDataStorePersistence.revisionField, Some(source._2),
-        Vector(DataStoreConditionalExpectedField(configurationField, policy)),
+        Vector.empty,
         DataRecord.dataAuto(WorkflowContinuationDataStorePersistence.payloadField -> storageText(completedbytes),
           payloadField -> storageText(resultbytes)), nextcontinuationrevision)
       plan <- DataStoreConditionalTransitionPlan.create(root, DataStoreConditionalSuccessor.Update(second),
@@ -206,12 +217,13 @@ final class WorkflowCompletionDataStorePersistence[W, R] private (
         case DataStoreConditionalTransitionResult.Transitioned(rootvalue, secondvalue) =>
           (for {
             instance <- instances.decodeC(rootvalue, current.identity)
-            bytes <- WorkflowInstanceRecordJsonV1.encodeC(instance)
             continuation <- continuations.decodeStoredC(secondvalue, selected.result.continuationId)
-            _ <- if (bytes == encoded && continuation._1 == completed &&
-                continuation._2 == nextcontinuationrevision &&
-                secondvalue.getString(payloadField).contains(storageText(resultbytes))) Consequence.unit
-              else Consequence.stateConflict("Completion authoritative readback differs")
+            payload <- requiredC(secondvalue.getString(payloadField), "Completion authoritative result is unavailable")
+            raw <- storageJsonC(payload)
+            retained <- WorkflowCompletionRecordJsonV1.decodeC(raw, resultCodec)
+            // Consume the guarded provider's committed representation. The
+            // selected plan was already admitted before the atomic write;
+            // its copies are not a second post-commit certificate.
           } yield PersistedCompletion(instance, continuation._1, retained)).recoverWith { _ =>
               DataStoreConditionalTransitionFailure.transactionIndeterminate(
                 "Completion committed but authoritative readback could not be admitted")
@@ -221,7 +233,9 @@ final class WorkflowCompletionDataStorePersistence[W, R] private (
     })
   }
 
-  /** Recovery is a query only: it neither claims nor replays semantic/effect work. */
+  /** Query stored facts only, not a history-based joint-publication certificate.
+    * Issued references select actual scope; input/evidence admission is not replayed.
+    */
   def loadC(identity: ContinuationIdentity): Consequence[Option[WorkflowCompletionRecordJsonV1.Record[R]]] =
     if (identity == null || identity.value == null || identity.value.trim.isEmpty)
       Consequence.stateConflict("Completion identity is missing")
@@ -235,18 +249,26 @@ final class WorkflowCompletionDataStorePersistence[W, R] private (
           payload <- requiredC(stored.getString(payloadField), "Completed Continuation lacks retained result")
           raw <- storageJsonC(payload)
           record <- WorkflowCompletionRecordJsonV1.decodeC(raw, resultCodec)
-          canonical <- WorkflowCompletionRecordJsonV1.encodeC(record, resultCodec)
-          _ <- if (raw == canonical && record.result.continuationId == identity) Consequence.unit
-            else Consequence.stateConflict("Retained completion identity or canonical bytes differ")
-          work <- issued.loadC(identity).flatMap(requiredC(_, "Completed WorkOrder is unavailable"))
-          request <- WorkflowIssuedWorkDataStorePersistence.requestC(work, kind)
-          _ <- admitResultC(work, record.result).map(_ => ())
-          instance <- instances.load(configuration, work.handle.instanceIdentity)
+          _ <- if (record.result.continuationId == identity) Consequence.unit
+            else Consequence.stateConflict("Retained completion targets another Continuation")
+          issuepayload <- requiredC(stored.getString(WorkflowIssuedWorkDataStorePersistence.payloadField),
+            "Completed issued reference is unavailable")
+          issuebytes <- storageJsonC(issuepayload)
+          handle <- WorkflowIssuedWorkDataStorePersistence._reference_c(issuebytes, kind, component, completionoperation)
+          _ <- if (record.result.handle == handle) Consequence.unit
+            else Consequence.stateConflict("Retained result targets another issued instance")
+          instance <- instances.load(configuration, handle.instanceIdentity)
             .flatMap(requiredC(_, "Completed instance is unavailable"))
-          index = instance.history.indexWhere(_.revision == record.instanceRevision)
-          _ <- if (index > 0 && instance.history(index).suspension.isEmpty &&
-              boundaryMatches(instance.history(index - 1).suspension, request)) Consequence.unit
-            else Consequence.stateConflict("Retained completion lacks adjacent suspension/completion history")
+          _ <- if (instance.definition.workflowIdentity == handle.workflowIdentity &&
+              instance.definition.workflowRevision == handle.workflowRevision) Consequence.unit
+            else Consequence.stateConflict("Retained result Workflow reference cannot be resolved")
+          continuation = decoded._1.continuation
+          _ <- if (record.result.runId == continuation.runId &&
+              record.result.expectedRevision == continuation.expectedRevision &&
+              WorkflowProtocolV1.sameContextScope(record.result.contextSnapshot, continuation.context.snapshot) &&
+              continuation.requiredOperation.resultType.contains(StateMachineResultTypeReference(record.result.result.typeIdentity)))
+            Consequence.unit
+          else Consequence.stateConflict("Retained result is outside its native Continuation scope or type")
         } yield Some(record)
       }
     }
@@ -255,10 +277,22 @@ final class WorkflowCompletionDataStorePersistence[W, R] private (
     if (boundaryMatches(instance.suspension, request)) Consequence.unit
     else Consequence.stateConflict("Completion does not match the current suspension boundary")
 
-  private def admitResultC(work: WorkflowInteraction[W, Nothing], submitted: ContinuationResult[R]):
-      Consequence[StateMachineOperationResult] = kind match {
-    case WorkflowIssuedContinuationKind.WorkOrder => WorkflowProtocolV1.admitResultC(work, submitted)
-    case WorkflowIssuedContinuationKind.Decision => WorkflowProtocolV1.admitDecisionResultC(work, submitted)
+  /** Native Required Operation owns result conditions. The saved issued copy
+    * still owns input/presentation/execution disposition, not a second contract.
+    */
+  private def _admit_native_result_c(work: WorkflowInteraction[W, Nothing], request: ContinuationRequest[W],
+      continuation: Continuation, submitted: ContinuationResult[R]): Consequence[StateMachineOperationResult] = {
+    val metadata = continuation.requiredOperation.metadata
+    val actualrequest = request.copy(completion = metadata.completionContract, evidence = metadata.evidenceContract)
+    work.current match {
+      case order: WorkflowContinuation.WorkOrder[?] if kind == WorkflowIssuedContinuationKind.WorkOrder =>
+        val selected = work.copy(current = order.asInstanceOf[WorkflowContinuation.WorkOrder[W]].copy(request = actualrequest))
+        WorkflowProtocolV1.admitResultC(selected, submitted)
+      case decision: WorkflowContinuation.Decision[?] if kind == WorkflowIssuedContinuationKind.Decision =>
+        val selected = work.copy(current = decision.asInstanceOf[WorkflowContinuation.Decision[W]].copy(request = actualrequest))
+        WorkflowProtocolV1.admitDecisionResultC(selected, submitted)
+      case _ => Consequence.stateConflict("Completion requires its selected issued kind")
+    }
   }
 
   private def boundaryMatches(boundary: Option[SuspensionBoundary], request: ContinuationRequest[W]): Boolean =
@@ -301,6 +335,6 @@ object WorkflowCompletionDataStorePersistence {
         definitions, instanceCollection, continuationCollection, inputCodec, kind)
       instances <- WorkflowInstanceDataStorePersistence.bindC(store, configuration, definitions, instanceCollection)
       continuations <- WorkflowContinuationDataStorePersistence.bindC(store, configuration, continuationCollection)
-    } yield new WorkflowCompletionDataStorePersistence(compound, configuration, instances, continuations,
+    } yield new WorkflowCompletionDataStorePersistence(compound, configuration, component, completionOperation, instances, continuations,
       issued, instanceCollection, continuationCollection, resultCodec, kind)
 }

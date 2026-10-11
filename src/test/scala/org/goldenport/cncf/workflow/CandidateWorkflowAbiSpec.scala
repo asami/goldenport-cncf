@@ -29,7 +29,7 @@ final class CandidateWorkflowAbiSpec extends AnyWordSpec with Matchers with Give
   private val sourceResource = "modeler/candidate-admission-workflow.cml"
 
   "Candidate-Admission workflow receiver" should {
-    "select one Workflow while preserving complete artifact bytes and validating its binding" in {
+    "resolve one Workflow without content certificates" in {
       Given("a complete artifact with two Workflow definitions")
       val original = parse(workflow).toOption.get.hcursor.downField("workflows").downArray.focus.get
       val sibling = original.mapObject(_.add("identity", Json.fromString("AnotherWorkflow")))
@@ -41,13 +41,8 @@ final class CandidateWorkflowAbiSpec extends AnyWordSpec with Matchers with Give
         case Consequence.Success(value) => value
         case failure => fail(s"selection rejected: $failure")
       }
-      Then("the complete original text and hash remain bound without per-Workflow serialization")
-      selected.rawJson shouldBe combined
+      Then("the selected executable definition needs neither a retained text copy nor a hash")
       selected.workflow.identity shouldBe "OrderProgress"
-      val expected = java.security.MessageDigest.getInstance("SHA-256")
-        .digest(combined.getBytes(java.nio.charset.StandardCharsets.UTF_8))
-        .map(byte => f"${byte & 0xff}%02x").mkString
-      selected.sha256 shouldBe expected
       CandidateWorkflowAbi.parseC(combined, sidecar, sourceResource) shouldBe a[Consequence.Failure[_]]
       CandidateWorkflowAbi.admitC(selected) shouldBe Consequence.success(selected)
       val binding = WorkflowInstancePersistence.bindCandidateDefinitionC(selected) match {
@@ -55,7 +50,6 @@ final class CandidateWorkflowAbiSpec extends AnyWordSpec with Matchers with Give
         case failure => fail(s"binding rejected: $failure")
       }
       binding.validateC shouldBe Consequence.success(binding)
-      CandidateWorkflowAbi.admitC(selected.copy(sha256 = "forged")) shouldBe a[Consequence.Failure[_]]
       CandidateWorkflowAbi.admitC(selected.copy(workflow = selected.workflow.copy(identity = "AnotherWorkflow"))) shouldBe
         a[Consequence.Failure[_]]
     }
@@ -122,8 +116,8 @@ final class CandidateWorkflowAbiSpec extends AnyWordSpec with Matchers with Give
       When("the ordinary operation source line is changed")
       val changedline = CandidateWorkflowAbi.parseC(wire(mixedWorkflow).replace("\"line\":100", "\"line\":101"),
         mixedSidecar, sourceResource)
-      Then("the source mismatch is rejected")
-      changedline shouldBe a[Consequence.Failure[_]]
+      Then("diagnostic source movement is accepted")
+      changedline shouldBe a[Consequence.Success[_]]
       When("the ordinary service identity is changed")
       val changedservice = CandidateWorkflowAbi.parseC(wire(mixedWorkflow).replace("RepairService", "OtherService"),
         mixedSidecar, sourceResource)
@@ -143,7 +137,6 @@ final class CandidateWorkflowAbiSpec extends AnyWordSpec with Matchers with Give
       }
       admitted.workflow.identity shouldBe "OrderProgress"
       admitted.workflow.version shouldBe "workflow-v1"
-      admitted.sha256 shouldBe "b56b3b5be5938277282c265e73a5a82678eedadd82724e17592ac60df0c5676a"
       admitted.workflow.actions.map(_.kind) shouldBe Vector("JUDGMENT", "ADMISSION")
       admitted.workflow.requiredSpi.map(_.capability) shouldBe Vector("capture-payment-capability")
 

@@ -27,7 +27,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 21, 2026
- * @version Sep. 21, 2026
+ * @version Oct.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GeneratedWorkflowAbiSpec
@@ -324,15 +324,20 @@ final class GeneratedWorkflowAbiSpec
           component.componentId, recovered, issuedstore,
           new SkillWorkResultNormalizerV1[String, String]
         ).toOption.getOrElse(fail("recovered fixture Skill adapter must bind"))
-        skilladapter.admitC(continuation.continuationId,
-          skillresult.copy(expectedRevision = StateMachineRevision("stale"))) shouldBe
-          a[Consequence.Failure[_]]
-        skilladapter.admitC(continuation.continuationId,
-          skillresult.copy(mappingPolicyVersion = "")) shouldBe a[Consequence.Failure[_]]
+        val staletranslation = skilladapter.admitC(continuation.continuationId,
+          skillresult.copy(expectedRevision = StateMachineRevision("stale"))).toOption.getOrElse(
+          fail("translation must not apply native revision admission"))
+        val diagnostictranslation = skilladapter.admitC(continuation.continuationId,
+          skillresult.copy(mappingPolicyVersion = "")).toOption.getOrElse(
+          fail("blank returned policy diagnostic must convert"))
+        val stalerejection = admitResultC(issued, staletranslation)
         val result = skilladapter.admitC(continuation.continuationId, skillresult).toOption.getOrElse(
           fail("recovered fixture Skill completion must normalize")
         )
-        Then("the normalized result preserves the requested requirement and dispatch evidence")
+        Then("translation preserves data while native applicability rejects the stale revision")
+        staletranslation.expectedRevision shouldBe StateMachineRevision("stale")
+        stalerejection shouldBe a[Consequence.Failure[?]]
+        diagnostictranslation.evidence.skillDispatch.get.mappingPolicyVersion shouldBe ""
         result.evidence.skillDispatch shouldBe Some(SkillDispatchEvidence(
           issued.current.asInstanceOf[WorkflowContinuation.WorkOrder[String]].requirement,
           "reviewer-profile-v1", "mapping-v1"
@@ -1238,8 +1243,9 @@ final class GeneratedWorkflowAbiSpec
       called.toVector shouldBe names
     }
 
-    "admit an additive Provided API only when it matches the accepted Workflow ABI" in {
-      Given("a generated Workflow and an explicit Cozy Provided operation")
+    "resolve additive Provided Operations without generator or source-line equality" in {
+      Given("docs/spec/workflow-completion-applicability.md R3: actual executable references, not unchanged generator/source annotations")
+      When("the fixture reads its generated Workflow and prepares explicitly declared Provided operation inputs")
       val workflow = _definition()
       val provided = GeneratedProvidedApiAbi.Definition(
         schemaVersion = GeneratedProvidedApiAbi.schemaVersion,
@@ -1255,7 +1261,7 @@ final class GeneratedWorkflowAbiSpec
           GeneratedProvidedApiAbi.SourceIdentity(Some(72))
         ))
       )
-      def component(value: GeneratedProvidedApiAbi.Definition): Component =
+      def _component_(value: GeneratedProvidedApiAbi.Definition): Component =
         _initialized_component(
           TestComponentFactory.emptySubsystem("generated_provided_api_admission"),
           new Component() with GeneratedWorkflowMetadataProvider with GeneratedProvidedApiMetadataProvider {
@@ -1264,26 +1270,29 @@ final class GeneratedWorkflowAbiSpec
           }
         )
 
-      When("ComponentFactory admits matching metadata and rejects incompatible producer facts")
-      val admitted = component(provided)
+      When("ComponentFactory resolves compatible diagnostic variants and actual incompatible executable declarations")
+      val compatible = Vector(provided,
+        provided.copy(generator = "unknown-generator"),
+        provided.copy(source = provided.source.copy(definition = GeneratedProvidedApiAbi.SourceIdentity(Some(21)))))
+        .map(value => value -> _component_(value))
       val malformed = Vector(
         provided.copy(version = "other-revision"),
         provided.copy(schemaVersion = "unsupported"),
-        provided.copy(generator = "unknown-generator"),
-        provided.copy(source = provided.source.copy(definition = GeneratedProvidedApiAbi.SourceIdentity(Some(21)))),
         provided.copy(providedOperations = Vector.empty),
         provided.copy(providedOperations = provided.providedOperations ++ provided.providedOperations)
-      ).map(component)
-      val success = new ComponentFactory().bootstrapC(admitted)
+      ).map(_component_)
+      val successes = compatible.map { (metadata, candidate) =>
+        val outcome = new ComponentFactory().bootstrapC(candidate)
+        (metadata, candidate, outcome)
+      }
       val failures = malformed.map(new ComponentFactory().bootstrapC(_))
 
-      Then("the explicit operation is retained only after matching Workflow admission")
-      success.toOption shouldBe Some(admitted)
-      admitted.admittedGeneratedProvidedApiMetadata shouldBe Vector(provided)
-      failures.foreach {
-        case Consequence.Failure(_) => succeed
-        case _ => fail("incompatible Provided API metadata must stop bootstrap")
+      Then("diagnostic annotations remain readable while wrong executable revision/schema and missing or duplicate operations reject")
+      successes.foreach { (metadata, candidate, outcome) =>
+        outcome.toOption shouldBe Some(candidate)
+        candidate.admittedGeneratedProvidedApiMetadata shouldBe Vector(metadata)
       }
+      failures.foreach(_ shouldBe a[Consequence.Failure[_]])
       malformed.foreach { rejected =>
         rejected.admittedGeneratedProvidedApiMetadata shouldBe empty
         rejected.collectionsBootstrapped shouldBe false

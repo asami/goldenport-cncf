@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /**
  * Phase 88 S1: borrowed provider acceptance, not server/MCP or joint claim recovery.
  * @since   Sep. 29, 2026
- * @version Oct.  8, 2026
+ * @version Oct.  9, 2026
  */
 final class WorkflowInstanceDataStorePersistenceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private given ExecutionContext = ExecutionContext.create()
@@ -36,10 +36,12 @@ final class WorkflowInstanceDataStorePersistenceSpec extends AnyWordSpec with Ma
     try source.mkString finally source.close()
   }
 
-  private def binding: DefinitionBinding = {
+  private def binding: DefinitionBinding = bindingWithSuffix("")
+
+  private def bindingWithSuffix(suffix: String): DefinitionBinding = {
     val sidecar = take(CandidateAdmissionProducerAbi.parseC(resource("/workflow/candidate-admission-producer-abi.json")))
     take(WorkflowInstancePersistence.bindCandidateDefinitionC(take(CandidateWorkflowAbi.parseC(
-      resource("/workflow/candidate-admission-workflow-abi.json").trim, sidecar,
+      resource("/workflow/candidate-admission-workflow-abi.json").trim + suffix, sidecar,
       "modeler/candidate-admission-workflow.cml"))))
   }
 
@@ -75,11 +77,12 @@ final class WorkflowInstanceDataStorePersistenceSpec extends AnyWordSpec with Ma
       take(WorkflowInstanceRecordJsonV1.encodeC(decoded)) shouldBe bytes
       decoded.history shouldBe record.history
       decoded.suspension shouldBe record.suspension
-      decoded.definition.fixtureSha256 shouldBe record.definition.fixtureSha256
+      decoded.definition.workflowIdentity shouldBe record.definition.workflowIdentity
+      decoded.definition.workflowRevision shouldBe record.definition.workflowRevision
       (decoded.definition eq record.definition) shouldBe false
     }
 
-    "reject unknown fields, wrong schema, altered definition and inconsistent current history" in {
+    "reject wrong schema, unresolved references and inconsistent current history" in {
       Given("valid initial and active record bytes")
       val record = take(initial().appendC(initialRevision, active))
       val json = parse(take(WorkflowInstanceRecordJsonV1.encodeC(record))).toOption.get
@@ -87,7 +90,7 @@ final class WorkflowInstanceDataStorePersistenceSpec extends AnyWordSpec with Ma
       val variants = Vector(
         json.deepMerge(Json.obj("nextState" -> Json.fromString("Closed"))),
         json.deepMerge(Json.obj("schemaVersion" -> Json.fromString("unknown"))),
-        json.deepMerge(Json.obj("definition" -> Json.obj("fixtureSha256" -> Json.fromString("0" * 64)))),
+        json.deepMerge(Json.obj("definition" -> Json.obj("revision" -> Json.fromString("foreign-revision")))),
         json.deepMerge(Json.obj("current" -> Json.obj("revision" -> Json.fromLong(2L)))),
         json.deepMerge(Json.obj("history" -> Json.arr()))
       )
@@ -95,7 +98,64 @@ final class WorkflowInstanceDataStorePersistenceSpec extends AnyWordSpec with Ma
       val results = variants.map(value => WorkflowInstanceRecordJsonV1.decodeC(value.noSpaces, catalog))
       Then("none admits a reconstructed definition or divergent state")
       results.forall(_.toOption.isEmpty) shouldBe true
-      WorkflowInstanceRecordJsonV1.catalogC(Vector(binding, binding)).toOption shouldBe None
+      WorkflowInstanceRecordJsonV1.catalogC(Vector(binding, binding)).toOption.nonEmpty shouldBe true
+    }
+
+    "resolve executable references while ignoring legacy integrity and provenance fields" in {
+      Given("Spec: docs/spec/workflow-definition-reference-reopening.md; Rule: R1; Example: E1; two separately admitted definitions with equal declared references")
+      val original = binding
+      val later = bindingWithSuffix("\n\n")
+      val record = take(initial(original).appendC(initialRevision, active))
+      val json = parse(take(WorkflowInstanceRecordJsonV1.encodeC(record))).toOption.get
+      val catalog = take(WorkflowInstanceRecordJsonV1.catalogC(Vector(later)))
+      When("the current wire and historical records reopen without using any stored fixture checksum")
+      val variants = Vector(json) ++ Vector(Json.fromString("historical-unused-value"), Json.Null)
+        .map(value => json.deepMerge(Json.obj("definition" -> Json.obj("fixtureSha256" -> value,
+          "source" -> Json.obj("root" -> Json.obj("line" -> Json.fromInt(999))),
+          "producerAbi" -> Json.fromString("old-generator-schema"),
+          "producerRevision" -> Json.fromString("old-generator-revision")))))
+      Then("new writes omit the digest and each read selects the actual separately admitted definition")
+      json.hcursor.downField("definition").focus.get.asObject.get.keys.toSet shouldBe Set("identity", "revision")
+      variants.foreach { value =>
+        val reopened = take(WorkflowInstanceRecordJsonV1.decodeC(value.noSpaces, catalog))
+        (reopened.definition eq later) shouldBe true
+        reopened.history shouldBe record.history
+        reopened.revision shouldBe record.revision
+        take(WorkflowInstanceRecordJsonV1.encodeC(reopened)) shouldBe json.noSpaces
+      }
+      When("an actual reference resolves to two distinct execution definitions")
+      Then("resolution rejects ambiguity instead of silently choosing a definition")
+      WorkflowInstanceRecordJsonV1.decodeC(json.noSpaces, take(WorkflowInstanceRecordJsonV1.catalogC(Vector(original, later)))).toOption shouldBe None
+    }
+
+    "physically reopen SQLite using a formatting-independent admitted definition reference" in {
+      Given("Spec: docs/spec/workflow-definition-reference-reopening.md; Rule: R2; Example: E2; an actual file-backed instance and retained suspension")
+      val path = Files.createTempDirectory("cncf-reference-reopen-").resolve("workflow.sqlite")
+      val record = initial()
+      val first = SqlDataStore.sqlite(path.toString)
+      try {
+        val writer = provider(first)
+        take(writer.create(config, record))
+        take(writer.append(config, record.identity, initialRevision, active))
+        take(writer.append(config, record.identity, InstanceRevision(1L), suspended))
+      } finally take(first.closeC())
+      When("a new physical provider binds the same declared reference from differently formatted ABI text")
+      val parsed = take(CandidateWorkflowAbi.parseC(
+    resource("/workflow/candidate-admission-workflow-abi.json"),
+    take(CandidateAdmissionProducerAbi.parseC(resource("/workflow/candidate-admission-producer-abi.json"))),
+    "relocated/workflow.cml"))
+  val later = take(WorkflowInstancePersistence.bindCandidateDefinitionC(parsed.copy(
+    workflow = parsed.workflow.copy(rootLine = 999, definitionLine = 1000))))
+      val reopened = SqlDataStore.sqlite(path.toString)
+      try {
+        val reader = take(WorkflowInstanceDataStorePersistence.bindC(reopened, config, Vector(later), collection))
+        val loaded = take(reader.load(config, record.identity)).get
+        Then("the actual saved history reopens without a content certificate or stale-writer permission")
+        (loaded.definition eq later) shouldBe true
+        loaded.history shouldBe Vector(active, suspended)
+        loaded.suspension shouldBe suspended.suspension
+        reader.append(config, record.identity, initialRevision, active).toOption shouldBe None
+      } finally take(reopened.closeC())
     }
 
     "use canonical in-memory CAS without adding a default store or mutation Operation" in {
@@ -143,20 +203,51 @@ final class WorkflowInstanceDataStorePersistenceSpec extends AnyWordSpec with Ma
       } finally take(reopened.closeC())
     }
 
-    "reject bound-policy drift and corrupt indexed revision before a mutation" in {
-      Given("one stored initial record and a reopened provider with changed retention policy")
+    "omit copied policy and reopen legacy rows under the current bound policy without rewriting them" in {
+      Given("a real SQLite initial instance and independently selected current retention policy")
+      val db = Files.createTempDirectory("cncf-policy-reopen-").resolve("workflow.sqlite")
+      val first = SqlDataStore.sqlite(db.toString)
+      val record = initial()
+      val changed = config.copy(retentionPolicy = RetentionPolicy("changed"))
+      val entryid = DataStore.StringEntryId(record.identity.value)
+      var initialfields = Set.empty[String]
+      try {
+        take(provider(first).create(changed, record))
+        initialfields = take(first.load(collection, entryid)).get.fields.map(_.key).toSet
+        take(first.update(collection, entryid, Record.dataAuto("configurationPayload" -> "legacy arbitrary policy")))
+      } finally take(first.closeC())
+      When("a new physical provider uses current policy and appends through a legacy Configuration argument")
+      val reopened = SqlDataStore.sqlite(db.toString)
+      try {
+        val adapter = provider(reopened, changed)
+        val loaded = take(adapter.load(config, record.identity)).get
+        val appended = take(adapter.append(config, record.identity, initialRevision, active))
+        val stale = adapter.append(config, record.identity, initialRevision, active)
+        val retained = take(reopened.load(collection, entryid)).get
+        Then("current binding owns access, the old copy is inert and actual stale revision is still refused")
+        initialfields should not contain "configurationPayload"
+        loaded.identity shouldBe record.identity
+        loaded.revision shouldBe initialRevision
+        appended.history shouldBe Vector(active)
+        appended.revision shouldBe InstanceRevision(1L)
+        stale.toOption shouldBe None
+        retained.getString("configurationPayload") shouldBe Some("legacy arbitrary policy")
+      } finally take(reopened.closeC())
+    }
+
+    "reject corrupt indexed revision before a mutation" in {
+      Given("one stored initial record with an inconsistent physical revision")
       val store = DataStore.inMemorySearchable()
       val record = initial()
       take(provider(store).create(config, record))
-      val changed = config.copy(retentionPolicy = RetentionPolicy("changed"))
-      When("changed-policy access and mismatched physical revision are attempted")
-      provider(store, changed).load(changed, record.identity).toOption shouldBe None
-      provider(store).load(changed, record.identity).toOption shouldBe None
       take(store.update(collection, DataStore.StringEntryId(record.identity.value),
         Record.dataAuto("cncf_revision" -> 7L)))
+      When("load and append encounter the actual indexed revision mismatch")
+      val loaded = provider(store).load(config, record.identity)
+      val appended = provider(store).append(config, record.identity, initialRevision, active)
       Then("load and append reject divergence without silently resetting a store")
-      provider(store).load(config, record.identity).toOption shouldBe None
-      provider(store).append(config, record.identity, initialRevision, active).toOption shouldBe None
+      loaded.toOption shouldBe None
+      appended.toOption shouldBe None
     }
 
     "reject malformed storage envelopes and missing catalogs without changing stored facts" in {
@@ -164,10 +255,8 @@ final class WorkflowInstanceDataStorePersistenceSpec extends AnyWordSpec with Ma
       val changes = Vector(
         Record.dataAuto("recordPayload" -> "{}"),
         Record.dataAuto("recordPayload" -> "cncf.workflow-json.v2:{}"),
-        Record.dataAuto("recordPayload" -> "cncf.workflow-json.v1:not-json"),
-        Record.dataAuto("configurationPayload" -> "changed-policy")
+        Record.dataAuto("recordPayload" -> "cncf.workflow-json.v1:not-json")
       )
-      When("each malformed row is loaded and an append is attempted")
       changes.foreach { change =>
         val store = DataStore.inMemorySearchable()
         val adapter = provider(store)
@@ -176,12 +265,16 @@ final class WorkflowInstanceDataStorePersistenceSpec extends AnyWordSpec with Ma
         val entryId = DataStore.StringEntryId(record.identity.value)
         take(store.update(collection, entryId, change))
         val before = take(store.load(collection, entryId)).get
-        adapter.load(config, record.identity).toOption shouldBe None
-        adapter.append(config, record.identity, initialRevision, active).toOption shouldBe None
+        When("the malformed row is loaded and an append is attempted")
+        val loaded = adapter.load(config, record.identity)
+        val appended = adapter.append(config, record.identity, initialRevision, active)
+        val retained = take(store.load(collection, entryId)).get
+        val uncatalogued = WorkflowInstanceDataStorePersistence.bindC(store, config, Vector.empty, collection)
         Then("neither decoding failure nor absent authority can rewrite the row")
-        take(store.load(collection, entryId)).get shouldBe before
-        WorkflowInstanceDataStorePersistence.bindC(store, config, Vector.empty, collection)
-          .toOption shouldBe None
+        loaded.toOption shouldBe None
+        appended.toOption shouldBe None
+        retained shouldBe before
+        uncatalogued.toOption shouldBe None
       }
     }
 

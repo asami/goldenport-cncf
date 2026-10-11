@@ -14,6 +14,10 @@ import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
+/** Generated Workflow and Provided Operation executable metadata cases.
+  * @since   Sep. 25, 2026
+  * @version Oct.  8, 2026
+  */
 final class GeneratedWorkflowActionProgramSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import GeneratedWorkflowActionProgram.*
 
@@ -259,11 +263,10 @@ final class GeneratedWorkflowActionProgramSpec extends AnyWordSpec with Matchers
       abi.admitC(Vector(definition)).toOption shouldBe Some(Vector(definition))
       val binding = WorkflowInstancePersistence.bindDefinitionC(definition).toOption
         .getOrElse(fail("placed Workflow must bind to persistence"))
-      Then("the persisted identity, revision, and source hash match the admitted definition")
+      Then("the persisted executable identity and revision resolve the admitted definition")
       binding.validateC.toOption shouldBe Some(binding)
       binding.workflowIdentity.value shouldBe placed.workflowIdentity
       binding.workflowRevision.value shouldBe placed.workflowVersion
-      binding.fixtureSha256.value shouldBe abi.acceptedPlacedFixtureSha256.value
       When("the matching generated Provided API sidecar is decoded")
       val providedwire = _resource("skill-driven-workflow-placed-provided-api.json")
       MessageDigest.getInstance("SHA-256").digest(providedwire.getBytes(StandardCharsets.UTF_8))
@@ -303,6 +306,21 @@ final class GeneratedWorkflowActionProgramSpec extends AnyWordSpec with Matchers
       provided.providedOperations.map(_.name) shouldBe Vector("beginReview", "submitReview")
       GeneratedProvidedApiAbi.admitC(Vector(provided), Vector(definition)).toOption shouldBe
         Some(Vector(provided))
+      Given("Spec: docs/spec/workflow-completion-applicability.md; Rule: R3; Example: E5; actual parsed Provided API operations and an admitted Workflow")
+      val diagnostic = provided.copy(generator = "different-diagnostic-producer",
+        source = GeneratedProvidedApiAbi.WorkflowSourceCorrelation(
+          GeneratedProvidedApiAbi.SourceIdentity(None), GeneratedProvidedApiAbi.SourceIdentity(Some(999))),
+        providedOperations = provided.providedOperations.map(_.copy(source = GeneratedProvidedApiAbi.SourceIdentity(None))))
+      When("Provided admission and Operation resolution encounter different or absent provenance")
+      val resolved = GeneratedProvidedApiAbi.admitC(Vector(diagnostic), Vector(definition))
+      Then("diagnostics are not an admission gate, while real schema/Workflow/Operation ambiguity and type conflicts reject")
+      resolved.toOption shouldBe Some(Vector(diagnostic))
+      diagnostic.providesOperation(provided.providedOperations.head) shouldBe true
+      diagnostic.providesOperation(provided.providedOperations.head.copy(inputType = Some("foreign.input"))) shouldBe false
+      GeneratedProvidedApiAbi.admitC(Vector(diagnostic.copy(version = "foreign-revision")), Vector(definition)).isSuccess shouldBe false
+      GeneratedProvidedApiAbi.admitC(Vector(diagnostic.copy(schemaVersion = "unsupported")), Vector(definition)).isSuccess shouldBe false
+      GeneratedProvidedApiAbi.admitC(Vector(diagnostic.copy(providedOperations = diagnostic.providedOperations :+ diagnostic.providedOperations.head)),
+        Vector(definition)).isSuccess shouldBe false
       abi.admitC(Vector(definition.copy(fixtureSha256 = abi.acceptedFixtureSha256))).toOption shouldBe None
       abi.admitC(Vector(definition.copy(workflow = definition.workflow.copy(
         revision = abi.acceptedWorkflowRevision

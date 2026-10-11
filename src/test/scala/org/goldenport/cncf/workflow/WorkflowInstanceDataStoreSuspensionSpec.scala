@@ -18,7 +18,7 @@ import org.sqlite.{SQLiteConfig, SQLiteDataSource}
 /**
  * Paired datastore commit and claim recovery, not full UoW/issued-work/evidence atomicity.
  * @since   Sep. 29, 2026
- * @version Oct.  8, 2026
+ * @version Oct.  9, 2026
  */
 final class WorkflowInstanceDataStoreSuspensionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private given ExecutionContext = ExecutionContext.create()
@@ -132,7 +132,7 @@ final class WorkflowInstanceDataStoreSuspensionSpec extends AnyWordSpec with Mat
       } finally take(reopened.closeC())
     }
 
-    "roll back a duplicate Continuation and reject stale or divergent instance facts without orphan publication" in {
+    "roll back an occupied Continuation without publishing an orphan root append" in {
       Given("an initial instance and an already-created Continuation")
       val store = SqlDataStore.sqlite(path.toString)
       try {
@@ -141,16 +141,45 @@ final class WorkflowInstanceDataStoreSuspensionSpec extends AnyWordSpec with Mat
         take(writer.create(config, current))
         take(claims(store).createC(continuation("continuation-1")))
         When("a suspension tries to create the occupied successor")
-        writer.suspendC(intent(current), owner, continuations).toOption shouldBe None
+        val rejected = writer.suspendC(intent(current), owner, continuations)
+        val retainedroot = take(writer.load(config, current.identity)).get
+        val retainedcontinuation = take(claims(store).loadC(ContinuationIdentity("continuation-1"))).get
         Then("the root remains initial and the existing successor remains exact")
-        take(writer.load(config, current.identity)).get.revision shouldBe initialRevision
-        take(claims(store).loadC(ContinuationIdentity("continuation-1"))).get shouldBe continuation("continuation-1")
-        val divergent = current.copy(causation = CausationReference("different-start"))
-        writer.suspendC(intent(divergent, "divergent"), owner, continuations).toOption shouldBe None
-        take(claims(store).loadC(ContinuationIdentity("divergent"))) shouldBe None
-        take(writer.suspendC(intent(current, "winner"), owner, continuations))
-        writer.suspendC(intent(current, "stale"), owner, continuations).toOption shouldBe None
-        take(claims(store).loadC(ContinuationIdentity("stale"))) shouldBe None
+        rejected.toOption shouldBe None
+        retainedroot.identity shouldBe current.identity
+        retainedroot.revision shouldBe initialRevision
+        retainedroot.lifecycle shouldBe Lifecycle.NotStarted
+        retainedroot.currentProgression shouldBe None
+        retainedroot.suspension shouldBe None
+        retainedroot.history shouldBe Vector.empty
+        retainedroot.correlation shouldBe current.correlation
+        retainedroot.causation shouldBe current.causation
+        retainedcontinuation shouldBe continuation("continuation-1")
+      } finally take(store.closeC())
+    }
+
+    "use the stored predecessor rather than a diagnostic copy and refuse a stale append without orphan work" in {
+      Given("an actual initial root, a different caller causation copy and its unchanged explicit append")
+      val store = SqlDataStore.sqlite(path.toString)
+      try {
+        val writer = provider(store)
+        val current = initial
+        take(writer.create(config, current))
+        val diagnostic = current.copy(causation = CausationReference("different-start"))
+        val request = intent(current, "winner").copy(current = diagnostic)
+        When("the valid request appends against the stored root and another request uses its old revision")
+        val accepted = take(writer.suspendC(request, owner, continuations))
+        val stale = writer.suspendC(intent(current, "stale"), owner, continuations)
+        val retainedroot = take(writer.load(config, current.identity)).get
+        val retainedwinner = take(claims(store).loadC(ContinuationIdentity("winner")))
+        val orphan = take(claims(store).loadC(ContinuationIdentity("stale")))
+        Then("the actual append and its continuation survive; the stale writer creates neither a revision nor work")
+        accepted.instance.history shouldBe Vector(request.entry)
+        accepted.instance.causation shouldBe request.entry.causation
+        retainedroot shouldBe accepted.instance
+        retainedwinner shouldBe Some(request.continuation)
+        stale.toOption shouldBe None
+        orphan shouldBe None
       } finally take(store.closeC())
     }
 
@@ -257,12 +286,70 @@ final class WorkflowInstanceDataStoreSuspensionSpec extends AnyWordSpec with Mat
       } finally take(store.closeC())
     }
 
-    "reject malformed Continuation storage and policy drift without rewriting stored facts" in {
-      Given("invalid payload envelopes, indexed revision or retained configuration")
+    "reopen legacy Continuations under current policy while guarding actual claim tokens" in {
+      Given("a new SQLite Continuation with an arbitrary old policy column added")
+      val db = path
+      val first = SqlDataStore.sqlite(db.toString)
+      val identity = ContinuationIdentity("continuation-1")
+      var initialfields = Set.empty[String]
+      try {
+        take(claims(first).createC(continuation(identity.value)))
+        initialfields = take(first.load(continuations, ckey(identity.value))).get.fields.map(_.key).toSet
+        take(first.update(continuations, ckey(identity.value), Record.dataAuto("configurationPayload" -> "old policy")))
+      } finally take(first.closeC())
+      When("the physical database reopens with changed current policy and consumes actual live claims")
+      val reopened = SqlDataStore.sqlite(db.toString)
+      try {
+        val adapter = claims(reopened, config.copy(retentionPolicy = RetentionPolicy("changed")))
+        val loaded = take(adapter.loadC(identity)).get
+        val firstclaim = take(adapter.claimC(identity)).claimId.get
+        val foreign = adapter.completeC(identity, "foreign")
+        val released = take(adapter.releaseC(identity, firstclaim))
+        val secondclaim = take(adapter.claimC(identity)).claimId.get
+        val stale = adapter.completeC(identity, firstclaim)
+        val completed = take(adapter.completeC(identity, secondclaim))
+        val retained = take(reopened.load(continuations, ckey(identity.value))).get
+        val revision = take(WorkflowContinuationDataStorePersistence.revisionBinding.revision(retained))
+        Then("the copy remains inert and unchanged while claim state and revision remain authoritative")
+        initialfields should not contain "configurationPayload"
+        loaded.status shouldBe ContinuationRuntimePersistence.Status.Available
+        foreign.toOption shouldBe None
+        released.status shouldBe ContinuationRuntimePersistence.Status.Available
+        secondclaim should not be firstclaim
+        stale.toOption shouldBe None
+        completed.status shouldBe ContinuationRuntimePersistence.Status.Completed
+        retained.getString("configurationPayload") shouldBe Some("old policy")
+        revision.value shouldBe 5L
+      } finally take(reopened.closeC())
+    }
+
+    "commit suspension when only a legacy policy column changes after preparation" in {
+      Given("an actual SQLite root and an uncommitted prepared suspension")
+      val store = SqlDataStore.sqlite(path.toString)
+      try {
+        val current = initial
+        val request = intent(current)
+        val writer = provider(store)
+        take(writer.create(config, current))
+        val prepared = take(writer.prepareSuspensionC(request, owner, continuations))
+        When("legacy policy material changes without consuming the indexed root revision")
+        take(store.update(instances, ckey(current.identity.value), Record.dataAuto("configurationPayload" -> "changed after preparation")))
+        val paired = take(prepared.commitC())
+        val retainedroot = take(store.load(instances, ckey(current.identity.value))).get
+        val retainedcontinuation = take(store.load(continuations, ckey("continuation-1"))).get
+        Then("the real revision commits the pair and neither copies nor certifies policy material")
+        paired.instance.history shouldBe Vector(request.entry)
+        paired.continuation.status shouldBe ContinuationRuntimePersistence.Status.Available
+        retainedroot.getString("configurationPayload") shouldBe Some("changed after preparation")
+        retainedcontinuation.fields.map(_.key) should not contain "configurationPayload"
+      } finally take(store.closeC())
+    }
+
+    "reject malformed Continuation storage without rewriting stored facts" in {
+      Given("invalid payload envelopes or indexed revision")
       val corruptions = Vector(
         Record.dataAuto("continuationPayload" -> "{}"),
         Record.dataAuto("continuationPayload" -> "cncf.workflow-json.v1:not-json"),
-        Record.dataAuto("configurationPayload" -> "foreign"),
         Record.dataAuto("cncf_revision" -> 0L))
       corruptions.foreach { changes =>
         val store = SqlDataStore.sqlite(path.toString)
@@ -270,14 +357,16 @@ final class WorkflowInstanceDataStoreSuspensionSpec extends AnyWordSpec with Mat
           val adapter = claims(store)
           val identity = ContinuationIdentity("continuation-1")
           take(adapter.createC(continuation(identity.value)))
-          claims(store, config.copy(retentionPolicy = RetentionPolicy("different"))).loadC(identity).toOption shouldBe None
           take(store.update(continuations, ckey(identity.value), changes))
           val before = take(store.load(continuations, ckey(identity.value))).get
           When("load or claim encounters inconsistent stored facts")
-          adapter.loadC(identity).toOption shouldBe None
-          adapter.claimC(identity).toOption shouldBe None
+          val loaded = adapter.loadC(identity)
+          val claimed = adapter.claimC(identity)
+          val retained = take(store.load(continuations, ckey(identity.value))).get
           Then("no payload or indexed revision is repaired")
-          take(store.load(continuations, ckey(identity.value))).get shouldBe before
+          loaded.toOption shouldBe None
+          claimed.toOption shouldBe None
+          retained shouldBe before
         } finally take(store.closeC())
       }
     }

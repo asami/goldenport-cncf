@@ -21,7 +21,7 @@ import org.simplemodeling.model.datatype.EntityCollectionId
  * Deliberately outside CNCF's private package: only public composition APIs.
  *
  * @since   Oct. 3, 2026
- * @version Oct. 3, 2026
+ * @version Oct. 9, 2026
  */
 final class WorkflowComponentStorageSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private given context: ExecutionContext = ExecutionContext.create()
@@ -152,10 +152,10 @@ final class WorkflowComponentStorageSpec extends AnyWordSpec with Matchers with 
         val foreignstore = attempt(configured = config.copy(workflowStore = NamedWorkflowStore("foreign", config.workflowStore.identity)))
         Then("the store mismatch is rejected")
         foreignstore.toOption shouldBe None
-        When("the definition is duplicated")
+        When("the identical admitted definition is repeated")
         val duplicated = attempt(definitions = Vector(definition, definition))
-        Then("the ambiguous definition is rejected")
-        duplicated.toOption shouldBe None
+        Then("a repeated catalog entry does not create a different execution definition")
+        duplicated.isSuccess shouldBe true
         When("the component construction parameters are absent")
         val absentparams = WorkflowComponentStorage.bindC(null, owner, config, Vector(definition), instances, continuations)
         Then("the missing authority is rejected")

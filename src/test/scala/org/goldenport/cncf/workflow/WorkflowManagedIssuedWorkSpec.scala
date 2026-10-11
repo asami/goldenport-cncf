@@ -18,7 +18,7 @@ import org.simplemodeling.model.datatype.EntityCollectionId
 
 /**
  * @since   Oct.  1, 2026
- * @version Oct.  8, 2026
+ * @version Oct.  9, 2026
  */
 final class WorkflowManagedIssuedWorkSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private given context: ExecutionContext = ExecutionContext.create()
@@ -131,7 +131,15 @@ final class WorkflowManagedIssuedWorkSpec extends AnyWordSpec with Matchers with
         issued.suspendC(request, decision) shouldBe a[Consequence.Failure[?]]
         val changed = decision.copy(current = WorkflowContinuation.Decision(order.request,
           MinimalPresentation("Changed", "Different visible question")))
-        issued.putIfAbsentC(changed) shouldBe a[Consequence.Failure[?]]
+        Given("Spec: docs/spec/workflow-completion-applicability.md; Rule: R4; Example: E8; a saved native Decision with its original visible meaning")
+        When("a retry supplies a fresh question body for the same target")
+        val selected = take(issued.putIfAbsentC(changed))
+        Then("original saved meaning is returned; no question rewrite or new grant occurs")
+        selected shouldBe decision
+        val foreign = decision.copy(current = WorkflowContinuation.Decision(
+          order.request.copy(completionOperation = completion.copy(operation = "foreign")),
+          MinimalPresentation("Changed", "Different visible question")))
+        issued.putIfAbsentC(foreign) shouldBe a[Consequence.Failure[?]]
         take(persistence.loadC(initial.identity)) shouldBe Some(saved)
         first.subsystem.systemNode.managedDataStoreCount shouldBe 1
         first.subsystem.systemNode.activeLeaseCount shouldBe 0
@@ -218,29 +226,37 @@ final class WorkflowManagedIssuedWorkSpec extends AnyWordSpec with Matchers with
     }
 
     "admit completion against the same captured grant without invoking effects" in {
+      Given("one captured host grant, repeated identical catalog data and foreign scope alternatives")
       val current = host(Files.createTempDirectory("managed-completion-admission-").resolve("host.sqlite"))
       var eventsCalled = false
       try {
-        def attempt(owner: ComponentId = component, configured: Configuration = config,
+        def _attempt_c_(owner: ComponentId = component, configuration: Configuration = config,
           roots: DataStore.CollectionId = instances, successors: DataStore.CollectionId = continuations,
           catalog: Vector[DefinitionBinding] = Vector(definition)) =
-          WorkflowManagedCompletion.bindC(current.subsystem, owner, configured, completion,
+          WorkflowManagedCompletion.bindC(current.subsystem, owner, configuration, completion,
             catalog, roots, successors, codec, codec, StateMachineResultTypeReference(codec.typeIdentity),
             (_, _) => { eventsCalled = true; Consequence.success(Vector.empty) })
-        take(attempt())
-        attempt(roots = collection("foreign")).toOption shouldBe None
-        attempt(successors = collection("foreign")).toOption shouldBe None
-        attempt(owner = ComponentId("org.goldenport.cncf.test.Foreign")).toOption shouldBe None
-        attempt(configured = config.copy(workflowStore = NamedWorkflowStore("foreign", config.workflowStore.identity)))
-          .toOption shouldBe None
-        attempt(catalog = Vector(definition, definition)).toOption shouldBe None
         val crossStore = config.copy(delivery = DeliveryConfiguration.CrossStoreCommittedTransition(
           WorkflowStoreIdentity("other"), CommittedEntityTransitionReference("transition"),
           IdempotencyKey("key"), RecoverabilityReference("recovery")))
-        attempt(configured = crossStore).toOption shouldBe None
+        When("bindings select the actual owner grant, independently of identical repeated catalog entries")
+        val admitted = _attempt_c_()
+        val repeated = _attempt_c_(catalog = Vector(definition, definition))
+        val foreign = Vector(
+          _attempt_c_(roots = collection("foreign")),
+          _attempt_c_(successors = collection("foreign")),
+          _attempt_c_(owner = ComponentId("org.goldenport.cncf.test.Foreign")),
+          _attempt_c_(configuration = config.copy(workflowStore = NamedWorkflowStore("foreign", config.workflowStore.identity))),
+          _attempt_c_(configuration = crossStore))
+        val pools = current.subsystem.systemNode.managedDataStoreCount
+        val leases = current.subsystem.systemNode.activeLeaseCount
+        Then("repeated passive data is accepted, actual foreign scope is refused and binding invokes no effects")
+        admitted.isSuccess shouldBe true
+        repeated.isSuccess shouldBe true
+        foreign.foreach(_.toOption shouldBe None)
         eventsCalled shouldBe false
-        current.subsystem.systemNode.managedDataStoreCount shouldBe 1
-        current.subsystem.systemNode.activeLeaseCount shouldBe 0
+        pools shouldBe 1
+        leases shouldBe 0
       } finally take(current.shutdownC())
     }
 
@@ -273,24 +289,37 @@ final class WorkflowManagedIssuedWorkSpec extends AnyWordSpec with Matchers with
       } finally take(reopened.shutdownC())
     }
 
-    "reject foreign collections, store and Component against captured declaration" in {
+    "enforce captured storage scope independently of a caller policy copy" in {
+      Given("an actual managed host with one declared owner and storage scope")
       val current = host(Files.createTempDirectory("managed-issued-admission-").resolve("host.sqlite"))
       try {
-        def attempt(owner: ComponentId = component, configured: Configuration = config,
+        def _attempt_c_(owner: ComponentId = component, configured: Configuration = config,
           roots: DataStore.CollectionId = instances, successors: DataStore.CollectionId = continuations) =
           WorkflowManagedIssuedWork.bindC(current.subsystem, owner, configured, completion,
             Vector(definition), roots, successors, codec)
-        attempt(roots = collection("foreign")).toOption shouldBe None
-        attempt(successors = collection("foreign")).toOption shouldBe None
-        attempt(owner = ComponentId("org.goldenport.cncf.test.Foreign")).toOption shouldBe None
-        attempt(configured = config.copy(workflowStore = NamedWorkflowStore("foreign", config.workflowStore.identity)))
-          .toOption shouldBe None
         val issued = bind(current)
-        issued.suspendC(intent.copy(configuration = config.copy(retentionPolicy = RetentionPolicy("foreign"))),
-          issue(intent)).toOption shouldBe None
-        take(issued.loadC(identity)) shouldBe None
-        current.subsystem.systemNode.managedDataStoreCount shouldBe 1
-        current.subsystem.systemNode.activeLeaseCount shouldBe 0
+        val request = intent
+        val work = issue(request)
+        take(root(current).createC(initial))
+        When("foreign scope bindings and an owned suspension with different diagnostic retention policy are requested")
+        val foreign = Vector(
+          _attempt_c_(roots = collection("foreign")),
+          _attempt_c_(successors = collection("foreign")),
+          _attempt_c_(owner = ComponentId("org.goldenport.cncf.test.Foreign")),
+          _attempt_c_(configured = config.copy(workflowStore = NamedWorkflowStore("foreign", config.workflowStore.identity))))
+        val suspended = take(issued.suspendC(request.copy(configuration = config.copy(
+          retentionPolicy = RetentionPolicy("diagnostic different"))), work))
+        val retainedwork = take(issued.loadC(identity))
+        val retainedroot = take(root(current).loadC(initial.identity)).get
+        val pools = current.subsystem.systemNode.managedDataStoreCount
+        val leases = current.subsystem.systemNode.activeLeaseCount
+        Then("actual scope remains enforced while the caller copy neither grants authority nor blocks owned work")
+        foreign.foreach(_.toOption shouldBe None)
+        suspended.instance.history shouldBe Vector(request.entry)
+        retainedroot.history shouldBe Vector(request.entry)
+        retainedwork shouldBe Some(work)
+        pools shouldBe 1
+        leases shouldBe 0
       } finally take(current.shutdownC())
     }
   }

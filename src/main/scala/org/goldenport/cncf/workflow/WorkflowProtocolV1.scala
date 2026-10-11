@@ -8,7 +8,7 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{InstanceIdentit
 /**
  * Minimum application-neutral Workflow values; JSON is an encoding, not their authority.
  * @since   Sep. 25, 2026
- * @version Oct.  8, 2026
+ * @version Oct.  9, 2026
  */
 object WorkflowProtocolV1 {
   val schemaVersion = "cncf.workflow-protocol.v1"
@@ -79,15 +79,41 @@ object WorkflowProtocolV1 {
 
   final case class CapabilityRequirement(identity: String)
   final case class RiskLevel(value: String)
+  enum ExecutionPlacement(val value: String) {
+    case Inline extends ExecutionPlacement("INLINE")
+    case Delegated extends ExecutionPlacement("DELEGATED")
+  }
+  enum ExecutionIndependence(val value: String) {
+    case Optional extends ExecutionIndependence("OPTIONAL")
+    case Required extends ExecutionIndependence("REQUIRED")
+  }
+  /** Runtime placement, not a Workflow-wide semantic invocation mode. */
+  final case class ExecutionDisposition(
+    placement: ExecutionPlacement,
+    independence: ExecutionIndependence,
+    originContextIdentity: String
+  ) {
+    def validateC: Consequence[ExecutionDisposition] =
+      if (placement == null || independence == null || !_name(originContextIdentity))
+        Consequence.stateConflict("Workflow execution disposition is incomplete")
+      else Consequence.success(this)
+  }
+  /** Opaque application-semantic class; never a provider/model/effort selector. */
+  final case class ReasoningClassReference(value: String)
   final case class ExecutionRequirement(
     capabilities: Vector[CapabilityRequirement],
     risk: RiskLevel,
     reasoning: ReasoningLevel,
-    reviewRequired: Boolean
+    reviewRequired: Boolean,
+    disposition: Option[ExecutionDisposition] = None,
+    reasoningClass: Option[ReasoningClassReference] = None
   ) {
     def validateC: Consequence[ExecutionRequirement] =
       if (capabilities == null || capabilities.exists(x => x == null || !_name(x.identity)) ||
-          risk == null || !_name(risk.value) || reasoning == null)
+          risk == null || !_name(risk.value) || reasoning == null ||
+          disposition == null || reasoningClass == null ||
+          disposition.exists(x => x == null || x.validateC.toOption.isEmpty) ||
+          reasoningClass.exists(x => x == null || !_name(x.value)))
         Consequence.stateConflict("Workflow execution requirement is incomplete")
       else Consequence.success(this)
   }
@@ -191,7 +217,7 @@ object WorkflowProtocolV1 {
       admittedHandle, WorkflowContinuation.Terminal(admittedResult, admittedPresentation)
     )
 
-  /** A separate-turn result is checked against the exact issued WorkOrder before resume. */
+  /** Returned dispatch diagnostics are not a saved-copy attestation or placement selector. */
   final case class SkillDispatchEvidence(
     requestedRequirement: ExecutionRequirement,
     selectedWorkerProfile: String,
@@ -208,8 +234,39 @@ object WorkflowProtocolV1 {
     references: Vector[ContextReference],
     workerIdentity: Option[String] = None,
     modelIdentity: Option[String] = None,
-    skillDispatch: Option[SkillDispatchEvidence] = None
+    skillDispatch: Option[SkillDispatchEvidence] = None,
+    execution: Option[ExecutionObservation] = None
   )
+
+  /** Supplied by the owning executor, not fabricated by semantic result content. */
+  final case class ExecutionObservation(
+    placement: ExecutionPlacement,
+    originContextIdentity: String,
+    executorContextIdentity: String,
+    profileIdentity: String
+  ) {
+    def validateC: Consequence[ExecutionObservation] =
+      if (placement == null || !Vector(originContextIdentity, executorContextIdentity, profileIdentity).forall(_name))
+        Consequence.stateConflict("Workflow execution observation is incomplete")
+      else Consequence.success(this)
+
+    /** Consume placement relations, not a repeated requirement/profile validation.
+      * A blank executor must not pass delegated independence merely by inequality.
+      */
+    def admitC(requirement: ExecutionRequirement): Consequence[ExecutionObservation] =
+      if (requirement == null || requirement.disposition == null)
+        Consequence.stateConflict("Workflow execution observation has no selected disposition")
+      else requirement.disposition match {
+        case Some(selected) if selected != null && _name(executorContextIdentity) &&
+            selected.placement == placement &&
+            selected.originContextIdentity == originContextIdentity &&
+            (placement != ExecutionPlacement.Inline || executorContextIdentity == originContextIdentity) &&
+            (placement != ExecutionPlacement.Delegated || executorContextIdentity != originContextIdentity) &&
+            (selected.independence != ExecutionIndependence.Required || executorContextIdentity != originContextIdentity) =>
+          Consequence.success(this)
+        case _ => Consequence.stateConflict("Workflow execution observation does not satisfy its selected placement/independence")
+      }
+  }
 
   final case class ContinuationResult[R](
     handle: WorkflowHandle,
@@ -239,10 +296,8 @@ object WorkflowProtocolV1 {
     submitted: ContinuationResult[R], kind: WorkflowIssuedContinuationKind): Consequence[StateMachineOperationResult] =
     if (issued == null || issued.handle == null || submitted == null ||
         submitted.handle == null || submitted.result == null ||
-        submitted.resultReference == null || submitted.completionFacts == null ||
-        submitted.evidence == null || submitted.evidence.references == null ||
-        submitted.evidence.workerIdentity == null || submitted.evidence.modelIdentity == null ||
-        submitted.evidence.skillDispatch == null)
+        submitted.result.value == null || submitted.completionFacts == null ||
+        submitted.evidence == null || submitted.evidence.references == null)
       Consequence.stateConflict("Workflow result is incomplete")
     else {
       val selected = issued.current match {
@@ -267,27 +322,18 @@ object WorkflowProtocolV1 {
             request.runId != submitted.runId ||
             request.continuationId != submitted.continuationId ||
             request.expectedRevision != submitted.expectedRevision ||
-            request.context.snapshot != submitted.contextSnapshot ||
+            !sameContextScope(request.context.snapshot, submitted.contextSnapshot) ||
             requiredType.isEmpty || requiredType != actualType ||
-            !_reference(submitted.resultReference) ||
-            facts.exists(x => !_reference(x)) || facts.distinct.size != facts.size ||
-            evidence.exists(x => !_reference(x)) || evidence.distinct.size != evidence.size ||
             !request.completion.requiredFacts.forall(facts.contains) ||
             !request.evidence.requiredEvidence.forall(evidence.contains) ||
-            submitted.evidence.workerIdentity.exists(x => !_name(x)) ||
-            submitted.evidence.modelIdentity.exists(x => !_name(x)) ||
-            submitted.evidence.skillDispatch.exists(x =>
-              x == null || !requirement.contains(x.requestedRequirement) ||
-              x.validateC.toOption.isEmpty))
+            requirement.exists(r => r == null || r.disposition == null ||
+              r.disposition.exists(_ => submitted.evidence.execution == null ||
+                !submitted.evidence.execution.exists(x => x != null && x.admitC(r).toOption.nonEmpty))))
             Consequence.stateConflict("Workflow result does not satisfy the issued WorkOrder")
-          else submitted.handle.validateC.flatMap(_ =>
-            submitted.result.validateC.map(_ =>
-              StateMachineOperationResult(
-                StateMachineResultTypeReference(submitted.result.typeIdentity),
-                submitted.resultReference
-              )
-            )
-          )
+          else Consequence.success(StateMachineOperationResult(
+            StateMachineResultTypeReference(submitted.result.typeIdentity),
+            submitted.resultReference
+          ))
         }
       case _ => Consequence.stateConflict("Workflow result requires an issued WorkOrder")
       }
@@ -304,22 +350,38 @@ object WorkflowProtocolV1 {
     if (issued == null || runtime == null || freshUnitOfWork == null || closingProgram == null)
       Consequence.stateConflict("Workflow continuation adapter is incomplete")
     else issued.current match {
-      case work: WorkflowContinuation.WorkOrder[?] =>
+      case work: WorkflowContinuation.WorkOrder[?] if work.request != null =>
         for {
-          result <- admitResultC(issued, submitted)
           claim <- runtime.recoverClaimC(work.request.continuationId)
-          projected <- projectClaimedWorkOrderC(
-            issued.handle, claim, work.request.input, work.request.completionOperation,
-            work.requirement, work.presentation
-          )
-          _ <- if (projected == issued) Consequence.unit
-               else Consequence.stateConflict("Issued WorkOrder differs from the persisted Continuation")
+          selected <- _select_claimed_work_order_c(issued, claim)
+          result <- admitResultC(selected, submitted)
           resumed <- closingProgram match {
             case Some(program) => runtime.resumeWithProgramC(claim, result, freshUnitOfWork, program)
             case None => runtime.resumeC(claim, result, freshUnitOfWork)
           }
         } yield resumed
       case _ => Consequence.stateConflict("Workflow continuation adapter requires an issued WorkOrder")
+    }
+
+  /** Resolve actual native conditions without certifying saved projection content. */
+  private[workflow] def _select_claimed_work_order_c[W](
+    issued: WorkflowInteraction[W, Nothing], claim: ContinuationRuntime.Claim
+  ): Consequence[WorkflowInteraction[W, Nothing]] =
+    if (issued == null || issued.handle == null || claim == null ||
+        claim.continuation == null || !_name(claim.claimId))
+      Consequence.stateConflict("Workflow claimed source selection is incomplete")
+    else issued.current match {
+      case work: WorkflowContinuation.WorkOrder[W] if work.request != null &&
+          work.request.input != null && work.request.completionOperation != null =>
+        for {
+          handle <- issued.handle.validateC
+          resolved <- _continuation_request_c(handle, claim.continuation,
+            work.request.input, work.request.completionOperation)
+          _ <- if (sameRequestTarget(work.request, resolved)) Consequence.unit
+            else Consequence.stateConflict("Issued WorkOrder targets another native Continuation contract")
+        } yield issued.copy(current = work.copy(request = work.request.copy(
+          completion = resolved.completion, evidence = resolved.evidence)))
+      case _ => Consequence.stateConflict("Workflow claimed source requires an issued WorkOrder")
     }
 
   /** Issue only an already-claimed Continuation; a failed store write returns no WorkOrder. */
@@ -339,9 +401,7 @@ object WorkflowProtocolV1 {
       claim <- runtime.recoverClaimC(identity)
       projected <- projectClaimedWorkOrderC(handle, claim, input, completionOperation, requirement, presentation)
       stored <- issuedPersistence.putIfAbsentC(projected)
-      result <- if (stored == projected) Consequence.success(stored)
-                else Consequence.stateConflict("WorkOrder persistence returned a different issue")
-    } yield result
+    } yield stored
 
   /** Load the exact issued WorkOrder before applying the WorkflowInstance resume guard. */
   def resumePersistedWorkOrderC[W, R](
@@ -504,6 +564,17 @@ object WorkflowProtocolV1 {
 
   private def _name(value: String): Boolean = value != null && value.trim.nonEmpty
 
-  private def _reference(value: ContextReference): Boolean =
-    value != null && _name(value.identity) && _name(value.revision)
+  /** Actual executable/model scope, not workspace/evidence immutability. */
+  private[workflow] def sameContextScope(left: ContextSnapshot, right: ContextSnapshot): Boolean =
+    left != null && right != null && left.workflowRevision == right.workflowRevision && left.modelRevision == right.modelRevision
+
+  private[workflow] def sameRequestTarget(left: ContinuationRequest[?], right: ContinuationRequest[?]): Boolean =
+    left != null && right != null && left.runId == right.runId && left.continuationId == right.continuationId &&
+      left.expectedRevision == right.expectedRevision && left.requiredOperation == right.requiredOperation &&
+      left.operation == right.operation && left.resultType == right.resultType &&
+      left.completionOperation == right.completionOperation &&
+      left.completion != null && right.completion != null && left.completion.identity == right.completion.identity &&
+      left.evidence != null && right.evidence != null && left.evidence.identity == right.evidence.identity &&
+      left.context != null && right.context != null && sameContextScope(left.context.snapshot, right.context.snapshot)
+
 }

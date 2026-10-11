@@ -49,12 +49,11 @@ final class GeneratedEntryWorkflowAbiSpec extends AnyWordSpec with Matchers with
         Lifecycle.NotStarted, None, CorrelationReference("human-selection-1"),
         CausationReference("start:1"), None, None, None, Vector.empty)
 
-      Then("the source and digest remain bound without a Candidate sidecar")
+      Then("the definition reference remains usable without a Candidate sidecar")
       take(binding.validateC) shouldBe binding
       take(record.validateC) shouldBe record
       binding.workflowIdentity shouldBe WorkflowDefinitionIdentity("SplitPhaseWorkflow")
       binding.workflowRevision shouldBe WorkflowDefinitionRevision("split-phase-entry-v1")
-      binding.fixtureSha256 shouldBe FixtureSha256(entry.fixtureSha256)
       binding.sourceCorrelation.root.resource shouldBe entry.sourceResource
     }
 
@@ -72,8 +71,8 @@ final class GeneratedEntryWorkflowAbiSpec extends AnyWordSpec with Matchers with
       outcomes.map(_.toOption) shouldBe Vector(None, None, None)
     }
 
-    "admit one correlated post-entry stage without changing the legacy entry digest" in {
-      val legacyDigest = entry.fixtureSha256
+    "admit one correlated post-entry stage without requiring unchanged-content evidence" in {
+      Given("an executable entry declaration with ordered stages or terminal branches")
       val staged = entry.copy(
         workflowRevision = "split-phase-entry-v2",
         providedWorkflowRevision = "split-phase-entry-v2",
@@ -84,10 +83,10 @@ final class GeneratedEntryWorkflowAbiSpec extends AnyWordSpec with Matchers with
           "SplitPhaseProposalAssessmentCommand", "SplitPhaseProposalAssessmentResult", 324))
       )
 
-      take(WorkflowInstancePersistence.bindEntryDefinitionC(staged)).fixtureSha256 shouldBe
-        FixtureSha256(staged.fixtureSha256)
-      entry.fixtureSha256 shouldBe legacyDigest
-      staged.fixtureSha256 should not be legacyDigest
+      When("the declaration is bound without a source or content certificate")
+      val binding = take(WorkflowInstancePersistence.bindEntryDefinitionC(staged))
+      Then("its executable reference is available")
+      binding.workflowIdentity.value shouldBe "SplitPhaseWorkflow"
 
       val missingState = staged.copy(states = entry.states)
       val missingOperation = staged.copy(postEntryOperation = None)
@@ -95,11 +94,16 @@ final class GeneratedEntryWorkflowAbiSpec extends AnyWordSpec with Matchers with
         _.copy(service = "OtherService")))
       val fakeStart = staged.copy(postEntryOperation = staged.postEntryOperation.map(
         _.copy(operation = "startAnotherWorkflow")))
-      Vector(missingState, missingOperation, wrongService, fakeStart).foreach(value =>
-        WorkflowInstancePersistence.bindEntryDefinitionC(value) shouldBe a[Consequence.Failure[?]])
+      Vector(missingState, missingOperation, wrongService, fakeStart).foreach { value =>
+        When("an incompatible stage declaration is submitted")
+        val result = WorkflowInstancePersistence.bindEntryDefinitionC(value)
+        Then("actual executable incompatibility is rejected")
+        result shouldBe a[Consequence.Failure[?]]
+      }
     }
 
     "admit one terminal operation after assessment and reject an unbound extra stage" in {
+      Given("an executable entry declaration with ordered stages or terminal branches")
       val staged = entry.copy(
         workflowRevision = "split-phase-entry-v2",
         providedWorkflowRevision = "split-phase-entry-v2",
@@ -119,23 +123,26 @@ final class GeneratedEntryWorkflowAbiSpec extends AnyWordSpec with Matchers with
           "SplitPhasePreviewCommand", "SplitPhasePreviewResult", 340))
       )
 
+      When("the terminal declaration is bound")
       val binding = take(WorkflowInstancePersistence.bindEntryDefinitionC(preview))
+      Then("the admitted execution definition remains usable")
       take(binding.validateC) shouldBe binding
-      binding.fixtureSha256 shouldBe FixtureSha256(preview.fixtureSha256)
-      preview.fixtureSha256 should not be staged.fixtureSha256
       Vector(
         preview.copy(states = staged.states),
         preview.copy(providedOperationCount = 2),
         preview.copy(postEntryOperation = None),
         preview.copy(terminalOperation = preview.terminalOperation.map(
-          _.copy(operation = "assessSplitProposal"))),
-        preview.copy(terminalOperation = preview.terminalOperation.map(
-          _.copy(sourceLine = 323)))
-      ).foreach(value => WorkflowInstancePersistence.bindEntryDefinitionC(value)
-        shouldBe a[Consequence.Failure[?]])
+          _.copy(operation = "assessSplitProposal")))
+      ).foreach { value =>
+        When("an incompatible stage declaration is submitted")
+        val result = WorkflowInstancePersistence.bindEntryDefinitionC(value)
+        Then("actual executable incompatibility is rejected")
+        result shouldBe a[Consequence.Failure[?]]
+      }
     }
 
-    "bind distinct terminal branches without changing the single-terminal digest" in {
+    "bind distinct terminal branches without requiring unchanged-content evidence" in {
+      Given("an executable entry declaration with ordered stages or terminal branches")
       val staged = entry.copy(
         workflowRevision = "split-phase-apply-v1",
         providedWorkflowRevision = "split-phase-apply-v1",
@@ -150,7 +157,6 @@ final class GeneratedEntryWorkflowAbiSpec extends AnyWordSpec with Matchers with
           "SplitPhaseService", "previewSplitPhase",
           "SplitPhasePreviewCommand", "SplitPhasePreviewResult", 340))
       )
-      val oldDigest = staged.fixtureSha256
       val branched = staged.copy(
         states = staged.states :+ GeneratedEntryWorkflowAbi.State("Applied", 317),
         providedOperationCount = 4,
@@ -159,22 +165,25 @@ final class GeneratedEntryWorkflowAbiSpec extends AnyWordSpec with Matchers with
           "SplitPhaseApplyCommand", "SplitPhaseApplyResult", 350))
       )
 
-      take(WorkflowInstancePersistence.bindEntryDefinitionC(branched)).fixtureSha256 shouldBe
-        FixtureSha256(branched.fixtureSha256)
-      staged.fixtureSha256 shouldBe oldDigest
-      branched.fixtureSha256 should not be oldDigest
+      When("the declaration is bound without a source or content certificate")
+      val binding = take(WorkflowInstancePersistence.bindEntryDefinitionC(branched))
+      Then("its executable reference is available")
+      binding.workflowIdentity.value shouldBe "SplitPhaseWorkflow"
       Vector(
         branched.copy(states = staged.states),
         branched.copy(providedOperationCount = 3),
         branched.copy(additionalTerminalOperations = branched.additionalTerminalOperations.map(
-          _.copy(operation = "previewSplitPhase"))),
-        branched.copy(additionalTerminalOperations = branched.additionalTerminalOperations.map(
-          _.copy(sourceLine = 339)))
-      ).foreach(value => WorkflowInstancePersistence.bindEntryDefinitionC(value)
-        shouldBe a[Consequence.Failure[?]])
+          _.copy(operation = "previewSplitPhase")))
+      ).foreach { value =>
+        When("an incompatible stage declaration is submitted")
+        val result = WorkflowInstancePersistence.bindEntryDefinitionC(value)
+        Then("actual executable incompatibility is rejected")
+        result shouldBe a[Consequence.Failure[?]]
+      }
     }
 
-    "bind ordered intermediate stages while preserving existing fixture digests" in {
+    "bind ordered intermediate stages without source-order certificates" in {
+      Given("an executable entry declaration with ordered stages or terminal branches")
       val first = entry.copy(
         workflowRevision = "repository-sync-boundary-v1",
         providedWorkflowRevision = "repository-sync-boundary-v1",
@@ -184,7 +193,6 @@ final class GeneratedEntryWorkflowAbiSpec extends AnyWordSpec with Matchers with
           "SplitPhaseService", "assessRepositoryBoundary",
           "RepositorySyncBoundaryAssessmentCommand", "RepositorySyncBoundaryAssessmentResult",
           330)))
-      val oldDigest = first.fixtureSha256
       val fetched = first.copy(
         workflowRevision = "repository-sync-fetch-v1",
         providedWorkflowRevision = "repository-sync-fetch-v1",
@@ -194,36 +202,36 @@ final class GeneratedEntryWorkflowAbiSpec extends AnyWordSpec with Matchers with
           "SplitPhaseService", "admitTrackingFetch",
           "RepositorySyncFetchAdmissionCommand", "RepositorySyncFetchAdmissionResult", 350)))
 
-      take(WorkflowInstancePersistence.bindEntryDefinitionC(fetched)).fixtureSha256 shouldBe
-        FixtureSha256(fetched.fixtureSha256)
-      first.fixtureSha256 shouldBe oldDigest
-      fetched.fixtureSha256 should not be oldDigest
+      When("the declaration is bound without a source or content certificate")
+      val binding = take(WorkflowInstancePersistence.bindEntryDefinitionC(fetched))
+      Then("its executable reference is available")
+      binding.workflowIdentity.value shouldBe "SplitPhaseWorkflow"
       Vector(
         fetched.copy(states = first.states),
         fetched.copy(providedOperationCount = 2),
         fetched.copy(additionalStageOperations = fetched.additionalStageOperations.map(
           _.copy(operation = "assessRepositoryBoundary"))),
         fetched.copy(additionalStageOperations = fetched.additionalStageOperations.map(
-          _.copy(sourceLine = 329))),
-        fetched.copy(additionalStageOperations = fetched.additionalStageOperations.map(
           _.copy(service = "OtherService")))
-      ).foreach(value => WorkflowInstancePersistence.bindEntryDefinitionC(value)
-        shouldBe a[Consequence.Failure[?]])
+      ).foreach { value =>
+        When("an incompatible stage declaration is submitted")
+        val result = WorkflowInstancePersistence.bindEntryDefinitionC(value)
+        Then("actual executable incompatibility is rejected")
+        result shouldBe a[Consequence.Failure[?]]
+      }
     }
 
-    "reject provenance drift after a binding is created" in {
-      Given("a valid generated entry binding")
-      val binding = take(WorkflowInstancePersistence.bindEntryDefinitionC(entry))
-
-      When("its persisted fixture digest differs from the admitted descriptor")
-      val drift = new DefinitionBinding(
-        binding.workflowIdentity, binding.workflowRevision, binding.sourceCorrelation,
-        binding.producerAbiIdentity, binding.workflowAbiIdentity, binding.bootstrapAbiIdentity,
-        binding.producerRevision, FixtureSha256("different"), null,
-        admittedEntryDefinition = Some(entry))
-
-      Then("validation rejects the forged binding")
-      drift.validateC shouldBe a[Consequence.Failure[?]]
+    "accept relocated sources and different generation metadata" in {
+      Given("Spec: docs/spec/workflow-definition-reference-reopening.md; Rule: R1; Example: E3; an executable entry definition")
+      val relocated = entry.copy(rootLine = 1, definitionLine = 2,
+        providedRootLine = 500, providedDefinitionLine = 600,
+        providedGenerator = "another-compatible-generator",
+        sourceResource = "relocated/workflow.cml")
+      When("the relocated definition is admitted and bound")
+      val binding = take(WorkflowInstancePersistence.bindEntryDefinitionC(relocated))
+      Then("source and generation metadata are diagnostic, not unchanged-content gates")
+      binding.workflowIdentity shouldBe WorkflowDefinitionIdentity(entry.workflowIdentity)
+      binding.workflowRevision shouldBe WorkflowDefinitionRevision(entry.workflowRevision)
     }
   }
 }

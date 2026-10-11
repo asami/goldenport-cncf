@@ -13,18 +13,21 @@ import org.goldenport.cncf.workflow.WorkflowResultJsonV1.{PayloadCodec, _fields,
 /**
  * Separate closed mechanical receipt schema, never a ContinuationResult.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct.  9, 2026
  */
 object WorkflowMechanicalTransitionJsonV1 {
   val schemaVersion = "cncf.workflow-mechanical-transition.v1"
   private val maxBytes = 1024 * 1024
 
   def encodeC[A](receipt: Receipt[A], codec: PayloadCodec[A]): Consequence[String] = guarded {
-    if (!validCodec(codec) || receipt == null || receipt.payload == null ||
+    if (!validCodec(codec) || receipt == null || receipt.reference == null ||
+        receipt.component == null || !canonical(receipt.component.name) || receipt.operation == null ||
+        !canonical(receipt.operation.service) || !canonical(receipt.operation.operation) || receipt.payload == null ||
         receipt.payload.typeIdentity != codec.typeIdentity)
       Consequence.stateConflict("Mechanical receipt payload codec is incompatible")
     else for {
-      accepted <- validateReceiptC(receipt)
+      _ <- keyC(receipt.reference)
+      accepted = receipt
       current <- WorkflowInstanceRecordJsonV1.encodeC(accepted.current)
       next <- WorkflowInstanceRecordJsonV1.encodeC(accepted.next)
       currentJson <- jsonC(current)
@@ -69,8 +72,10 @@ object WorkflowMechanicalTransitionJsonV1 {
       fields.fold(Consequence.stateConflict(_), data => for {
         current <- WorkflowInstanceRecordJsonV1.decodeC(data._1("current").noSpaces, catalog)
         next <- WorkflowInstanceRecordJsonV1.decodeC(data._1("next").noSpaces, catalog)
-        accepted <- validateReceiptC(Receipt(data._2, data._3, data._4, current, next, data._5))
-      } yield accepted)
+        _ <- keyC(data._2)
+        _ <- if (canonical(data._3.name) && canonical(data._4.service) && canonical(data._4.operation))
+          Consequence.unit else Consequence.stateConflict("Mechanical receipt owner or operation is noncanonical")
+      } yield Receipt(data._2, data._3, data._4, current, next, data._5))
     }
   }
 

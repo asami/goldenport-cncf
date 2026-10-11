@@ -4,6 +4,7 @@ import java.nio.file.{Files, Path}
 import java.sql.Connection
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import io.circe.Json
+import io.circe.parser.parse
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.context.ExecutionContext
@@ -21,7 +22,7 @@ import org.sqlite.{SQLiteConfig, SQLiteDataSource}
 
 /*
  * @since   Sep. 29, 2026
- * @version Sep. 29, 2026
+ * @version Oct.  9, 2026
  */
 final class WorkflowIssuedWorkDataStorePersistenceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private given ExecutionContext = ExecutionContext.create()
@@ -189,7 +190,7 @@ final class WorkflowIssuedWorkDataStorePersistenceSpec extends AnyWordSpec with 
       } finally take(reopened.closeC())
     }
 
-    "reject incompatible handles and every projected Continuation contract before writing" in {
+    "reject incompatible handles and actual Continuation scope before writing" in {
       Given("an unmodified root and a matrix of incompatible typed work")
       val store = SqlDataStore.sqlite(path.toString)
       try {
@@ -197,36 +198,61 @@ final class WorkflowIssuedWorkDataStorePersistenceSpec extends AnyWordSpec with 
         val request = intent(current)
         val work = issue(request)
         val order = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[String]]
-        def changed(f: ContinuationRequest[String] => ContinuationRequest[String]) =
+        def _changed_(f: ContinuationRequest[String] => ContinuationRequest[String]) =
           work.copy(current = order.copy(request = f(order.request)))
         val variants = Vector(
           work.copy(handle = work.handle.copy(componentIdentity = ComponentId("org.goldenport.cncf.test.ForeignIssuedWork"))),
           work.copy(handle = work.handle.copy(instanceIdentity = InstanceIdentity("foreign"))),
           work.copy(handle = work.handle.copy(workflowIdentity = WorkflowDefinitionIdentity("foreign"))),
           work.copy(handle = work.handle.copy(workflowRevision = WorkflowDefinitionRevision("foreign"))),
-          changed(_.copy(runId = StateMachineRunIdentity("foreign"))),
-          changed(_.copy(continuationId = ContinuationIdentity("foreign"))),
-          changed(_.copy(expectedRevision = StateMachineRevision("foreign"))),
-          changed(_.copy(requiredOperation = StateMachineRequiredOperationIdentity("foreign"))),
-          changed(_.copy(operation = StateMachineOperationIdentity("review", "foreign"))),
-          changed(_.copy(input = None)),
-          changed(_.copy(input = Some(TypedValue("foreign", "input")))),
-          changed(_.copy(resultType = Some(StateMachineResultTypeReference("foreign")))),
-          changed(r => r.copy(context = r.context.copy(summary = "foreign"))),
-          changed(_.copy(completion = CompletionContract("foreign", Vector.empty))),
-          changed(_.copy(evidence = EvidenceContract("foreign", Vector.empty))),
-          changed(_.copy(completionOperation = StateMachineOperationIdentity("", "invalid"))),
-          changed(_.copy(completionOperation = StateMachineOperationIdentity("workflow", "foreign"))))
+          _changed_(_.copy(runId = StateMachineRunIdentity("foreign"))),
+          _changed_(_.copy(continuationId = ContinuationIdentity("foreign"))),
+          _changed_(_.copy(expectedRevision = StateMachineRevision("foreign"))),
+          _changed_(_.copy(requiredOperation = StateMachineRequiredOperationIdentity("foreign"))),
+          _changed_(_.copy(operation = StateMachineOperationIdentity("review", "foreign"))),
+          _changed_(_.copy(input = None)),
+          _changed_(_.copy(input = Some(TypedValue("foreign", "input")))),
+          _changed_(_.copy(resultType = Some(StateMachineResultTypeReference("foreign")))),
+          _changed_(r => r.copy(context = r.context.copy(snapshot = r.context.snapshot.copy(modelRevision = Some("foreign"))))),
+          _changed_(_.copy(completion = CompletionContract("foreign", Vector.empty))),
+          _changed_(_.copy(evidence = EvidenceContract("foreign", Vector.empty))),
+          _changed_(_.copy(completionOperation = StateMachineOperationIdentity("", "invalid"))),
+          _changed_(_.copy(completionOperation = StateMachineOperationIdentity("workflow", "foreign"))))
         take(root(store).create(config, current))
         When("each mismatch is offered to atomic publication")
-        variants.foreach(value => issued(store).suspendC(request, value, owner).toOption shouldBe None)
-        val mismatchedHistory = request.copy(entry = request.entry.copy(suspension =
+        val outcomes = variants.map(value => issued(store).suspendC(request, value, owner))
+        val mismatchedhistory = request.copy(entry = request.entry.copy(suspension =
           request.entry.suspension.map(_.copy(completion = CompletionReference("foreign")))))
-        issued(store).suspendC(mismatchedHistory, work, owner).toOption shouldBe None
+        val mismatched = issued(store).suspendC(mismatchedhistory, work, owner)
+        val retainedroot = take(root(store).load(config, current.identity)).get
+        val retainedclaim = take(claims(store).loadC(identity))
+        val retainedwork = take(issued(store).loadC(identity))
         Then("no root revision, Continuation or issued work has been published")
-        take(root(store).load(config, current.identity)).get.revision shouldBe initialRevision
-        take(claims(store).loadC(identity)) shouldBe None
-        take(issued(store).loadC(identity)) shouldBe None
+        outcomes.foreach(_.toOption shouldBe None)
+        mismatched.toOption shouldBe None
+        retainedroot.revision shouldBe initialRevision
+        retainedclaim shouldBe None
+        retainedwork shouldBe None
+      } finally take(store.closeC())
+    }
+
+    "issue differing Context diagnostics without certifying a complete copy" in {
+      Given("an actual initial SQLite instance and a typed request within the same execution scope")
+      val store = SqlDataStore.sqlite(path.toString)
+      try {
+        val current = initial
+        val request = intent(current)
+        val work = issue(request)
+        val order = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[String]]
+        val diagnostic = work.copy(current = order.copy(request = order.request.copy(
+          context = order.request.context.copy(summary = "different diagnostics"))))
+        take(root(store).create(config, current))
+        When("the typed issue keeps real target, operation and model scope but changes diagnostic summary")
+        val published = take(issued(store).suspendC(request, diagnostic, owner))
+        val retained = take(issued(store).loadC(identity)).get
+        Then("actual publication retains supplied meaning without a Context body equality gate")
+        published.instance.history shouldBe Vector(request.entry)
+        retained shouldBe diagnostic
       } finally take(store.closeC())
     }
 
@@ -243,20 +269,25 @@ final class WorkflowIssuedWorkDataStorePersistenceSpec extends AnyWordSpec with 
           required.copy(metadata = required.metadata.copy(completionContract = null)))
         take(root(store).create(config, current))
         When("atomic publication admits each malformed intent")
-        malformed.foreach { value =>
+        val outcomes = malformed.map { value =>
           val invalid = request.copy(continuation = request.continuation.copy(
             continuation = c.copy(requiredOperation = value)))
-          issued(store).suspendC(invalid, work, owner).toOption shouldBe None
+          issued(store).suspendC(invalid, work, owner)
         }
-        issued(store).suspendC(null, work, owner).toOption shouldBe None
-        issued(store).suspendC(request, null, owner).toOption shouldBe None
+        val missingintent = issued(store).suspendC(null, work, owner)
+        val missingwork = issued(store).suspendC(request, null, owner)
+        val retainedroot = take(root(store).load(config, current.identity)).get
+        val retainedclaim = take(claims(store).loadC(identity))
         Then("no exception, root transition or issue escapes")
-        take(root(store).load(config, current.identity)).get.revision shouldBe initialRevision
-        take(claims(store).loadC(identity)) shouldBe None
+        outcomes.foreach(_.toOption shouldBe None)
+        missingintent.toOption shouldBe None
+        missingwork.toOption shouldBe None
+        retainedroot.revision shouldBe initialRevision
+        retainedclaim shouldBe None
       } finally take(store.closeC())
     }
 
-    "refuse independent initial issue, retrofit and divergent retries" in {
+    "refuse independent initial issue or retrofit and select saved meaning on compatible retries" in {
       Given("the existing issued-work SPI without atomic publication")
       val store = SqlDataStore.sqlite(path.toString)
       try {
@@ -274,7 +305,7 @@ final class WorkflowIssuedWorkDataStorePersistenceSpec extends AnyWordSpec with 
         adapter.loadC(identity).toOption shouldBe None
         adapter.putIfAbsentC(work).toOption shouldBe None
         take(store.load(continuations, key(identity.value))).get shouldBe before
-        Then("a separately atomically issued successor allows identical retry but no changed presentation/input")
+        Given("Spec: docs/spec/workflow-completion-applicability.md; Rule: R4; Example: E6; a separately atomically issued successor")
         val separate = initial.copy(identity = InstanceIdentity("instance-2"))
         val secondRequest = intent(separate, "continuation-2")
         val secondWork = issue(secondRequest)
@@ -282,10 +313,18 @@ final class WorkflowIssuedWorkDataStorePersistenceSpec extends AnyWordSpec with 
         take(adapter.suspendC(secondRequest, secondWork, owner))
         take(adapter.putIfAbsentC(secondWork)) shouldBe secondWork
         val order = secondWork.current.asInstanceOf[WorkflowContinuation.WorkOrder[String]]
-        adapter.putIfAbsentC(secondWork.copy(current = order.copy(presentation =
-          order.presentation.copy(title = "different")))).toOption shouldBe None
-        adapter.putIfAbsentC(secondWork.copy(current = order.copy(request =
-          order.request.copy(input = Some(TypedValue(codec.typeIdentity, "different")))))).toOption shouldBe None
+        When("retry proposes another presentation or input body for the same target")
+        take(adapter.putIfAbsentC(secondWork.copy(current = order.copy(presentation =
+          order.presentation.copy(title = "different"))))) shouldBe secondWork
+        take(adapter.putIfAbsentC(secondWork.copy(current = order.copy(request =
+          order.request.copy(input = Some(TypedValue(codec.typeIdentity, "different"))))))) shouldBe secondWork
+        Then("original work is selected without overwrite, while another route/type/model scope still rejects")
+        Vector(order.request.copy(completionOperation = completionOperation.copy(operation = "foreign")),
+          order.request.copy(input = Some(TypedValue("foreign.input", "different"))),
+          order.request.copy(context = order.request.context.copy(snapshot =
+            order.request.context.snapshot.copy(modelRevision = Some("foreign-model"))))).foreach { foreign =>
+          adapter.putIfAbsentC(secondWork.copy(current = order.copy(request = foreign))).isSuccess shouldBe false
+        }
         take(adapter.loadC(ContinuationIdentity("continuation-2"))) shouldBe Some(secondWork)
       } finally take(store.closeC())
     }
@@ -300,8 +339,7 @@ final class WorkflowIssuedWorkDataStorePersistenceSpec extends AnyWordSpec with 
       val foreign = work.copy(current = order.copy(request = order.request.copy(runId = StateMachineRunIdentity("foreign"))))
       val payloads = Vector("broken", "cncf.workflow-json.v1:{broken",
         WorkflowInstanceDataStorePersistence.storageText(bytes.replace("cncf.workflow-protocol.v1", "unknown")),
-        WorkflowInstanceDataStorePersistence.storageText(take(WorkflowWorkOrderJsonV1.encodeC(foreign, codec))),
-        WorkflowInstanceDataStorePersistence.storageText(" " + bytes))
+        WorkflowInstanceDataStorePersistence.storageText(take(WorkflowWorkOrderJsonV1.encodeC(foreign, codec))))
       payloads.foreach { payload =>
         val store = SqlDataStore.sqlite(path.toString)
         try {
@@ -321,8 +359,8 @@ final class WorkflowIssuedWorkDataStorePersistenceSpec extends AnyWordSpec with 
       }
     }
 
-    "reject failed or lossy application codecs and unsupported store declarations before publication" in {
-      Given("application codecs that throw or do not reproduce the admitted typed input")
+    "reject throwing application codecs and unsupported store declarations before publication" in {
+      Given("an application writer that fails to serialize the actual typed input")
       val store = SqlDataStore.sqlite(path.toString)
       try {
         val current = initial
@@ -334,13 +372,7 @@ final class WorkflowIssuedWorkDataStorePersistenceSpec extends AnyWordSpec with 
           def encode(value: String): Json = throw new IllegalArgumentException("injected")
           def decode(value: Json): Either[String, String] = codec.decode(value)
         }
-        val lossy = new PayloadCodec[String] {
-          val typeIdentity = codec.typeIdentity
-          def encode(value: String): Json = Json.fromString("lost")
-          def decode(value: Json): Either[String, String] = codec.decode(value)
-        }
         issued(store, throwing).suspendC(request, work, owner).toOption shouldBe None
-        issued(store, lossy).suspendC(request, work, owner).toOption shouldBe None
         val cross = config.copy(delivery = DeliveryConfiguration.CrossStoreCommittedTransition(
           WorkflowStoreIdentity("other"), CommittedEntityTransitionReference("committed"),
           IdempotencyKey("key"), RecoverabilityReference("recovery")))
@@ -354,6 +386,57 @@ final class WorkflowIssuedWorkDataStorePersistenceSpec extends AnyWordSpec with 
         take(root(store).load(config, current.identity)).get.revision shouldBe initialRevision
         take(claims(store).loadC(identity)) shouldBe None
       } finally take(store.closeC())
+    }
+
+    "serialize once and recover actual formatted issued meaning without canonical or Context body proof" in {
+      Given("Spec: docs/spec/workflow-completion-applicability.md; Rule: R5; Example: E9; the production borrowed SQLite issue adapter and a counting typed codec")
+      val db = path
+      val current = initial
+      val request = intent(current)
+      val work = issue(request)
+      var writes = 0
+      var reads = 0
+      val observed = new PayloadCodec[String] {
+        val typeIdentity = codec.typeIdentity
+        def encode(value: String): Json = { writes += 1; codec.encode(value) }
+        def decode(value: Json): Either[String, String] = { reads += 1; codec.decode(value) }
+      }
+      val first = SqlDataStore.sqlite(db.toString)
+      try {
+        take(root(first).create(config, current))
+        When("atomic suspension serializes input and consumes actual committed readback")
+        take(issued(first, observed).suspendC(request, work, owner))
+        Then("the typed writer runs once and the reader runs once, not a certificate round trip")
+        writes shouldBe 1
+        reads shouldBe 1
+        val json = parse(take(WorkflowWorkOrderJsonV1.encodeC(work, codec))).toOption.get
+        val diagnostic = json.hcursor.downField("request").downField("context").downField("summary")
+          .withFocus(_ => Json.fromString("original saved meaning with different diagnostics")).top.get
+          .hcursor.downField("request").downField("context").downField("snapshot").downField("workspaceRevision")
+          .withFocus(_ => Json.fromString("moved-workspace")).top.get
+        take(first.update(continuations, key(identity.value), Record.dataAuto(
+          WorkflowIssuedWorkDataStorePersistence.payloadField -> WorkflowInstanceDataStorePersistence.storageText(" \n" + diagnostic.spaces2))))
+      } finally take(first.closeC())
+      When("a fresh physical provider reads that valid older JSON form and retries with a changed proposal")
+      val reopened = SqlDataStore.sqlite(db.toString)
+      try {
+        val adapter = issued(reopened, observed)
+        val before = take(reopened.load(continuations, key(identity.value))).get
+        val saved = take(adapter.loadC(identity)).get
+        val order = saved.current.asInstanceOf[WorkflowContinuation.WorkOrder[String]]
+        order.request.context.summary shouldBe "original saved meaning with different diagnostics"
+        order.request.context.snapshot.workspaceRevision shouldBe Some("moved-workspace")
+        order.request.input.get.value shouldBe "exact review input"
+        val supplied = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[String]]
+        take(adapter.putIfAbsentC(work.copy(current = supplied.copy(request = supplied.request.copy(
+          input = Some(TypedValue(codec.typeIdentity, "fresh proposal is not an overwrite"))))))) shouldBe saved
+        Then("original saved meaning is returned without serialization, mutation, claim grant or renewal")
+        writes shouldBe 1
+        reads shouldBe 3
+        take(reopened.load(continuations, key(identity.value))).get shouldBe before
+        take(claims(reopened).loadC(identity)).get.status shouldBe ContinuationRuntimePersistence.Status.Available
+        take(root(reopened).load(config, current.identity)).get.history shouldBe Vector(request.entry)
+      } finally take(reopened.closeC())
     }
 
     "roll back issued payload and both records at every pre-commit checkpoint" in {

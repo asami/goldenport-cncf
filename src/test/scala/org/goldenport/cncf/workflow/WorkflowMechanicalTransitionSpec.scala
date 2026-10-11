@@ -10,10 +10,11 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.TypedValue
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.scalacheck.{Gen, Prop, Test}
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct.  9, 2026
  */
 final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](value: Consequence[A]): A = value match {
@@ -90,7 +91,7 @@ final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers w
       admitted.foreach(_.isSuccess shouldBe false)
     }
 
-    "refuse unknown fields, foreign payload types and divergent complete history" in {
+    "refuse unknown fields, foreign payload types and oversized data without recertifying an append" in {
       Given("a correctly encoded receipt and an independently admitted definition catalog")
       val receipt = take(admitC(component, operation, intent))
       val json = parse(take(WorkflowMechanicalTransitionJsonV1.encodeC(receipt, codec))).toOption.get
@@ -100,11 +101,27 @@ final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers w
         json.mapObject(_.add("reference", json.hcursor.downField("reference").focus.get.mapObject(_.add("hash", Json.fromString("x"))))),
         json.mapObject(_.add("payload", foreignPayload)))
       val decoded = malformed.map(value => WorkflowMechanicalTransitionJsonV1.decodeC(value.noSpaces, catalog, codec))
-      Then("no malformed record or inconsistent next-history receipt is accepted")
+      val oversized = WorkflowMechanicalTransitionJsonV1.encodeC(
+        receipt.copy(payload = TypedValue(codec.typeIdentity, "x" * (1024 * 1024))), codec)
+      Then("no malformed envelope or incompatible payload is accepted")
       decoded.foreach(_.isSuccess shouldBe false)
-      WorkflowMechanicalTransitionJsonV1.encodeC(receipt.copy(next = receipt.current), codec).isSuccess shouldBe false
-      WorkflowMechanicalTransitionJsonV1.encodeC(receipt.copy(payload = TypedValue(codec.typeIdentity, "x" * (1024 * 1024))), codec)
-        .isSuccess shouldBe false
+      oversized.isSuccess shouldBe false
+    }
+
+    "read historical records as inert data without reproducing or proving their transition" in {
+      Given("a receipt carrying individually valid native records that are not a one-append pair")
+      val admitted = take(admitC(component, operation, intent))
+      val property = Prop.forAll(Gen.alphaNumStr.suchThat(_.nonEmpty)) { cause =>
+        val historic = active.copy(causation = CausationReference(cause),
+          history = active.history.map(_.copy(causation = CausationReference(cause))))
+        val saved = admitted.copy(next = historic)
+        WorkflowMechanicalTransitionJsonV1.encodeC(saved, codec)
+          .flatMap(WorkflowMechanicalTransitionJsonV1.decodeC(_, catalog, codec)).toOption.contains(saved)
+      }
+      When("the codec stores and reloads this historical data")
+      val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(100), property)
+      Then("raw record data survives; decoding neither executes nor certifies an append")
+      checked.passed shouldBe true
     }
   }
 }

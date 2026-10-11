@@ -13,7 +13,7 @@ import org.simplemodeling.model.datatype.EntityRevision
 /**
  * Private borrowed adapter: prepares a pair, never owns or commits a store.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct.  9, 2026
  */
 private[workflow] final class WorkflowMechanicalTransitionDataStorePersistence[A] private (
   store: DataStore & EntityConditionalTransitionDataStore,
@@ -22,34 +22,27 @@ private[workflow] final class WorkflowMechanicalTransitionDataStorePersistence[A
   instanceCollection: DataStore.CollectionId, checkpointCollection: DataStore.CollectionId,
   codec: PayloadCodec[A], owner: DataStoreComponentOwner
 )(using ExecutionContext) {
-  import WorkflowInstanceDataStorePersistence.{configurationField, configurationJson, recordField,
+  import WorkflowInstanceDataStorePersistence.{configurationField, recordField,
     revisionField, storageText, storageJsonC}
   import WorkflowMechanicalTransitionDataStorePersistence.payloadField
-  private val configurationBytes = configurationJson(configuration).noSpaces
 
   def prepareC(intent: Intent[A]): Consequence[WorkflowPreparedDataStoreTransition[Receipt[A]]] =
     for {
-      _ <- if (intent != null && intent.configuration == configuration) Consequence.unit
-        else Consequence.stateConflict("Mechanical intent differs from its bound configuration")
-      receipt <- admitC(component, operation, intent)
-      receiptBytes <- WorkflowMechanicalTransitionJsonV1.encodeC(receipt, codec)
+      _ <- if (intent != null && intent.current != null) Consequence.unit
+        else Consequence.stateConflict("Mechanical intent target is missing")
       // Re-read the actual native instance; the caller's data is not a guard witness.
-      loaded <- instances.load(configuration, receipt.current.identity)
+      loaded <- instances.load(configuration, intent.current.identity)
       current <- loaded.map(Consequence.success).getOrElse(Consequence.stateConflict("Mechanical instance is absent"))
-      currentBytes <- WorkflowInstanceRecordJsonV1.encodeC(current)
-      suppliedBytes <- WorkflowInstanceRecordJsonV1.encodeC(receipt.current)
-      _ <- if (currentBytes == suppliedBytes) Consequence.unit
-        else Consequence.stateConflict("Mechanical current instance differs from stored facts")
+      receipt <- admitC(component, operation, intent.copy(configuration = configuration, current = current))
+      receiptBytes <- WorkflowMechanicalTransitionJsonV1.encodeC(receipt, codec)
       nextBytes <- WorkflowInstanceRecordJsonV1.encodeC(receipt.next)
-      _ <- WorkflowInstanceRecordJsonV1.decodeC(nextBytes, catalog)
       key <- keyC(receipt.reference)
       expected <- EntityRevision.createC(current.revision.value + 1L)
       nextRevision <- expected.nextC
-      policy <- DataStoreConditionalValue.from(storageText(configurationBytes))
       root <- DataStoreConditionalRoot.create(owner, instanceCollection, DataStore.StringEntryId(current.identity.value),
-        revisionField, Some(expected), Vector(DataStoreConditionalExpectedField(configurationField, policy)),
+        revisionField, Some(expected), Vector.empty,
         Record.dataAuto(recordField -> storageText(nextBytes)), nextRevision)
-      successor = Record.dataAuto(revisionField -> 1L, configurationField -> storageText(configurationBytes),
+      successor = Record.dataAuto(revisionField -> 1L,
         payloadField -> storageText(receiptBytes))
       pair <- DataStoreConditionalTransitionPlan.create(root, DataStoreConditionalSuccessor.Create(owner,
         checkpointCollection, DataStore.StringEntryId(key), revisionField, successor),
@@ -57,12 +50,8 @@ private[workflow] final class WorkflowMechanicalTransitionDataStorePersistence[A
     } yield WorkflowPreparedDataStoreTransition.create(store, pair, changed => changed match {
       case DataStoreConditionalTransitionResult.Transitioned(rootValue, successorValue) => for {
         actual <- instances.decodeC(rootValue, receipt.next.identity)
-        actualBytes <- WorkflowInstanceRecordJsonV1.encodeC(actual)
         retained <- decodeLogicalC(successorValue, receipt.reference)
-        retainedBytes <- WorkflowMechanicalTransitionJsonV1.encodeC(retained, codec)
-        _ <- if (actualBytes == nextBytes && retainedBytes == receiptBytes) Consequence.unit
-          else Consequence.stateConflict("Mechanical pair authoritative readback differs")
-      } yield retained
+      } yield retained.copy(next = actual)
       case _ => Consequence.stateConflict("Mechanical revision or checkpoint Create was refused")
     })
 
@@ -76,17 +65,16 @@ private[workflow] final class WorkflowMechanicalTransitionDataStorePersistence[A
           receipt <- decodeStoredC(value, reference)
           loaded <- instances.load(configuration, receipt.next.identity)
           current <- loaded.map(Consequence.success).getOrElse(Consequence.stateConflict("Retained mechanical instance is absent"))
-          _ <- if (current.identity == receipt.next.identity && current.definition == receipt.next.definition &&
-              current.history.take(receipt.next.history.size) == receipt.next.history) Consequence.unit
-            else Consequence.stateConflict("Mechanical receipt no longer matches complete native history prefix")
         } yield Some(receipt -> current)
       }
     } yield retained
 
   private def decodeStoredC(stored: Record, reference: Reference): Consequence[Receipt[A]] = for {
     key <- keyC(reference)
-    _ <- if (stored.getString("id").contains(key) && stored.fields.size == 4 &&
-        stored.fields.map(_.key).toSet == Set("id", revisionField, configurationField, payloadField)) Consequence.unit
+    fields = stored.fields.map(_.key).toSet
+    _ <- if (stored.getString("id").contains(key) && stored.fields.size == fields.size &&
+        (fields == Set("id", revisionField, payloadField) ||
+          fields == Set("id", revisionField, configurationField, payloadField))) Consequence.unit
       else Consequence.stateConflict("Mechanical checkpoint physical identity or envelope differs")
     receipt <- decodeLogicalC(Record(stored.fields.filterNot(_.key == "id")), reference)
   } yield receipt
@@ -96,9 +84,11 @@ private[workflow] final class WorkflowMechanicalTransitionDataStorePersistence[A
     */
   private def decodeLogicalC(stored: Record, reference: Reference): Consequence[Receipt[A]] = for {
     revision <- WorkflowContinuationDataStorePersistence.revisionBinding.revision(stored)
-    _ <- if (revision.value == 1L && stored.fields.size == 3 &&
-        stored.getString(configurationField).contains(storageText(configurationBytes)) &&
-        stored.fields.map(_.key).toSet == Set(revisionField, configurationField, payloadField)) Consequence.unit
+    fields = stored.fields.map(_.key).toSet
+    // Legacy configurationPayload is inert; current host binding owns policy.
+    _ <- if (revision.value == 1L && stored.fields.size == fields.size &&
+        (fields == Set(revisionField, payloadField) ||
+          fields == Set(revisionField, configurationField, payloadField))) Consequence.unit
       else Consequence.stateConflict("Mechanical checkpoint native envelope differs")
     payload <- stored.getString(payloadField).map(Consequence.success)
       .getOrElse(Consequence.stateConflict("Mechanical checkpoint payload is absent"))

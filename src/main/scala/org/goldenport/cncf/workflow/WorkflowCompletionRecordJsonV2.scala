@@ -11,7 +11,7 @@ import org.goldenport.cncf.workflow.WorkflowResultJsonV1.PayloadCodec
   * unchanged for completions without a closing Action. References are facts,
   * never a grant to resolve context or execute another Action.
   * @since   Oct.  1, 2026
-  * @version Oct.  8, 2026
+  * @version Oct.  9, 2026
   */
 private[workflow] object WorkflowCompletionRecordJsonV2 {
   val schemaVersion = "cncf.workflow-completion-record.v2"
@@ -34,16 +34,16 @@ private[workflow] object WorkflowCompletionRecordJsonV2 {
   }
 
   def decodeC[R](bytes: String, codec: PayloadCodec[R]): Consequence[Record[R]] = safelyC {
-    import WorkflowResultJsonV1.{_fields, _string, _expect}
+    import WorkflowResultJsonV1.{_returned_fields, _string, _expect}
     val decoded = for {
       json <- Option(bytes).toRight("Joint completion bytes are missing").flatMap(b => parse(b).left.map(_ => "Invalid joint completion JSON"))
-      fields <- _fields(json, Set("schemaVersion", "semanticCompletion", "closingResult"))
+      fields <- _returned_fields(json, Set("schemaVersion", "semanticCompletion", "closingResult"))
       version <- _string(fields, "schemaVersion")
       _ <- _expect(version == schemaVersion, "Unsupported joint completion schema")
-      semantic <- _fields(fields("semanticCompletion"), Set("schemaVersion", "instanceRevision", "result"))
+      semantic <- _returned_fields(fields("semanticCompletion"), Set("schemaVersion", "instanceRevision", "result"))
       semanticVersion <- _string(semantic, "schemaVersion")
       _ <- _expect(semanticVersion == WorkflowCompletionRecordJsonV1.schemaVersion, "Joint completion requires a V1 semantic envelope")
-      closing <- _fields(fields("closingResult"), Set("typeIdentity", "contextIdentity", "contextRevision"))
+      closing <- _returned_fields(fields("closingResult"), Set("typeIdentity", "contextIdentity", "contextRevision"))
       typeIdentity <- _string(closing, "typeIdentity")
       contextIdentity <- _string(closing, "contextIdentity")
       contextRevision <- _string(closing, "contextRevision")

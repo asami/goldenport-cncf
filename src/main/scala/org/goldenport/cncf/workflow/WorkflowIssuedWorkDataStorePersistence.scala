@@ -8,10 +8,11 @@ import org.goldenport.cncf.datastore.*
 import org.goldenport.cncf.workflow.WorkflowInstancePersistence.{Configuration, DefinitionBinding, InstanceRecord}
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 import org.goldenport.cncf.workflow.WorkflowResultJsonV1.PayloadCodec
+import org.simplemodeling.model.datatype.EntityRevision
 
 /*
  * @since   Sep. 29, 2026
- * @version Sep. 29, 2026
+ * @version Oct.  9, 2026
  */
 /** Borrowed, same-store issued-work publication and recovery. Initial issue is
   * exclusively a compound instance/Continuation create, never a later SPI write.
@@ -43,23 +44,42 @@ final class WorkflowIssuedWorkDataStorePersistence[W] private (
   ): Consequence[WorkflowPreparedDataStoreTransition[WorkflowInstanceDataStorePersistence.PersistedSuspension]] =
     instances.prepareIssuedSuspensionC(intent, owner, continuationCollection, issued, codec, component, completionOperation, kind)
 
-  /** Immutable retry only. Refuse to retrofit a separately published Continuation. */
+  /** Select original saved work only; refuse to retrofit a separately published Continuation. */
   def putIfAbsentC(issued: WorkflowInteraction[W, Nothing]):
       Consequence[WorkflowInteraction[W, Nothing]] =
     for {
-      bytes <- encodeExactC(issued, codec, kind)
       request <- requestC(issued, kind)
       existing <- loadC(request.continuationId)
       admitted <- existing match {
-        case Some(value) => encodeExactC(value, codec, kind).flatMap { actual =>
-          if (actual == bytes) Consequence.success(value)
-          else Consequence.stateConflict("A different WorkOrder is already issued")
-        }
+        case Some(value) => IssuedWorkOrderPersistence.selectIssuedC(value, issued, kind)
         case None => Consequence.stateConflict("Initial WorkOrder issue requires atomic suspension")
       }
     } yield admitted
 
   def loadC(identity: ContinuationIdentity): Consequence[Option[WorkflowInteraction[W, Nothing]]] =
+    _load_source_c(identity).flatMap {
+      case None => Consequence.success(None)
+      case Some((work, source)) => for {
+        loaded <- instances.load(configuration, work.handle.instanceIdentity)
+        instance <- loaded.map(Consequence.success)
+          .getOrElse(Consequence.stateConflict("Issued WorkOrder instance is unavailable"))
+        _ <- matchingC(instance, source._1.continuation, work, component, completionOperation, kind)
+      } yield Some(work)
+    }
+
+  /** Consume one native source with the completion owner's actual instance.
+    * No instance reload, second Continuation read or publication certificate.
+    */
+  private[workflow] def _load_selected_c(identity: ContinuationIdentity, instance: InstanceRecord):
+      Consequence[Option[(WorkflowInteraction[W, Nothing], (ContinuationRuntimePersistence.Record, EntityRevision))]] =
+    _load_source_c(identity).flatMap {
+      case None => Consequence.success(None)
+      case Some(value) => matchingC(instance, value._2._1.continuation, value._1,
+        component, completionOperation, kind).map(_ => Some(value))
+    }
+
+  private def _load_source_c(identity: ContinuationIdentity):
+      Consequence[Option[(WorkflowInteraction[W, Nothing], (ContinuationRuntimePersistence.Record, EntityRevision))]] =
     if (identity == null || identity.value == null || identity.value.trim.isEmpty)
       Consequence.stateConflict("Issued WorkOrder requires a Continuation identity")
     else store.load(continuationCollection, WorkflowContinuationDataStorePersistence.id(identity)).flatMap {
@@ -69,17 +89,45 @@ final class WorkflowIssuedWorkDataStorePersistence[W] private (
         payload <- stored.getString(payloadField).map(Consequence.success)
           .getOrElse(Consequence.stateConflict("Atomically issued WorkOrder payload is missing"))
         raw <- storageJsonC(payload)
-        issued <- decodeExactC(raw, codec, kind)
-        loaded <- instances.load(configuration, issued.handle.instanceIdentity)
-        instance <- loaded.map(Consequence.success)
-          .getOrElse(Consequence.stateConflict("Issued WorkOrder instance is unavailable"))
-        _ <- matchingC(instance, continuation._1.continuation, issued, component, completionOperation, kind)
-      } yield Some(issued)
+        issued <- decodeC(raw, codec, kind)
+      } yield Some((issued, continuation))
     }
 }
 
 object WorkflowIssuedWorkDataStorePersistence {
   private[workflow] val payloadField = "issuedWorkPayload"
+
+  /** Read the selected stored issue's binding references only. A Completion
+    * query does not need to decode application input or re-admit AI work.
+    * This reference carries no claim, execution or publication authority.
+    */
+  private[workflow] def _reference_c(bytes: String, kind: WorkflowIssuedContinuationKind,
+      component: ComponentId, completionoperation: StateMachineOperationIdentity): Consequence[WorkflowHandle] = safelyC {
+    import io.circe.parser.parse
+    import WorkflowResultJsonV1.{_decodeHandle, _expect, _fields, _string}
+    val decoded = for {
+      json <- Option(bytes).toRight("Issued reference bytes are missing")
+        .flatMap(value => parse(value).left.map(_ => "Invalid issued reference JSON"))
+      fields <- json.asObject.map(_.toMap).toRight("Issued reference must be an object")
+      schema <- _string(fields, "schemaVersion")
+      _ <- _expect(schema == WorkflowProtocolV1.schemaVersion, "Unsupported issued reference schema")
+      selectedkind <- _string(fields, "kind")
+      _ <- _expect(selectedkind == (kind match {
+        case WorkflowIssuedContinuationKind.WorkOrder => "WORK_ORDER"
+        case WorkflowIssuedContinuationKind.Decision => "DECISION"
+      }), "Foreign issued reference kind")
+      handle <- fields.get("handle").toRight("Issued handle is missing").flatMap(_decodeHandle)
+      _ <- _expect(handle.componentIdentity == component, "Foreign issued Component")
+      request <- fields.get("request").flatMap(_.asObject).toRight("Issued request reference is missing")
+      route <- request("completionOperation").toRight("Issued completion Operation is missing")
+        .flatMap(value => _fields(value, Set("service", "operation")))
+      service <- _string(route, "service")
+      operation <- _string(route, "operation")
+      _ <- _expect(StateMachineOperationIdentity(service, operation) == completionoperation,
+        "Foreign issued completion Operation")
+    } yield handle
+    decoded.fold(Consequence.stateConflict(_), handle => handle.validateC.map(_ => handle))
+  }
 
   def bindC[W](store: DataStore, configuration: Configuration, component: ComponentId,
     completionOperation: StateMachineOperationIdentity,
@@ -140,10 +188,11 @@ object WorkflowIssuedWorkDataStorePersistence {
     kind: WorkflowIssuedContinuationKind = WorkflowIssuedContinuationKind.WorkOrder
   ): Consequence[Unit] =
     for {
-      expectedHandle <- WorkflowHandle.fromRecordC(component, instance)
       request <- requestC(issued, kind)
+      expectedhandle = WorkflowHandle(component, instance.definition.workflowIdentity,
+        instance.definition.workflowRevision, instance.identity)
       required = continuation.requiredOperation
-      _ <- if (issued.handle == expectedHandle &&
+      _ <- if (issued.handle == expectedhandle &&
           request.completionOperation == completionOperation &&
           request.runId == continuation.runId &&
           request.continuationId == continuation.continuationId &&
@@ -152,46 +201,44 @@ object WorkflowIssuedWorkDataStorePersistence {
           request.operation == required.operation &&
           request.input.map(_.typeIdentity) == required.inputType.map(_.value) &&
           request.resultType == required.resultType &&
-          request.context == continuation.context &&
-          request.completion == required.metadata.completionContract &&
-          request.evidence == required.metadata.evidenceContract)
+          request.context != null && WorkflowProtocolV1.sameContextScope(request.context.snapshot, continuation.context.snapshot) &&
+          request.completion.identity == required.metadata.completionContract.identity &&
+          request.evidence.identity == required.metadata.evidenceContract.identity)
         Consequence.unit
       else Consequence.stateConflict("Issued WorkOrder differs from instance or Continuation facts")
-      _ <- if (instance.history.exists(entry => entry.suspension.exists(boundary =>
-          boundary.continuationIdentity.value == request.continuationId.value &&
-          boundary.expectedRevision == entry.revision &&
-          boundary.contextSnapshot.value == request.context.snapshot.workflowRevision &&
-          boundary.completion.value == request.completion.identity &&
-          boundary.evidence.value == request.evidence.identity)))
-        Consequence.unit
-      else Consequence.stateConflict("Issued WorkOrder has no matching instance suspension history")
     } yield ()
 
-  /** Application codecs must be exact and must fail before datastore publication. */
-  private[workflow] def encodeExactC[W](issued: WorkflowInteraction[W, Nothing], codec: PayloadCodec[W],
+  /** Initial publication resolves the actual adjacent suspension once. Stored
+    * reads do not reconstruct this boundary from historical annotations.
+    */
+  private[workflow] def _publication_c[W](instance: InstanceRecord, continuation: Continuation,
+      issued: WorkflowInteraction[W, Nothing], component: ComponentId,
+      completionoperation: StateMachineOperationIdentity, kind: WorkflowIssuedContinuationKind): Consequence[Unit] =
+    for {
+      _ <- matchingC(instance, continuation, issued, component, completionoperation, kind)
+      metadata = continuation.requiredOperation.metadata
+      _ <- if (instance.suspension.exists(boundary =>
+          boundary.contextSnapshot.value == continuation.context.snapshot.workflowRevision &&
+          boundary.completion.value == metadata.completionContract.identity &&
+          boundary.evidence.value == metadata.evidenceContract.identity))
+        Consequence.unit
+      else Consequence.stateConflict("Issued work does not resolve the actual suspension contracts")
+    } yield ()
+
+  /** Serialize once; application meaning is not certified by a duplicate round trip. */
+  private[workflow] def encodeC[W](issued: WorkflowInteraction[W, Nothing], codec: PayloadCodec[W],
     kind: WorkflowIssuedContinuationKind = WorkflowIssuedContinuationKind.WorkOrder):
       Consequence[String] =
     safelyC {
       for {
         _ <- requestC(issued, kind)
         bytes <- encodeForKindC(issued, codec, kind)
-        decoded <- decodeForKindC(bytes, codec, kind)
-        roundTrip <- encodeForKindC(decoded, codec, kind)
-        _ <- if (decoded == issued && roundTrip == bytes) Consequence.unit
-          else Consequence.stateConflict("Issued WorkOrder codec is not an exact round-trip")
       } yield bytes
     }
 
-  private def decodeExactC[W](bytes: String, codec: PayloadCodec[W], kind: WorkflowIssuedContinuationKind):
+  private[workflow] def decodeC[W](bytes: String, codec: PayloadCodec[W], kind: WorkflowIssuedContinuationKind):
       Consequence[WorkflowInteraction[W, Nothing]] =
-    safelyC {
-      for {
-        decoded <- decodeForKindC(bytes, codec, kind)
-        encoded <- encodeExactC(decoded, codec, kind)
-        _ <- if (encoded == bytes) Consequence.unit
-          else Consequence.stateConflict("Persisted issued WorkOrder bytes are not canonical")
-      } yield decoded
-    }
+    safelyC { decodeForKindC(bytes, codec, kind) }
 
   private def encodeForKindC[W](issued: WorkflowInteraction[W, Nothing], codec: PayloadCodec[W],
     kind: WorkflowIssuedContinuationKind): Consequence[String] = kind match {

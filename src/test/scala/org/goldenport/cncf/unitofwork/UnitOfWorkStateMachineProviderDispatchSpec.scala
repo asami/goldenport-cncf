@@ -14,6 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 23, 2026
+ * @version Oct.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkStateMachineProviderDispatchSpec
@@ -64,12 +65,20 @@ final class UnitOfWorkStateMachineProviderDispatchSpec
 
     "interpret a program Provider in the active UnitOfWork without using its direct compatibility method" in {
       Given("a Program Provider that emits a typed System authorization before completing")
-      val request = _request("required.program")
+      val requirement = org.goldenport.cncf.workflow.WorkflowProtocolV1.ExecutionRequirement(
+        Vector(org.goldenport.cncf.workflow.WorkflowProtocolV1.CapabilityRequirement("required.program")),
+        org.goldenport.cncf.workflow.WorkflowProtocolV1.RiskLevel("SOURCE"),
+        org.goldenport.cncf.workflow.WorkflowProtocolV1.ReasoningLevel.Deep, reviewRequired = false,
+        disposition = Some(org.goldenport.cncf.workflow.WorkflowProtocolV1.ExecutionDisposition(
+          org.goldenport.cncf.workflow.WorkflowProtocolV1.ExecutionPlacement.Inline,
+          org.goldenport.cncf.workflow.WorkflowProtocolV1.ExecutionIndependence.Optional, "origin")))
+      val request = _request("required.program").copy(executionRequirement = Some(requirement))
       var programcalls = 0
       val provider = new StateMachineProgramProvider {
         override val identity = ProviderIdentity("provider.program")
         override def program(value: ProviderExecutionRequest): ExecUowM[ActionExecution] = {
           value shouldBe request
+          value.executionRequirement shouldBe Some(requirement)
           programcalls += 1
           for {
             _ <- ConsequenceT.liftF(

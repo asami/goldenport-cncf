@@ -67,8 +67,7 @@ object WorkflowCompletionServiceOperation {
           value.resultTypeIdentity != codec.resultTypeIdentity) ||
         (managedCompletion.nonEmpty && closingProgram.isEmpty) ||
         definition.schemaVersion != GeneratedProvidedApiAbi.schemaVersion ||
-        definition.generator != GeneratedProvidedApiAbi.generatorIdentity ||
-        definition.providedOperations == null || !definition.providedOperations.contains(operation) ||
+        !definition.providesOperation(operation) ||
         !_name(definition.identity) || !_name(definition.version) ||
         !_name(operation.service) || !_name(operation.name) ||
         !_name(codec.resultTypeIdentity) || operation.inputType != Some(codec.resultTypeIdentity))
@@ -193,23 +192,9 @@ object WorkflowCompletionServiceOperation {
       for {
         _ <- if (closingProgram.isEmpty || selected.nonEmpty) Consequence.unit
              else Consequence.stateConflict("public completion has no selected closing Action")
-        _ <- _admit_issued_c()
         owner <- component match {
           case Some(value) => Consequence.success(value.componentId)
           case None => Consequence.stateConflict("public completion Component is unavailable")
-        }
-        _ <- selected match {
-          case Some((current, _)) =>
-            instancePersistence.load(configuration, current.identity).flatMap {
-              case Some(stored) => for {
-                actual <- WorkflowInstanceRecordJsonV1.encodeC(stored)
-                expected <- WorkflowInstanceRecordJsonV1.encodeC(current)
-                _ <- if (actual == expected) Consequence.unit
-                  else Consequence.stateConflict("public completion WorkflowInstance changed after closing Action selection")
-              } yield ()
-              case _ => Consequence.stateConflict("public completion WorkflowInstance changed after closing Action selection")
-            }
-          case None => Consequence.unit
         }
         completion <- managedCompletion match {
           case Some(bound) => selected match {
@@ -226,7 +211,9 @@ object WorkflowCompletionServiceOperation {
               case Some((current, SelectedClosing(_, Some(next)))) =>
                 instancePersistence.append(configuration, current.identity, current.revision, next.history.last)
                   .flatMap { persisted =>
-                    if (persisted == next) Consequence.success(Some(persisted))
+                    if (persisted.identity == next.identity && persisted.revision == next.revision &&
+                        persisted.lifecycle == next.lifecycle && persisted.currentProgression == next.currentProgression &&
+                        persisted.suspension == next.suspension) Consequence.success(Some(persisted))
                     else Consequence.stateConflict("public completion WorkflowInstance append diverged")
                   }
               case _ => Consequence.success(None)
@@ -248,9 +235,13 @@ object WorkflowCompletionServiceOperation {
           Consequence.stateConflict("Managed completion requires an adjacent selected next instance")
         case None => Consequence.unit
         case Some(next) if next != null && next.history != null && next.history.nonEmpty =>
-          current.appendC(current.revision, next.history.last).flatMap { projected =>
-            if (projected == next) Consequence.unit
-            else Consequence.stateConflict("public completion next WorkflowInstance is not the selected append")
+          next.validateC.flatMap { admitted =>
+            current.appendC(current.revision, admitted.history.last).flatMap { projected =>
+              if (admitted.identity == current.identity && admitted.revision == projected.revision &&
+                  admitted.definition.workflowIdentity == current.definition.workflowIdentity &&
+                  admitted.definition.workflowRevision == current.definition.workflowRevision) Consequence.unit
+              else Consequence.stateConflict("public completion next WorkflowInstance is not the selected append")
+            }
           }
         case _ => Consequence.stateConflict("public completion next WorkflowInstance is missing")
       }

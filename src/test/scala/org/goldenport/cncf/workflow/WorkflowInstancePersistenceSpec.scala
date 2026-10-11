@@ -14,7 +14,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 21, 2026
- * @version Sep. 29, 2026
+ *  version Oct.  8, 2026
+ * @version Oct.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkflowInstancePersistenceSpec
@@ -177,45 +178,19 @@ final class WorkflowInstancePersistenceSpec
       }
     }
 
-    "E6 retain an admitted definition behind immutable binding facts" must _e6 {
-      "translate generated admission failures and reject reflected fact divergence" in {
-        Given("an admitted generated definition and a generated definition with a forged revision")
-        val definition = _definition()
-        val tamperedDefinition = definition.copy(
-          workflow = definition.workflow.copy(revision = WorkflowRevision("forged-revision"))
-        )
-        val binding = _take(WorkflowInstancePersistence.bindDefinitionC(definition))
-
-        When("generated admission and a reflected private binding construction are attempted")
-        val admission = _diagnostic(WorkflowInstancePersistence.bindDefinitionC(tamperedDefinition))
-        val constructor = classOf[DefinitionBinding].getDeclaredConstructors match {
-          case Array(value) => value
-          case values => fail(s"expected one DefinitionBinding constructor but got ${values.length}")
-        }
-        constructor.setAccessible(true)
-        val forged = constructor.newInstance(
-          WorkflowDefinitionIdentity("forged-workflow"),
-          binding.workflowRevision,
-          binding.sourceCorrelation,
-          binding.producerAbiIdentity,
-          binding.workflowAbiIdentity,
-          binding.bootstrapAbiIdentity,
-          binding.producerRevision,
-          binding.fixtureSha256,
-          definition,
-          None,
-          None
-        ).asInstanceOf[DefinitionBinding]
-        val forgedDiagnostic = _diagnostic(forged.validateC)
-        val forgedRecordDiagnostic = _diagnostic(_initial_record(forged).validateC)
-
-        Then("the persistence boundary preserves the generated diagnostic and rejects divergent public facts")
-        admission.code shouldBe DiagnosticCode.GeneratedAbiAdmissionRejected
-        admission.data("generated-code") shouldBe GeneratedWorkflowAbi.DiagnosticCode.UnsupportedWorkflowRevision.value
-        forgedDiagnostic.code shouldBe DiagnosticCode.InvalidDefinitionIdentity
-        forgedRecordDiagnostic.code shouldBe DiagnosticCode.InvalidDefinitionIdentity
-      }
-    }
+"E6 retain admitted executable definitions" must _e6 {
+  "translate an unsupported execution revision at admission, without reflected tamper proofs" in {
+    Given("an admitted generated definition and an unsupported runtime revision")
+    val definition = _definition()
+    val incompatible = definition.copy(
+      workflow = definition.workflow.copy(revision = WorkflowRevision("unsupported-revision")))
+    When("the runtime definition is admitted")
+    val admission = _diagnostic(WorkflowInstancePersistence.bindDefinitionC(incompatible))
+    Then("actual incompatibility preserves its generated diagnostic")
+    admission.code shouldBe DiagnosticCode.GeneratedAbiAdmissionRejected
+    admission.data("generated-code") shouldBe GeneratedWorkflowAbi.DiagnosticCode.UnsupportedWorkflowRevision.value
+  }
+}
 
     "E7 admit only a versioned, correlated suspension intent" must _e7 {
       "derive the next WorkflowInstance record and reject foreign, claimed, or stale Continuations" in {
@@ -341,16 +316,20 @@ final class WorkflowInstancePersistenceSpec
         requirement, presentation, recovered, failingStore) shouldBe a[Consequence.Failure[_]]
       Then("the claim remains recoverable")
       recovered.recoverClaimC(continuation.continuationId) shouldBe Consequence.success(claim)
-      When("a WorkOrder is issued and then retried with identical or conflicting presentation")
+      Given("Spec: docs/spec/workflow-completion-applicability.md; Rule: R4; Example: E7; a durable recovered claim and original issued meaning")
+      When("a WorkOrder is issued and then retried with different presentation for the same actual target")
       val issued = _take(issueRecoveredWorkOrderC(
         handle, continuation.continuationId, None, completionOperation,
         requirement, presentation, recovered, issuedStore
       ))
-      Then("only the identical issue can be replayed")
+      Then("retry selects the original saved issue without opening or consuming its claim")
       issueRecoveredWorkOrderC(handle, continuation.continuationId, None, completionOperation,
         requirement, presentation, recovered, issuedStore) shouldBe Consequence.success(issued)
       issueRecoveredWorkOrderC(handle, continuation.continuationId, None, completionOperation,
         requirement, presentation.copy(title = "Different review"), recovered, issuedStore) shouldBe
+        Consequence.success(issued)
+      issueRecoveredWorkOrderC(handle, continuation.continuationId, None,
+        completionOperation.copy(operation = "foreignCompletion"), requirement, presentation, recovered, issuedStore) shouldBe
         a[Consequence.Failure[_]]
       val jsonRoot = java.nio.file.Files.createTempDirectory(
         java.nio.file.Files.createDirectories(java.nio.file.Paths.get("target")), "issued-workorder-"
@@ -365,12 +344,13 @@ final class WorkflowInstancePersistenceSpec
       jsonStore.putIfAbsentC(issued) shouldBe Consequence.success(issued)
       When("the local WorkOrder adapter is reopened")
       val reopenedJsonStore = new IssuedWorkOrderPersistence.LocalJson[String](jsonRoot, codec)
-      Then("the issued identity survives reopening and a conflicting issue is rejected")
+      Then("saved meaning survives physical JSON-store reopening without a presentation certificate")
       reopenedJsonStore.loadC(continuation.continuationId) shouldBe Consequence.success(Some(issued))
       reopenedJsonStore.putIfAbsentC(issued) shouldBe Consequence.success(issued)
       issueRecoveredWorkOrderC(handle, continuation.continuationId, None, completionOperation,
         requirement, presentation.copy(title = "Different review"), recovered, reopenedJsonStore) shouldBe
-        a[Consequence.Failure[_]]
+        Consequence.success(issued)
+      recovered.recoverClaimC(continuation.continuationId) shouldBe Consequence.success(claim)
       val submitted = ContinuationResult(
         handle, continuation.runId, continuation.continuationId,
         continuation.expectedRevision, continuation.context.snapshot,
@@ -690,19 +670,23 @@ final class WorkflowInstancePersistenceSpec
       expectedNext.currentProgression shouldBe Some(ProgressionReference(
         "{\"schemaVersion\":\"cncf.candidate-workflow-progression.v1\",\"machine\":\"OrderProgress\",\"path\":[\"Complete\"]}"
       ))
-      CandidateAdmissionRouter.resumeAndAdvancePersistedSubmittedC(component, artifact, submitted, routes,
+      When("native replay is offered and the completed issue is separately translated as retained data")
+      val replay = CandidateAdmissionRouter.resumeAndAdvancePersistedSubmittedC(component, artifact, submitted, routes,
         issuedStore, new PersistentContinuationRuntime(
           new ContinuationRuntimePersistence.LocalJson(continuationRoot)
         ), instances,
-        _same_store_configuration, fresh) shouldBe a[Consequence.Failure[_]]
-      bound.admitC(continuation.continuationId, typed) shouldBe a[Consequence.Failure[_]]
-      adapted shouldBe 1
+        _same_store_configuration, fresh)
+      val translated = bound.admitC(continuation.continuationId, typed)
+      val completedstatus = new ContinuationRuntimePersistence.LocalJson(continuationRoot)
+        .loadC(continuation.continuationId).toOption.flatten.map(_.status)
+      Then("conversion returns the original meaning without a new transaction, while actual native replay is refused")
+      replay shouldBe a[Consequence.Failure[_]]
+      translated shouldBe Consequence.success(submitted)
+      adapted shouldBe 2
       opened shouldBe 1
       stored shouldBe Some(expectedNext)
       issuedStore.loadC(continuation.continuationId) shouldBe Consequence.success(Some(issued))
-      new ContinuationRuntimePersistence.LocalJson(continuationRoot)
-        .loadC(continuation.continuationId).toOption.flatten.map(_.status) shouldBe
-        Some(ContinuationRuntimePersistence.Status.Completed)
+      completedstatus shouldBe Some(ContinuationRuntimePersistence.Status.Completed)
     }
   }
 

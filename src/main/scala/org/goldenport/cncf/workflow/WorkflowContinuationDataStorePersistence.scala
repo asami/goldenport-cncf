@@ -12,18 +12,15 @@ import org.simplemodeling.model.datatype.EntityRevision
 /** Borrowed canonical CAS adapter. No claim expiry, recovery replay, resource
   * ownership or cross-record transaction is inferred by this SPI.
   * @since   Sep. 29, 2026
-  * @version Oct.  8, 2026
+  * @version Oct.  9, 2026
   */
 final class WorkflowContinuationDataStorePersistence private (
   store: DataStore & EntityVersionedMutationDataStore,
-  configuration: Configuration,
   collection: DataStore.CollectionId
 )(using ExecutionContext) extends ContinuationRuntimePersistence {
   import ContinuationRuntimePersistence.*
   import WorkflowContinuationDataStorePersistence.*
-  import WorkflowInstanceDataStorePersistence.{configurationField, configurationJson, storageText, storageJsonC}
-
-  private val configurationBytes = configurationJson(configuration).noSpaces
+  import WorkflowInstanceDataStorePersistence.{storageText, storageJsonC}
 
   def createC(record: Record): Consequence[Unit] =
     initialStoredC(record).flatMap(value =>
@@ -65,7 +62,6 @@ final class WorkflowContinuationDataStorePersistence private (
         .getOrElse(Consequence.stateConflict("Continuation is unavailable"))
       next <- f(current._1)
       bytes <- ContinuationRecordJsonV1.encodeC(next)
-      revision <- current._2.nextC
       changed <- store.compareAndSetEntity(EntityCompareAndSetMutationPlan(
         collection, id(identity), revisionField, current._2,
         DataRecord.dataAuto(payloadField -> storageText(bytes)),
@@ -78,11 +74,9 @@ final class WorkflowContinuationDataStorePersistence private (
             "Continuation mutation was applied without authoritative readback")
         case _ => Consequence.stateConflict("Continuation expected storage revision was not applied")
       }
-      result <- (for {
-        decoded <- decodeStoredC(stored, identity)
-        _ <- if (decoded._1 == next && decoded._2 == revision) Consequence.unit
-          else Consequence.stateConflict("Continuation authoritative readback differs")
-      } yield decoded._1).recoverWith { _ =>
+      // The CAS provider owns its committed representation. Decode that
+      // value; do not certify the write plan again after the commit.
+      result <- decodeStoredC(stored, identity).map(_._1).recoverWith { _ =>
         EntityVersionedMutationFailure.transactionIndeterminate(
           "Continuation mutation committed but authoritative readback could not be admitted")
       }
@@ -101,14 +95,11 @@ final class WorkflowContinuationDataStorePersistence private (
       bytes <- ContinuationRecordJsonV1.encodeC(record)
       _ <- if (record.status == Status.Available && record.claimId.isEmpty) Consequence.unit
         else Consequence.stateConflict("Continuation create requires unclaimed Available state")
-    } yield DataRecord.dataAuto(revisionField -> 1L,
-      configurationField -> storageText(configurationBytes), payloadField -> storageText(bytes))
+    } yield DataRecord.dataAuto(revisionField -> 1L, payloadField -> storageText(bytes))
 
   private[workflow] def decodeStoredC(stored: DataRecord, identity: ContinuationIdentity):
       Consequence[(Record, EntityRevision)] =
     for {
-      _ <- if (stored.getString(configurationField).contains(storageText(configurationBytes))) Consequence.unit
-        else Consequence.stateConflict("Persisted Continuation store policy differs")
       payload <- stored.getString(payloadField).map(Consequence.success)
         .getOrElse(Consequence.stateConflict("Persisted Continuation payload is missing"))
       raw <- storageJsonC(payload)
@@ -141,5 +132,5 @@ object WorkflowContinuationDataStorePersistence {
           Consequence.success(value.asInstanceOf[DataStore & EntityVersionedMutationDataStore])
         case _ => Consequence.configurationInvalid("Continuation datastore requires atomic CAS and authoritative readback")
       }
-    } yield new WorkflowContinuationDataStorePersistence(versioned, configuration, collection)
+    } yield new WorkflowContinuationDataStorePersistence(versioned, collection)
 }

@@ -10,7 +10,7 @@ import org.goldenport.cncf.workflow.WorkflowInstancePersistence.*
 /** Component/Factory declaration, not an engine, executable definition loader
   * or default storage selection. None keeps legacy components opt-out.
   * @since   Sep. 29, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 10, 2026
   */
 trait WorkflowInstancePersistenceSource {
   def workflowInstancePersistenceDeclarationOption:
@@ -34,6 +34,11 @@ final class WorkflowInstancePersistenceBinding private (
   def loadC(identity: InstanceIdentity)(using ExecutionContext): Consequence[Option[InstanceRecord]] =
     withProviderC(_.load(declaration.configuration, identity))
 
+  def findBySessionC(sessionId: String, workflowIdentity: WorkflowDefinitionIdentity)(
+    using ExecutionContext
+  ): Consequence[Vector[InstanceRecord]] =
+    withProviderC(_.findBySessionC(sessionId, workflowIdentity))
+
   def appendC(identity: InstanceIdentity, expectedRevision: InstanceRevision,
     entry: HistoryEntry)(using ExecutionContext): Consequence[InstanceRecord] =
     withProviderC(_.append(declaration.configuration, identity, expectedRevision, entry))
@@ -41,7 +46,7 @@ final class WorkflowInstancePersistenceBinding private (
   private[workflow] def probeC()(using ExecutionContext): Consequence[Unit] =
     withProviderC(_ => Consequence.unit)
 
-  private def withProviderC[A](f: WorkflowInstancePersistence => Consequence[A])(
+  private def withProviderC[A](f: WorkflowInstanceDataStorePersistence => Consequence[A])(
     using ExecutionContext
   ): Consequence[A] =
     subsystem._with_managed_datastore_lease_c { _ =>

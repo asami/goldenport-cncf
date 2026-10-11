@@ -43,7 +43,8 @@ import scala.util.Try
  *  version Apr. 25, 2026
  *  version Apr. 26, 2026
  *  version May.  7, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -69,7 +70,7 @@ final class ComponentFactory(
   def bootstrap(component: Component): Component =
     _or_raise(bootstrapC(component))
 
-  /** Bind an application-owned external result adapter to this Component's injected runtime. */
+  /** Bind Component-scoped input access; actual completion consumes runtime authority. */
   def bindContinuationSpiAdapterC[W, S, R](
     component: Component,
     issuedPersistence: IssuedWorkOrderPersistence[W],
@@ -78,7 +79,7 @@ final class ComponentFactory(
     if (component == null || component.coreOption.isEmpty)
       Consequence.configurationInvalid("Continuation SPI adapter requires a Component")
     else ContinuationSpiAdapter.bindC(
-      component.componentId, component.continuationRuntime, issuedPersistence, adapter
+      component.componentId, issuedPersistence, adapter
     )
 
   def bootstrapC(component: Component): Consequence[Component] =

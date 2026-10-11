@@ -3,7 +3,7 @@ package org.goldenport.cncf.workflow
 import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 
-/** Host-owned dispatch output. Its profile choice is evidence, never a Workflow selector. */
+/** Host-owned dispatch output. Returned profile diagnostics are not execution authority. */
 final case class SkillWorkResult[R](
   runId: StateMachineRunIdentity,
   continuationId: ContinuationIdentity,
@@ -16,38 +16,35 @@ final case class SkillWorkResult[R](
   workerIdentity: Option[String],
   modelIdentity: Option[String],
   selectedWorkerProfile: String,
-  mappingPolicyVersion: String
+  mappingPolicyVersion: String,
+  execution: Option[ExecutionObservation] = None
 )
 
-/** Adapts a Skill/Host completion to the common typed result after issued-work admission. */
+/** Converts a Host completion without selecting a transition or proving execution.
+  * An actual executor observation is transported unchanged when supplied.
+  * @since   Sep. 25, 2026
+  * @version Oct.  9, 2026
+  */
 final class SkillWorkResultNormalizerV1[W, R]
     extends ContinuationSpiAdapter[W, SkillWorkResult[R], R] {
   def admitC(
     issued: WorkflowInteraction[W, Nothing],
     submission: SkillWorkResult[R]
   ): Consequence[ContinuationResult[R]] =
-    if (issued == null || issued.handle == null || submission == null ||
-        submission.result == null || submission.workerIdentity == null ||
-        submission.modelIdentity == null || submission.completionFacts == null ||
-        submission.evidenceReferences == null)
+    if (issued == null || submission == null)
       Consequence.stateConflict("Skill WorkResult normalization is incomplete")
     else issued.current match {
-      case work: WorkflowContinuation.WorkOrder[?] if work.request != null &&
-          work.requirement != null =>
+      case work: WorkflowContinuation.WorkOrder[?] =>
         val dispatch = SkillDispatchEvidence(
           work.requirement, submission.selectedWorkerProfile, submission.mappingPolicyVersion
         )
-        for {
-          _ <- dispatch.validateC
-          normalized = ContinuationResult(
+        Consequence.success(ContinuationResult(
             issued.handle, submission.runId, submission.continuationId,
             submission.expectedRevision, submission.contextSnapshot,
             submission.result, submission.resultReference, submission.completionFacts,
             ExecutionEvidence(submission.evidenceReferences, submission.workerIdentity,
-              submission.modelIdentity, Some(dispatch))
-          )
-          _ <- WorkflowProtocolV1.admitResultC(issued, normalized)
-        } yield normalized
+              submission.modelIdentity, Some(dispatch), submission.execution)
+          ))
       case _ => Consequence.stateConflict("Skill WorkResult requires an issued WorkOrder")
     }
 }

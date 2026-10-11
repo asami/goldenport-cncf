@@ -34,7 +34,7 @@ import org.sqlite.{SQLiteConfig, SQLiteDataSource}
 
 /*
  * @since   Sep. 29, 2026
- * @version Oct.  5, 2026
+ * @version Oct.  9, 2026
  */
 final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private given context: ExecutionContext = ExecutionContext.create()
@@ -199,6 +199,7 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
     "execute a declared Decision completion Service and retain committed answers despite response projection failure" in {
       Vector(false, true).foreach { rejectResponse =>
         Given("a native managed Decision and its separately declared public completion Operation; human evidence remains a fixture")
+        Given("Spec: docs/spec/workflow-completion-applicability.md; Rule: R3; Example: E4; different Provided provenance and an irrelevant earlier projected history body")
         withManagedHost { s =>
           org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture.admit(s)
           take(s.initializeEventCursorC(environment(s)))
@@ -207,7 +208,10 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
           val order = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[String]]
           val decision = WorkflowInteraction[String, Nothing](work.handle,
             WorkflowContinuation.Decision(order.request, MinimalPresentation("Fixture choice", "No effect grant")))
-          val answer = submitted(work).copy(evidence = ExecutionEvidence(order.request.evidence.requiredEvidence))
+          val diagnostic = submitted(work).evidence
+          val answer = submitted(work).copy(evidence = diagnostic.copy(workerIdentity = Some(""),
+            modelIdentity = Some(" "), skillDispatch = diagnostic.skillDispatch.map(value =>
+              value.copy(requestedRequirement = value.requestedRequirement.copy(reviewRequired = false)))))
           take(s.withWorkflowVerifiedMultiGuardSpaceC(component, environment(s)) { space =>
             space.dataStore(instances).flatMap(store => root(store).create(config, issueIntent.current))
           })
@@ -224,10 +228,10 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
           val apiOperation = GeneratedProvidedApiAbi.Operation(completionOperation.service, completionOperation.operation,
             Some(resultCodec.typeIdentity), Some("decision.response.v1"), GeneratedProvidedApiAbi.SourceIdentity(Some(1)))
           val api = GeneratedProvidedApiAbi.Definition(GeneratedProvidedApiAbi.schemaVersion,
-            GeneratedProvidedApiAbi.generatorIdentity, suspended.definition.workflowIdentity.value,
+            "different-diagnostic-producer", suspended.definition.workflowIdentity.value,
             suspended.definition.workflowRevision.value,
             GeneratedProvidedApiAbi.WorkflowSourceCorrelation(GeneratedProvidedApiAbi.SourceIdentity(Some(1)),
-              GeneratedProvidedApiAbi.SourceIdentity(Some(1))), Vector(apiOperation))
+              GeneratedProvidedApiAbi.SourceIdentity(Some(1))), Vector(apiOperation.copy(source = GeneratedProvidedApiAbi.SourceIdentity(Some(999)))))
           var selections = 0
           var interpretations = 0
           val closing = new WorkflowCompletionServiceOperation.ClosingProgram[String] {
@@ -241,7 +245,9 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
                   interpretations += 1
                   ActionExecution.Completed(closingResult): ActionExecution
                 }
-                WorkflowCompletionServiceOperation.SelectedClosing(program, Some(next))
+                val projected = next.copy(history = next.history.updated(0,
+                  next.history.head.copy(causation = CausationReference("unselected-projection-history"))))
+                WorkflowCompletionServiceOperation.SelectedClosing(program, Some(projected))
               }
             }
           }
@@ -257,6 +263,7 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
                 completed: Option[InstanceRecord]): Consequence[OperationResponse] = {
               value.result shouldBe closingResult
               completed.get.revision shouldBe InstanceRevision(2L)
+              completed.get.history.head.causation shouldBe suspended.history.head.causation
               take(completionBinding.loadRetainedC(identity)).get.completion.result shouldBe answer
               if (rejectResponse) Consequence.stateConflict("fixture Decision response failure") else encodeC(value)
             }
@@ -298,16 +305,16 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
           def raw(result: ContinuationResult[String]) = Request.of(component = component.name,
             service = completionOperation.service, operation = completionOperation.operation,
             arguments = List(Argument("arg1", take(WorkflowResultJsonV1.encodeC(result, resultCodec)))))
-          When("missing, stale, foreign-owner or AI-dispatch answers enter the actual Service")
+          When("missing, stale or foreign-owner answers enter the actual Service before any permitted completion")
           s.executeOperationResponse(raw(answer).copy(arguments = Nil)).isSuccess shouldBe false
           Vector(answer.copy(expectedRevision = StateMachineRevision("foreign")),
-            answer.copy(handle = answer.handle.copy(componentIdentity = ComponentId("org.goldenport.cncf.test.Foreign"))),
-            answer.copy(evidence = submitted(work).evidence)).foreach { invalid =>
+            answer.copy(handle = answer.handle.copy(componentIdentity = ComponentId("org.goldenport.cncf.test.Foreign")))).foreach { invalid =>
             s.executeOperationResponse(raw(invalid)).isSuccess shouldBe false
           }
+          Then("actual native mismatches do not reach closing selection or interpretation")
           selections shouldBe 0
           interpretations shouldBe 0
-          When("the exact answer is submitted and response projection may reject after storage commit")
+          When("the applicable answer carries copied dispatch diagnostics and response projection may reject after commit")
           val response = s.executeOperationResponse(raw(answer))
           if (rejectResponse) response.isSuccess shouldBe false
           else take(response) shouldBe OperationResponse.Scalar("DECISION_COMPLETED")
@@ -331,7 +338,7 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
       val order = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[String]]
       val decision = WorkflowInteraction[String, Nothing](work.handle,
         WorkflowContinuation.Decision(order.request, MinimalPresentation("Fixture choice", "No command grant")))
-      val result = submitted(work).copy(evidence = ExecutionEvidence(order.request.evidence.requiredEvidence))
+      val result = submitted(work)
       val closingType = StateMachineResultTypeReference("decision.closing.v1")
       val closingResult = StateMachineOperationResult(closingType, ContextReference("decision-closing", "1"))
       var interpretations = 0
@@ -355,11 +362,10 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
         }
         val selected = WorkflowCompletionServiceOperation.SelectedClosing(program, Some(next))
         val completion = bound(s)
-        When("stale or incomplete answers, AI dispatch evidence, a foreign owner or the WorkOrder completion route are offered")
+        When("stale or incomplete answers, a foreign owner or the WorkOrder completion route are offered before a valid result")
         Vector(result.copy(expectedRevision = StateMachineRevision("foreign")),
           result.copy(contextSnapshot = ContextSnapshot("foreign")),
           result.copy(completionFacts = Vector.empty), result.copy(evidence = ExecutionEvidence(Vector.empty)),
-          result.copy(evidence = submitted(work).evidence),
           result.copy(result = TypedValue("foreign", "answer"))).foreach { invalid =>
           completion.completeC(component, invalid, suspended, selected, context) shouldBe a[Consequence.Failure[?]]
         }
@@ -381,7 +387,7 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
         }).get
         take(WorkflowInstanceRecordJsonV1.encodeC(unchanged)) shouldBe
           take(WorkflowInstanceRecordJsonV1.encodeC(suspended))
-        When("the exact Decision result enters its managed completion binding")
+        When("the applicable Decision result enters its managed binding with copied dispatch diagnostics, not Human consent")
         val completed = take(completion.completeC(component, result, suspended, selected, context))
         Then("claim completion, closing result, answer and adjacent history are retained together")
         take(WorkflowInstanceRecordJsonV1.encodeC(completed.instance)) shouldBe
@@ -457,6 +463,7 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
 
     "execute a declared public completion Operation through host-owned joint storage without legacy resume or separate append" in {
       Vector(false, true).foreach { rejectResponse =>
+        Given("Spec: docs/spec/workflow-completion-applicability.md; Rule: R3; Example: E4; a declared WorkOrder Service with different Provided provenance and irrelevant projected history")
         withManagedHost { s =>
           org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture.admit(s)
           take(s.initializeEventCursorC(environment(s)))
@@ -482,10 +489,10 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
             val apiOperation = GeneratedProvidedApiAbi.Operation(completionOperation.service, completionOperation.operation,
               Some(resultCodec.typeIdentity), Some("completion.response.v1"), GeneratedProvidedApiAbi.SourceIdentity(Some(1)))
             val api = GeneratedProvidedApiAbi.Definition(GeneratedProvidedApiAbi.schemaVersion,
-              GeneratedProvidedApiAbi.generatorIdentity, request.current.definition.workflowIdentity.value,
+              "different-diagnostic-producer", request.current.definition.workflowIdentity.value,
               request.current.definition.workflowRevision.value,
               GeneratedProvidedApiAbi.WorkflowSourceCorrelation(GeneratedProvidedApiAbi.SourceIdentity(Some(1)),
-                GeneratedProvidedApiAbi.SourceIdentity(Some(1))), Vector(apiOperation))
+                GeneratedProvidedApiAbi.SourceIdentity(Some(1))), Vector(apiOperation.copy(source = GeneratedProvidedApiAbi.SourceIdentity(Some(999)))))
             val closing = new WorkflowCompletionServiceOperation.ClosingProgram[String] {
               def selectC(result: ContinuationResult[String], current: InstanceRecord):
                   Consequence[WorkflowCompletionServiceOperation.SelectedClosing] =
@@ -494,7 +501,9 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
                     interpreted += 1
                     ActionExecution.Completed(closingResult): ActionExecution
                   }
-                  WorkflowCompletionServiceOperation.SelectedClosing(program, Some(next))
+                  val projected = next.copy(history = next.history.updated(0,
+                    next.history.head.copy(causation = CausationReference("unselected-projection-history"))))
+                  WorkflowCompletionServiceOperation.SelectedClosing(program, Some(projected))
                 }
             }
             val publicCodec = new WorkflowCompletionServiceOperation.Codec[String] {
@@ -859,26 +868,35 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
       }
     }
 
-    "retain distinct semantic and actual closing results with strict V2 decoding while preserving V1 bytes" in {
+    "retain distinct closing results and read passive V1/V2 annotations while rejecting malformed frames" in {
+      Given("a semantic completion and a distinct typed closing result; passive annotations are not progression authority")
       val semantic = WorkflowCompletionRecordJsonV1.Record(InstanceRevision(2L), submitted(issue(intent(initial))))
+      When("both declared formats encode and decode their data and the V2 frame receives an unused annotation")
       val legacy = take(WorkflowCompletionRecordJsonV1.encodeC(semantic, resultCodec))
       val closing = StateMachineOperationResult(StateMachineResultTypeReference("actual.closing.v1"),
         ContextReference("actual-closing-context", "7"))
       val joint = semantic.copy(closingResult = Some(closing))
       val bytes = take(WorkflowCompletionRecordJsonV1.encodeC(joint, resultCodec))
-      take(WorkflowCompletionRecordJsonV1.decodeC(bytes, resultCodec)) shouldBe joint
-      take(WorkflowCompletionRecordJsonV1.decodeC(legacy, resultCodec)) shouldBe semantic
-      take(WorkflowCompletionRecordJsonV1.encodeC(semantic, resultCodec)) shouldBe legacy
+      val decodedjoint = WorkflowCompletionRecordJsonV1.decodeC(bytes, resultCodec)
+      val decodedlegacy = WorkflowCompletionRecordJsonV1.decodeC(legacy, resultCodec)
+      val encodedlegacy = WorkflowCompletionRecordJsonV1.encodeC(semantic, resultCodec)
       val json = io.circe.parser.parse(bytes).toOption.get
-      Vector(
+      val annotated = WorkflowCompletionRecordJsonV1.decodeC(json.mapObject(_.add("extra", Json.True)).noSpaces, resultCodec)
+      val malformed = Vector(
         json.mapObject(_.remove("closingResult")),
-        json.mapObject(_.add("extra", Json.True)),
         json.mapObject(_.add("closingResult", Json.Null)),
         json.mapObject(_.add("closingResult", Json.obj("typeIdentity" -> Json.fromString(""),
           "contextIdentity" -> Json.fromString("actual-closing-context"), "contextRevision" -> Json.fromString("7")))),
         json.mapObject(_.add("semanticCompletion", json))
-      ).foreach(bad => WorkflowCompletionRecordJsonV1.decodeC(bad.noSpaces, resultCodec).isSuccess shouldBe false)
-      WorkflowCompletionRecordJsonV1.encodeC(semantic.copy(closingResult = Some(null)), resultCodec).isSuccess shouldBe false
+      ).map(bad => WorkflowCompletionRecordJsonV1.decodeC(bad.noSpaces, resultCodec))
+      val missingclosing = WorkflowCompletionRecordJsonV1.encodeC(semantic.copy(closingResult = Some(null)), resultCodec)
+      Then("declared meaning survives an annotation while missing, nested-invalid or unconvertible representation fails")
+      decodedjoint shouldBe Consequence.success(joint)
+      decodedlegacy shouldBe Consequence.success(semantic)
+      encodedlegacy shouldBe Consequence.success(legacy)
+      annotated shouldBe Consequence.success(joint)
+      malformed.foreach(_ shouldBe a[Consequence.Failure[?]])
+      missingclosing shouldBe a[Consequence.Failure[?]]
     }
 
     "commit exact typed completion and an actually prepared closing program through every ordinary event mode" in {
@@ -1361,6 +1379,42 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
   }
 
   "Phase 88 guarded retained completion" should {
+    "commit both revision guards despite changed legacy policy columns and recover under current policy" in {
+      Given("an actual SQLite claimed WorkOrder with no generated configuration copies")
+      val db = path
+      val first = SqlDataStore.sqlite(db.toString)
+      val request = seed(first)
+      val original = stored(first)
+      val prepared = take(completion(first).prepareCompletionC(request, owner))
+      When("both legacy policy columns change after preparation without consuming either indexed revision")
+      val committed = try {
+        take(first.update(instances, key("instance-1"), Record.dataAuto("configurationPayload" -> "old root policy")))
+        take(first.update(continuations, key(identity.value), Record.dataAuto("configurationPayload" -> "different old continuation policy")))
+        take(prepared.commitC())
+      } finally take(first.closeC())
+      val reopened = SqlDataStore.sqlite(db.toString)
+      try {
+        val changed = config.copy(retentionPolicy = RetentionPolicy("changed"))
+        val adapter = take(WorkflowCompletionDataStorePersistence.bindC(reopened, changed, component,
+          completionOperation, Vector(binding), instances, continuations, codec, resultCodec))
+        val recovered = take(adapter.loadC(identity)).get
+        val retained = stored(reopened)
+        val replay = adapter.completeC(request, owner)
+        Then("native revisions own completion, old material stays inert and recovery does not replay consumed work")
+        original._1.fields.map(_.key) should not contain "configurationPayload"
+        original._2.fields.map(_.key) should not contain "configurationPayload"
+        committed.instance.lifecycle shouldBe Lifecycle.Completed
+        committed.instance.revision shouldBe request.entry.revision
+        committed.instance.history shouldBe request.current.history :+ request.entry
+        committed.continuation.status shouldBe ContinuationRuntimePersistence.Status.Completed
+        recovered.instanceRevision shouldBe request.entry.revision
+        recovered.result shouldBe request.result
+        retained._1.getString("configurationPayload") shouldBe Some("old root policy")
+        retained._2.getString("configurationPayload") shouldBe Some("different old continuation policy")
+        replay.toOption shouldBe None
+      } finally take(reopened.closeC())
+    }
+
     "prepare completion without completing the claim or exposing a retained result" in {
       Given("one claimed issued WorkOrder and a typed result")
       val store = DataStore.inMemory()
@@ -1478,47 +1532,90 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
       } finally take(store.closeC())
     }
 
-    "reject missing facts/evidence, incompatible dispatch and typed result identities before any write" in {
+    "reject native facts, evidence and target/type errors before accepting unused dispatch diagnostics once" in {
+      Given("one actual claimed issue and incompatible typed result boundaries")
       val store = SqlDataStore.sqlite(path.toString)
       try {
         val request = seed(store)
         val result = request.result
         val variants = Vector(result.copy(completionFacts = Vector.empty),
           result.copy(evidence = result.evidence.copy(references = Vector.empty)),
-          result.copy(evidence = result.evidence.copy(skillDispatch = result.evidence.skillDispatch.map(value =>
-            value.copy(requestedRequirement = value.requestedRequirement.copy(reviewRequired = false))))),
           result.copy(handle = result.handle.copy(instanceIdentity = InstanceIdentity("foreign"))),
           result.copy(handle = result.handle.copy(componentIdentity = ComponentId("org.goldenport.cncf.test.ForeignCompletion"))),
           result.copy(runId = StateMachineRunIdentity("foreign")),
           result.copy(continuationId = ContinuationIdentity("foreign")),
           result.copy(expectedRevision = StateMachineRevision("stale")),
-          result.copy(contextSnapshot = result.contextSnapshot.copy(workspaceRevision = Some("foreign"))),
+          result.copy(contextSnapshot = result.contextSnapshot.copy(modelRevision = Some("foreign"))),
           result.copy(result = TypedValue("foreign.result", "result")),
           result.copy(evidence = null))
         val before = stored(store)
-        variants.foreach(value => completion(store).completeC(request.copy(result = value), owner).toOption shouldBe None)
-        stored(store) shouldBe before
+        When("each actual incompatible boundary is submitted")
+        val outcomes = variants.map(value => completion(store).completeC(request.copy(result = value), owner))
+        val retained = stored(store)
+        Then("none consumes the current revision or claim")
+        outcomes.foreach(_.toOption shouldBe None)
+        retained shouldBe before
+        When("only the unused copied dispatch review requirement changes on the still-live claim")
+        val diagnostic = result.copy(evidence = result.evidence.copy(skillDispatch = result.evidence.skillDispatch.map(value =>
+          value.copy(requestedRequirement = value.requestedRequirement.copy(reviewRequired = false)))))
+        val accepted = completion(store).completeC(request.copy(result = diagnostic), owner)
+        val committed = completion(store).loadC(identity)
+        val replay = completion(store).completeC(request.copy(result = diagnostic), owner)
+        Then("native admission completes once, retains the diagnostic data and replay cannot write again")
+        accepted.isSuccess shouldBe true
+        take(committed).map(_.result) shouldBe Some(diagnostic)
+        replay shouldBe a[Consequence.Failure[?]]
       } finally take(store.closeC())
     }
 
     "require the current host suspension, expected instance revision and exact nonblank live claim token" in {
+      Given("an actual stored suspension and one live claim token")
       val store = SqlDataStore.sqlite(path.toString)
       try {
         val request = seed(store)
         val before = stored(store)
-        Vector(request.copy(claimId = ""), request.copy(claimId = null), request.copy(claimId = "foreign"),
+        val variants = Vector(request.copy(claimId = ""), request.copy(claimId = null), request.copy(claimId = "foreign"),
           request.copy(expectedRevision = initialRevision),
           request.copy(entry = request.entry.copy(suspension = null)),
-          request.copy(entry = request.entry.copy(suspension = request.current.suspension)),
-          request.copy(current = request.current.copy(causation = CausationReference("foreign"))))
-          .foreach(value => completion(store).completeC(value, owner).toOption shouldBe None)
-        completion(store).completeC(null, owner).toOption shouldBe None
-        stored(store) shouldBe before
+          request.copy(entry = request.entry.copy(suspension = request.current.suspension)))
+        When("invalid live claim, revision or suspension facts are submitted")
+        val outcomes = variants.map(value => completion(store).completeC(value, owner))
+        val missing = completion(store).completeC(null, owner)
+        val retained = stored(store)
+        Then("invalid actual boundaries leave the stored issue unchanged")
+        outcomes.foreach(_.toOption shouldBe None)
+        missing.toOption shouldBe None
+        retained shouldBe before
+        When("release and re-claim replace the live token")
         take(claims(store).releaseC(identity, request.claimId))
-        completion(store).completeC(request, owner).toOption shouldBe None
+        val released = completion(store).completeC(request, owner)
         val fresh = take(claims(store).claimC(identity)).claimId.get
-        completion(store).completeC(request, owner).toOption shouldBe None
-        take(completion(store).completeC(request.copy(claimId = fresh), owner))
+        val stale = completion(store).completeC(request, owner)
+        val completed = take(completion(store).completeC(request.copy(claimId = fresh), owner))
+        Then("only the actual replacement token can consume completion")
+        released.toOption shouldBe None
+        stale.toOption shouldBe None
+        completed.continuation.claimId shouldBe Some(fresh)
+      } finally take(store.closeC())
+    }
+
+    "complete from stored current despite differing diagnostic causation and workspace copies" in {
+      Given("a claimed SQLite issue with an actual owning suspension")
+      val store = SqlDataStore.sqlite(path.toString)
+      try {
+        val request = seed(store)
+        val diagnostic = request.copy(current = request.current.copy(causation = CausationReference("diagnostic")),
+          result = request.result.copy(contextSnapshot = request.result.contextSnapshot.copy(
+            workspaceRevision = Some("diagnostic workspace"))))
+        When("the result targets the real stored state with only diagnostic copies differing")
+        val completed = take(completion(store).completeC(diagnostic, owner))
+        val retained = take(completion(store).loadC(identity)).get
+        val stale = completion(store).completeC(diagnostic, owner)
+        Then("actual history and typed result are consumed once without a whole-record or workspace proof")
+        completed.instance.history shouldBe request.current.history :+ request.entry
+        completed.instance.causation shouldBe request.entry.causation
+        retained.result.contextSnapshot.workspaceRevision shouldBe Some("diagnostic workspace")
+        stale.toOption shouldBe None
       } finally take(store.closeC())
     }
 
@@ -1639,9 +1736,9 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
       }
     }
 
-    "fail closed on malformed, foreign or noncanonical retained bytes without repair" in {
+    "fail on malformed or foreign retained input without a canonical-body certificate" in {
       val baseline = seedBytes()
-      Vector("broken", WorkflowInstanceDataStorePersistence.storageText(" " + baseline),
+      Vector("broken",
         WorkflowInstanceDataStorePersistence.storageText(baseline.replace("cncf.workflow-completion-record.v1", "unsupported")),
         WorkflowInstanceDataStorePersistence.storageText(baseline.replace("instance-1", "foreign"))).foreach { payload =>
         val store = SqlDataStore.sqlite(path.toString)
@@ -1656,7 +1753,34 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
       }
     }
 
-    "reject orphan and legacy completion and missing issued bytes without retrofit" in {
+    "read permitted old formatting and diagnostic snapshots without rewriting completion or renewing a consumed claim" in {
+      Given("Spec: docs/spec/workflow-completion-applicability.md; Rule: R2; Example: E3; a physically committed SQLite completion")
+      val db = path
+      val store = SqlDataStore.sqlite(db.toString)
+      val request = seed(store)
+      val saved = take(completion(store).completeC(request, owner)).retained
+      val original = take(WorkflowCompletionRecordJsonV1.encodeC(saved, resultCodec))
+      val diagnostic = io.circe.parser.parse(original).toOption.get.hcursor.downField("result").downField("contextSnapshot")
+        .downField("workspaceRevision").withFocus(_ => Json.fromString("retained-workspace-description")).top.get
+      take(store.update(continuations, key(identity.value), Record.dataAuto(WorkflowCompletionDataStorePersistence.payloadField ->
+        WorkflowInstanceDataStorePersistence.storageText(" \n" + diagnostic.spaces2))))
+      val before = stored(store)
+      take(store.closeC())
+      val reopened = SqlDataStore.sqlite(db.toString)
+      try {
+        When("the completion is decoded after physical reopen, without a re-encoded-body comparison")
+        val retained = take(completion(reopened).loadC(identity)).get
+        Then("the real result/closing revision remain usable without row rewrite or another completion")
+        retained.instanceRevision shouldBe saved.instanceRevision
+        retained.result.result shouldBe saved.result.result
+        retained.result.contextSnapshot.workspaceRevision shouldBe Some("retained-workspace-description")
+        stored(reopened) shouldBe before
+        completion(reopened).completeC(request, owner).isSuccess shouldBe false
+      } finally take(reopened.closeC())
+    }
+
+    "read completed stored facts without a history certificate, but reject missing result or unissued execution" in {
+      Given("docs/spec/workflow-completion-applicability.md R7: a claimed issued Continuation with a stored typed result but no completion")
       val store = SqlDataStore.sqlite(path.toString)
       try {
         val request = seed(store)
@@ -1664,16 +1788,32 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
           WorkflowCompletionRecordJsonV1.Record(request.entry.revision, request.result), resultCodec))
         take(store.update(continuations, key(identity.value), Record.dataAuto(
           WorkflowCompletionDataStorePersistence.payloadField -> WorkflowInstanceDataStorePersistence.storageText(bytes))))
-        completion(store).loadC(identity).toOption shouldBe None
+        When("the result is queried before its native Continuation becomes Completed")
+        val premature = completion(store).loadC(identity)
+        Then("non-Completed native state refuses the stored result")
+        premature.toOption shouldBe None
+        When("the native claim completes independently and the result is queried without adjacent history proof")
         take(claims(store).completeC(identity, request.claimId))
-        completion(store).loadC(identity).toOption shouldBe None // no adjacent completion history
+        val retained = take(completion(store).loadC(identity)).get
+        val observed = take(root(store).load(config, request.current.identity)).get
+        val replay = completion(store).completeC(request, owner)
+        Then("the stored typed result is readable, but query does not advance the instance or authorize replay")
+        retained.result shouldBe request.result
+        observed.revision shouldBe InstanceRevision(1L)
+        // Query grants no replay and does not certify a past joint transaction.
+        replay.toOption shouldBe None
       } finally take(store.closeC())
+      Given("a legacy native completion without a retained typed result")
       val legacy = SqlDataStore.sqlite(path.toString)
       try {
         val request = seed(legacy)
         take(claims(legacy).completeC(identity, request.claimId))
-        completion(legacy).loadC(identity).toOption shouldBe None
+        When("Completion query reads the legacy native state")
+        val missing = completion(legacy).loadC(identity)
+        Then("missing retained result cannot be fabricated or retrofitted")
+        missing.toOption shouldBe None
       } finally take(legacy.closeC())
+      Given("a native suspension created without atomically issued work")
       val unissued = SqlDataStore.sqlite(path.toString)
       try {
         val current = initial
@@ -1683,13 +1823,18 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
         val token = take(claims(unissued).claimC(identity)).claimId.get
         val entry = request.entry.copy(sequence = HistorySequence(2L), revision = InstanceRevision(2L),
           lifecycle = Lifecycle.Completed, currentProgression = None, suspension = None)
-        completion(unissued).completeC(WorkflowCompletionDataStorePersistence.Intent(suspended,
-          suspended.revision, entry, token, submitted(issue(request))), owner).toOption shouldBe None
-        take(root(unissued).load(config, current.identity)).get.revision shouldBe InstanceRevision(1L)
+        When("execution attempts completion using a result for work that was never issued")
+        val rejected = completion(unissued).completeC(WorkflowCompletionDataStorePersistence.Intent(suspended,
+          suspended.revision, entry, token, submitted(issue(request))), owner)
+        val observed = take(root(unissued).load(config, current.identity)).get
+        Then("the actual writer refuses unissued execution and leaves the instance at its suspension")
+        rejected.toOption shouldBe None
+        observed.revision shouldBe InstanceRevision(1L)
       } finally take(unissued.closeC())
     }
 
-    "reject unsupported capabilities and thrown or lossy result codecs before publication" in {
+    "reject unsupported capabilities and throwing result codecs before publication" in {
+      Given("an actual claimed issue and an application writer that throws")
       val store = SqlDataStore.sqlite(path.toString)
       try {
         val request = seed(store)
@@ -1699,16 +1844,42 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
           def encode(value: String): Json = throw new IllegalArgumentException("injected")
           def decode(value: Json) = resultCodec.decode(value)
         }
-        val lossy = new PayloadCodec[String] {
+        When("the throwing writer or a provider without required capability is used")
+        val rejected = completion(store, throwing).completeC(request, owner)
+        val unsupported = WorkflowCompletionDataStorePersistence.bindC(DataStore.noop(), config, component, completionOperation,
+          Vector(binding), instances, continuations, codec, resultCodec)
+        val retained = stored(store)
+        Then("serialization failure or missing capability publishes no completion")
+        rejected.toOption shouldBe None
+        unsupported.toOption shouldBe None
+        retained shouldBe before
+      } finally take(store.closeC())
+    }
+
+    "consume trusted codec output once without producer self-certification" in {
+      Given("an actual claimed issue and a trusted typed writer selecting its storage representation")
+      val store = SqlDataStore.sqlite(path.toString)
+      try {
+        val request = seed(store)
+        var writes = 0
+        var reads = 0
+        val transformed = new PayloadCodec[String] {
           val typeIdentity = resultCodec.typeIdentity
-          def encode(value: String): Json = Json.fromString("lost")
-          def decode(value: Json) = resultCodec.decode(value)
+          def encode(value: String): Json = { writes += 1; Json.fromString("serialized representation") }
+          def decode(value: Json) = { reads += 1; resultCodec.decode(value) }
         }
-        completion(store, throwing).completeC(request, owner).toOption shouldBe None
-        completion(store, lossy).completeC(request, owner).toOption shouldBe None
-        WorkflowCompletionDataStorePersistence.bindC(DataStore.noop(), config, component, completionOperation,
-          Vector(binding), instances, continuations, codec, resultCodec).toOption shouldBe None
-        stored(store) shouldBe before
+        val adapter = completion(store, transformed)
+        When("completion serializes once, consumes committed readback and later queries retained meaning")
+        val completed = take(adapter.completeC(request, owner))
+        val retained = take(adapter.loadC(identity)).get
+        val writecount = writes
+        val readcount = reads
+        Then("the writer owns its representation without an extra round-trip or payload-copy comparison")
+        completed.retained.result.result.value shouldBe "serialized representation"
+        retained.result.result.value shouldBe "serialized representation"
+        completed.instance.lifecycle shouldBe Lifecycle.Completed
+        writecount shouldBe 1
+        readcount shouldBe 2
       } finally take(store.closeC())
     }
 
