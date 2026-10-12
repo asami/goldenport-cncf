@@ -17,6 +17,7 @@ Current Web/admin design:
 - `management-console.md`
 - `web-form-api-schema.md`
 - `web-operation-dispatcher.md`
+- `job-user-operator-experience.md`
 
 Current Entity/Blob usage design:
 

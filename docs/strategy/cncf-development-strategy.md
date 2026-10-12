@@ -5330,3 +5330,42 @@ closed, active, planned, and unspecified records. Each linked ledger owns
 its status and evidence; the index is navigation, not a second acceptance
 authority. Later phase ledgers take precedence over an older strategy
 snapshot. No Phase status or acceptance evidence is changed by this erratum.
+
+## Phase 69.5 Closure — 2026-09-29
+
+[Phase 69.5](../phase/phase-69.5.md) and its
+[checklist](../phase/phase-69.5-checklist.md) are closed for JM69-07 / JM69-07A,
+CompositeQuery v2. The typed, bounded, target-authorized composition contract
+is committed in Step `3736ce2c153cefbaf1f825b881bd761e4539527b`, with 31 v2
+and 41 affected-consumer specifications passing. Independent Step acceptance,
+one comprehensive Phase review, and its sole M0 naming closure with fresh
+warning-free test compilation are recorded in the
+[closure journal](../journal/2026/09/2026-09-29-phase-69.5-composite-query-v2.md).
+
+The final release binds `PHASE-69.5` and its deferred aggregate handoff.
+Phase 69.6 remains planned and not started, consuming the frozen composition
+contract. Phase 69.7 remains the reciprocal final owner of repository-full
+CNCF and required downstream validation for Phase 69.4--69.7. This is focused
+closure with aggregate acceptance pending; older status snapshots above remain
+historical.
+
+## Phase 69.6 Closure — 2026-09-29
+
+[Phase 69.6](../phase/phase-69.6.md) and its
+[checklist](../phase/phase-69.6-checklist.md) close JM69-08 / JM69-08A,
+User and Operator Job Experience. Step
+`6f0c3fb426f57a257d48c4fd6e7fea380e5aa7bf` accepts the canonical authorized
+projections, provider-owned notification inbox/read state, descriptor-backed
+Web/Help/API, accessibility, safe controls, and bounded polling. HTTP 21/21
+and affected consumers 316/316 passed (337/337 total). Independent protected
+Step acceptance and the sole comprehensive Phase review passed; neither
+produced blockers, Hygiene, or Development Candidates. The
+[closure journal](../journal/2026/09/2026-09-29-phase-69.6-job-user-operator-experience.md)
+records the evidence, and the distinct release binds `PHASE-69.6`.
+
+This supersedes the older Phase 69.6 planned pointer. Phase 69.7 remains
+planned and not started, consuming the frozen UX handoff. It owns retained
+security/operations, durable integrity, and aggregate repository-full CNCF
+and required downstream validation for Phase 69.4--69.7. Phase 69.6 closes
+with focused assurance and `repository_full_suite=deferred-not-run`; aggregate
+acceptance remains pending.

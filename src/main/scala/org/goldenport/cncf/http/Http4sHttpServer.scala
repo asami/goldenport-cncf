@@ -1,13 +1,4 @@
 package org.goldenport.cncf.http
-
-/*
- * @since   May. 18, 2026
- *  version May. 30, 2026
- *  version Jun. 19, 2026
- *  version Aug. 14, 2026
- * @version Sep.  8, 2026
- * @author  ASAMI, Tomoharu
- */
 import cats.effect.IO
 import cats.effect.std.Queue
 import cats.effect.unsafe.implicits.global
@@ -54,7 +45,8 @@ import org.goldenport.cncf.entity.{
   EntityRevisionTransport
 }
 import org.goldenport.cncf.naming.{NamingConventions, PropertyValueResolver}
-import org.goldenport.cncf.job.{JobId, JobInput, JobInputRetentionPolicy, JobQueryReadModel, JobStatus}
+import org.goldenport.cncf.job.{JobExperienceQuery, JobExperienceQueryCodec, JobExperienceScope, JobExperienceService, JobId, JobInput, JobInputRetentionPolicy, JobQueryReadModel, JobStatus}
+import org.goldenport.cncf.usernotification.UserNotificationInboxRuntime
 import org.goldenport.cncf.observability.{ConclusionDiagnostics, DiagnosticPayloadReferenceCodec, DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 import org.goldenport.cncf.mcp.{McpJsonRpcAdapter, McpJsonRpcOutcome}
 import org.goldenport.cncf.openapi.OpenApiProjector
@@ -72,9 +64,11 @@ import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
  *  version May. 25, 2026
+ *  version May. 30, 2026
  *  version Jun. 19, 2026
+ *  version Aug. 14, 2026
  *  version Aug. 15, 2026
- * @version Sep.  8, 2026
+ * @version Sep. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -94,6 +88,7 @@ final class Http4sHttpServer(
   )
   private val _static_form_app_renderer =
     new StaticFormAppRenderer(_runtime_config.staticFormAppRendererConfig)
+  private val _job_experience_service = new JobExperienceService(engine.runtimeSubsystem.jobEngine)
   private final case class WebTemplateComposition(
     html: String,
     appliedlayout: Boolean
@@ -260,10 +255,14 @@ final class Http4sHttpServer(
         _logout_submit(req, app)
       case req @ GET -> Root / "web" / app / "session" =>
         _current_session(req, app)
+      case req @ GET -> Root / "web" / "system" / "jobs" =>
+        _job_experience_private(if (_job_experience_web_enabled("system", Vector("jobs")) && _is_web_authorized("system", "jobs", "index", Some(req))) _job_experience_list(req, JobExperienceScope.Mine(None), Some("system")) else _forbidden_web(req, Some("system"), Some("jobs"), Some("index")))
+      case req @ GET -> Root / "web" / "system" / "notifications" =>
+        _job_experience_private(if (_job_experience_web_enabled("system", Vector("notifications")) && _is_web_authorized("system", "notifications", "index", Some(req))) _job_experience_notifications(req, None, Some("system")) else _forbidden_web(req, Some("system"), Some("notifications"), Some("index")))
       case req @ GET -> Root / "web" / "system" / "jobs" / jobId =>
-        _system_job(req, jobId)
+        _job_experience_private(if (_job_experience_web_enabled("system", Vector("jobs")) && _is_web_authorized("system", "jobs", jobId, Some(req))) _job_experience_detail(req, jobId, JobExperienceScope.Mine(None), Some("system")) else _forbidden_web(req, Some("system"), Some("jobs"), Some(jobId)))
       case req @ POST -> Root / "web" / "system" / "jobs" / jobId / "await" =>
-        _system_job_await(req, jobId)
+        _job_experience_private(_system_job_await(req, jobId))
       case req @ GET -> Root / "web" / "system" / "admin" =>
         if (_is_web_authorized("system", "admin", "index", Some(req), Some("admin.system.index"))) _system_admin() else _forbidden_web(req, Some("system"), Some("admin"), Some("index"))
       case req @ GET -> Root / "web" / "system" / "admin" / "descriptor" =>
@@ -273,9 +272,9 @@ final class Http4sHttpServer(
       case req @ GET -> Root / "web" / "system" / "admin" / "assembly" / "report" =>
         if (_is_web_authorized("system", "admin.assembly", "report", Some(req), Some("admin.system.assembly"))) _system_admin_assembly_report() else _forbidden_web(req, Some("system"), Some("admin.assembly"), Some("report"))
       case req @ GET -> Root / "web" / "system" / "admin" / "jobs" =>
-        if (_is_web_authorized("system", "admin.jobs", "index", Some(req))) _system_admin_jobs() else _forbidden_web(req, Some("system"), Some("admin.jobs"), Some("index"))
+        _job_experience_private(if (_job_experience_web_enabled("system", Vector("admin", "jobs")) && _is_web_authorized("system", "admin.jobs", "index", Some(req))) _job_experience_list(req, JobExperienceScope.Operator, Some("system")) else _forbidden_web(req, Some("system"), Some("admin.jobs"), Some("index")))
       case req @ GET -> Root / "web" / "system" / "admin" / "jobs" / jobId =>
-        if (_is_web_authorized("system", "admin.jobs", jobId, Some(req))) _system_admin_job(req, jobId) else _forbidden_web(req, Some("system"), Some("admin.jobs"), Some(jobId))
+        _job_experience_private(if (_job_experience_web_enabled("system", Vector("admin", "jobs")) && _is_web_authorized("system", "admin.jobs", jobId, Some(req))) _job_experience_detail(req, jobId, JobExperienceScope.Operator, Some("system")) else _forbidden_web(req, Some("system"), Some("admin.jobs"), Some(jobId)))
       case req @ GET -> Root / "web" / "system" / "admin" / "knowledge" =>
         if (_is_web_authorized("system", "admin.knowledge", "index", Some(req), Some("admin.system.knowledge"))) _system_admin_knowledge() else _forbidden_web(req, Some("system"), Some("admin.knowledge"), Some("index"))
       case req @ GET -> Root / "web" / "system" / "admin" / "knowledge" / component =>
@@ -351,13 +350,17 @@ final class Http4sHttpServer(
       case req @ POST -> Root / "web" / app / "tags" / "move" =>
         if (_is_web_authorized(app, "tags", "move", Some(req))) _app_tag_move_in_shell(req, app) else _forbidden_web(req, Some(app), Some("tags"), Some("move"))
       case req @ GET -> Root / "web" / app / "notifications" =>
-        if (_is_web_authorized(app, "notifications", "index", Some(req))) _app_notifications_in_shell(req, app) else _forbidden_web(req, Some(app), Some("notifications"), Some("index"))
+        _job_experience_private(if (_job_experience_web_enabled(app, Vector("notifications")) && _is_web_authorized(app, "notifications", "index", Some(req))) _job_experience_notifications(req, Some(NamingConventions.toNormalizedSegment(app)), Some(app)) else _forbidden_web(req, Some(app), Some("notifications"), Some("index")))
       case GET -> Root / "web" / app / "dashboard" / "state" =>
         _dashboard_state(Some(app))
       case req @ GET -> Root / "web" / app / "jobs" =>
-        if (_is_web_authorized(app, "jobs", "index", Some(req))) _application_jobs(req, app) else _forbidden_web(req, Some(app), Some("jobs"), Some("index"))
+        _job_experience_private(if (_job_experience_web_enabled(app, Vector("jobs")) && _is_web_authorized(app, "jobs", "index", Some(req))) _job_experience_list(req, JobExperienceScope.Mine(Some(NamingConventions.toNormalizedSegment(app))), Some(app)) else _forbidden_web(req, Some(app), Some("jobs"), Some("index")))
       case req @ GET -> Root / "web" / app / "jobs" / jobId =>
-        if (_is_web_authorized(app, "jobs", jobId, Some(req))) _application_job(req, app, jobId) else _forbidden_web(req, Some(app), Some("jobs"), Some(jobId))
+        _job_experience_private(if (_job_experience_web_enabled(app, Vector("jobs")) && _is_web_authorized(app, "jobs", jobId, Some(req))) _job_experience_detail(req, jobId, JobExperienceScope.Mine(Some(NamingConventions.toNormalizedSegment(app))), Some(app)) else _forbidden_web(req, Some(app), Some("jobs"), Some(jobId)))
+      case req @ GET -> Root / "web" / app / "admin" / "jobs" =>
+        _job_experience_private(if (_job_experience_web_enabled(app, Vector("admin", "jobs")) && _is_web_authorized(app, "admin.jobs", "index", Some(req))) _job_experience_list(req, JobExperienceScope.Application(NamingConventions.toNormalizedSegment(app)), Some(app)) else _forbidden_web(req, Some(app), Some("admin.jobs"), Some("index")))
+      case req @ GET -> Root / "web" / app / "admin" / "jobs" / jobId =>
+        _job_experience_private(if (_job_experience_web_enabled(app, Vector("admin", "jobs")) && _is_web_authorized(app, "admin.jobs", jobId, Some(req))) _job_experience_detail(req, jobId, JobExperienceScope.Application(NamingConventions.toNormalizedSegment(app)), Some(app)) else _forbidden_web(req, Some(app), Some("admin.jobs"), Some(jobId)))
       case req @ GET -> Root / "web" / app / "admin" =>
         if (_is_web_authorized(app, "admin", "index", Some(req))) _component_admin(app) else _forbidden_web(req, Some(app), Some("admin"), Some("index"))
       case req @ GET -> Root / "web" / app / "admin" / "descriptor" =>
@@ -527,13 +530,18 @@ final class Http4sHttpServer(
                 )
             }
           } yield {
+            val response =
+              if (_is_job_experience_rest_request(req))
+                res.putHeaders(Header.Raw(CIString("Cache-Control"), "private, no-store"))
+              else
+                res
             RuntimeDashboardMetrics.recordHtmlRequest(
               req.method.name,
               req.uri.path.renderString,
-              res.status.code,
+              response.status.code,
               (System.nanoTime() - started) / 1000000L
             )
-            res
+            response
           }
         } catch {
           case e: Throwable =>
@@ -544,7 +552,12 @@ final class Http4sHttpServer(
               HStatus.InternalServerError.code,
               0L
             )
-            IO.pure(HResponse[IO](HStatus.InternalServerError))
+            val response = HResponse[IO](HStatus.InternalServerError)
+            IO.pure(
+              if (_is_job_experience_rest_request(req))
+                response.putHeaders(Header.Raw(CIString("Cache-Control"), "private, no-store"))
+              else response
+            )
         }
       case _ =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Route not found"))
@@ -1324,6 +1337,24 @@ final class Http4sHttpServer(
   private def _system_job_await(
     req: org.http4s.Request[IO],
     jobid: String
+  ): IO[HResponse[IO]] =
+    JobId.parse(jobid).toOption match {
+      case Some(id) =>
+        _request_execution_context(req, Some(BuiltinComponentIdentity.JOB_CONTROL.name)) match {
+          case Consequence.Success(ctx) =>
+            given ExecutionContext = ctx
+            _job_experience_service.get(id, JobExperienceScope.Mine(None)) match {
+              case Consequence.Success(_) => _system_job_await_admitted(req, jobid)
+              case Consequence.Failure(_) => _job_experience_error(Some("system"), "/web/system/jobs")
+            }
+          case Consequence.Failure(_) => _job_experience_error(Some("system"), "/web/system/jobs")
+        }
+      case None => _job_experience_error(Some("system"), "/web/system/jobs")
+    }
+
+  private def _system_job_await_admitted(
+    req: org.http4s.Request[IO],
+    jobid: String
   ): IO[HResponse[IO]] = {
     val res = _dispatch_operation(
       BuiltinComponentIdentity.JOB_CONTROL.name,
@@ -1337,8 +1368,134 @@ final class Http4sHttpServer(
         form = Record.data("id" -> jobid)
       )
     )
-    _html_status(_static_form_app_renderer.renderSystemJobResult(jobid, res), HStatus.fromInt(res.code).getOrElse(HStatus.Ok))
+    _job_experience_private(_html_status(_static_form_app_renderer.renderSystemJobResult(jobid, res), HStatus.fromInt(res.code).getOrElse(HStatus.Ok)))
   }
+
+  private def _job_experience_list(
+    req: org.http4s.Request[IO],
+    scope: JobExperienceScope,
+    app: Option[String]
+  ): IO[HResponse[IO]] =
+    _job_experience_execution(req) match {
+      case Consequence.Success((ctx, locale)) =>
+        given ExecutionContext = ctx
+        val values = _query_values(req)
+        JobExperienceQueryCodec.parse(
+          None,
+          scope.applicationOption,
+          values.get("persistentOnly"),
+          values.get("status"),
+          values.get("origin"),
+          values.get("limit"),
+          values.get("cursor"),
+          Some(_job_experience_scope_name(scope))
+        ).flatMap(query => _job_experience_service.list(query, Some(locale))) match {
+          case Consequence.Success(page) =>
+            _job_experience_private(_html(StaticFormAppRenderer.Page(JobExperienceWebRenderer.list(page, scope, _job_experience_filters(values))), app))
+          case Consequence.Failure(_) =>
+            _job_experience_error(app, JobExperienceWebSupport.listPath(scope))
+        }
+      case Consequence.Failure(_) =>
+        _job_experience_error(app, JobExperienceWebSupport.listPath(scope))
+    }
+
+  private def _job_experience_detail(
+    req: org.http4s.Request[IO],
+    jobid: String,
+    scope: JobExperienceScope,
+    app: Option[String]
+  ): IO[HResponse[IO]] =
+    JobId.parse(jobid).toOption match {
+      case Some(id) =>
+        _job_experience_execution(req) match {
+          case Consequence.Success((ctx, locale)) =>
+            given ExecutionContext = ctx
+            _job_experience_service.get(id, scope, Some(locale)) match {
+              case Consequence.Success(view) =>
+                val csrf = _web_csrf_context(req)
+                _job_experience_private(_html(_with_csrf_cookie(StaticFormAppRenderer.Page(JobExperienceWebRenderer.detail(view, scope, csrf.token)), csrf), app))
+              case Consequence.Failure(_) =>
+                _job_experience_error(app, JobExperienceWebSupport.listPath(scope))
+            }
+          case Consequence.Failure(_) =>
+            _job_experience_error(app, JobExperienceWebSupport.listPath(scope))
+        }
+      case None => _job_experience_error(app, JobExperienceWebSupport.listPath(scope))
+    }
+
+  private def _job_experience_notifications(
+    req: org.http4s.Request[IO],
+    application: Option[String],
+    app: Option[String]
+  ): IO[HResponse[IO]] =
+    _job_experience_execution(req) match {
+      case Consequence.Success((ctx, _)) =>
+        val values = _query_values(req)
+        JobExperienceQueryCodec.parseNotifications(application, values.get("unreadOnly"), values.get("limit"), values.get("cursor")) match {
+          case Consequence.Success(query) =>
+            UserNotificationInboxRuntime.list(ctx, query.application, query.unreadOnly, query.limit, query.cursor) match {
+              case Consequence.Success(page) =>
+                val csrf = _web_csrf_context(req)
+                _job_experience_private(_html(_with_csrf_cookie(StaticFormAppRenderer.Page(JobExperienceWebRenderer.notifications(page, query.application, _job_notification_filters(values), csrf.token)), csrf), app))
+              case Consequence.Failure(_) =>
+                _job_experience_private(_html_status(StaticFormAppRenderer.Page(JobExperienceWebRenderer.error("Notifications are unavailable.", JobExperienceWebSupport.listPath(JobExperienceScope.Mine(application)))), HStatus.NotFound))
+            }
+          case Consequence.Failure(_) =>
+            _job_experience_private(_html_status(StaticFormAppRenderer.Page(JobExperienceWebRenderer.error("Notifications are unavailable.", JobExperienceWebSupport.listPath(JobExperienceScope.Mine(application)))), HStatus.NotFound))
+        }
+      case Consequence.Failure(_) =>
+        _job_experience_private(_html_status(StaticFormAppRenderer.Page(JobExperienceWebRenderer.error("Notifications are unavailable.", JobExperienceWebSupport.listPath(JobExperienceScope.Mine(application)))), HStatus.NotFound))
+    }
+
+  private def _job_experience_scope_name(scope: JobExperienceScope): String = scope match {
+    case JobExperienceScope.Mine(_) => "mine"
+    case JobExperienceScope.Application(_) => "application"
+    case JobExperienceScope.Operator => "operator"
+  }
+
+  private def _job_experience_error(
+    app: Option[String],
+    back: String
+  ): IO[HResponse[IO]] =
+    _job_experience_private(_html_status(StaticFormAppRenderer.Page(JobExperienceWebRenderer.error("The Job was not found or is not available.", back)), HStatus.NotFound))
+
+  private def _job_experience_private(
+    response: IO[HResponse[IO]]
+  ): IO[HResponse[IO]] =
+    response.map(_.putHeaders(Header.Raw(CIString("Cache-Control"), "private, no-store")))
+
+  private def _job_experience_web_enabled(
+    app: String,
+    path: Vector[String]
+  ): Boolean =
+    engine.webDescriptor.isAppEnabled(app, path)
+
+  private def _job_experience_execution(
+    req: org.http4s.Request[IO]
+  ): Consequence[(ExecutionContext, java.util.Locale)] = {
+    val values = _query_values(req)
+    _static_request_execution_context(req, Some(BuiltinComponentIdentity.JOB_CONTROL.name)).flatMap { resolved =>
+      WebExecutionRuntimeProjection.resolve(
+        resolved.resolution,
+        resolved.executioncontext,
+        WebExecutionRuntimeRequest(
+          displayLocale = values.get("lang").orElse(values.get("locale")),
+          displayTimezone = values.get("timezone").orElse(values.get("timeZone")),
+          acceptLanguage = _request_header_value(req, "Accept-Language")
+        )
+      ).map(projection => (resolved.executioncontext, java.util.Locale.forLanguageTag(projection.locale)))
+    }
+  }
+
+  private def _job_experience_filters(values: Map[String, String]): Map[String, String] =
+    Vector("persistentOnly", "status", "origin", "limit").flatMap { name =>
+      values.get(name).map(name -> _)
+    }.toMap
+
+  private def _job_notification_filters(values: Map[String, String]): Map[String, String] =
+    Vector("unreadOnly", "limit").flatMap { name =>
+      values.get(name).map(name -> _)
+    }.toMap
 
   private def _application_jobs(
     req: org.http4s.Request[IO],
@@ -2381,66 +2538,68 @@ final class Http4sHttpServer(
     app: String,
     service: String,
     operation: String
-  ): IO[HResponse[IO]] =
-    if (!_is_form_enabled(app, service, operation)) {
-      IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form not found"))
-    } else if (!_is_web_authorized(app, service, operation, Some(req))) {
-      _forbidden_web(req, Some(app), Some(service), Some(operation))
-    } else {
-    val started = System.nanoTime()
-    for {
-      form <- _to_form_record(req)
-      pagevalues = _form_values(form)
-      response <-
-        if (!_verify_operation_form_csrf(req, form))
-          _csrf_forbidden_response(req, app, started)
-        else _operation_form_values(app, service, operation, form) match {
-          case Consequence.Success(operationvalues) =>
-            val validation = _static_form_app_renderer.validateOperationForm(
-              engine.runtimeSubsystem,
-              app,
-              service,
-              operation,
-              operationvalues,
-              engine.webDescriptor
-            )
-            validation match {
-              case Some(result) if !result.valid =>
-                val page = _static_form_app_renderer.renderOperationForm(
+  ): IO[HResponse[IO]] = {
+    val generated =
+      if (!_is_form_enabled(app, service, operation)) {
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form not found"))
+      } else if (!_is_web_authorized(app, service, operation, Some(req))) {
+        _forbidden_web(req, Some(app), Some(service), Some(operation))
+      } else {
+        val started = System.nanoTime()
+        for {
+          form <- _to_form_record(req)
+          pagevalues = _form_values(form)
+          response <-
+            if (!_verify_operation_form_csrf(req, form))
+              _csrf_forbidden_response(req, app, started)
+            else _operation_form_values(app, service, operation, form) match {
+              case Consequence.Success(operationvalues) =>
+                val validation = _static_form_app_renderer.validateOperationForm(
                   engine.runtimeSubsystem,
                   app,
                   service,
                   operation,
-                  engine.webDescriptor,
-                  _with_form_debug_panel_flag(pagevalues),
-                  Some(result),
-                  _operation_mode,
-                  showExecutionDebugPanel = true
-                ).getOrElse(_static_form_app_renderer.renderFormResult(
-                  _form_result_properties(app, service, operation, HttpResponse.Text(
-                    HttpStatus.BadRequest,
-                    ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
-                    Bag.text("Validation failed.", StandardCharsets.UTF_8)
-                  ), pagevalues, _form_page_view_context_values(req, app, service, operation, pagevalues))
-                ))
-                _html_status(page, HStatus.BadRequest, Some(app)).map { html =>
-                  RuntimeDashboardMetrics.recordHtmlRequest(
-                    req.method.name,
-                    req.uri.path.renderString,
-                    HStatus.BadRequest.code,
-                    (System.nanoTime() - started) / 1000000L
-                  )
-                  html
+                  operationvalues,
+                  engine.webDescriptor
+                )
+                validation match {
+                  case Some(result) if !result.valid =>
+                    val page = _static_form_app_renderer.renderOperationForm(
+                      engine.runtimeSubsystem,
+                      app,
+                      service,
+                      operation,
+                      engine.webDescriptor,
+                      _with_form_debug_panel_flag(pagevalues),
+                      Some(result),
+                      _operation_mode,
+                      showExecutionDebugPanel = true
+                    ).getOrElse(_static_form_app_renderer.renderFormResult(
+                      _form_result_properties(app, service, operation, HttpResponse.Text(
+                        HttpStatus.BadRequest,
+                        ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+                        Bag.text("Validation failed.", StandardCharsets.UTF_8)
+                      ), pagevalues, _form_page_view_context_values(req, app, service, operation, pagevalues))
+                    ))
+                    _html_status(page, HStatus.BadRequest, Some(app)).map { html =>
+                      RuntimeDashboardMetrics.recordHtmlRequest(
+                        req.method.name,
+                        req.uri.path.renderString,
+                        HStatus.BadRequest.code,
+                        (System.nanoTime() - started) / 1000000L
+                      )
+                      html
+                    }
+                  case _ =>
+                    _submit_valid_operation_form(req, app, service, operation, form, pagevalues, started)
                 }
-              case _ =>
-                _submit_valid_operation_form(req, app, service, operation, form, pagevalues, started)
+              case Consequence.Failure(conclusion) =>
+                _web_error_response(Some(app), conclusion, req.uri.path.renderString, req.method.name)
             }
-          case Consequence.Failure(conclusion) =>
-            _web_error_response(Some(app), conclusion, req.uri.path.renderString, req.method.name)
-        }
-    } yield {
-      response
-    }
+        } yield response
+      }
+    if (_is_job_experience_command(app, service, operation)) _job_experience_private(generated)
+    else generated
   }
 
   private def _submit_valid_operation_form(
@@ -3891,6 +4050,11 @@ final class Http4sHttpServer(
   ): Option[org.goldenport.cncf.component.Component] =
     _presentation_component(app)
 
+  private def _is_job_experience_component(
+    app: String
+  ): Boolean =
+    _component(app).exists(_.componentId == BuiltinComponentIdentity.JOB_CONTROL)
+
   private[http] def _use_endpoint(endpoint: ServerEndpointPolicy.Endpoint): this.type = {
     _endpoint = endpoint
     this
@@ -3908,12 +4072,12 @@ final class Http4sHttpServer(
     val ok = response.code >= 200 && response.code < 400
     val redirect =
       if (ok)
-        descriptor.flatMap(_.successRedirect)
+        descriptor.flatMap(_.successRedirect).orElse(_job_experience_form_redirect(app, service, operation, form))
       else if (descriptor.exists(_.stayOnError))
         None
       else
         descriptor.flatMap(_.failureRedirect)
-    redirect match {
+    val generated = redirect match {
       case Some(template) =>
         val redirectresponse = _see_other(
           _render_redirect_template(template, app, service, operation, form, response, properties.executionMetadata)
@@ -3950,7 +4114,62 @@ final class Http4sHttpServer(
               _web_error_response(Some(app), conclusion, s"/form/${app}/${service}/${operation}")
           }
     }
+    if (_is_job_experience_command(app, service, operation))
+      _job_experience_private(
+        if (ok)
+          generated
+        else
+          generated.map(_.withStatus(
+            org.http4s.Status.fromInt(response.code).toOption.getOrElse(HStatus.InternalServerError)
+          ))
+      )
+    else generated
   }
+
+  private def _is_job_experience_command(
+    app: String,
+    service: String,
+    operation: String
+  ): Boolean =
+    _is_job_experience_component(app) &&
+      NamingConventions.equivalentByNormalized(service, "job_experience") &&
+      (NamingConventions.equivalentByNormalized(operation, "control_job_experience") ||
+        NamingConventions.equivalentByNormalized(operation, "mark_notification_read")) &&
+      _job_experience_operation_is_installed(service, operation)
+
+  private def _job_experience_operation_is_installed(
+    service: String,
+    operation: String
+  ): Boolean =
+    engine.runtimeSubsystem.findComponent(BuiltinComponentIdentity.JOB_CONTROL).exists { component =>
+      component.protocol.services.services.exists { definition =>
+        NamingConventions.equivalentByNormalized(definition.name, service) &&
+          definition.operations.operations.exists(value =>
+            NamingConventions.equivalentByNormalized(value.name, operation)
+          )
+      }
+    }
+
+  private def _job_experience_form_redirect(
+    app: String,
+    service: String,
+    operation: String,
+    form: Record
+  ): Option[String] =
+    if (!_is_job_experience_component(app) ||
+      !NamingConventions.equivalentByNormalized(service, "job_experience"))
+      None
+    else if (NamingConventions.equivalentByNormalized(operation, "control_job_experience")) {
+        for {
+          id <- form.getString("id").flatMap(JobId.parse(_).toOption)
+          scope <- JobExperienceQueryCodec.parseScope(form.getString("scope"), form.getString("application")).toOption
+        } yield JobExperienceWebSupport.detailPath(scope, id)
+    } else if (NamingConventions.equivalentByNormalized(operation, "mark_notification_read")) {
+        form.getString("application").filter(_.trim.nonEmpty)
+          .flatMap(JobExperienceScope.normalizedApplication(_).toOption)
+          .map(value => JobExperienceWebSupport.notificationPath(Some(value)))
+          .orElse(Some(JobExperienceWebSupport.notificationPath(None)))
+    } else None
 
   private[http] def _form_result_static_template(
     app: String,
@@ -5676,6 +5895,22 @@ final class Http4sHttpServer(
   private def _is_rest_v1_request(req: org.http4s.Request[IO]): Boolean = {
     val path = req.uri.path.renderString
     path == "/rest/v1" || path == "/rest/v1/" || path.startsWith("/rest/v1/")
+  }
+
+  private def _is_job_experience_rest_request(req: org.http4s.Request[IO]): Boolean = {
+    val segments = _rest_execution_path(req).split("/").toVector.filter(_.nonEmpty)
+    (
+      for {
+        componentname <- segments.headOption
+        servicename <- segments.drop(1).headOption
+        component <- _component(componentname)
+      } yield
+        component.componentId == BuiltinComponentIdentity.JOB_CONTROL &&
+          NamingConventions.equivalentByNormalized(servicename, "job_experience") &&
+          component.protocol.services.services.exists { definition =>
+            NamingConventions.equivalentByNormalized(definition.name, servicename)
+          }
+    ).getOrElse(false)
   }
 
   private def _is_rest_compatibility_request(req: org.http4s.Request[IO]): Boolean = {
