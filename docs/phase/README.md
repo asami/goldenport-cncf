@@ -15,15 +15,15 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- [Phase 105](phase-105.md) is Workflow validation hygiene, with no feature additions:
-  remove unnecessary type/provenance restrictions, repeated admission/history
-  checks and post-commit copy comparisons while preserving public interfaces.
-  `completeC` stays non-public. CNCF and sm-workflow Phase 5.2 can develop in
-  parallel; affected integration acceptance uses an explicitly selected corrected
-  CNCF artifact. [Checklist](phase-105-checklist.md). Planning does not start or
-  pause either development task. Dedicated source/specification authoring is
-  untested; producer acceptance, artifact integration and consumer handoff remain
-  OPEN. Consumer-readiness limits do not authorize unfinished feature work.
+- [Phase 105](phase-105.md) is CLOSED: Workflow validation hygiene, no feature
+  additions. Public interfaces, non-public managed `completeC`, native CAS and
+  persisted layouts are preserved. The connected Step, sole Phase full review
+  and bounded host-spec repair are accepted; final full test4348/4348 passed.
+  The explicitly selected CNCF0.5.3-SNAPSHOT artifact passed the existing
+  consumer E12 eight-case integration check. [Checklist](phase-105-checklist.md)
+  and Phase handoff record the tested cutoff, four nonblocking Hygiene items
+  and separate sm-workflow obligations. No consumer Phase completion, main
+  merge, push, publication or deployment is claimed.
 
 - [Phase 103](phase-103.md) plans the shared Validation/Test Metadata ABI and
   operation discovery, driven by sm-workflow Phase 5. textus-cbd-support static
@@ -678,5 +678,5 @@ acceptance, successor, and resume evidence. This inventory changes no status.
 | [phase-94](phase-94.md) | status=planned |
 | [phase-103](phase-103.md) | status=planned |
 | [phase-103-checklist](phase-103-checklist.md) | status=planned |
-| [phase-105](phase-105.md) | status=planned |
-| [phase-105-checklist](phase-105-checklist.md) | status=planned |
+| [phase-105](phase-105.md) | status=closed |
+| [phase-105-checklist](phase-105-checklist.md) | status=closed |

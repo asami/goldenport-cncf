@@ -418,3 +418,29 @@ history, normalized event/index representation and pre-effect refusal. They are
 not execution evidence until the parent records the selected validation outcome.
 Consumer integration uses the existing sm-workflow public routes when ready;
 unfinished consumer features and wider Phase5 obligations remain separate OPEN.
+
+### Phase105 completion evidence — 2026-10-12
+
+The source cutoff above is historical and superseded for the bounded Phase105
+contract only. WCS-01..05 were accepted in Step WCS-CORE at7a640d281d64fa9314b9265e66fdfa4a8665cc9c.
+Protected Step review and its focused closure, one comprehensive original-epoch
+Phase review and the later host-spec repair1 focused closure are PASS. Whole-file
+review confirms the remaining consumed native conditions, public signatures
+and persisted writer layouts; no provider/security/CAS boundary was broadened.
+
+Final exact `sbt --batch test` validation11 passed4348/4348 in587 completed
+suites,0 failed/aborted,13 canceled,1 ignored and46 pending, SBT0/wrapper0/
+lockreleased. Earlier failed validation9 exposed obsolete proposal-copy refusal
+expectations in the host specification; their bounded test-only correction
+passed the entire host suite25/25 and independent review before this full run.
+Committed durable payloads and exact cursor-domain sequences remain asserted,
+alongside missing/null evidence refusal, storage preservation and stale CAS.
+
+The selected development JAR org.goldenport:goldenport-cncf_3:0.5.3-SNAPSHOT,
+Scala3.3.8, from the dedicated Phase105 checkout was used once in each sm-workflow
+Compile/Test classpath. Existing public E12 integration cases passed8/8 at the
+tested consumer cutoff; see the [Phase handoff](../phase/phase-105.md).
+That result does not certify later consumer commits, every historical codec,
+actual provider/AI execution or completion of sm-workflow Phase5/5.2. Wider
+previously adopted consumer obligations remain separate. No main integration,
+shared publication, stronger recovery or new capabilities are implied.

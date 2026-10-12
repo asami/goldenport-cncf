@@ -1,8 +1,9 @@
 # Phase 105: Workflow Validation Hygiene
 
-status=planned
+status=closed
 planned_at=2026-10-12
-current_status=OPEN
+closed_at=2026-10-12
+current_status=CLOSED
 work_class=hygiene
 consumer=sm-workflow Phase 5.2
 checklist=[Phase 105 Checklist](phase-105-checklist.md)
@@ -49,11 +50,11 @@ completion of one issued interaction, not automatic completion of a whole Phase.
 
 | ID | Outcome | Status |
 | --- | --- | --- |
-| WCS-01 | Correct completion binding and consolidate issued-input/result admission on the existing public WorkOrder and Decision routes. | OPEN |
-| WCS-02 | Consolidate instance/history checks at loading and transition boundaries; remove repeated certification of the same internal data. | OPEN |
-| WCS-03 | Remove post-commit comparisons against planned/copy data from completion and event paths; consume actual stored outcomes. | OPEN |
-| WCS-04 | Remove diagnostic provenance gates in related public/generated Workflow paths and resolve unnecessary closed-field restrictions. | OPEN |
-| WCS-05 | Validate the connected producer/consumer route, preserve interfaces and complete independent review and consumer handoff. | OPEN |
+| WCS-01 | Correct completion binding and consolidate issued-input/result admission on the existing public WorkOrder and Decision routes. | DONE |
+| WCS-02 | Consolidate instance/history checks at loading and transition boundaries; remove repeated certification of the same internal data. | DONE |
+| WCS-03 | Remove post-commit comparisons against planned/copy data from completion and event paths; consume actual stored outcomes. | DONE |
+| WCS-04 | Remove diagnostic provenance gates in related public/generated Workflow paths and resolve unnecessary closed-field restrictions. | DONE |
+| WCS-05 | Validate the connected producer/consumer route, preserve interfaces and complete independent review and consumer handoff. | DONE |
 
 These are outcomes in one connected implementation, not a test/review/commit
 cycle for each helper. The checklist owns acceptance; this plan claims no
@@ -157,3 +158,60 @@ Implementation source cutoff, 2026-10-12: the bounded Phase105 source/specificat
 batch is being authored in the dedicated checkout. No test, independent review,
 artifact integration or acceptance result is recorded here. All WCS items remain
 OPEN; the applicability section records the intended consumption boundaries.
+
+## Completion record — 2026-10-12
+
+This final record supersedes the earlier same-day planning/source cutoffs above;
+those cutoffs remain historical, not current acceptance.
+
+The connected WCS-CORE / WCS-CORE-A Step was accepted and committed as
+`7a640d281d64fa9314b9265e66fdfa4a8665cc9c` on
+`codex/phase-105-workflow-validation`, from original base
+`15756431cf31c7172099b8544a049985d201df25`. Both completion Operations consume
+their actual semantic codecs without carrier-name equality. Native loading and
+public arbitrary-instance admission retain history checks; internal append and
+formatting do not recertify that already consumed history. Actual committed
+instance/event/index/cursor data supplies response and delivery. Required
+references, domains, provider scope, CAS, ordering and indeterminate/no-retry
+handling remain. Provided and ActionProgram admission consumes executable
+identities/types/order/effects rather than diagnostic provenance. Public
+interfaces, writer layouts and product version `0.5.3-SNAPSHOT` are preserved.
+
+Independent protected Step review and its focused closure accepted the Step.
+One comprehensive Phase review accepted the complete original-epoch accumulator.
+Final full validation9 then exposed two obsolete host-spec copy expectations;
+bounded Phase repair1 corrected those expectations, not production code.
+The complete host suite passed25/25 in validation10 and a fresh independent
+focused review accepted the repair. Final validation11, exact `sbt --batch test`,
+passed4348/4348 across587 complete suites,0 failed/aborted, with13 canceled,
+1 ignored and46 pending. SBT0, wrapper0 and `lock=released` were observed;
+the current-request reader accepted the actual terminal result.
+
+### Consumer integration handoff
+
+The explicitly selected corrected development artifact is
+`org.goldenport:goldenport-cncf_3:0.5.3-SNAPSHOT` (Scala3.3.8), from
+`/Users/asami/src/dev2025/cloud-native-component-framework-phase105`:
+`target/scala-3.3.8/goldenport-cncf_3-0.5.3-SNAPSHOT.jar`.
+Package validation5 succeeded without shared publication. Consumer validation7
+selected that JAR exactly once in both Compile and Test classpaths and compiled
+the existing sm-workflow sources/specifications. The original
+`ThreeWorkflowDirectOperationSpec` E12 filter passed8/8: enriched, resolved,
+defer, cancel, reasoning-resolved, reasoning-defer, reasoning-cancel and direct
+SplitPhase semantic completion. These cover existing public WorkOrder/reasoning/
+Decision progression, native result/continuation completion and acknowledgement.
+The tested consumer HEAD was `fdd016c1a2dfeef67030f5cbfb0a40474c2d7c43`;
+later parallel consumer commits are not retroactively covered by this result.
+
+The consumer can integrate the selected artifact through its existing local
+dependency-selection route; this handoff adds no caller certification fields,
+exposes no managed `completeC`, and controls no consumer task. Completion of
+sm-workflow Phase5.2, wider business paths and actual provider/AI execution remain
+its own obligations. No Cozy work, Phase96 work, main merge, push, shared
+publication or deployment belongs to this closure.
+
+Four nonblocking pre-existing maintenance items remain OPEN in the
+[Hygiene journal](../journal/2026/10/2026-10-12-phase-105-hygiene-follow-up.md).
+No Development Candidate was accepted and no empty candidate journal is created.
+This final Phase/checklist/index state and the accepted journal form the distinct
+Phase release payload; a Step commit alone is not Phase closure.

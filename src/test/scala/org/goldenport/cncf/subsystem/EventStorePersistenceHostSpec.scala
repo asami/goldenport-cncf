@@ -20,7 +20,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityRevision}
  * Host construction/admission examples, not atomic provider acceptance.
  *
  * @since   Oct. 3, 2026
- * @version Oct. 3, 2026
+ * @version Oct. 12, 2026
  */
 final class EventStorePersistenceHostSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private given context: ExecutionContext = ExecutionContext.create()
@@ -619,8 +619,8 @@ final class EventStorePersistenceHostSpec extends AnyWordSpec with Matchers with
       }
     }
 
-    "reject verified storage evidence for a different canonical event proposal" in {
-      Given("verified committed storage for one exact canonical event proposal")
+    "consume actual committed event data despite a different proposal payload" in {
+      Given("verified storage containing the original committed canonical event data")
       val prepared = selectedRecords()
       val input = selectedPlan(prepared)
       EventStorePersistenceConstruction.withDeclaration(declaration) {
@@ -629,10 +629,14 @@ final class EventStorePersistenceHostSpec extends AnyWordSpec with Matchers with
             seedSelected(space, input)
             val verified = take(space.conditionalMultiGuardVerified(input)).asInstanceOf[DataStoreMultiGuardReadbackResult.Verified]
             val changed = selectedRecords(mixedEvents.updated(1, mixedEvents(1).copy(payload = Map("typed" -> 7L))))
-            When("a proposal with changed payload claims the verified storage")
+            When("a proposal with changed payload consumes the verified committed storage")
             val changedresult = changed.deliveryCandidatesFromVerifiedStorageC(verified)
-            Then("the mismatched payload proposal is rejected")
-            changedresult.toOption shouldBe None
+            val changedcandidates = take(changedresult)
+            Then("delivery retains the committed durable payloads, mixed event order and sequences")
+            changedcandidates.filter(_.persistent).map(_.payload) shouldBe prepared.persistent.map(_.payload)
+            changedcandidates.filter(_.persistent).map(_.payload) should not be changed.persistent.map(_.payload)
+            changedcandidates.map(_.id) shouldBe mixedEvents.map(_.id)
+            changedcandidates.map(_.sequence) shouldBe Vector(0L, 11L, 0L, 12L)
             val missing = selectedRecords(Vector(selectedEvent("fact", "absent")))
             When("a proposal for an absent event claims the verified storage")
             val missingresult = missing.deliveryCandidatesFromVerifiedStorageC(verified)
@@ -682,12 +686,12 @@ final class EventStorePersistenceHostSpec extends AnyWordSpec with Matchers with
             val candidates = take(proposal.deliveryCandidatesFromVerifiedStorageC(verified))
             Then("the selected durable sequences preserve exact integer precision")
             candidates.map(_.sequence) shouldBe Vector(0L, last + 1L, 0L, last + 2L)
-            val wrongCursor = take(WorkflowCursorEventProposal.prepareC(selection, declaration,
+            val cursorcopy = take(WorkflowCursorEventProposal.prepareC(selection, declaration,
               take(EventCursorRecordV1.createC(2L, last))))
-            When("a proposal with another expected cursor revision claims the verified result")
-            val wrongresult = wrongCursor.deliveryCandidatesFromVerifiedStorageC(verified)
-            Then("the foreign cursor evidence is rejected")
-            wrongresult.toOption shouldBe None
+            When("a proposal with a different unused cursor revision annotation consumes the committed cursor domain")
+            val wrongresult = cursorcopy.deliveryCandidatesFromVerifiedStorageC(verified)
+            Then("delivery preserves the actual committed cursor sequences with exact integer precision")
+            take(wrongresult).map(_.sequence) shouldBe Vector(0L, last + 1L, 0L, last + 2L)
             // A stale complete plan cannot republish or advance the cursor again.
             val before = stored(space, input)
             When("the stale complete plan is resubmitted")
