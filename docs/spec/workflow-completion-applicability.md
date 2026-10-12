@@ -372,3 +372,49 @@ application canonical/retained/body and all wider Phase5 obligations remain
 adopted OPEN, not declared universally necessary. Original9/history/repair3/3/
 frames unchanged. Exact forwarding94/95/96 does not erase separate operational
 80/84/86/89/92/93 observations. No fullGoal/Phase/release acceptance follows.
+
+## Phase105 — existing-functionality consumption and incremental validation
+
+Source cutoff, 2026-10-12: the dedicated Phase105 implementation and executable
+examples are authored but UNVERIFIED. No compilation, test, independent review,
+main integration, selected consumer artifact, actual provider/AI execution or
+sm-workflow Phase5.2 acceptance follows. Historical evidence above is unchanged.
+
+The declared public carrier may differ from the semantic result type produced
+by its codec. Actual declared Operation resolution, decoding, Component/Workflow
+scope and result conditions still govern WorkOrder and Decision completion.
+Managed native issued/result admission precedes closing interpretation and event
+preparation. Pure selection confers no effect permission. The non-managed route
+retains its separate issued-input access and runtime admission, and the response
+uses the actual record returned by append rather than certifying its proposal.
+
+Arbitrary public instance values and stored decode retain full history admission.
+Inside a call chain that has consumed native current history, incremental append
+checks only the new adjacent entry, original expected revision, references and
+lifecycle/suspension transition. Internal formatting does not rescan that history.
+Selected Closing consumes actual target/definition/revision and its final entry;
+unused copied prefixes and projected current fields cannot rewrite actual history.
+Mechanical caller-owned intents still use public append admission. Inert receipt
+and instance annotations are allowed; required fields, native physical consumed
+fields, owner/reference/type and schema interpretation remain necessary.
+
+V1/V2 event readers consume actual parsed facts rather than canonical byte copies.
+Their closed consumed field sets, explicit format choice, issued identities,
+typed numbers, stored lane/status and bounded payload/envelope domains remain.
+Existing parsed-object duplicate-member behavior is unchanged. Canonical writers
+and stored addressing are unchanged. Delivery indexes bind actual key/address,
+event identity and sequence; body-digest metadata and unused annotations are inert.
+Actual durable content fills the original mixed order, with transient values kept
+separate. Actual cursor domain is consumed without proposal-copy equality.
+Missing, unreadable, foreign, ambiguous or invalid applied data still withholds
+delivery and preserves transaction-indeterminate/no-retry behavior.
+
+Provided/generated execution resolves executable Operation/Action identities,
+types, order, metadata and effect obligations. Generator/source-line annotations
+are diagnostic, not execution authority. Public signatures, Operation names,
+native CAS/provider/grant boundaries and persisted writer layouts are preserved.
+The Phase105 producer examples include actual SQLite close/reopen, multi-step
+history, normalized event/index representation and pre-effect refusal. They are
+not execution evidence until the parent records the selected validation outcome.
+Consumer integration uses the existing sm-workflow public routes when ready;
+unfinished consumer features and wider Phase5 obligations remain separate OPEN.

@@ -4,12 +4,12 @@ import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.*
-import org.goldenport.cncf.event.{EventRecord, EventRecordJsonV1}
+import org.goldenport.cncf.event.{EventLane, EventRecord, EventRecordJsonV1}
 import org.goldenport.cncf.unitofwork.TransactionContext
 
 /*
  * @since   Sep. 29, 2026
- * @version Sep. 29, 2026
+ * @version Oct. 12, 2026
  */
 /** Borrowed local record preparation, not a transaction, lease, UoW or authority. */
 final class WorkflowPreparedDataStoreTransition[A] private (
@@ -61,7 +61,7 @@ final class WorkflowPreparedDataStoreTransition[A] private (
           else withSideEffectsC(effects).map { prepared =>
             new WorkflowPreparedDataStoreTransition(store, prepared.plan, result => result match {
               case changed: DataStoreConditionalTransitionResult.Transitioned =>
-                _admitEventReadbackC(collection, effects).flatMap(_ => project(changed))
+                _admit_event_readback_c(collection, effects).flatMap(_ => project(changed))
               case unchanged => project(unchanged)
             })
           }
@@ -72,19 +72,30 @@ final class WorkflowPreparedDataStoreTransition[A] private (
     }
   }
 
-  private def _admitEventReadbackC(
+  private def _admit_event_readback_c(
     collection: DataStore.CollectionId,
     effects: Vector[EntityVersionedSideEffect.Create]
   ): Consequence[Unit] =
-    effects.foldLeft(Consequence.unit) { (acc, effect) =>
-      acc.flatMap { _ =>
+    effects.foldLeft[Consequence[Vector[EventRecord]]](Consequence.success(Vector.empty)) { (acc, effect) =>
+      acc.flatMap { events =>
         store.load(collection, effect.entryId).flatMap {
-          case Some(stored) if stored.getString("event_json") == effect.record.getString("event_json") =>
-            Consequence.unit
+          case Some(stored) => stored.getString("event_json") match {
+            case Some(bytes) => EventRecordJsonV1.decodeStorageC(bytes).flatMap { actual =>
+              if (actual.id.value == effect.entryId.print && actual.persistent &&
+                  actual.lane == EventLane.Transactional && actual.sequence > 0L)
+                Consequence.success(events :+ actual)
+              else Consequence.stateConflict("Committed event target or native domain differs")
+            }
+            case None => Consequence.stateConflict("Committed native event bytes are missing")
+          }
           case _ =>
-            Consequence.stateConflict("Committed event record readback differs from the prepared batch")
+            Consequence.stateConflict("Committed event target is missing")
         }
       }
+    }.flatMap { events =>
+      val sequences = events.map(_.sequence)
+      if (sequences.zip(sequences.drop(1)).forall { case (left, right) => left < right }) Consequence.unit
+      else Consequence.stateConflict("Committed event sequences are not in selected target order")
     }
 
   /** One canonical guarded commit; the provider rechecks all prepared guards.
@@ -109,8 +120,8 @@ final class WorkflowPreparedDataStoreTransition[A] private (
     * prepared provider and projects its already-verified Workflow pair.
     */
   private[cncf] def commitHostEventsC(space: DataStoreSpace, records: Vector[EventRecord]): Consequence[A] =
-    _hostResultC(space, records).flatMap {
-      case verified: DataStoreMultiGuardReadbackResult.Verified => _projectHostVerifiedC(verified)
+    _host_result_c(space, records).flatMap {
+      case verified: DataStoreMultiGuardReadbackResult.Verified => _project_host_verified_c(verified)
       case DataStoreMultiGuardReadbackResult.NotMatched(existing) =>
         project(DataStoreConditionalTransitionResult.NotMatched(existing))
     }
@@ -125,21 +136,21 @@ final class WorkflowPreparedDataStoreTransition[A] private (
       callbacks: Vector[() => Consequence[Unit]], cleanup: () => Consequence[Unit],
       delivery: Vector[EventRecord] => Consequence[Unit],
       localGuards: Vector[DataStoreConditionalRoot] = Vector.empty,
-      localCreates: Vector[EntityVersionedSideEffect.Create] = Vector.empty): Consequence[ManagedCompletionParticipant[A]] =
+      localCreates: Vector[EntityVersionedSideEffect.Create] = Vector.empty): Consequence[ManagedCompletionParticipant[A]] = {
     if (delivery == null || records == null || records.exists(_ == null) || localGuards == null ||
         localCreates == null || localGuards.exists(_ == null) || localCreates.exists(_ == null))
       Consequence.configurationInvalid("Managed host participant requires ordinary input and a delivery port")
-    else _hostProviderC(space).flatMap { _ =>
+    else _host_provider_c(space).flatMap { _ =>
       var batch: Option[Vector[EventRecord]] = Some(records)
       var finalized: Option[Vector[EventRecord]] = None
       val native = new ManagedCompletionParticipant.Native[A] {
         def commit(tx: TransactionContext): ManagedCompletionParticipant.Outcome[A] = {
           import ManagedCompletionParticipant.Outcome
-          _hostProviderC(space).flatMap(_ => space.conditionalHostEventsFinalizedC(
+          _host_provider_c(space).flatMap(_ => space.conditionalHostEventsFinalizedC(
             plan, batch.getOrElse(Vector.empty), localGuards, localCreates)) match {
             case Consequence.Success((verified: DataStoreMultiGuardReadbackResult.Verified, actual)) =>
               finalized = Some(actual)
-              _projectHostVerifiedC(verified) match {
+              _project_host_verified_c(verified) match {
                 case Consequence.Success(value) => Outcome.Verified(value)
                 case Consequence.Failure(conclusion) => Outcome.Indeterminate(conclusion)
               }
@@ -150,36 +161,41 @@ final class WorkflowPreparedDataStoreTransition[A] private (
               Outcome.Indeterminate(conclusion)
           }
         }
-        def deliverC(value: A): Consequence[Unit] = finalized match {
+        def deliverC(value: A): Consequence[Unit] = {
+           finalized match {
           case Some(original) => delivery(original)
           case None => Consequence.stateConflict("Managed delivery batch was discarded")
+        }
         }
         def discardC(): Consequence[Unit] = { batch = None; finalized = None; Consequence.unit }
       }
       ManagedCompletionParticipant.createC(native, callbacks, cleanup)
     }
+  }
 
-  private def _hostProviderC(space: DataStoreSpace): Consequence[Unit] =
+  private def _host_provider_c(space: DataStoreSpace): Consequence[Unit] = {
     if (space == null || plan.sideEffects.nonEmpty)
       Consequence.configurationInvalid("Host event completion requires an effect-free prepared pair")
     else for {
-      rootStore <- space.dataStore(plan.root.collection)
-      successorStore <- space.dataStore(plan.successor.collection)
-      _ <- if ((rootStore eq store) && (successorStore eq store)) Consequence.unit
+      rootstore <- space.dataStore(plan.root.collection)
+      successorstore <- space.dataStore(plan.successor.collection)
+      _ <- if ((rootstore eq store) && (successorstore eq store)) Consequence.unit
         else Consequence.configurationInvalid("Prepared Workflow provider differs from the admitted host provider")
     } yield ()
+  }
 
-  private def _hostResultC(space: DataStoreSpace, records: Vector[EventRecord],
-      localGuards: Vector[DataStoreConditionalRoot] = Vector.empty,
-      localCreates: Vector[EntityVersionedSideEffect.Create] = Vector.empty): Consequence[DataStoreMultiGuardReadbackResult] =
+  private def _host_result_c(space: DataStoreSpace, records: Vector[EventRecord],
+      localguards: Vector[DataStoreConditionalRoot] = Vector.empty,
+      localcreates: Vector[EntityVersionedSideEffect.Create] = Vector.empty): Consequence[DataStoreMultiGuardReadbackResult] = {
     if (space == null || records == null || plan.sideEffects.nonEmpty)
       Consequence.configurationInvalid("Host event completion requires an effect-free prepared pair and ordinary input")
     else for {
-      _ <- _hostProviderC(space)
-      result <- space.conditionalHostEventsWithLocalIntentsVerified(plan, records, localGuards, localCreates)
+      _ <- _host_provider_c(space)
+      result <- space.conditionalHostEventsWithLocalIntentsVerified(plan, records, localguards, localcreates)
     } yield result
+  }
 
-  private def _projectHostVerifiedC(verified: DataStoreMultiGuardReadbackResult.Verified): Consequence[A] =
+  private def _project_host_verified_c(verified: DataStoreMultiGuardReadbackResult.Verified): Consequence[A] = {
           try {
             val pair = verified.records.take(2)
             if (pair.map(r => r.collection -> r.entryId) != Vector(plan.root.collection -> plan.root.entryId,
@@ -192,6 +208,7 @@ final class WorkflowPreparedDataStoreTransition[A] private (
             case NonFatal(_) => DataStoreConditionalTransitionFailure.transactionIndeterminate(
               "Host Workflow committed but authoritative projection threw")
           }
+  }
 }
 
 object WorkflowPreparedDataStoreTransition {

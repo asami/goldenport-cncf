@@ -1,11 +1,13 @@
-# Phase 105 Checklist: Workflow Validation Simplification
+# Phase 105 Checklist: Workflow Validation Hygiene
 
 Status: PLANNED
+Work class: HYGIENE — no feature additions.
 Phase: [Phase 105](phase-105.md)
 All implementation and acceptance items remain OPEN.
 
 ## WCS-01: Existing completion entry points
 
+- [ ] Confine changes to existing functionality: no new capabilities, Operations, public APIs, storage formats or recovery guarantees. Record missing features separately without expanding this Phase's acceptance.
 - [ ] Preserve public Operation names, arguments, responses and public Scala signatures; keep both managed `completeC` methods non-public.
 - [ ] Accept a valid public input carrier whose codec produces a differently named semantic result type, through both WorkOrder and Decision Operations.
 - [ ] Consolidate repeated issued-input reads and result admission with clear input-access, business and storage responsibilities.
@@ -41,6 +43,7 @@ All implementation and acceptance items remain OPEN.
 - [ ] Identify the corrected CNCF development artifact/checkout explicitly for integration without disturbing parallel consumers.
 - [ ] Demonstrate sm-workflow result submission through the existing public Operation to committed next state, saved result/continuation completion and acknowledgement; cover WorkOrder and Decision.
 - [ ] Verify consumer source compatibility without `completeC` exposure or added caller certification fields.
+- [ ] Use integration checks for existing behavior; do not add unfinished sm-workflow features as a prerequisite to hygiene. Record any consumer-readiness limitation explicitly.
 - [ ] Complete independent review of the integrated implementation and its remaining necessary checks.
 - [ ] Provide integration evidence and remaining obligations to the existing sm-workflow Phase 5.2 task without declaring that entire consumer Phase complete.
 - [ ] Complete applicable release validation and reconcile all checklist items before Phase closure; preserve unrelated work and historical evidence.
@@ -52,3 +55,8 @@ concrete checks and distinguished current completion paths from supporting paths
 whose sm-workflow use was not established. No implementation, tests, independent
 implementation review or consumer acceptance is claimed. Creating this plan
 does not activate a Goal, authorize a release or start a new task.
+
+2026-10-12 implementation source cutoff: the dedicated producer source and
+Executable Specifications are being authored. This entry reports no compilation,
+test, independent review, selected artifact or consumer result. Every acceptance
+item remains OPEN pending actual evidence owned by the parent workflow.

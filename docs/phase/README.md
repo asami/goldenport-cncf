@@ -15,13 +15,15 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- [Phase 105](phase-105.md) plans bounded Workflow validation simplification:
+- [Phase 105](phase-105.md) is Workflow validation hygiene, with no feature additions:
   remove unnecessary type/provenance restrictions, repeated admission/history
   checks and post-commit copy comparisons while preserving public interfaces.
   `completeC` stays non-public. CNCF and sm-workflow Phase 5.2 can develop in
   parallel; affected integration acceptance uses an explicitly selected corrected
   CNCF artifact. [Checklist](phase-105-checklist.md). Planning does not start or
-  pause either development task.
+  pause either development task. Dedicated source/specification authoring is
+  untested; producer acceptance, artifact integration and consumer handoff remain
+  OPEN. Consumer-readiness limits do not authorize unfinished feature work.
 
 - [Phase 103](phase-103.md) plans the shared Validation/Test Metadata ABI and
   operation discovery, driven by sm-workflow Phase 5. textus-cbd-support static

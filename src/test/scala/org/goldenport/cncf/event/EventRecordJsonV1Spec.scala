@@ -20,7 +20,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityRevision}
 
 /*
  * @since   Sep. 29, 2026
- * @version Sep. 30, 2026
+ *  version Sep. 30, 2026
+ * @version Oct. 12, 2026
  */
 final class EventRecordJsonV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
   private given ExecutionContext = ExecutionContext.create()
@@ -29,9 +30,11 @@ final class EventRecordJsonV1Spec extends AnyWordSpec with Matchers with GivenWh
   private val _roots = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "event", "root"))
   private val _next = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "event", "next"))
   private val _entry = DataStore.StringEntryId("root")
-  private def _take[A](result: Consequence[A]): A = result match {
+  private def _take[A](result: Consequence[A]): A = {
+     result match {
     case Consequence.Success(value) => value
     case other => fail(s"unexpected rejection: $other")
+  }
   }
   private def _event(payload: Map[String, Any] = Map.empty): EventRecord =
     EventRecord(EventId("test", "event", Some(_instant), Some("issued-id")),
@@ -90,25 +93,82 @@ final class EventRecordJsonV1Spec extends AnyWordSpec with Matchers with GivenWh
       EventRecordJsonV1.encode(second) shouldBe bytes
       EventRecordJsonV1.encode(_take(EventRecordJsonV1.decodeC(bytes))) shouldBe bytes
     }
-    "reject corrupt, unknown, duplicate and noncanonical wire facts" in {
+    "consume equivalent JSON formatting and final parsed members as actual typed facts" in {
+      Given("a valid issued event and equivalent whitespace, property order and string escapes")
+      val original = _event(Map("long" -> 7L, "decimal" -> BigDecimal("1.2300")))
+      val bytes = EventRecordJsonV1.encode(original)
+      val reordered = Json.fromJsonObject(io.circe.JsonObject.fromIterable(
+        parse(bytes).toOption.get.asObject.get.toVector.reverse)).spaces2
+      val representations = Vector(" \n" + bytes + "\n ", reordered,
+        bytes.replace("transition.fact", "transition\\u002efact"),
+        "{\"schemaVersion\":\"obsolete\"," + bytes.drop(1))
+      When("the actual parsed event and storage representations are consumed")
+      val decoded = representations.map(raw => _take(EventRecordJsonV1.decodeC(raw)))
+      val stored = _take(EventRecordJsonV1.decodeStorageC("cncf.event-record.v1:" + representations.head))
+      Then("all representations retain typed content and canonical writing stays deterministic")
+      decoded.foreach(_ shouldBe original)
+      stored shouldBe original
+      decoded.foreach(value => value.payload("decimal").asInstanceOf[BigDecimal].bigDecimal.scale shouldBe 4)
+      decoded.map(EventRecordJsonV1.encode).distinct shouldBe Vector(bytes)
+    }
+    "reject corrupt, unknown and invalid final parsed wire facts" in {
       Given("one admitted canonical encoding")
       val bytes = EventRecordJsonV1.encode(_event())
       val json = parse(bytes).toOption.get
-      val invalid = Vector(null, "", bytes + " ", bytes.dropRight(1),
+      val invalid = Vector(null, "", bytes.dropRight(1),
         bytes.replace("cncf.event-record.v1", "cncf.event-record.v2"),
         bytes.replace("\"stored\"", "\"unknown\""),
         bytes.replace("\"transactional\"", "\"unknown\""),
         bytes.replace(Long.MaxValue.toString, "0"),
         json.mapObject(_.add("unknown", Json.True)).noSpaces,
-        "{\"schemaVersion\":\"wrong\"," + bytes.drop(1))
-      When("each representation is decoded")
-      invalid.foreach(raw => EventRecordJsonV1.decodeC(raw).toOption shouldBe None)
-      Then("ambiguous or unsupported bytes never recover a fact")
-      _json.sequence shouldBe Long.MaxValue
+        bytes.dropRight(1) + ",\"schemaVersion\":\"wrong\"}")
       val stored = EventRecordJsonV1.encodeStorage(_event())
-      _take(EventRecordJsonV1.decodeStorageC(stored)) shouldBe _event()
-      Vector(null, bytes, stored.replace("cncf.event-record.v1:", "unsupported:"),
-        stored + " ").foreach(raw => EventRecordJsonV1.decodeStorageC(raw).toOption shouldBe None)
+      val invalidstored = Vector(null, bytes, stored.replace("cncf.event-record.v1:", "unsupported:"))
+      When("each representation is decoded")
+      val results = invalid.map(raw => EventRecordJsonV1.decodeC(raw).toOption)
+      val storageresults = invalidstored.map(raw => EventRecordJsonV1.decodeStorageC(raw).toOption)
+      Then("unsupported or malformed consumed values never recover a fact")
+      results.foreach(_ shouldBe None)
+      storageresults.foreach(_ shouldBe None)
+      _json.sequence shouldBe Long.MaxValue
+    }
+    "reject invalid issued identities, bounded values and numeric overflow directly from parsed input" in {
+      Given("an event object whose consumed fields and tagged payload values can be varied independently")
+      val root = parse(EventRecordJsonV1.encode(_event())).toOption.get
+      val id = root.hcursor.downField("id").focus.get
+      def _field_(key: String, value: Json): Json = root.mapObject(_.add(key, value))
+      def _payload_(value: Json): Json = _field_("payload", Json.obj(
+        "type" -> Json.fromString("map"), "value" -> Json.obj("value" -> value)))
+      def _tag_(kind: String, value: Json): Json = Json.obj("type" -> Json.fromString(kind), "value" -> value)
+      val string = _tag_("string", Json.fromString("leaf"))
+      val nested = (1 to 17).foldLeft(string)((value, _) => _tag_("vector", Json.arr(value)))
+      val nodes = _tag_("vector", Json.arr(Vector.fill(256)(
+        _tag_("vector", Json.arr(Vector.fill(16)(string)*)))*))
+      val invalid = Vector(
+        _field_("id", id.mapObject(_.add("timestamp", Json.Null))),
+        _field_("id", id.mapObject(_.add("timestamp", Json.fromString("not-an-instant")))),
+        _field_("id", id.mapObject(_.add("entropy", Json.Null))),
+        _field_("id", id.mapObject(_.add("entropy", Json.fromString(" ")))),
+        _field_("id", id.mapObject(_.add("major", Json.fromString("x" * 129)))),
+        _field_("name", Json.fromString("x" * 129)), _field_("kind", Json.fromString("")),
+        _field_("attributes", Json.obj(("x" * 129) -> Json.fromString("value"))),
+        _field_("attributes", Json.obj("key" -> Json.fromString("x" * 8193))),
+        _field_("attributes", Json.obj(Vector.tabulate(257)(i => s"key$i" -> Json.fromString("x"))*)),
+        _field_("payload", _tag_("map", Json.obj(("x" * 129) -> string))),
+        _payload_(_tag_("string", Json.fromString("x" * 8193))),
+        _payload_(_tag_("int", Json.fromString("2147483648"))),
+        _payload_(_tag_("long", Json.fromString("9223372036854775808"))),
+        _payload_(_tag_("decimal", Json.fromString("NaN"))),
+        _payload_(_tag_("vector", Json.arr(Vector.fill(257)(string)*))),
+        _payload_(_tag_("map", Json.obj(Vector.tabulate(257)(i => s"key$i" -> string)*))),
+        _payload_(nested), _payload_(nodes),
+        _field_("sequence", Json.fromString("9223372036854775808")))
+      When("the actual parsed values are decoded without a writer round trip")
+      val results = invalid.map(value => EventRecordJsonV1.decodeC(value.noSpaces).toOption)
+      val oversized = EventRecordJsonV1.decodeC(" " * 65537).toOption
+      Then("every invalid domain, payload budget and envelope bound rejects")
+      results.foreach(_ shouldBe None)
+      oversized shouldBe None
     }
     "reject unsupported payloads and all bounded representation overflows" in {
       Given("values outside the admitted closed payload algebra")
@@ -157,10 +217,10 @@ final class EventRecordJsonV1Spec extends AnyWordSpec with Matchers with GivenWh
       val unissued = event.copy(sequence = 0L)
       unissued._delivery_lookup_key = event._delivery_lookup_key
       EventRecordJsonV1.prepareCreateC(_events, unissued, 1L).toOption shouldBe None
-      val selectionPolicy = _take(EventPersistencePolicy.createC("v1", Vector(
+      val selectionpolicy = _take(EventPersistencePolicy.createC("v1", Vector(
         EventPersistencePolicy.Rule(EventTypeId(unissued.kind), EventPersistencePolicy.Mode.Persist))))
       val selected = _take(org.goldenport.cncf.workflow.WorkflowEventSelection.prepareC(
-        selectionPolicy, Vector(unissued)))
+        selectionpolicy, Vector(unissued)))
       org.goldenport.cncf.workflow.WorkflowSelectedEventRecords.prepareC(selected, _events, 0L)
         .toOption shouldBe None
       Then("the key is retained in the source and no apparent round-trip succeeds")

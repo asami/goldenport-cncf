@@ -9,17 +9,16 @@ import org.simplemodeling.model.datatype.EntityRevision
 /**
  * Pure host-configured proposal, not a reservation, commit or dispatch permit.
  * @since   Sep. 30, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 12, 2026
  */
 private[cncf] final class WorkflowCursorEventProposal private (
   val events: WorkflowSelectedEventRecords,
-  val cursorGuard: Option[DataStoreConditionalRoot],
-  private val cursor: Option[EventCursorRecordV1.Proposal]
+  val cursorGuard: Option[DataStoreConditionalRoot]
 ) {
   /** Adds the durable subset and cursor to one pure plan. Host admission and
     * native verified commit remain mandatory; all-transient uses another route.
     */
-  def multiGuardPlanC(transition: DataStoreConditionalTransitionPlan): Consequence[DataStoreConditionalMultiGuardPlan] =
+  def multiGuardPlanC(transition: DataStoreConditionalTransitionPlan): Consequence[DataStoreConditionalMultiGuardPlan] = {
     if (transition == null) Consequence.configurationInvalid("Workflow transition is missing")
     else cursorGuard match {
       case None => Consequence.stateConflict("No durable events: use the verified two-record completion route")
@@ -31,23 +30,27 @@ private[cncf] final class WorkflowCursorEventProposal private (
         plan <- DataStoreConditionalMultiGuardPlan.create(combined, Vector(guard), scope)
       } yield plan
     }
+  }
 
   def deliveryCandidatesFromVerifiedStorageC(
     verified: DataStoreMultiGuardReadbackResult.Verified
   ): Consequence[Vector[EventRecord]] = {
     val admitted = cursorGuard match {
-      case None => Consequence.unit
+      case None => events.deliveryCandidatesFromVerifiedStorageC(verified)
       case Some(guard) if verified != null =>
         val records = verified.records.filter(r => r.collection == guard.collection && r.entryId == guard.entryId)
         if (records.size != 1) Consequence.stateConflict("Verified storage is missing the proposed cursor")
         else EventCursorRecordV1.decodeC(records.head.record).flatMap { actual =>
-          val next = cursor.get.next
-          if (actual.revision == next.revision && actual.lastSequence == next.lastSequence) Consequence.unit
-          else Consequence.stateConflict("Verified cursor differs from its proposal")
+          events.deliveryCandidatesFromVerifiedStorageC(verified).flatMap { candidates =>
+            if (candidates.filter(_.persistent).forall(record =>
+                record.sequence > 0L && record.sequence <= actual.lastSequence))
+              Consequence.success(candidates)
+            else Consequence.stateConflict("Selected durable events are outside the actual cursor domain")
+          }
         }
       case _ => Consequence.stateConflict("Verified cursor storage is missing")
     }
-    admitted.flatMap(_ => events.deliveryCandidatesFromVerifiedStorageC(verified))
+    admitted
   }
 }
 
@@ -56,22 +59,22 @@ private[cncf] object WorkflowCursorEventProposal {
     selection: WorkflowEventSelection,
     declaration: EventStorePersistenceDeclaration,
     loadedCursor: EventCursorRecordV1
-  ): Consequence[WorkflowCursorEventProposal] = _prepareC(selection, declaration, loadedCursor, false)
+  ): Consequence[WorkflowCursorEventProposal] = _prepare_c(selection, declaration, loadedCursor, false)
 
   /** Explicit format choice by trusted host assembly, never content sniffing. */
   def prepareV2C(selection: WorkflowEventSelection, declaration: EventStorePersistenceDeclaration,
     loadedCursor: EventCursorRecordV1): Consequence[WorkflowCursorEventProposal] =
-    _prepareC(selection, declaration, loadedCursor, true)
+    _prepare_c(selection, declaration, loadedCursor, true)
 
-  private def _prepareC(selection: WorkflowEventSelection, declaration: EventStorePersistenceDeclaration,
-    loadedCursor: EventCursorRecordV1, v2: Boolean): Consequence[WorkflowCursorEventProposal] =
-    if (selection == null || declaration == null || loadedCursor == null)
+  private def _prepare_c(selection: WorkflowEventSelection, declaration: EventStorePersistenceDeclaration,
+    loadedcursor: EventCursorRecordV1, v2: Boolean): Consequence[WorkflowCursorEventProposal] = {
+    if (selection == null || declaration == null || loadedcursor == null)
       Consequence.configurationInvalid("Cursor event proposal requires selection, host declaration and loaded cursor")
     else for {
-      cursor <- loadedCursor.proposeC(selection.persistent.size)
+      cursor <- loadedcursor.proposeC(selection.persistent.size)
       events <- if (v2) WorkflowSelectedEventRecords.prepareV2C(selection, declaration.eventCollection,
-        declaration.deliveryIndexCollection, loadedCursor.lastSequence)
-        else WorkflowSelectedEventRecords.prepareC(selection, declaration.eventCollection, loadedCursor.lastSequence)
+        declaration.deliveryIndexCollection, loadedcursor.lastSequence)
+        else WorkflowSelectedEventRecords.prepareC(selection, declaration.eventCollection, loadedcursor.lastSequence)
       guard <- cursor match {
         case None => Consequence.success(None)
         case Some(proposal) => for {
@@ -87,5 +90,6 @@ private[cncf] object WorkflowCursorEventProposal {
             Record(proposal.next.toRecord.fields.filterNot(_.key == "revision")), next)
         } yield Some(root)
       }
-    } yield new WorkflowCursorEventProposal(events, guard, cursor)
+    } yield new WorkflowCursorEventProposal(events, guard)
+  }
 }

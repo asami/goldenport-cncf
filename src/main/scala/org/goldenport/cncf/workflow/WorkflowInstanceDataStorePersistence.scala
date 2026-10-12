@@ -10,7 +10,7 @@ import org.simplemodeling.model.datatype.EntityRevision
 
 /*
  * @since   Sep. 29, 2026
- * @version Oct. 10, 2026
+ * @version Oct. 12, 2026
  */
 /** Borrowed canonical datastore adapter. No engine, SQL, resource lifecycle,
   * implicit store selection, command dispatch or cross-store transaction.
@@ -25,7 +25,7 @@ final class WorkflowInstanceDataStorePersistence private (
 
   // Legacy SPI Configuration arguments are not storage selectors or permits.
   // The factory-bound provider/collection owns access and current delivery.
-  def create(config: Configuration, record: InstanceRecord): Consequence[InstanceRecord] =
+  def create(config: Configuration, record: InstanceRecord): Consequence[InstanceRecord] = {
     for {
       encoded <- WorkflowInstanceRecordJsonV1.encodeC(record)
       _ <- catalog.resolveC(record.definition)
@@ -38,15 +38,16 @@ final class WorkflowInstanceDataStorePersistence private (
       associated = summon[ExecutionContext].security.session.flatMap(_.sessionId).fold(initial)(session =>
         initial ++ Record.dataAuto(_session_field -> session,
           _session_workflow_field -> record.definition.workflowIdentity.value))
-      _ <- store.create(collection, id(record.identity), associated)
+      _ <- store.create(collection, _id(record.identity), associated)
     } yield record
 
+  }
   /** Routing candidates, not authority, a latest-instance choice or proof that
     * Start completed. Association is part of the initial create; normal state
     * consumers still own activation, issued work and update conflicts.
     */
   def findBySessionC(sessionId: String,
-    workflowIdentity: WorkflowDefinitionIdentity): Consequence[Vector[InstanceRecord]] =
+    workflowIdentity: WorkflowDefinitionIdentity): Consequence[Vector[InstanceRecord]] = {
     for {
       searchable <- store match {
         case value: SearchableDataStore => Consequence.success(value)
@@ -68,28 +69,30 @@ final class WorkflowInstanceDataStorePersistence private (
         } yield prior :+ record
       }
     } yield records
+  }
 
-  def load(config: Configuration, identity: InstanceIdentity): Consequence[Option[InstanceRecord]] =
+  def load(config: Configuration, identity: InstanceIdentity): Consequence[Option[InstanceRecord]] = {
     for {
-      _ <- identityC(identity)
-      stored <- store.load(collection, id(identity))
+      _ <- _identity_c(identity)
+      stored <- store.load(collection, _id(identity))
       decoded <- stored match {
         case Some(value) => decodeC(value, identity).map(Some(_))
         case None => Consequence.success(None)
       }
     } yield decoded
+  }
 
   def append(config: Configuration, identity: InstanceIdentity,
-    expectedRevision: InstanceRevision, entry: HistoryEntry): Consequence[InstanceRecord] =
+    expectedRevision: InstanceRevision, entry: HistoryEntry): Consequence[InstanceRecord] = {
     for {
       loaded <- load(config, identity)
       current <- loaded.map(Consequence.success)
         .getOrElse(Consequence.stateConflict("Workflow instance is unavailable"))
-      next <- current.appendC(expectedRevision, entry)
-      encoded <- WorkflowInstanceRecordJsonV1.encodeC(next)
+      next <- current._append_c_unchecked(expectedRevision, entry)
+      encoded = WorkflowInstanceRecordJsonV1._encode_unchecked(next)
       expected <- EntityRevision.createC(expectedRevision.value + 1L)
       changed <- store.compareAndSetEntity(EntityCompareAndSetMutationPlan(
-        collection, id(identity), revisionField, expected,
+        collection, _id(identity), revisionField, expected,
         Record.dataAuto(recordField -> storageText(encoded)),
         EntityMutationReadbackRequirement.AuthoritativeRecord))
       stored <- changed match {
@@ -102,6 +105,7 @@ final class WorkflowInstanceDataStorePersistence private (
       decoded <- decodeC(stored, identity)
     } yield decoded
 
+  }
   /** One canonical compound datastore commit, not an EventEngine/UoW enlistment.
     * No issued payload, evidence or external effect is published by this slice.
     */
@@ -137,7 +141,7 @@ final class WorkflowInstanceDataStorePersistence private (
     component: org.goldenport.cncf.component.ComponentId,
     completionOperation: StateMachineOperationIdentity,
     kind: WorkflowIssuedContinuationKind = WorkflowIssuedContinuationKind.WorkOrder
-  ): Consequence[WorkflowPreparedDataStoreTransition[PersistedSuspension]] =
+  ): Consequence[WorkflowPreparedDataStoreTransition[PersistedSuspension]] = {
     for {
       admitted <- WorkflowInstanceAtomicTransitionV1.admitSuspensionC(intent)
       bytes <- WorkflowIssuedWorkDataStorePersistence.encodeC(issued, codec, kind)
@@ -155,6 +159,7 @@ final class WorkflowInstanceDataStorePersistence private (
         } yield ()
       result <- _prepare_suspension_c(admitted, componentOwner, continuationCollection, Some((bytes, admission, readback)))
     } yield result
+  }
 
   private type IssuedReadback = (InstanceRecord, ContinuationRuntimePersistence.Record, Record) => Consequence[Unit]
   private type IssuedAdmission = (InstanceRecord, Continuation) => Consequence[Unit]
@@ -162,7 +167,7 @@ final class WorkflowInstanceDataStorePersistence private (
   private def _prepare_suspension_c(admitted: WorkflowInstanceAtomicTransitionV1.AdmittedSuspension,
     componentowner: DataStoreComponentOwner, continuationcollection: DataStore.CollectionId,
     issued: Option[(String, IssuedAdmission, IssuedReadback)]
-  ): Consequence[WorkflowPreparedDataStoreTransition[PersistedSuspension]] =
+  ): Consequence[WorkflowPreparedDataStoreTransition[PersistedSuspension]] = {
     for {
       _ <- configuration.delivery match {
         case _: DeliveryConfiguration.SameStore => Consequence.unit
@@ -187,11 +192,11 @@ final class WorkflowInstanceDataStorePersistence private (
         else Consequence.stateConflict("Atomic suspension executable target differs")
       // The actual source owns lifecycle/history admission. The caller supplies
       // an expected revision, not a copy certificate or an automatic renewal.
-      next <- current.appendC(admitted.current.revision, admitted.next.history.last)
-      encoded <- WorkflowInstanceRecordJsonV1.encodeC(next)
+      next <- current._append_c_unchecked(admitted.current.revision, admitted.next.history.last)
+      encoded = WorkflowInstanceRecordJsonV1._encode_unchecked(next)
       expected <- EntityRevision.createC(admitted.current.revision.value + 1L)
       nextrevision <- expected.nextC
-      root <- DataStoreConditionalRoot.create(componentowner, collection, id(current.identity),
+      root <- DataStoreConditionalRoot.create(componentowner, collection, _id(current.identity),
         revisionField, Some(expected), Vector.empty,
         Record.dataAuto(recordField -> storageText(encoded)), nextrevision)
       initialsuccessor <- continuations.initialStoredC(admitted.continuation)
@@ -225,24 +230,27 @@ final class WorkflowInstanceDataStorePersistence private (
         case _: DataStoreConditionalTransitionResult.NotMatched =>
           Consequence.stateConflict("Atomic suspension expected revision was consumed")
     })
+  }
 
-  private[workflow] def decodeC(stored: Record, identity: InstanceIdentity): Consequence[InstanceRecord] =
+  private[workflow] def decodeC(stored: Record, identity: InstanceIdentity): Consequence[InstanceRecord] = {
     for {
       record <- _decode_record_c(stored)
       _ <- if (record.identity == identity) Consequence.unit
         else Consequence.stateConflict("Persisted Workflow identity differs from its address")
     } yield record
+  }
 
-  private def _decode_record_c(stored: Record): Consequence[InstanceRecord] =
+  private def _decode_record_c(stored: Record): Consequence[InstanceRecord] = {
     for {
       payload <- stored.getString(recordField).map(Consequence.success)
         .getOrElse(Consequence.stateConflict("Persisted Workflow record bytes are missing"))
       raw <- storageJsonC(payload)
       record <- WorkflowInstanceRecordJsonV1.decodeC(raw, catalog)
-      revision <- revisionBinding.revision(stored)
+      revision <- _revision_binding.revision(stored)
       _ <- if (revision.value - 1L == record.revision.value) Consequence.unit
         else Consequence.stateConflict("Persisted Workflow indexed revision differs")
     } yield record
+  }
 }
 
 object WorkflowInstanceDataStorePersistence {
@@ -251,8 +259,8 @@ object WorkflowInstanceDataStorePersistence {
 
   // Canonical Entity CAS uses positive revisions; Workflow revision zero maps
   // to storage revision one. Storage overflow rejects the append before write.
-  private val revisionBinding = EntityRevisionBinding(EntityRevisionRepresentation.Detached)
-  private[workflow] val revisionField = revisionBinding.storageFieldName
+  private val _revision_binding = EntityRevisionBinding(EntityRevisionRepresentation.Detached)
+  private[workflow] val revisionField = _revision_binding.storageFieldName
   // Canonical property names survive SQL column normalization. Prefix opaque
   // JSON bytes so SqlDataStore's structured-value decoder cannot reinterpret
   // nulls, arrays or nested ABI/history facts as Record fields.
@@ -262,19 +270,21 @@ object WorkflowInstanceDataStorePersistence {
   private[workflow] val recordField = "recordPayload"
   private[workflow] val _session_field = "workflowSessionId"
   private[workflow] val _session_workflow_field = "workflowSessionDefinition"
-  private val storagePrefix = "cncf.workflow-json.v1:"
-  private[workflow] def storageText(json: String): String = storagePrefix + json
-  private[workflow] def storageJsonC(payload: String): Consequence[String] =
-    if (payload.startsWith(storagePrefix)) Consequence.success(payload.substring(storagePrefix.length))
+  private val _storage_prefix = "cncf.workflow-json.v1:"
+  private[workflow] def storageText(json: String): String = _storage_prefix + json
+  private[workflow] def storageJsonC(payload: String): Consequence[String] = {
+    if (payload.startsWith(_storage_prefix)) Consequence.success(payload.substring(_storage_prefix.length))
     else Consequence.stateConflict("Persisted Workflow payload encoding is unsupported")
-  private def id(identity: InstanceIdentity): DataStore.EntryId = DataStore.StringEntryId(identity.value)
-  private def identityC(identity: InstanceIdentity): Consequence[Unit] =
+  }
+  private def _id(identity: InstanceIdentity): DataStore.EntryId = DataStore.StringEntryId(identity.value)
+  private def _identity_c(identity: InstanceIdentity): Consequence[Unit] = {
     if (identity != null && identity.value != null && identity.value.trim.nonEmpty) Consequence.unit
     else Consequence.stateConflict("Workflow instance identity is missing")
+  }
 
   def bindC(store: DataStore, configuration: Configuration,
     definitions: Vector[DefinitionBinding], collection: DataStore.CollectionId
-  )(using ExecutionContext): Consequence[WorkflowInstanceDataStorePersistence] =
+  )(using ExecutionContext): Consequence[WorkflowInstanceDataStorePersistence] = {
     if (store == null || configuration == null || collection == null ||
         collection.collectionName == null || collection.collectionName.trim.isEmpty)
       Consequence.configurationInvalid("Workflow datastore binding is incomplete")
@@ -289,4 +299,5 @@ object WorkflowInstanceDataStorePersistence {
         case _ => Consequence.configurationInvalid("Workflow datastore requires atomic CAS and authoritative readback")
       }
     } yield new WorkflowInstanceDataStorePersistence(versioned, configuration, catalog, collection)
+  }
 }

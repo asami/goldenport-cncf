@@ -14,7 +14,7 @@ import org.goldenport.value.{BaseContent, DescriptiveAttributes}
   * The application codec owns human verification; structural admission here
   * never supplies consent, command permission or a WorkOrder fallback.
   * @since   Oct.  1, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 12, 2026
   */
 object WorkflowDecisionCompletionServiceOperation {
   def bindC[W, R](definition: GeneratedProvidedApiAbi.Definition,
@@ -24,7 +24,7 @@ object WorkflowDecisionCompletionServiceOperation {
     instances: WorkflowInstancePersistenceBinding, closing: ClosingProgram[R],
     completion: WorkflowManagedDecisionCompletion[R],
     descriptiveAttributes: DescriptiveAttributes = DescriptiveAttributes.empty
-  ): Consequence[spec.OperationDefinition] =
+  ): Consequence[spec.OperationDefinition] = {
     if (definition == null || operation == null || requestDefinition == null ||
         responseDefinition == null || codec == null || questions == null ||
         instances == null || closing == null || completion == null || descriptiveAttributes == null ||
@@ -32,25 +32,27 @@ object WorkflowDecisionCompletionServiceOperation {
         !definition.providesOperation(operation) ||
         !_name(definition.identity) || !_name(definition.version) ||
         !_name(operation.service) || !_name(operation.name) ||
-        !_name(codec.resultTypeIdentity) || operation.inputType != Some(codec.resultTypeIdentity) ||
+        !_name(codec.resultTypeIdentity) || operation.inputType == null ||
+        !operation.inputType.exists(_name) ||
         completion.resultTypeIdentity != codec.resultTypeIdentity)
       Consequence.configurationInvalid("Decision completion requires a declared typed Operation and managed bindings")
     else Consequence.success(new BoundOperation(definition, operation, requestDefinition,
       responseDefinition, codec, questions, instances, closing, completion, descriptiveAttributes))
+  }
 
   private final class BoundOperation[W, R](definition: GeneratedProvidedApiAbi.Definition,
     operation: GeneratedProvidedApiAbi.Operation,
-    requestDefinition: spec.RequestDefinition, responseDefinition: spec.ResponseDefinition,
+    requestdefinition: spec.RequestDefinition, responsedefinition: spec.ResponseDefinition,
     codec: Codec[R], questions: WorkflowManagedIssuedDecision[W],
     instances: WorkflowInstancePersistenceBinding, closing: ClosingProgram[R],
     completion: WorkflowManagedDecisionCompletion[R],
-    descriptiveAttributes: DescriptiveAttributes
+    descriptiveattributes: DescriptiveAttributes
   ) extends spec.OperationDefinition {
     val specification = spec.OperationDefinition.Specification(
-      content = BaseContent.simple(operation.name, descriptiveAttributes),
-      request = requestDefinition, response = responseDefinition)
+      content = BaseContent.simple(operation.name, descriptiveattributes),
+      request = requestdefinition, response = responsedefinition)
 
-    def createOperationRequest(request: Request): Consequence[OperationRequest] =
+    def createOperationRequest(request: Request): Consequence[OperationRequest] = {
       if (request == null || request.operation != operation.name || !request.service.contains(operation.service))
         Consequence.stateConflict("Decision request differs from its declared completion Operation")
       else codec.decodeC(request).flatMap { submitted =>
@@ -65,6 +67,7 @@ object WorkflowDecisionCompletionServiceOperation {
         else submitted.handle.validateC.map(_ =>
           BoundAction(request, submitted, operation, codec, questions, instances, closing, completion))
       }
+    }
   }
 
   private final case class BoundAction[W, R](request: Request, submitted: ContinuationResult[R],
@@ -82,43 +85,31 @@ object WorkflowDecisionCompletionServiceOperation {
     questions: WorkflowManagedIssuedDecision[W], instances: WorkflowInstancePersistenceBinding,
     closing: ClosingProgram[R], completion: WorkflowManagedDecisionCompletion[R]
   ) extends ProcedureActionCall {
-    private var selected: Option[(InstanceRecord, SelectedClosing)] = None
-
-    private def admitIssuedC(): Consequence[Unit] =
-      questions.loadC(submitted.continuationId)(using executionContext).flatMap {
-        case Some(issued) if issued != null && issued.handle == submitted.handle => issued.current match {
-          case decision: WorkflowContinuation.Decision[?] if decision.request != null &&
-              decision.request.completionOperation == StateMachineOperationIdentity(operation.service, operation.name) =>
-            WorkflowProtocolV1.admitDecisionResultC(issued, submitted).map(_ => ())
-          case _ => Consequence.stateConflict("Decision completion differs from the issued question Operation")
-        }
-        case _ => Consequence.stateConflict("Decision completion has no matching issued question")
-      }
+    private var _selected: Option[(InstanceRecord, SelectedClosing)] = None
 
     def execute(): Consequence[OperationResponse] = {
-      selected = None
+      _selected = None
       for {
         _ <- component match {
           case Some(value) if value.componentId == instances.componentId => Consequence.unit
           case _ => Consequence.stateConflict("Decision completion Component is unavailable or differs")
         }
-        _ <- admitIssuedC()
         loaded <- instances.loadC(submitted.handle.instanceIdentity)(using executionContext)
         current <- loaded match {
-          case Some(value) if value != null => value.validateC
+          case Some(value) if value != null => Consequence.success(value)
           case _ => Consequence.stateConflict("Decision completion WorkflowInstance is unavailable")
         }
         proposed <- closing.selectC(submitted, current)
-        _ <- admitSelectedC(current, proposed)
+        admitted <- _admit_selected_c(current, proposed)
       } yield {
-        selected = Some(current -> proposed)
+        _selected = Some(current -> admitted)
         OperationResponse.void
       }
     }
 
     override def afterCommitResponseC(response: OperationResponse): Consequence[OperationResponse] = {
-      val prepared = selected
-      selected = None
+      val prepared = _selected
+      _selected = None
       prepared match {
         case None => Consequence.stateConflict("Decision completion has no selected closing Action")
         case Some((current, program)) => for {
@@ -132,20 +123,21 @@ object WorkflowDecisionCompletionServiceOperation {
       }
     }
 
-    private def admitSelectedC(current: InstanceRecord, proposed: SelectedClosing): Consequence[Unit] =
+    private def _admit_selected_c(current: InstanceRecord, proposed: SelectedClosing): Consequence[SelectedClosing] = {
       if (proposed == null || proposed.program == null || proposed.nextInstance == null)
         Consequence.stateConflict("Decision closing selection is incomplete")
       else proposed.nextInstance match {
-        case Some(next) if next != null && next.history != null && next.history.nonEmpty => for {
-          admitted <- next.validateC
-          projected <- current.appendC(current.revision, admitted.history.last)
-          _ <- if (admitted.identity == current.identity && admitted.revision == projected.revision &&
-              admitted.definition.workflowIdentity == current.definition.workflowIdentity &&
-              admitted.definition.workflowRevision == current.definition.workflowRevision) Consequence.unit
+        case Some(next) if next != null && next.definition != null &&
+            next.history != null && next.history.nonEmpty => for {
+          projected <- current._append_c_unchecked(current.revision, next.history.last)
+          _ <- if (next.identity == current.identity && next.revision == projected.revision &&
+              next.definition.workflowIdentity == current.definition.workflowIdentity &&
+              next.definition.workflowRevision == current.definition.workflowRevision) Consequence.unit
             else Consequence.stateConflict("Decision next instance is not the selected adjacent append")
-        } yield ()
+        } yield proposed.copy(nextInstance = Some(projected))
         case _ => Consequence.stateConflict("Decision completion requires an adjacent selected next instance")
       }
+    }
   }
 
   private def _name(value: String): Boolean = value != null && value.trim.nonEmpty

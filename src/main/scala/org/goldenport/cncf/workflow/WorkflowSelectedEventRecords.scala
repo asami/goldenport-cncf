@@ -3,45 +3,49 @@ package org.goldenport.cncf.workflow
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.cncf.datastore.{DataStore, DataStoreMultiGuardReadbackResult, EntityVersionedSideEffect}
-import org.goldenport.cncf.event.{EventDeliveryIndexRecordV1, EventRecord, EventRecordJsonV1, EventRecordJsonV2}
+import org.goldenport.cncf.event.{EventDeliveryIndexRecordV1, EventLane, EventRecord, EventRecordJsonV1, EventRecordJsonV2}
 
 /** Pure selected-only event/index Create proposal. No provider, cursor allocation,
   * delivery lookup, commit receipt or dispatch authority is held here.
   * @since   Sep. 30, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 12, 2026
   */
 final class WorkflowSelectedEventRecords private (
   val policyRevision: String,
   val proposedLastSequence: Long,
   val persistent: Vector[EventRecord],
   val creates: Vector[EntityVersionedSideEffect.Create],
-  private val selected: WorkflowEventSelection,
-  private val canonicalBytes: Vector[String],
-  private val encodeStored: EventRecord => String = EventRecordJsonV1.encodeStorage,
-  private val decodeStored: String => Consequence[EventRecord] = EventRecordJsonV1.decodeStorageC,
+  private val _selected: WorkflowEventSelection,
+  private val _encode_stored: EventRecord => String = EventRecordJsonV1.encodeStorage,
+  private val _decode_stored: String => Consequence[EventRecord] = EventRecordJsonV1.decodeStorageC,
   private[cncf] val indexCreates: Vector[EntityVersionedSideEffect.Create] = Vector.empty
 ) {
   val requiresCursorUpdate: Boolean = persistent.nonEmpty
 
-  /** Project only canonical event bytes from complete verified storage evidence.
+  /** Project actual native events from complete verified storage evidence.
     * This returns candidates, never a dispatch permit or Workflow completion.
     * Host runtime still owns cursor/index and application completion admission.
     */
   private[cncf] def deliveryCandidatesFromVerifiedStorageC(
     verified: DataStoreMultiGuardReadbackResult.Verified
-  ): Consequence[Vector[EventRecord]] =
+  ): Consequence[Vector[EventRecord]] = {
     if (verified == null) Consequence.stateConflict("Verified selected-event storage is missing")
-    else _verify_indexes_c(verified).flatMap { _ => creates.foldLeft[Consequence[Vector[EventRecord]]](Consequence.success(Vector.empty)) {
+    else _verify_indexes_c(verified).flatMap { _ =>
+      val collections = creates.map(_.collection).toSet
+      if (verified.records.count(row => collections.contains(row.collection)) != creates.size)
+        Consequence.stateConflict("Verified selected event coverage is ambiguous")
+      else creates.foldLeft[Consequence[Vector[EventRecord]]](Consequence.success(Vector.empty)) {
       (acc, effect) => acc.flatMap { events =>
         val matched = verified.records.filter(item =>
           item.collection == effect.collection && item.entryId == effect.entryId)
         if (matched.size != 1) Consequence.stateConflict("Verified storage is missing a selected event")
         else matched.head.record.getString("event_json") match {
-          case Some(bytes) => decodeStored(bytes).map(events :+ _)
-          case None => Consequence.stateConflict("Verified storage has no canonical event bytes")
+          case Some(bytes) => _decode_stored(bytes).map(events :+ _)
+          case None => Consequence.stateConflict("Verified storage has no native event bytes")
         }
       }
-    }.flatMap(admitDeliveryCandidatesC) }
+    }.flatMap(_project_durable_c) }
+  }
 
   private def _verify_indexes_c(verified: DataStoreMultiGuardReadbackResult.Verified): Consequence[Unit] =
     indexCreates.foldLeft(Consequence.unit) { (acc, effect) => acc.flatMap { _ =>
@@ -51,8 +55,6 @@ final class WorkflowSelectedEventRecords private (
         expected <- EventDeliveryIndexRecordV1.decodeC(effect.record)
         actual <- EventDeliveryIndexRecordV1.decodeC(rows.head.record)
         _ <- actual.validateLookupC(effect.entryId, expected.lookupKeyBytes)
-        _ <- if (actual.toRecord == expected.toRecord) Consequence.unit
-          else Consequence.stateConflict("Verified delivery index differs from its proposal")
         event <- creates.find(_.entryId.print == actual.eventId.value)
           .map(Consequence.success).getOrElse(Consequence.stateConflict("Delivery index reference is outside selected events"))
         eventRows = verified.records.filter(r => r.collection == event.collection && r.entryId == event.entryId)
@@ -63,24 +65,34 @@ final class WorkflowSelectedEventRecords private (
       } yield ()
     }}
 
-  /** Pure readback comparison, not proof of transaction completion. The host
+  /** Pure native data consumption, not proof of transaction completion. The host
     * must independently admit commit/root/Continuation/cursor/index readback.
-    * Durable candidates are reconstructed from canonical stored bytes; a
+    * Durable candidates retain actual supplied facts; a
     * transient candidate is never reconstructed from EventStore recovery.
     */
   def admitDeliveryCandidatesC(stored: Vector[EventRecord]): Consequence[Vector[EventRecord]] = {
     try {
-      if (stored == null || stored.size != persistent.size || stored.exists(_ == null) ||
-          stored.map(encodeStored) != canonicalBytes)
-        Consequence.stateConflict("Selected event authoritative readback differs from the prepared durable subset")
-      else canonicalBytes.foldLeft[Consequence[Vector[EventRecord]]](Consequence.success(Vector.empty)) {
-        (acc, bytes) => acc.flatMap(records => decodeStored(bytes).map(records :+ _))
-      }.map { durable =>
-        val byId = durable.map(record => record.id -> record).toMap
-        selected.events.map(record => if (record.persistent) byId(record.id) else record)
-      }
+      if (stored == null || stored.contains(null))
+        Consequence.stateConflict("Selected event native data is missing")
+      else stored.foldLeft[Consequence[Vector[EventRecord]]](Consequence.success(Vector.empty)) {
+        (acc, record) => acc.flatMap(records => _decode_stored(_encode_stored(record)).map(records :+ _))
+      }.flatMap(_project_durable_c)
     } catch {
       case NonFatal(_) => Consequence.stateConflict("Selected event authoritative readback is invalid")
+    }
+  }
+
+  /** Native decoders have consumed the domain; only actual target/order remains. */
+  private def _project_durable_c(durable: Vector[EventRecord]): Consequence[Vector[EventRecord]] = {
+    val sequences = durable.map(_.sequence)
+    if (durable.map(_.id) != persistent.map(_.id) ||
+        durable.map(_.id).distinct.size != durable.size ||
+        durable.exists(record => !record.persistent || record.lane != EventLane.Transactional || record.sequence <= 0L) ||
+        sequences.zip(sequences.drop(1)).exists { case (left, right) => left >= right })
+      Consequence.stateConflict("Selected event actual identity, cardinality or sequence order differs")
+    else {
+      val byid = durable.map(record => record.id -> record).toMap
+      Consequence.success(_selected.events.map(record => if (record.persistent) byid(record.id) else record))
     }
   }
 }
@@ -94,7 +106,7 @@ object WorkflowSelectedEventRecords {
     eventCollection: DataStore.CollectionId,
     indexCollection: DataStore.CollectionId,
     lastSequence: Long
-  ): Consequence[WorkflowSelectedEventRecords] =
+  ): Consequence[WorkflowSelectedEventRecords] = {
     if (selection == null || eventCollection == null || indexCollection == null ||
         eventCollection == indexCollection || lastSequence < 0L ||
         (selection != null && lastSequence > Long.MaxValue - selection.persistent.size.toLong))
@@ -109,10 +121,11 @@ object WorkflowSelectedEventRecords {
       }}.map { prepared =>
         val creates = prepared.map(_._2)
         new WorkflowSelectedEventRecords(selection.policyRevision, lastSequence + prepared.size.toLong,
-          prepared.map(_._1), creates, selection, creates.map(_.record.getString("event_json").get),
+          prepared.map(_._1), creates, selection,
           EventRecordJsonV2.encodeStorage, EventRecordJsonV2.decodeStorageC, prepared.flatMap(_._3))
       }
 
+  }
   /** The last sequence is a host-read cursor proposal, never an allocated
     * range. The host must include its exact expected revision in the atomic
     * transaction and cannot replay a proposal after an uncertain commit.
@@ -121,7 +134,7 @@ object WorkflowSelectedEventRecords {
     selection: WorkflowEventSelection,
     eventCollection: DataStore.CollectionId,
     lastSequence: Long
-  ): Consequence[WorkflowSelectedEventRecords] =
+  ): Consequence[WorkflowSelectedEventRecords] = {
     if (selection == null || eventCollection == null || lastSequence < 0L ||
         (selection != null && lastSequence > Long.MaxValue - selection.persistent.size.toLong))
       Consequence.configurationInvalid("Selected event preparation requires a collection and overflow-safe nonnegative cursor proposal")
@@ -134,7 +147,7 @@ object WorkflowSelectedEventRecords {
       }.map { prepared =>
         val creates = prepared.map(_._2)
         new WorkflowSelectedEventRecords(selection.policyRevision,
-          lastSequence + prepared.size.toLong, prepared.map(_._1), creates, selection,
-          creates.map(_.record.getString("event_json").get))
+          lastSequence + prepared.size.toLong, prepared.map(_._1), creates, selection)
       }
+  }
 }

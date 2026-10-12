@@ -27,7 +27,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 21, 2026
- * @version Oct.  9, 2026
+ * @version Oct. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GeneratedWorkflowAbiSpec
@@ -176,7 +176,7 @@ final class GeneratedWorkflowAbiSpec
         val execution = root.withScope(Component.Context(
           "cozy-fixture-vertical-slice", root.scope, component, ComponentOrigin.Embed
         ))
-        def internal(name: String): ResolvedAction[Unit, Unit] =
+        def _internal_(name: String): ResolvedAction[Unit, Unit] =
           new ResolvedAction[Unit, Unit] {
             def program(state: Unit, event: Unit): ExecUowM[ActionExecution] =
               ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
@@ -191,10 +191,10 @@ final class GeneratedWorkflowAbiSpec
         val prefix = ExecutionPlan[Unit, Unit](
           Vector.empty,
           Vector(
-            internal(workflow.actions(0).identity.value),
-            internal(workflow.actions(1).identity.value),
+            _internal_(workflow.actions(0).identity.value),
+            _internal_(workflow.actions(1).identity.value),
             new StateMachineRequiredOperationAction[Unit, Unit]((_, _) => request),
-            internal(workflow.actions(3).identity.value)
+            _internal_(workflow.actions(3).identity.value)
           ),
           Vector.empty
         )
@@ -222,25 +222,27 @@ final class GeneratedWorkflowAbiSpec
           def create(
             actual: WorkflowInstancePersistence.Configuration,
             record: WorkflowInstancePersistence.InstanceRecord
-          ): Consequence[WorkflowInstancePersistence.InstanceRecord] =
+          ): Consequence[WorkflowInstancePersistence.InstanceRecord] = {
             if (actual != configuration || records.contains(record.identity))
               Consequence.stateConflict("fixture WorkflowInstance create is duplicate or misconfigured")
             else record.validateC.map { admitted =>
               records.update(admitted.identity, admitted)
               admitted
             }
+          }
           def load(
             actual: WorkflowInstancePersistence.Configuration,
             identity: WorkflowInstancePersistence.InstanceIdentity
-          ): Consequence[Option[WorkflowInstancePersistence.InstanceRecord]] =
+          ): Consequence[Option[WorkflowInstancePersistence.InstanceRecord]] = {
             if (actual != configuration) Consequence.stateConflict("fixture WorkflowInstance store mismatch")
             else Consequence.success(records.get(identity))
+          }
           def append(
             actual: WorkflowInstancePersistence.Configuration,
             identity: WorkflowInstancePersistence.InstanceIdentity,
             expectedRevision: WorkflowInstancePersistence.InstanceRevision,
             entry: WorkflowInstancePersistence.HistoryEntry
-          ): Consequence[WorkflowInstancePersistence.InstanceRecord] =
+          ): Consequence[WorkflowInstancePersistence.InstanceRecord] = {
             if (actual != configuration) Consequence.stateConflict("fixture WorkflowInstance store mismatch")
             else records.get(identity) match {
               case Some(current) => current.appendC(expectedRevision, entry).map { next =>
@@ -249,6 +251,7 @@ final class GeneratedWorkflowAbiSpec
               }
               case None => Consequence.stateConflict("fixture WorkflowInstance is unavailable for append")
             }
+          }
         }
         When("the generated Action prefix commits and stores its suspension boundary")
         val startunitofwork = new UnitOfWork(execution)
@@ -354,7 +357,7 @@ final class GeneratedWorkflowAbiSpec
           fail("fixture ReviewChange result must decode")
         )
         val freshunits = scala.collection.mutable.ArrayBuffer.empty[UnitOfWork]
-        def fresh(): UnitOfWork = {
+        def _fresh_(): UnitOfWork = {
           val value = new UnitOfWork(execution)
           freshunits += value
           value
@@ -364,25 +367,28 @@ final class GeneratedWorkflowAbiSpec
         ))
         When("the saved suspension is absent and then restored for a fresh-UnitOfWork resume")
         resumePersistedWorkOrderC(
-          component.componentId, submitted, issuedstore, recovered, instances, configuration, () => fresh(),
-          Some(internal(workflow.actions(3).identity.value).program((), ()))
+          component.componentId, submitted, issuedstore, recovered, instances, configuration, () => _fresh_(),
+          Some(_internal_(workflow.actions(3).identity.value).program((), ()))
         ) shouldBe a[Consequence.Failure[_]]
         trace.toVector shouldBe Vector("BuildProject", "RunTests", "ReviewChange")
         freshunits shouldBe empty
         records.update(instance.identity, active)
         resumePersistedWorkOrderC(
-          component.componentId, submitted, issuedstore, recovered, instances, configuration, () => fresh(),
-          Some(internal(workflow.actions(3).identity.value).program((), ()))
+          component.componentId, submitted, issuedstore, recovered, instances, configuration, () => _fresh_(),
+          Some(_internal_(workflow.actions(3).identity.value).program((), ()))
         ).isSuccess shouldBe true
         Then("only the restored boundary runs CommitChanges once in a fresh UnitOfWork")
         freshunits.size shouldBe 1
         freshunits.head should not be startunitofwork
         freshunits.head.lastCommitTermination shouldBe Some(UnitOfWorkTermination.Committed)
         trace.toVector shouldBe Vector("BuildProject", "RunTests", "ReviewChange", "CommitChanges")
-        resumePersistedWorkOrderC(
-          component.componentId, submitted, issuedstore, recovered, instances, configuration, () => fresh(),
-          Some(internal(workflow.actions(3).identity.value).program((), ()))
-        ) shouldBe a[Consequence.Failure[_]]
+        When("the same completed WorkOrder is submitted again")
+        val replay = resumePersistedWorkOrderC(
+          component.componentId, submitted, issuedstore, recovered, instances, configuration, () => _fresh_(),
+          Some(_internal_(workflow.actions(3).identity.value).program((), ()))
+        )
+        Then("the completed claim refuses replay without another CommitChanges action")
+        replay shouldBe a[Consequence.Failure[_]]
         trace.toVector shouldBe Vector("BuildProject", "RunTests", "ReviewChange", "CommitChanges")
       } finally {
         subsystem.shutdown()
@@ -393,17 +399,17 @@ final class GeneratedWorkflowAbiSpec
       val placedoutcomes = scala.collection.mutable.ArrayBuffer.empty[
         (WorkflowDescriptor, Vector[String], ProviderIdentity)
       ]
-      Vector((false, false), (true, false), (true, true)).foreach { case (placed, replacementProvider) =>
+      Vector((false, false), (true, false), (true, true)).foreach { case (placed, replacementprovider) =>
       Given("declared Start and completion Operations, a program Provider, and persistent suspension ports")
       val workflow = if (placed) _placed_definition() else _definition()
       val providedbase = _provided_definition(workflow)
-      val provided = providedbase.copy(providedOperations =
+      val provided = providedbase.copy(generator = "diagnostic-generator", providedOperations =
         Vector(
           providedbase.providedOperations.head.copy(
             source = GeneratedProvidedApiAbi.SourceIdentity(Some(if (placed) 151 else 72))
           ),
           GeneratedProvidedApiAbi.Operation(
-            "WorkflowService", "submitReview", Some("ReviewResult"), Some("WorkflowInteraction"),
+            "WorkflowService", "submitReview", Some("ReviewCompletionRequest"), Some("WorkflowInteraction"),
             GeneratedProvidedApiAbi.SourceIdentity(Some(if (placed) 155 else 73))
           )
         )
@@ -430,12 +436,13 @@ final class GeneratedWorkflowAbiSpec
       var rejectwrite = false
       var indeterminatewrite = false
       val persistence = new ContinuationRuntimePersistence {
-        def createC(record: ContinuationRuntimePersistence.Record): Consequence[Unit] =
+        def createC(record: ContinuationRuntimePersistence.Record): Consequence[Unit] = {
           if (rejectwrite) Consequence.stateConflict("planned public Service continuation write failure")
           else if (indeterminatewrite) backing.createC(record).flatMap(_ =>
             Consequence.stateConflict("planned indeterminate public Service continuation write")
           )
           else backing.createC(record)
+        }
         def loadC(identity: ContinuationIdentity): Consequence[Option[ContinuationRuntimePersistence.Record]] =
           backing.loadC(identity)
         def claimC(identity: ContinuationIdentity): Consequence[ContinuationRuntimePersistence.Record] =
@@ -468,7 +475,7 @@ final class GeneratedWorkflowAbiSpec
         def create(
           actual: WorkflowInstancePersistence.Configuration,
           record: WorkflowInstancePersistence.InstanceRecord
-        ): Consequence[WorkflowInstancePersistence.InstanceRecord] =
+        ): Consequence[WorkflowInstancePersistence.InstanceRecord] = {
           if (rejectinstancewrite) Consequence.stateConflict("planned public Service instance write failure")
           else if (actual != configuration || records.contains(record.identity))
             Consequence.stateConflict("public Service instance create is duplicate or misconfigured")
@@ -476,26 +483,34 @@ final class GeneratedWorkflowAbiSpec
             records.update(admitted.identity, admitted)
             admitted
           }
+        }
         def load(
           actual: WorkflowInstancePersistence.Configuration,
           identity: WorkflowInstancePersistence.InstanceIdentity
-        ): Consequence[Option[WorkflowInstancePersistence.InstanceRecord]] =
+        ): Consequence[Option[WorkflowInstancePersistence.InstanceRecord]] = {
           if (actual != configuration) Consequence.stateConflict("public Service instance store mismatch")
           else Consequence.success(records.get(identity))
+        }
         def append(
           actual: WorkflowInstancePersistence.Configuration,
           identity: WorkflowInstancePersistence.InstanceIdentity,
           expectedRevision: WorkflowInstancePersistence.InstanceRevision,
           entry: WorkflowInstancePersistence.HistoryEntry
-        ): Consequence[WorkflowInstancePersistence.InstanceRecord] =
+        ): Consequence[WorkflowInstancePersistence.InstanceRecord] = {
           if (actual != configuration) Consequence.stateConflict("public Service instance store mismatch")
           else records.get(identity) match {
             case Some(current) => current.appendC(expectedRevision, entry).map { next =>
-              records.update(identity, next)
-              next
+              val retained = if (next.lifecycle == WorkflowInstancePersistence.Lifecycle.Completed) {
+                val causation = WorkflowInstancePersistence.CausationReference("actual-persisted-completion")
+                next.copy(causation = causation,
+                  history = next.history.updated(next.history.size - 1, next.history.last.copy(causation = causation)))
+              } else next
+              records.update(identity, retained)
+              retained
             }
             case None => Consequence.stateConflict("public Service instance is unavailable for append")
           }
+        }
       }
       val suspensionpersistence = new StateMachineProvidedApiServiceOperation.SuspensionPersistence {
         def persistC(actual: StateMachineProvidedApiRequest, continuation: Continuation): Consequence[Unit] = {
@@ -526,7 +541,7 @@ final class GeneratedWorkflowAbiSpec
         }
       }
       val actiontrace = scala.collection.mutable.ArrayBuffer.empty[String]
-      def internalAction(name: String): ExecUowM[Unit] =
+      def _internal_action_(name: String): ExecUowM[Unit] =
         ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](())
           .map { _ =>
             actiontrace += name
@@ -534,7 +549,7 @@ final class GeneratedWorkflowAbiSpec
           }
       val provider = new StateMachineProgramProvider {
         val identity = ProviderIdentity(
-          if (replacementProvider) "replacement-public-service-review-provider"
+          if (replacementprovider) "replacement-public-service-review-provider"
           else "public-service-review-provider"
         )
         def program(actual: ProviderExecutionRequest): ExecUowM[ActionExecution] = {
@@ -550,11 +565,11 @@ final class GeneratedWorkflowAbiSpec
         _workflow_resource("skill-driven-workflow-placed-abi.json"),
         _workflow_resource("skill-driven-workflow-placed-action-program.json")
       ).toOption.getOrElse(fail("placed generated plan must parse"))) else None
-      def completedAction(name: String, closing: Boolean = false): ResolvedAction[StateMachineProvidedApiRequest, Unit] =
+      def _completed_action_(name: String, closing: Boolean = false): ResolvedAction[StateMachineProvidedApiRequest, Unit] =
         new ResolvedAction[StateMachineProvidedApiRequest, Unit] {
           def program(actual: StateMachineProvidedApiRequest, event: Unit): ExecUowM[ActionExecution] = {
             actual shouldBe request
-            internalAction(name).map { _ =>
+            _internal_action_(name).map { _ =>
               if (closing) closingexecutions += 1
               ActionExecution.Completed(StateMachineOperationResult(
                 StateMachineResultTypeReference("ReviewResult"), ContextReference(name, "1")
@@ -563,7 +578,7 @@ final class GeneratedWorkflowAbiSpec
           }
         }
       val placedbindings = Vector(
-        GeneratedWorkflowActionProgram.Binding("CommitChanges", completedAction("CommitChanges", closing = true)),
+        GeneratedWorkflowActionProgram.Binding("CommitChanges", _completed_action_("CommitChanges", closing = true)),
         GeneratedWorkflowActionProgram.Binding("ReviewChange",
           new ResolvedAction[StateMachineProvidedApiRequest, Unit] {
             def program(actual: StateMachineProvidedApiRequest, event: Unit): ExecUowM[ActionExecution] = {
@@ -573,8 +588,8 @@ final class GeneratedWorkflowAbiSpec
               )))
             }
           }),
-        GeneratedWorkflowActionProgram.Binding("RunTests", completedAction("RunTests")),
-        GeneratedWorkflowActionProgram.Binding("BuildProject", completedAction("BuildProject"))
+        GeneratedWorkflowActionProgram.Binding("RunTests", _completed_action_("RunTests")),
+        GeneratedWorkflowActionProgram.Binding("BuildProject", _completed_action_("BuildProject"))
       )
       val placedplan = placedprogram.map(definition => GeneratedWorkflowActionProgram.bindC(
         definition, placedbindings
@@ -588,8 +603,8 @@ final class GeneratedWorkflowAbiSpec
           val operation = request.operation
           def program(actual: StateMachineProvidedApiRequest): ExecUowM[ActionExecution] = {
             actual shouldBe request
-            internalAction(workflow.actions(0).identity.value).flatMap { _ =>
-              internalAction(workflow.actions(1).identity.value).flatMap { _ =>
+            _internal_action_(workflow.actions(0).identity.value).flatMap { _ =>
+              _internal_action_(workflow.actions(1).identity.value).flatMap { _ =>
                 ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.StateMachineProviderExecute(
                   ProviderExecutionRequest(request.runId, required, request.input, request.context)
                 )))
@@ -622,7 +637,7 @@ final class GeneratedWorkflowAbiSpec
       var postcommitresponses = 0
       var rejectprojection = false
       val codec = new StateMachineProvidedApiServiceOperation.Codec {
-        def decodeC(raw: Request): Consequence[StateMachineProvidedApiRequest] =
+        def decodeC(raw: Request): Consequence[StateMachineProvidedApiRequest] = {
           raw.arguments match {
             case List(Argument("arg1", wire: String, _)) =>
               WorkflowStartJsonV1.decodeBoundC(
@@ -633,6 +648,7 @@ final class GeneratedWorkflowAbiSpec
               }
             case _ => Consequence.stateConflict("public Service profile Start JSON is missing")
           }
+        }
         def encodeC(outcome: ActionExecution): Consequence[OperationResponse] = {
           runtime.claimC(selected.continuationId) shouldBe a[Consequence.Failure[_]]
           outcome match {
@@ -681,41 +697,46 @@ final class GeneratedWorkflowAbiSpec
         }
       }
       val operation = StateMachineProvidedApiServiceOperation.bindC(
-        provided, provided.providedOperations.head, spec.RequestDefinition(),
+        provided, provided.providedOperations.head.copy(source = GeneratedProvidedApiAbi.SourceIdentity(None)), spec.RequestDefinition(),
         spec.ResponseDefinition.void, codec, Some(suspensionpersistence)
       ).toOption.getOrElse(fail("declared public Service operation must bind"))
       val completioncodec = new WorkflowCompletionServiceOperation.Codec[String] {
         val resultTypeIdentity = "ReviewResult"
-        def decodeC(raw: Request): Consequence[ContinuationResult[String]] =
+        def decodeC(raw: Request): Consequence[ContinuationResult[String]] = {
           raw.arguments match {
             case List(Argument("arg1", wire: String, _)) => WorkflowResultJsonV1.decodeC(wire, resultcodec)
             case _ => Consequence.stateConflict("public completion Result JSON is missing")
           }
+        }
         def encodeC(resume: ContinuationRuntime.Resume): Consequence[OperationResponse] =
           Consequence.success(OperationResponse.Scalar(s"RESUMED:${resume.continuation.continuationId.value}"))
         override def encodeAfterCommitC(
           resume: ContinuationRuntime.Resume,
           submitted: ContinuationResult[String],
           completed: Option[WorkflowInstancePersistence.InstanceRecord]
-        ): Consequence[OperationResponse] =
+        ): Consequence[OperationResponse] = {
           completed match {
-            case Some(record) => for {
-              terminal <- projectTerminalC(
-                submitted.handle, record, submitted.result,
-                MinimalPresentation("Review complete", "Approved")
-              )
-              wire <- WorkflowInteractionJsonV1.encodeC(
-                WorkflowInteraction[String, String](terminal.handle, terminal.current), inputcodec, resultcodec
-              )
-            } yield OperationResponse.Scalar(wire)
+            case Some(record) => {
+              record.causation shouldBe WorkflowInstancePersistence.CausationReference("actual-persisted-completion")
+              for {
+                terminal <- projectTerminalC(
+                  submitted.handle, record, submitted.result,
+                  MinimalPresentation("Review complete", "Approved")
+                )
+                wire <- WorkflowInteractionJsonV1.encodeC(
+                  WorkflowInteraction[String, String](terminal.handle, terminal.current), inputcodec, resultcodec
+                )
+              } yield OperationResponse.Scalar(wire)
+            }
             case None => Consequence.stateConflict("public completion did not persist a terminal WorkflowInstance")
           }
+        }
       }
       val closingprogram = new WorkflowCompletionServiceOperation.ClosingProgram[String] {
         def selectC(
           submitted: ContinuationResult[String],
           current: WorkflowInstancePersistence.InstanceRecord
-        ): Consequence[WorkflowCompletionServiceOperation.SelectedClosing] =
+        ): Consequence[WorkflowCompletionServiceOperation.SelectedClosing] = {
           if (submitted.result.value != "approved" ||
               !current.suspension.exists(_.continuationIdentity.value == submitted.continuationId.value))
             Consequence.stateConflict("public Service closing Action is not selected by the current StateMachine facts")
@@ -744,6 +765,7 @@ final class GeneratedWorkflowAbiSpec
             }
             WorkflowCompletionServiceOperation.SelectedClosing(closing, Some(next))
           }
+        }
       }
       Given("test-only completion descriptions, not generated producer evidence")
       val completiondescription = DescriptiveAttributes.Builder()
@@ -875,8 +897,15 @@ final class GeneratedWorkflowAbiSpec
           suspension = None,
           history = active.history.map(_.copy(suspension = None))
         ))
+        val unsuspendedresponse = subsystem.executeOperationResponse(completionraw)
         Then("the unsuspended instance rejects completion before the closing Action can resume")
-        subsystem.executeOperationResponse(completionraw) shouldBe a[Consequence.Failure[_]]
+        unsuspendedresponse shouldBe a[Consequence.Failure[_]]
+        When("the caller-owned instance adapter returns malformed current history")
+        records.update(instanceidentity, active.copy(history = Vector(null)))
+        val invalidcurrentresponse = subsystem.executeOperationResponse(completionraw)
+        Then("public current admission rejects the arbitrary application value before the closing Action")
+        invalidcurrentresponse shouldBe a[Consequence.Failure[_]]
+        closingexecutions shouldBe 0
         When("the stored suspension is restored and the matching Result is submitted")
         records.update(instanceidentity, active)
         val completionresponse = subsystem.executeOperationResponse(completionraw).toOption.getOrElse(
@@ -893,7 +922,7 @@ final class GeneratedWorkflowAbiSpec
         terminal.current shouldBe WorkflowContinuation.Terminal(
           TypedValue("ReviewResult", "approved"), MinimalPresentation("Review complete", "Approved")
         )
-        Then("the closing Action and terminal history append occur exactly once")
+        Then("the closing Action occurs once and the response consumes the actual normalized append return")
         closingexecutions shouldBe 1
         actiontrace.toVector shouldBe Vector("BuildProject", "RunTests", "ReviewChange", "CommitChanges")
         val completed = records(instanceidentity)
@@ -901,8 +930,12 @@ final class GeneratedWorkflowAbiSpec
         completed.lifecycle shouldBe WorkflowInstancePersistence.Lifecycle.Completed
         completed.suspension shouldBe None
         completed.history.size shouldBe 2
+        completed.causation shouldBe WorkflowInstancePersistence.CausationReference("actual-persisted-completion")
         if (placed) placedoutcomes += ((workflow.workflow, actiontrace.toVector, provider.identity))
-        subsystem.executeOperationResponse(completionraw) shouldBe a[Consequence.Failure[_]]
+        When("the completed legacy request is submitted again")
+        val replay = subsystem.executeOperationResponse(completionraw)
+        Then("the actual retained append is not executed again")
+        replay shouldBe a[Consequence.Failure[_]]
         closingexecutions shouldBe 1
         records(instanceidentity) shouldBe completed
 
@@ -947,6 +980,7 @@ final class GeneratedWorkflowAbiSpec
     }
 
     "commit an explicitly declared Provided suspension before external claim and typed resume" in {
+      Given("an explicitly declared Provided Operation backed by a durable external Continuation runtime")
       val workflow = _definition()
       val providedbase = _provided_definition(workflow)
       val provided = providedbase.copy(providedOperations =
@@ -997,9 +1031,10 @@ final class GeneratedWorkflowAbiSpec
       val backing = new ContinuationRuntimePersistence.InMemory
       var failcreate = false
       val persistence = new ContinuationRuntimePersistence {
-        def createC(record: ContinuationRuntimePersistence.Record): Consequence[Unit] =
+        def createC(record: ContinuationRuntimePersistence.Record): Consequence[Unit] = {
           if (failcreate) Consequence.Failure(Conclusion.from(new IllegalStateException("planned post-commit write failure")))
           else backing.createC(record)
+        }
         def loadC(identity: ContinuationIdentity): Consequence[Option[ContinuationRuntimePersistence.Record]] =
           backing.loadC(identity)
         def claimC(identity: ContinuationIdentity): Consequence[ContinuationRuntimePersistence.Record] =
@@ -1023,76 +1058,112 @@ final class GeneratedWorkflowAbiSpec
           override def continuationRuntimeOption: Option[ContinuationRuntime] = Some(runtime)
         }
       )
-      new ComponentFactory().bootstrapC(component).toOption shouldBe Some(component)
+      When("the declared component is bootstrapped")
+      val bootstrapped = new ComponentFactory().bootstrapC(component)
+      Then("the actual Provided and Required Operation bindings are admitted")
+      bootstrapped.toOption shouldBe Some(component)
       val root = ExecutionContext.create()
       val execution = root.withScope(Component.Context("provided-api-suspension", root.scope, component, ComponentOrigin.Embed))
 
       val directuow = new UnitOfWork(execution)
+      When("the Provided program is interpreted without its committing route")
       val direct = new UnitOfWorkInterpreter(directuow).run(ConsequenceT.liftF(
         Free.liftF(UnitOfWorkOp.StateMachineProvidedApiExecute(request))
       ))
+      val directclaim = runtime.claimC(continuation.continuationId)
+      Then("the uncommitted suspension cannot be claimed")
       direct shouldBe a[Consequence.Failure[_]]
-      runtime.claimC(continuation.continuationId) shouldBe a[Consequence.Failure[_]]
+      directclaim shouldBe a[Consequence.Failure[_]]
 
       selectedcontinuation = continuation.copy(continuationId = ContinuationIdentity("aborted-service-continuation"))
       val abortedserviceuow = new UnitOfWork(execution)
-      new UnitOfWorkInterpreter(abortedserviceuow).stageProvidedForExternalCommitC(request) shouldBe
-        Consequence.success(ActionExecution.Suspended(selectedcontinuation))
-      runtime.claimC(selectedcontinuation.continuationId) shouldBe a[Consequence.Failure[_]]
-      abortedserviceuow.rollback().isSuccess shouldBe true
-      runtime.claimC(selectedcontinuation.continuationId) shouldBe a[Consequence.Failure[_]]
+      When("the external-commit route stages a suspension without committing")
+      val stagedaborted = new UnitOfWorkInterpreter(abortedserviceuow).stageProvidedForExternalCommitC(request)
+      val stagedclaim = runtime.claimC(selectedcontinuation.continuationId)
+      Then("the staged outcome remains unclaimable")
+      stagedaborted shouldBe Consequence.success(ActionExecution.Suspended(selectedcontinuation))
+      stagedclaim shouldBe a[Consequence.Failure[_]]
+      When("the staged UnitOfWork rolls back")
+      val rolledback = abortedserviceuow.rollback()
+      val abortedclaim = runtime.claimC(selectedcontinuation.continuationId)
+      Then("rollback leaves no claimable Continuation")
+      rolledback.isSuccess shouldBe true
+      abortedclaim shouldBe a[Consequence.Failure[_]]
 
       selectedcontinuation = continuation.copy(continuationId = ContinuationIdentity("committed-service-continuation"))
       val serviceowneduow = new UnitOfWork(execution)
-      new UnitOfWorkInterpreter(serviceowneduow).stageProvidedForExternalCommitC(request) shouldBe
-        Consequence.success(ActionExecution.Suspended(selectedcontinuation))
-      runtime.claimC(selectedcontinuation.continuationId) shouldBe a[Consequence.Failure[_]]
-      serviceowneduow.commit().isSuccess shouldBe true
-      runtime.claimC(selectedcontinuation.continuationId).isSuccess shouldBe true
+      When("a fresh external-commit UnitOfWork stages its suspension")
+      val stagedcommitted = new UnitOfWorkInterpreter(serviceowneduow).stageProvidedForExternalCommitC(request)
+      val beforecommitclaim = runtime.claimC(selectedcontinuation.continuationId)
+      Then("the staged suspension is still unclaimable")
+      stagedcommitted shouldBe Consequence.success(ActionExecution.Suspended(selectedcontinuation))
+      beforecommitclaim shouldBe a[Consequence.Failure[_]]
+      When("the owning UnitOfWork commits")
+      val committed = serviceowneduow.commit()
+      val aftercommitclaim = runtime.claimC(selectedcontinuation.continuationId)
+      Then("the committed suspension becomes claimable")
+      committed.isSuccess shouldBe true
+      aftercommitclaim.isSuccess shouldBe true
 
       selectedcontinuation = continuation
       val startuow = new UnitOfWork(execution)
+      When("the dedicated committing Provided route executes the actual request")
       val suspended = new UnitOfWorkInterpreter(startuow).runProvidedCommittingC(request)
+      Then("the returned suspension follows a committed native termination")
       suspended shouldBe Consequence.success(ActionExecution.Suspended(continuation))
       startuow.lastCommitTermination shouldBe Some(UnitOfWorkTermination.Committed)
       val recoveredruntime = new PersistentContinuationRuntime(persistence)
+      When("a recreated runtime claims the committed Continuation")
       val claim = recoveredruntime.claimC(continuation.continuationId).toOption.getOrElse(
         fail("committed external continuation must survive runtime recreation")
       )
-      runtime.claimC(continuation.continuationId) shouldBe a[Consequence.Failure[_]]
+      val duplicateclaim = runtime.claimC(continuation.continuationId)
+      Then("the recovered claim is exclusive")
+      duplicateclaim shouldBe a[Consequence.Failure[_]]
       val result = StateMachineOperationResult(
         StateMachineResultTypeReference("ReviewResult"), ContextReference("review-result", "1")
       )
       val resumedruntime = new PersistentContinuationRuntime(persistence)
+      When("another recreated runtime recovers the saved private claim")
       val recoveredclaim = resumedruntime.recoverClaimC(continuation.continuationId).toOption.getOrElse(
         fail("restart must recover the private claim from persistence")
       )
+      Then("the actual private claim survives runtime recreation")
       recoveredclaim shouldBe claim
-      resumedruntime.resumeC(recoveredclaim, result, () => new UnitOfWork(execution)).isSuccess shouldBe true
-      runtime.claimC(continuation.continuationId) shouldBe a[Consequence.Failure[_]]
-      new PersistentContinuationRuntime(persistence).recoverClaimC(continuation.continuationId) shouldBe
-        a[Consequence.Failure[_]]
-      new PersistentContinuationRuntime(persistence).resumeC(
-        claim, result, () => new UnitOfWork(execution)
-      ) shouldBe a[Consequence.Failure[_]]
+      When("the typed result consumes the claim and later claim/recovery/resume attempts follow")
+      val resumed = resumedruntime.resumeC(recoveredclaim, result, () => new UnitOfWork(execution))
+      val consumedclaim = runtime.claimC(continuation.continuationId)
+      val consumedrecovery = new PersistentContinuationRuntime(persistence).recoverClaimC(continuation.continuationId)
+      val repeatedresume = new PersistentContinuationRuntime(persistence).resumeC(claim, result, () => new UnitOfWork(execution))
+      Then("typed resume succeeds once and every consumed-claim route refuses replay")
+      resumed.isSuccess shouldBe true
+      consumedclaim shouldBe a[Consequence.Failure[_]]
+      consumedrecovery shouldBe a[Consequence.Failure[_]]
+      repeatedresume shouldBe a[Consequence.Failure[_]]
 
       val foreign = continuation.copy(
         continuationId = ContinuationIdentity("foreign-continuation"),
         requiredOperation = required.copy(identity = StateMachineRequiredOperationIdentity("foreign-capability"))
       )
-      component.stateMachineProvidedApiDispatcher.admitCommittingOutcomeC(
+      When("a suspended outcome refers to a foreign executable capability")
+      val foreignoutcome = component.stateMachineProvidedApiDispatcher.admitCommittingOutcomeC(
         request, ActionExecution.Suspended(foreign)
-      ) shouldBe a[Consequence.Failure[_]]
+      )
+      Then("the actual Required Operation mismatch rejects")
+      foreignoutcome shouldBe a[Consequence.Failure[_]]
 
       selectedcontinuation = continuation.copy(continuationId = ContinuationIdentity("failed-continuation"))
       failcreate = true
       val faileduow = new UnitOfWork(execution)
+      When("the native UnitOfWork commits but the subsequent durable Continuation write fails")
       val failed = new UnitOfWorkInterpreter(faileduow).runProvidedCommittingC(request)
+      val failedclaim = runtime.claimC(selectedcontinuation.continuationId)
+      Then("the committed termination is preserved and no unavailable Continuation is fabricated")
       failed shouldBe a[Consequence.Failure[_]]
       failed.display should include ("planned post-commit write failure")
       faileduow.lastCommitTermination shouldBe Some(UnitOfWorkTermination.Committed)
       backing.loadC(selectedcontinuation.continuationId).toOption.flatten shouldBe None
-      runtime.claimC(selectedcontinuation.continuationId) shouldBe a[Consequence.Failure[_]]
+      failedclaim shouldBe a[Consequence.Failure[_]]
     }
 
     "dispatch one declared Provided API program through the active UnitOfWork and Required SPI Provider" in {
@@ -1756,7 +1827,7 @@ final class GeneratedWorkflowAbiSpec
 
   private def _diagnostic(
     result: Consequence[Component]
-  ): Diagnostic =
+  ): Diagnostic = {
     result match {
       case Consequence.Failure(conclusion) =>
         conclusion.getException match {
@@ -1768,4 +1839,5 @@ final class GeneratedWorkflowAbiSpec
       case _ =>
         fail("expected generated workflow admission to fail")
     }
+  }
 }

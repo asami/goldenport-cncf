@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 29, 2026
- * @version Sep. 29, 2026
+ * @version Oct. 12, 2026
  */
 final class WorkflowPreparedDataStoreTransitionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private given ExecutionContext = ExecutionContext.create()
@@ -27,9 +27,11 @@ final class WorkflowPreparedDataStoreTransitionSpec extends AnyWordSpec with Mat
   private val _events = DataStore.CollectionId("prepared_events_v1")
   private val _identity = DataStore.StringEntryId("one")
   private val _owner = _take(DataStoreComponentOwner.create("prepared-workflow"))
-  private def _take[A](result: Consequence[A]): A = result match {
+  private def _take[A](result: Consequence[A]): A = {
+     result match {
     case Consequence.Success(value) => value
     case other => fail(s"unexpected rejection: $other")
+  }
   }
   private def _plan = {
     val root = _take(DataStoreConditionalRoot.create(_owner, _roots, _identity, "revision",
@@ -41,12 +43,14 @@ final class WorkflowPreparedDataStoreTransitionSpec extends AnyWordSpec with Mat
   }
   private def _seed(store: DataStore): Unit =
     _take(store.create(_roots, _identity, Record.dataAuto("revision" -> 1L, "status" -> "initial")))
-  private def _project_c(result: DataStoreConditionalTransitionResult): Consequence[String] = result match {
+  private def _project_c(result: DataStoreConditionalTransitionResult): Consequence[String] = {
+     result match {
     case DataStoreConditionalTransitionResult.Transitioned(root, successor) =>
       if (root.getString("status").contains("suspended") && successor.getString("work").contains("exact issued payload"))
         Consequence.success("committed")
       else Consequence.stateConflict("invalid readback")
     case _: DataStoreConditionalTransitionResult.NotMatched => Consequence.stateConflict("stale prepared plan")
+  }
   }
   private def _prepared(store: DataStore & EntityConditionalTransitionDataStore) =
     WorkflowPreparedDataStoreTransition.create(store, _plan, _project_c)
@@ -65,12 +69,14 @@ final class WorkflowPreparedDataStoreTransitionSpec extends AnyWordSpec with Mat
     Files.createDirectories(directory)
     SqlDataStore.sqlite(Files.createTempDirectory(directory, "spec-").resolve("workflow.sqlite").toString)
   }
-  private def _reason[A](result: Consequence[A], expected: String): Unit = result match {
+  private def _reason[A](result: Consequence[A], expected: String): Unit = {
+     result match {
     case Consequence.Failure(conclusion) =>
       conclusion.observation.cause.descriptor.facets.collect {
         case org.goldenport.observation.Descriptor.Facet.Reason(name) => name
       } should contain (expected)
     case _ => fail("expected structured failure")
+  }
   }
   private def _with_store(backend: String)(work: (DataStore & EntityConditionalTransitionDataStore) => Unit): Unit = {
     val store: DataStore & EntityConditionalTransitionDataStore =
@@ -218,11 +224,11 @@ final class WorkflowPreparedDataStoreTransitionSpec extends AnyWordSpec with Mat
   }
 
   "Prepared publication failure and recovery" should {
-    "classify missing or divergent event readback after an acknowledged commit as indeterminate" in {
-      Vector("missing", "divergent").foreach { distortion =>
+    "consume normalized actual event readback and withhold success for missing or malformed retained events" in {
+      Vector("normalized", "missing", "malformed", "foreign").foreach { distortion =>
         Given(s"a canonical provider whose committed event readback is $distortion")
         var committed = false
-        var eventReads = 0
+        var eventreads = 0
         var projections = 0
         val store = new DataStore.InMemoryDataStore(CommitRecorder.noop) {
           override def conditionalTransition(plan: DataStoreConditionalTransitionPlan)(using ExecutionContext):
@@ -233,12 +239,20 @@ final class WorkflowPreparedDataStoreTransitionSpec extends AnyWordSpec with Mat
             }
 
           override def load(collection: DataStore.CollectionId, id: DataStore.EntryId)(using ExecutionContext):
-              Consequence[Option[Record]] =
+              Consequence[Option[Record]] = {
             if (committed && collection == _events) {
-              eventReads += 1
+              eventreads += 1
               if (distortion == "missing") Consequence.success(None)
-              else Consequence.success(Some(Record.dataAuto("event_json" -> "divergent")))
+              else if (distortion == "malformed") Consequence.success(Some(Record.dataAuto("event_json" -> "not-native")))
+              else {
+                val original = _event(if (distortion == "foreign") "foreign" else "readback", 20L)
+                  .copy(name = "actual.retained", payload = Map("actual" -> "changed"))
+                val json = io.circe.parser.parse(EventRecordJsonV1.encode(original)).toOption.get
+                Consequence.success(Some(Record.dataAuto("event_json" ->
+                  ("cncf.event-record.v1: \n" + json.spaces2 + "\n "))))
+              }
             } else super.load(collection, id)
+          }
         }
         _seed(store)
         val event = _event("readback", 10L)
@@ -247,13 +261,14 @@ final class WorkflowPreparedDataStoreTransitionSpec extends AnyWordSpec with Mat
           _project_c(result)
         })
         val prepared = _take(base.withEventRecordsC(_events, Vector(event)))
-        eventReads shouldBe 0
+        eventreads shouldBe 0
         When("the single guarded transaction commits")
         val result = prepared.commitC()
-        Then("success is withheld and the committed Workflow records are not retried or rolled back")
-        _reason(result, "transaction-indeterminate")
-        eventReads shouldBe 1
-        projections shouldBe 0
+        Then("actual valid content is consumed while missing or malformed targets remain committed but indeterminate")
+        if (distortion == "normalized") _take(result) shouldBe "committed"
+        else _reason(result, "transaction-indeterminate")
+        eventreads shouldBe 1
+        projections shouldBe (if (distortion == "normalized") 1 else 0)
         _pair(store).forall(_.nonEmpty) shouldBe true
       }
     }
@@ -290,10 +305,11 @@ final class WorkflowPreparedDataStoreTransitionSpec extends AnyWordSpec with Mat
       val datasource = new org.sqlite.SQLiteDataSource()
       datasource.setUrl(s"jdbc:sqlite:$path")
       val store = new SqlDataStore(org.goldenport.cncf.datastore.sql.SqliteDialectDriver, datasource) {
-        override protected def conditional_transition_checkpoint(stage: DataStoreConditionalTransitionCheckpoint): Consequence[Unit] =
+        override protected def conditional_transition_checkpoint(stage: DataStoreConditionalTransitionCheckpoint): Consequence[Unit] = {
           if (stage == DataStoreConditionalTransitionCheckpoint.BeforePublish)
             Consequence.operationInvalid("injected prepared commit rejection")
           else Consequence.unit
+        }
       }
       _seed(store)
       val before = _pair(store)

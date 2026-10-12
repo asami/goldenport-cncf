@@ -10,7 +10,7 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
 
 /** Result conversion only; transition authority belongs to the consuming Operation.
   * @since   Sep. 25, 2026
-  * @version Oct.  9, 2026
+  * @version Oct. 12, 2026
   */
 object WorkflowResultJsonV1 {
   trait PayloadCodec[A] {
@@ -19,7 +19,7 @@ object WorkflowResultJsonV1 {
     def decode(value: Json): Either[String, A]
   }
 
-  def encodeC[A](value: ContinuationResult[A], codec: PayloadCodec[A]): Consequence[String] =
+  def encodeC[A](value: ContinuationResult[A], codec: PayloadCodec[A]): Consequence[String] = {
     if (value == null || codec == null)
       Consequence.stateConflict("Workflow result JSON conversion requires a value and codec")
     else try {
@@ -47,8 +47,9 @@ object WorkflowResultJsonV1 {
     } catch {
       case NonFatal(_) => Consequence.stateConflict("Workflow result cannot be encoded")
     }
+  }
 
-  def decodeC[A](text: String, codec: PayloadCodec[A]): Consequence[ContinuationResult[A]] =
+  def decodeC[A](text: String, codec: PayloadCodec[A]): Consequence[ContinuationResult[A]] = {
     if (text == null || codec == null)
       Consequence.stateConflict("Workflow result JSON codec is incomplete")
     else try {
@@ -65,7 +66,7 @@ object WorkflowResultJsonV1 {
         revision <- _text(root, "expectedRevision")
         snapshot <- _decode_returned_snapshot(root("contextSnapshot"))
         result <- _returned_fields(root("result"), Set("typeIdentity", "value", "reference"))
-        resultType <- _text(result, "typeIdentity")
+        resulttype <- _text(result, "typeIdentity")
         payload <- codec.decode(result("value"))
         _ <- _expect(payload != null, "null Workflow result payload")
         reference <- _decode_returned_reference(result("reference"))
@@ -86,7 +87,7 @@ object WorkflowResultJsonV1 {
         ContinuationIdentity(continuation),
         StateMachineRevision(revision),
         snapshot,
-        TypedValue(resultType, payload),
+        TypedValue(resulttype, payload),
         reference,
         facts,
         ExecutionEvidence(references, worker, model, dispatch, execution)
@@ -96,6 +97,7 @@ object WorkflowResultJsonV1 {
       case NonFatal(_) => Consequence.stateConflict("Workflow result cannot be decoded")
     }
 
+  }
   /** Returned data may contain annotations and blank diagnostics. These readers
     * convert the required representation; shared issued-work readers stay unchanged.
     */
@@ -107,14 +109,16 @@ object WorkflowResultJsonV1 {
   private[workflow] def _text(fields: Map[String, Json], key: String): Either[String, String] =
     fields.get(key).flatMap(_.asString).toRight(s"returned result field $key must be a string")
 
-  private[workflow] def _optional_text(fields: Map[String, Json], key: String): Either[String, Option[String]] =
+  private[workflow] def _optional_text(fields: Map[String, Json], key: String): Either[String, Option[String]] = {
     fields.get(key) match {
       case Some(value) if value.isNull => Right(None)
       case Some(value) => value.asString.map(Some(_)).toRight(s"returned result field $key must be null or a string")
       case None => Left(s"returned result field $key is missing")
     }
+  }
 
-  private def _decode_returned_handle(json: Json): Either[String, WorkflowHandle] = for {
+  private def _decode_returned_handle(json: Json): Either[String, WorkflowHandle] = {
+     for {
     fields <- _returned_fields(json, Set("componentIdentity", "workflowIdentity", "workflowRevision", "instanceIdentity", "protocolVersion"))
     component <- _text(fields, "componentIdentity")
     identity <- _text(fields, "workflowIdentity")
@@ -123,20 +127,25 @@ object WorkflowResultJsonV1 {
     version <- _text(fields, "protocolVersion")
   } yield WorkflowHandle(ComponentId(component), WorkflowDefinitionIdentity(identity),
     WorkflowDefinitionRevision(revision), InstanceIdentity(instance), version)
+  }
 
-  private def _decode_returned_snapshot(json: Json): Either[String, ContextSnapshot] = for {
+  private def _decode_returned_snapshot(json: Json): Either[String, ContextSnapshot] = {
+     for {
     fields <- _returned_fields(json, Set("workflowRevision", "modelRevision", "workspaceRevision", "evidenceRevision"))
     workflow <- _text(fields, "workflowRevision")
     model <- _optional_text(fields, "modelRevision")
     workspace <- _optional_text(fields, "workspaceRevision")
     evidence <- _optional_text(fields, "evidenceRevision")
   } yield ContextSnapshot(workflow, model, workspace, evidence)
+  }
 
-  private def _decode_returned_reference(json: Json): Either[String, ContextReference] = for {
+  private def _decode_returned_reference(json: Json): Either[String, ContextReference] = {
+     for {
     fields <- _returned_fields(json, Set("identity", "revision"))
     identity <- _text(fields, "identity")
     revision <- _text(fields, "revision")
   } yield ContextReference(identity, revision)
+  }
 
   private def _decode_returned_references(json: Json): Either[String, Vector[ContextReference]] =
     json.asArray.toRight("expected references array").flatMap { values =>
@@ -154,7 +163,7 @@ object WorkflowResultJsonV1 {
     "mappingPolicyVersion" -> Json.fromString(value.mappingPolicyVersion)
   )
 
-  private def _decode_skill_dispatch(json: Json): Either[String, Option[SkillDispatchEvidence]] =
+  private def _decode_skill_dispatch(json: Json): Either[String, Option[SkillDispatchEvidence]] = {
     if (json.isNull) Right(None)
     else for {
       fields <- _returned_fields(json, Set("requestedRequirement", "selectedWorkerProfile", "mappingPolicyVersion"))
@@ -164,6 +173,7 @@ object WorkflowResultJsonV1 {
     } yield Some(SkillDispatchEvidence(
       requirement, profile, policy
     ))
+  }
 
   private[workflow] def _handle(value: WorkflowHandle): Json = Json.obj(
     "componentIdentity" -> Json.fromString(value.componentIdentity.name),
@@ -173,7 +183,8 @@ object WorkflowResultJsonV1 {
     "protocolVersion" -> Json.fromString(value.protocolVersion)
   )
 
-  private[workflow] def _decodeHandle(json: Json): Either[String, WorkflowHandle] = for {
+  private[workflow] def _decodeHandle(json: Json): Either[String, WorkflowHandle] = {
+     for {
     fields <- _fields(json, Set("componentIdentity", "workflowIdentity", "workflowRevision", "instanceIdentity", "protocolVersion"))
     component <- _string(fields, "componentIdentity")
     identity <- _string(fields, "workflowIdentity")
@@ -185,6 +196,7 @@ object WorkflowResultJsonV1 {
     ComponentId(component), WorkflowDefinitionIdentity(identity),
     WorkflowDefinitionRevision(revision), InstanceIdentity(instance), version
   )
+  }
 
   private[workflow] def _snapshot(value: ContextSnapshot): Json = Json.obj(
     "workflowRevision" -> Json.fromString(value.workflowRevision),
@@ -193,24 +205,28 @@ object WorkflowResultJsonV1 {
     "evidenceRevision" -> _optional(value.evidenceRevision)
   )
 
-  private[workflow] def _decodeSnapshot(json: Json): Either[String, ContextSnapshot] = for {
+  private[workflow] def _decodeSnapshot(json: Json): Either[String, ContextSnapshot] = {
+     for {
     fields <- _fields(json, Set("workflowRevision", "modelRevision", "workspaceRevision", "evidenceRevision"))
     workflow <- _string(fields, "workflowRevision")
     model <- _optional_string(fields, "modelRevision")
     workspace <- _optional_string(fields, "workspaceRevision")
     evidence <- _optional_string(fields, "evidenceRevision")
   } yield ContextSnapshot(workflow, model, workspace, evidence)
+  }
 
   private[workflow] def _reference(value: ContextReference): Json = Json.obj(
     "identity" -> Json.fromString(value.identity),
     "revision" -> Json.fromString(value.revision)
   )
 
-  private[workflow] def _decodeReference(json: Json): Either[String, ContextReference] = for {
+  private[workflow] def _decodeReference(json: Json): Either[String, ContextReference] = {
+     for {
     fields <- _fields(json, Set("identity", "revision"))
     identity <- _string(fields, "identity")
     revision <- _string(fields, "revision")
   } yield ContextReference(identity, revision)
+  }
 
   private[workflow] def _decodeReferences(json: Json): Either[String, Vector[ContextReference]] =
     json.asArray.toRight("expected references array").flatMap { values =>
@@ -222,29 +238,42 @@ object WorkflowResultJsonV1 {
       }
     }
 
-  private[workflow] def _optional(value: Option[String]): Json = value match {
+  private[workflow] def _optional(value: Option[String]): Json = {
+     value match {
     case Some(x) => Json.fromString(x)
     case None => Json.Null
   }
+  }
 
-  private[workflow] def _fields(json: Json, expected: Set[String]): Either[String, Map[String, Json]] =
+  private[workflow] def _fields(json: Json, expected: Set[String]): Either[String, Map[String, Json]] = {
     json.asObject match {
       case Some(obj) if obj.keys.toSet == expected => Right(obj.toMap)
       case _ => Left("Workflow result JSON fields are missing or unknown")
     }
 
+  }
+  /** Consume required native fields; unused annotations have no authority. */
+  private[workflow] def _required_fields(json: Json, required: Set[String]): Either[String, Map[String, Json]] = {
+    Option(json).flatMap(_.asObject) match {
+      case Some(obj) if required.subsetOf(obj.keys.toSet) => Right(obj.toMap)
+      case _ => Left("Workflow native JSON required fields are missing")
+    }
+  }
+
   private[workflow] def _string(fields: Map[String, Json], key: String): Either[String, String] =
     fields.get(key).flatMap(_.asString).filter(_.trim.nonEmpty)
       .toRight(s"Workflow result JSON field $key must be a nonempty string")
 
-  private[workflow] def _optional_string(fields: Map[String, Json], key: String): Either[String, Option[String]] =
+  private[workflow] def _optional_string(fields: Map[String, Json], key: String): Either[String, Option[String]] = {
     fields.get(key) match {
       case Some(value) if value.isNull => Right(None)
       case Some(value) => value.asString.filter(_.trim.nonEmpty).map(Some(_))
         .toRight(s"Workflow result JSON field $key must be null or a nonempty string")
       case None => Left(s"Workflow result JSON field $key is missing")
     }
+  }
 
-  private[workflow] def _expect(condition: Boolean, message: String): Either[String, Unit] =
+  private[workflow] def _expect(condition: Boolean, message: String): Either[String, Unit] = {
     if (condition) Right(()) else Left(message)
+  }
 }

@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /** Generated Workflow and Provided Operation executable metadata cases.
   * @since   Sep. 25, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 12, 2026
   */
 final class GeneratedWorkflowActionProgramSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import GeneratedWorkflowActionProgram.*
@@ -105,7 +105,7 @@ final class GeneratedWorkflowActionProgramSpec extends AnyWordSpec with Matchers
         ContextBundle("review", Vector.empty, Vector.empty,
           ContextSnapshot(admitted.workflowVersion))
       )
-      def completed(identity: String): ResolvedAction[Unit, Unit] =
+      def _completed_(identity: String): ResolvedAction[Unit, Unit] =
         new ResolvedAction[Unit, Unit] {
           def program(state: Unit, event: Unit): ExecUowM[ActionExecution] =
             ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], ActionExecution](
@@ -127,26 +127,29 @@ final class GeneratedWorkflowActionProgramSpec extends AnyWordSpec with Matchers
           }
       }
       val plan = bindC(admitted, Vector(
-        Binding("CommitChanges", completed("CommitChanges")),
+        Binding("CommitChanges", _completed_("CommitChanges")),
         Binding("ReviewChange", review),
-        Binding("RunTests", completed("RunTests")),
-        Binding("BuildProject", completed("BuildProject"))
+        Binding("RunTests", _completed_("RunTests")),
+        Binding("BuildProject", _completed_("BuildProject"))
       )).toOption.getOrElse(fail("generated occurrences must bind"))
       val runtime = new PersistentContinuationRuntime(new ContinuationRuntimePersistence.InMemory)
       When("the generated prefix executes and commits")
       val startuow = new UnitOfWork(ExecutionContext.create())
-      ExecutionPlanExecutor.executeCommittingC(plan, (), (), startuow, runtime) shouldBe
-        org.goldenport.Consequence.success(Some(continuation))
+      val started = ExecutionPlanExecutor.executeCommittingC(plan, (), (), startuow, runtime)
       Then("the internal Actions complete before the external suspension is claimable")
+      started shouldBe org.goldenport.Consequence.success(Some(continuation))
       startuow.lastCommitTermination shouldBe Some(UnitOfWorkTermination.Committed)
       trace.toVector shouldBe Vector("BuildProject", "RunTests", "ReviewChange")
-      runtime.claimC(continuation.continuationId).toOption should not be empty
+      When("the committed suspension is claimed")
+      val claimed = runtime.claimC(continuation.continuationId)
+      Then("the actual Continuation is claimable")
+      claimed.toOption should not be empty
       val closing = ExecutionPlan[Unit, Unit](Vector.empty, Vector.empty, plan.entryActions)
       When("the generated closing entry Action runs in a fresh UnitOfWork")
       val completionuow = new UnitOfWork(ExecutionContext.create())
-      ExecutionPlanExecutor.executeCommittingC(closing, (), (), completionuow, runtime) shouldBe
-        org.goldenport.Consequence.success(None)
+      val completed = ExecutionPlanExecutor.executeCommittingC(closing, (), (), completionuow, runtime)
       Then("CommitChanges completes after the suspended prefix")
+      completed shouldBe org.goldenport.Consequence.success(None)
       completionuow.lastCommitTermination shouldBe Some(UnitOfWorkTermination.Committed)
       trace.toVector shouldBe Vector("BuildProject", "RunTests", "ReviewChange", "CommitChanges")
     }
@@ -174,7 +177,7 @@ final class GeneratedWorkflowActionProgramSpec extends AnyWordSpec with Matchers
       val continuation = Continuation(request.runId, ContinuationIdentity("placed-service-review"),
         StateMachineRevision("1"), required, request.context)
       val trace = scala.collection.mutable.ArrayBuffer.empty[String]
-      def bound(identity: String): Binding[StateMachineProvidedApiRequest, Unit] =
+      def _bound_(identity: String): Binding[StateMachineProvidedApiRequest, Unit] =
         Binding(identity, new ResolvedAction[StateMachineProvidedApiRequest, Unit] {
           def program(state: StateMachineProvidedApiRequest, event: Unit): ExecUowM[ActionExecution] = {
             state shouldBe request
@@ -191,7 +194,7 @@ final class GeneratedWorkflowActionProgramSpec extends AnyWordSpec with Matchers
         })
       When("the generated sequence binds as a Provided API program")
       val provided = bindProvidedApiProgramC(admitted, operation, Vector(
-        bound("CommitChanges"), bound("ReviewChange"), bound("RunTests"), bound("BuildProject")
+        _bound_("CommitChanges"), _bound_("ReviewChange"), _bound_("RunTests"), _bound_("BuildProject")
       )).toOption.getOrElse(fail("generated Provided API program must bind"))
       Then("the public binding retains its Workflow and Operation provenance")
       provided.workflowIdentity shouldBe admitted.workflowIdentity
@@ -313,18 +316,100 @@ final class GeneratedWorkflowActionProgramSpec extends AnyWordSpec with Matchers
         providedOperations = provided.providedOperations.map(_.copy(source = GeneratedProvidedApiAbi.SourceIdentity(None))))
       When("Provided admission and Operation resolution encounter different or absent provenance")
       val resolved = GeneratedProvidedApiAbi.admitC(Vector(diagnostic), Vector(definition))
+      val compatible = diagnostic.providesOperation(provided.providedOperations.head)
+      val conflicting = diagnostic.providesOperation(provided.providedOperations.head.copy(inputType = Some("foreign.input")))
+      val rejected = Vector(
+        GeneratedProvidedApiAbi.admitC(Vector(diagnostic.copy(version = "foreign-revision")), Vector(definition)),
+        GeneratedProvidedApiAbi.admitC(Vector(diagnostic.copy(schemaVersion = "unsupported")), Vector(definition)),
+        GeneratedProvidedApiAbi.admitC(Vector(diagnostic.copy(providedOperations = diagnostic.providedOperations :+ diagnostic.providedOperations.head)),
+          Vector(definition)))
       Then("diagnostics are not an admission gate, while real schema/Workflow/Operation ambiguity and type conflicts reject")
       resolved.toOption shouldBe Some(Vector(diagnostic))
-      diagnostic.providesOperation(provided.providedOperations.head) shouldBe true
-      diagnostic.providesOperation(provided.providedOperations.head.copy(inputType = Some("foreign.input"))) shouldBe false
-      GeneratedProvidedApiAbi.admitC(Vector(diagnostic.copy(version = "foreign-revision")), Vector(definition)).isSuccess shouldBe false
-      GeneratedProvidedApiAbi.admitC(Vector(diagnostic.copy(schemaVersion = "unsupported")), Vector(definition)).isSuccess shouldBe false
-      GeneratedProvidedApiAbi.admitC(Vector(diagnostic.copy(providedOperations = diagnostic.providedOperations :+ diagnostic.providedOperations.head)),
-        Vector(definition)).isSuccess shouldBe false
-      abi.admitC(Vector(definition.copy(fixtureSha256 = abi.acceptedFixtureSha256))).toOption shouldBe None
-      abi.admitC(Vector(definition.copy(workflow = definition.workflow.copy(
-        revision = abi.acceptedWorkflowRevision
-      )))).toOption shouldBe None
+      compatible shouldBe true
+      conflicting shouldBe false
+      rejected.forall(!_.isSuccess) shouldBe true
+      When("the placed Workflow is replaced by a different supported fixture identity or revision")
+      val incompatible = Vector(
+        abi.admitC(Vector(definition.copy(fixtureSha256 = abi.acceptedFixtureSha256))),
+        abi.admitC(Vector(definition.copy(workflow = definition.workflow.copy(
+          revision = abi.acceptedWorkflowRevision)))))
+      Then("the actual placed executable contract remains closed")
+      incompatible.map(_.toOption) shouldBe Vector(None, None)
+    }
+
+    "consume absent, moved and nonpositive diagnostic lines independently of executable Action identity" in {
+      Given("the real Workflow and ActionProgram sidecars, their decoded Definition and baseline binding order")
+      val workflow = parse(_workflow).toOption.get
+      val program = parse(_program).toOption.get
+      val baseline = parseC(_workflow, _program).toOption.getOrElse(fail("sidecars must be admitted"))
+      val bindings = baseline.actions.reverse.map(action => Binding(action.identity, _action))
+      val baselineplan = bindC(baseline, bindings).toOption.getOrElse(fail("baseline must bind"))
+      def _annotate_(json: Json, container: String, collection: String, field: String,
+        line: Option[Json]): Json = json.mapObject { root =>
+        root.add(container, root(container).get.mapArray { definitions =>
+          definitions.map(_.mapObject { definition =>
+            definition.add(collection, definition(collection).get.mapArray { values =>
+              values.map(_.mapObject { value =>
+                line.fold(value.remove(field)) { annotation =>
+                  value.add(field, value(field).get.mapObject(_.add("line", annotation)))
+                }
+              })
+            })
+          })
+        })
+      }
+      def _action_semantics_(definition: Definition) = definition.actions.map(action =>
+        (action.identity, action.operation, action.inputBinding, action.metadata))
+      def _occurrence_semantics_(definition: Definition) = definition.occurrences.map(occurrence =>
+        (occurrence.definitionIdentity, occurrence.identity, occurrence.ordinal,
+          occurrence.actionIdentity, occurrence.operation, occurrence.inputBinding,
+          occurrence.placement, occurrence.transition, occurrence.metadata))
+      val annotations: Vector[(String, Option[Json], Int)] = Vector(
+        ("missing", None, 0), ("null", Some(Json.Null), 0),
+        ("string", Some(Json.fromString("unused")), 0),
+        ("zero", Some(Json.fromInt(0)), 0), ("negative", Some(Json.fromInt(-7)), -7),
+        ("moved", Some(Json.fromInt(999)), 999))
+      val lanes = Vector(
+        ("Workflow action source", "workflows", "actions", "source"),
+        ("program action actionSource", "definitions", "actions", "actionSource"),
+        ("occurrence actionSource", "definitions", "occurrences", "actionSource"),
+        ("occurrence occurrenceSource", "definitions", "occurrences", "occurrenceSource"))
+      lanes.foreach { case (lane, container, collection, field) =>
+        annotations.foreach { case (variant, line, expected) =>
+          withClue(s"$lane / $variant: ") {
+            Given(s"only $lane has $variant diagnostic lines and every other lane retains the pinned values")
+            val workflowvariant = if (container == "workflows")
+              _annotate_(workflow, container, collection, field, line) else workflow
+            val programvariant = if (container == "definitions")
+              _annotate_(program, container, collection, field, line) else program
+            When(s"the receiver parses and binds the $lane / $variant sidecars")
+            val parsed = parseC(workflowvariant.noSpaces, programvariant.noSpaces)
+            val bound = parsed.flatMap(definition => bindC(definition, bindings))
+            Then("the diagnostic defaults or exact Int values are decoded without changing executable semantics or binding order")
+            parsed.isSuccess shouldBe true
+            bound.isSuccess shouldBe true
+            val decoded = parsed.toOption.getOrElse(fail("variant must decode"))
+            val plan = bound.toOption.getOrElse(fail("variant must bind"))
+            decoded.actions.map(_.sourceLine) shouldBe
+              (if (container == "definitions" && collection == "actions")
+                Vector.fill(baseline.actions.size)(expected) else baseline.actions.map(_.sourceLine))
+            decoded.occurrences.map(_.actionSourceLine) shouldBe
+              (if (collection == "occurrences" && field == "actionSource")
+                Vector.fill(baseline.occurrences.size)(expected) else baseline.occurrences.map(_.actionSourceLine))
+            decoded.occurrences.map(_.occurrenceSourceLine) shouldBe
+              (if (collection == "occurrences" && field == "occurrenceSource")
+                Vector.fill(baseline.occurrences.size)(expected) else baseline.occurrences.map(_.occurrenceSourceLine))
+            decoded.workflowIdentity shouldBe baseline.workflowIdentity
+            decoded.workflowVersion shouldBe baseline.workflowVersion
+            decoded.requiredSpiActionIdentities shouldBe baseline.requiredSpiActionIdentities
+            _action_semantics_(decoded) shouldBe _action_semantics_(baseline)
+            _occurrence_semantics_(decoded) shouldBe _occurrence_semantics_(baseline)
+            plan.exitActions shouldBe baselineplan.exitActions
+            plan.transitionActions shouldBe baselineplan.transitionActions
+            plan.entryActions shouldBe baselineplan.entryActions
+          }
+        }
+      }
     }
 
     "reject cross-artifact identity, Action, and metadata drift" in {

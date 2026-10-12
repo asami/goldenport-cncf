@@ -10,7 +10,8 @@ import org.goldenport.record.Record
 
 /*
  * @since   Sep. 29, 2026
- * @version Sep. 30, 2026
+ *  version Sep. 30, 2026
+ * @version Oct. 12, 2026
  */
 /** Pure bounded event encoding, not EventStore append or sequence authority. */
 object EventRecordJsonV1 {
@@ -50,7 +51,7 @@ object EventRecordJsonV1 {
     encoded
   }
 
-  /** Only exact canonical bytes recover facts; never repairs or grants authority. */
+  /** Consume bounded parsed facts; formatting carries no execution authority. */
   def decodeC(encoded: String): Consequence[EventRecord] =
     _safely_c {
       if (encoded == null || encoded.length > _maximum_bytes)
@@ -64,8 +65,8 @@ object EventRecordJsonV1 {
           id <- _fields(root("id"), Set("major", "minor", "timestamp", "entropy"))
           major <- _text(id("major"))
           minor <- _text(id("minor"))
-          timestamp <- _optional_instant(id("timestamp"))
-          entropy <- _optional_text(id("entropy"))
+          timestamp <- _instant(id("timestamp"))
+          entropy <- _text(id("entropy"))
           name <- _text(root("name"))
           kind <- _text(root("kind"))
           payloadvalue <- _decode_payload(root("payload"), 0, new Budget)
@@ -83,11 +84,9 @@ object EventRecordJsonV1 {
           sequencevalue <- _text(root("sequence"))
           sequence <- scala.util.Try(sequencevalue.toLong).toEither.left.map(_ => "Invalid event sequence")
           _ <- Either.cond(sequence > 0, (), "Unassigned event sequence")
-        } yield EventRecord(EventId(major, minor, timestamp, entropy), name, kind, payload,
+        } yield EventRecord(EventId(major, minor, Some(timestamp), Some(entropy)), name, kind, payload,
           attributes, created, persistent, EventRecord.Status.Stored, lane, sequence)
-        decoded.fold(Consequence.stateConflict(_), value =>
-          if (encode(value) == encoded) Consequence.success(value)
-          else Consequence.stateConflict("Event bytes are not canonical or contain ambiguous fields"))
+        decoded.fold(Consequence.stateConflict(_), Consequence.success)
       }
     }
 
@@ -95,12 +94,13 @@ object EventRecordJsonV1 {
   def encodeStorage(value: EventRecord): String = _storage_prefix + encode(value)
 
   /** Strict storage wrapper recovery, with no bare-JSON or alternate-prefix fallback. */
-  def decodeStorageC(stored: String): Consequence[EventRecord] =
+  def decodeStorageC(stored: String): Consequence[EventRecord] = {
     if (stored == null || stored.length > _maximum_bytes + _storage_prefix.length ||
         !stored.startsWith(_storage_prefix))
       Consequence.stateConflict("Event storage prefix is missing or unsupported")
     else decodeC(stored.substring(_storage_prefix.length))
 
+  }
   /** Host supplies the collection and sequence; the containing plan admits the store. */
   def createSideEffectC(
     collection: DataStore.CollectionId,
@@ -124,7 +124,7 @@ object EventRecordJsonV1 {
     collection: DataStore.CollectionId,
     value: EventRecord,
     proposedSequence: Long
-  ): Consequence[(EventRecord, EntityVersionedSideEffect.Create)] =
+  ): Consequence[(EventRecord, EntityVersionedSideEffect.Create)] = {
     if (value == null || value.sequence != 0L || proposedSequence <= 0L)
       Consequence.configurationInvalid("Event Create preparation requires unissued facts and a positive sequence proposal")
     else {
@@ -134,6 +134,7 @@ object EventRecordJsonV1 {
         decodeStorageC(effect.record.getString("event_json").get).map(record => record -> effect)
       }
     }
+  }
 
   private final class Budget {
     private var _remaining = 4096
@@ -190,7 +191,7 @@ object EventRecordJsonV1 {
     budget.admit(depth)
     _fields(json, Set("type", "value")).flatMap { fields =>
       fields("type").asString.toRight("Missing event value type").flatMap {
-        case "string" => fields("value").asString.toRight("Invalid event string")
+        case "string" => _string_value(fields("value"))
         case "boolean" => fields("value").asBoolean.toRight("Invalid event boolean")
         case "int" => _number(fields("value"))(_.toInt)
         case "long" => _number(fields("value"))(_.toLong)
@@ -203,7 +204,11 @@ object EventRecordJsonV1 {
         case "map" => fields("value").asObject.filter(_.size <= 256).toRight("Invalid event map").flatMap {
           _.toVector.foldLeft[Either[String, Map[String, Any]]](Right(Map.empty)) {
             case (acc, (key, item)) =>
-              for { values <- acc; value <- _decode_payload(item, depth + 1, budget) } yield values.updated(key, value)
+              for {
+                values <- acc
+                _ <- _text(Json.fromString(key))
+                value <- _decode_payload(item, depth + 1, budget)
+              } yield values.updated(key, value)
           }
         }
         case _ => Left("Unsupported event value type")
@@ -212,7 +217,7 @@ object EventRecordJsonV1 {
   }
 
   private def _number[A](json: Json)(convert: String => A): Either[String, A] =
-    json.asString.toRight("Event number must be tagged text").flatMap(value =>
+    _string_value(json).flatMap(value =>
       scala.util.Try(convert(value)).toEither.left.map(_ => "Invalid event number"))
 
   private def _fields(json: Json, expected: Set[String]): Either[String, Map[String, Json]] =
@@ -224,24 +229,23 @@ object EventRecordJsonV1 {
   private def _instant(json: Json): Either[String, Instant] =
     _text(json).flatMap(value => scala.util.Try(Instant.parse(value)).toEither.left.map(_ => "Invalid event instant"))
 
-  private def _optional_text(json: Json): Either[String, Option[String]] =
-    if (json.isNull) Right(None) else _text(json).map(Some(_))
-
-  private def _optional_instant(json: Json): Either[String, Option[Instant]] =
-    if (json.isNull) Right(None) else _instant(json).map(Some(_))
+  private def _string_value(json: Json): Either[String, String] =
+    json.asString.filter(_.length <= 8192).toRight("Invalid event string")
 
   private def _decode_attributes(json: Json): Either[String, Map[String, String]] =
     json.asObject.filter(_.size <= 256).toRight("Invalid event attributes").flatMap {
       _.toVector.foldLeft[Either[String, Map[String, String]]](Right(Map.empty)) {
         case (acc, (key, item)) => for {
           values <- acc
-          value <- item.asString.toRight("Invalid event attribute")
+          _ <- _text(Json.fromString(key))
+          value <- _string_value(item)
         } yield values.updated(key, value)
       }
     }
 
-  private def _safely_c[A](operation: => Consequence[A]): Consequence[A] =
+  private def _safely_c[A](operation: => Consequence[A]): Consequence[A] = {
     try operation catch {
       case NonFatal(_) => Consequence.stateConflict("Event canonical storage admission failed")
     }
+  }
 }

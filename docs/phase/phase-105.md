@@ -1,8 +1,9 @@
-# Phase 105: Workflow Validation Simplification
+# Phase 105: Workflow Validation Hygiene
 
 status=planned
 planned_at=2026-10-12
 current_status=OPEN
+work_class=hygiene
 consumer=sm-workflow Phase 5.2
 checklist=[Phase 105 Checklist](phase-105-checklist.md)
 
@@ -12,7 +13,13 @@ Remove unnecessary acceptance restrictions, repeated checks and unchanged-copy
 certification from the existing Workflow execution paths. Preserve the public
 interfaces so CNCF and sm-workflow can develop in parallel.
 
-The delivered route receives a work or decision result through the existing
+This is hygiene of existing functionality, not feature development. Remove
+unnecessary checks and correct false rejections within the existing Usage
+Contract; do not introduce new capabilities, Operations, public APIs, storage
+formats or recovery guarantees. Any discovered missing feature is recorded as
+a separate Development Candidate and is not added to this Phase's acceptance.
+
+The existing route receives a work or decision result through the existing
 public Operation, applies the next Workflow state and continuation completion
 through existing storage, and returns the actual committed outcome. This is
 completion of one issued interaction, not automatic completion of a whole Phase.
@@ -27,8 +34,9 @@ completion of one issued interaction, not automatic completion of a whole Phase.
   Keep `WorkflowManagedCompletion.completeC` and
   `WorkflowManagedDecisionCompletion.completeC` non-public. Do not require an
   application-owned replacement completion Action or fake Provided metadata.
-- Separate the public input carrier from the semantic result produced by its
-  codec. Their type names need not be identical. Actual decoding, consumed
+- Remove the unnecessary equality restriction between the public input carrier
+  and the semantic result already produced by its codec. No new conversion
+  facility is added. Their type names need not be identical. Actual decoding, consumed
   result semantics and required operation routing still apply.
 - CNCF retains completion sequencing, storage transactions, local effects,
   resource lifecycle and post-commit event/response handling. sm-workflow owns
@@ -37,7 +45,7 @@ completion of one issued interaction, not automatic completion of a whole Phase.
   redesign discovered during implementation is a separate design issue, not an
   implicit prerequisite or an incidental change in this Phase.
 
-## Development items
+## Hygiene items
 
 | ID | Outcome | Status |
 | --- | --- | --- |
@@ -117,12 +125,15 @@ sm-workflow Phase 7. Preserve the established SBT runner/serialization policy.
 1. Trace the public completion-to-storage route and agree the unchanged consumer
    interface. Resolve the bounded inventory against existing uncommitted work.
 2. Implement the connected simplification and Executable Specifications as one
-   batch. Establish one result-to-committed-state route first, then cover Decision,
+   batch. Verify the existing result-to-committed-state route first, then cover Decision,
    durable-event and the listed supporting paths. Update affected specs with code.
 3. Run the affected producer specifications and meaningful regressions together.
    Through the existing sm-workflow public route, demonstrate minimal result
    input, semantic decoding, next state, saved completion and acknowledgement.
    Include a durable-event fixture because current consumers may select no events.
+   Consumer validation exercises existing behavior; do not implement unfinished
+   sm-workflow features to satisfy this hygiene Phase. If consumer development is
+   not ready, record the integration limitation and coordinate its later check.
 4. Review the integrated change independently, resolve findings at their actual
    scope, and hand off the selected artifact and actual evidence. Do not repeat
    unchanged tests or independent review for every helper. Required repository
@@ -141,3 +152,8 @@ earlier tests alone do not establish this Phase's acceptance.
 
 Planning only: no product edits, build, tests, Goal activation, artifact
 publication, commit or deployment are performed by creation of this Phase.
+
+Implementation source cutoff, 2026-10-12: the bounded Phase105 source/specification
+batch is being authored in the dedicated checkout. No test, independent review,
+artifact integration or acceptance result is recorded here. All WCS items remain
+OPEN; the applicability section records the intended consumption boundaries.
