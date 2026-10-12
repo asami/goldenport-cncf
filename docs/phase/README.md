@@ -15,6 +15,12 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
+- [Phase 106](phase-106.md) / [checklist](phase-106-checklist.md) is PLANNED:
+  generic Review Evidence/Admission integration driven by sm-workflow Phase 6,
+  with Cozy 81 and cbd-support 15. Reuse Phase 90 CAM; add only actual missing
+  connections and verify the bounded consumer route. No STEP/PHASE/FINAL ABI,
+  unchanged-content proof or reopening of Phase 105 hygiene scope.
+
 - [Phase 105](phase-105.md) is CLOSED: Workflow validation hygiene, no feature
   additions. Public interfaces, non-public managed `completeC`, native CAS and
   persisted layouts are preserved. The connected Step, sole Phase full review
