@@ -75,16 +75,32 @@ interoperability is CAP-78-05. These boxes do not close those later obligations.
 ## CAP-78-03: Realization mapping
 
 Stage Status:
-- Current status: OPEN
-- Owner: CNCF Operation/Workflow contract owners
-- Update rule: Close only after explicit realization references bind admitted
-  contracts without turning Capability into an executable object.
+- Current status: DONE
+- Owner: CNCF Operation/Workflow/StateMachine contract owners
+- Current step: R13 actual typed target adapters and CPT01..32 accepted.
+- Update rule: Retain accepted explicit realization binding without turning
+  Capability into an executable object, established by focused validation and
+  independent protected Step conformance on 2026-10-14; the local Step commit
+  binds this acceptance.
+- Closure basis: All four criteria below are checked against the actual typed
+  adapters, accepted focused validation and independent protected Step conformance.
 
-- [ ] Define realization references to Operation, Workflow, and StateMachine.
-- [ ] Fail closed for unresolved or incompatible realization targets.
-- [ ] Keep ordering, retry, compensation, guards, and runtime state outside the
+Accepted contract and executable specifications:
+- [R13 actual typed target adapter](../spec/component-capability.md#r13-actual-typed-target-adapter)
+- [Adapter specification CPT01..22](../../src/test/scala/org/goldenport/cncf/component/capability/ComponentCapabilityTargetAdapterSpec.scala)
+- [Binding specification CPT23..32](../../src/test/scala/org/goldenport/cncf/component/capability/ComponentCapabilityTargetBindingSpec.scala)
+
+Focused validation passed and independent protected Step conformance accepted
+CAP-78-03 on 2026-10-14. The local Step commit binds this acceptance. Canonical
+acquisition/discovery is CAP-78-04; real Cozy producer/CBD consumer proof is
+CAP-78-05 with Cozy CAP-64-05 and CBD Phase 11. Separate participant Phase
+full validation, review and local release remain open.
+
+- [x] Define realization references to Operation, Workflow, and StateMachine.
+- [x] Fail closed for unresolved or incompatible realization targets.
+- [x] Keep ordering, retry, compensation, guards, and runtime state outside the
       Capability record.
-- [ ] Treat Specification and Evidence references as traceability links.
+- [x] Treat Specification and Evidence references as traceability links.
 
 ## CAP-78-04: Component/package exposure
 

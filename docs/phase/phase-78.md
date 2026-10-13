@@ -79,7 +79,7 @@ runtime admission requirement.
 | --- | --- | --- |
 | CAP-78-01 | Freeze Component Capability identity, vocabulary, semantic-reference shape, versioning, and compatibility boundaries. | closed |
 | CAP-78-02 | Define and implement the external Component projection for provided and required Capabilities, preserving admitted semantic grounding/provenance. | closed |
-| CAP-78-03 | Bind explicit realization references to admitted Operation, Workflow, and StateMachine contracts without embedding orchestration procedure. | planned |
+| CAP-78-03 | Bind explicit realization references to admitted Operation, Workflow, and StateMachine contracts without embedding orchestration procedure. | closed |
 | CAP-78-04 | Integrate admission/discovery with ComponentFactory and package/CAR metadata, including semantic references where present. | planned |
 | CAP-78-05 | Prove Cozy producer and Textus CBD Support consumer interoperability with exact identity, source, ABI, semantic-reference, and realization provenance. | planned |
 
@@ -108,9 +108,40 @@ Step review at GPT-6.1 Sol high accepted the complete 16-file Step and its
 Static source/document checks and `git diff --check` passed. The
 [CAP-78-02 checklist](phase-78-checklist.md#cap-78-02-external-projection-and-admission)
 records the closure basis. Participant Phase release validation and full review
-remain pending. Actual target adapters, canonical
+remain pending. Actual target adapters are accepted in CAP-78-03. Canonical
 Factory/package/CAR exposure and real Cozy/CBD interoperability retain their
-CAP-78-03..05 owners and planned status.
+CAP-78-04..05 owners and planned status.
+
+## CAP-78-03 acceptance
+
+Stage Status:
+- Current status: DONE
+- Owner: CNCF Operation/Workflow/StateMachine contract owners
+- Current step: Actual typed target adapters and CPT01..32 specifications accepted.
+- Update rule: Retain acceptance established by focused validation and independent
+  protected Step conformance; the local Step commit binds this acceptance.
+- Closure basis: The four checked criteria in the
+  [CAP-78-03 checklist](phase-78-checklist.md#cap-78-03-realization-mapping),
+  accepted focused validation and independent protected Step conformance.
+
+[R13](../spec/component-capability.md#r13-actual-typed-target-adapter) defines
+the internal explicit acquired metadata and native-selector binding contract.
+The [adapter](../../src/test/scala/org/goldenport/cncf/component/capability/ComponentCapabilityTargetAdapterSpec.scala)
+and [binding](../../src/test/scala/org/goldenport/cncf/component/capability/ComponentCapabilityTargetBindingSpec.scala)
+specifications cover actual three-family selection, original-object/source
+retention, fail-closed finite acquisition and unchanged R11/R12 admission.
+The five modules and their responsibility split are described in the
+[design](../design/component-capability.md#actual-typed-target-adapter-structure).
+Focused validation passed and independent protected Step conformance accepted
+CAP-78-03 on 2026-10-14. The local Step commit binds this acceptance.
+
+CAP-78-04 retains canonical metadata acquisition/provider and
+ComponentFactory/package/CAR discovery. CAP-78-05 and Cozy CAP-64-05 retain
+normal producer/admission/CBD interoperability; CBD Support Phase 11 retains
+ingestion, catalog and queries. Each participant's Phase full validation,
+full review and local release remain separately owed. Cozy Phase 64 main
+integration follows its separate completion and release. These authored typed
+fixtures do not close any of those obligations.
 
 ## Ownership boundary
 

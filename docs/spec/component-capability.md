@@ -8,7 +8,8 @@ This specification defines Component Capability meaning, identity,
 declarations, versions, provenance, grounding, realization, compatibility,
 traceability, and admission/query outcome boundaries. R1 through R10 are the
 self-contained normative semantic contract. R11 and R12 define the concrete
-external v1 format and metadata admission boundary.
+external v1 format and metadata admission boundary. R13 defines the internal
+adapter from explicitly acquired actual typed target metadata to R12 binding.
 
 The [Component Capability design](../design/component-capability.md)
 provides non-normative structural context. The existing Phase 56
@@ -17,10 +18,13 @@ authority for Component identity.
 
 CAP-78-02 supplies the metadata projection, strict codec, explicit reference
 scope, and pure admission implementation described by R11/R12. Its executable
-specifications are authored; validation and independent Step acceptance are
-pending. E1 through E10 remain semantic expectations. Actual target-contract
-adapters, ComponentFactory/package discovery and real Cozy producer/consumer
-proof remain CAP-78-03 through CAP-78-05. The hand-authored conformance resource
+specifications and independent Step acceptance are complete, as recorded in
+[Phase 78](../phase/phase-78.md#cap-78-02-acceptance-and-implementation-boundary).
+E1 through E10 remain semantic expectations. CAP-78-03 supplies the accepted
+actual target adapters and CPT01..32 specifications, as recorded in
+[Phase 78](../phase/phase-78.md#cap-78-03-acceptance).
+ComponentFactory/package discovery and real Cozy
+producer/consumer proof remain CAP-78-04 and CAP-78-05. The hand-authored conformance resource
 is external-contract input, not a generated fixture or interoperability proof.
 
 ## Rules
@@ -405,7 +409,8 @@ is hand-authored external-contract conformance input. Its supplemental older
 definition and exact model/vocabulary/target facts are independently supplied
 in the codec specification with explicit revisions. The resource is neither
 Cozy-produced nor evidence of actual target adapter, Factory/CAR or CBD
-integration. Step validation and independent acceptance remain pending.
+integration. CAP-78-02 validation and independent acceptance are complete;
+participant Phase release validation and full review remain separate.
 
 | Case ID | Observable contract | Rules |
 | --- | --- | --- |
@@ -435,6 +440,173 @@ integration. Step validation and independent acceptance remain pending.
 | CPA-15 | Acquisition and ready scope IDs must agree. | R10, R12 |
 | CPA-16 | Stable Capability identity/version retains explicitly changed edge/target revision and exact replacement binding. | R2, R4, R5, R7, R8, R12 |
 
+### R13 Actual typed target adapter
+
+This internal `private[cncf]` boundary receives immutable metadata already
+admitted by its Operation, Workflow or StateMachine owner. It MUST NOT acquire
+a runtime Component, invoke a Factory, read sources or select a provider.
+R11 transport and R12 admission APIs and semantics remain unchanged.
+
+#### Explicit acquired carriers
+
+All fields are explicit, with no defaults. Constructors record caller-supplied
+facts; they do not authenticate acquisition, currentness or permission.
+
+| TargetSource carrier | Fields / alternatives |
+| --- | --- |
+| AcquisitionInput | `Acquired(scopeId: String, snapshots: Vector[Snapshot])` or `Rejected(diagnostic: Diagnostic)` |
+| Snapshot | `component: ComponentId`, `source: Source`, `operations: Vector[CmlOperationDefinition]`, `workflows: Vector[WorkflowDefinition]`, `stateMachines: Vector[CmlStateMachineDefinition]` |
+| SnapshotKey | `component: ComponentId`, `modelAuthority: String`, `path: String`, `sourceRevision: String` |
+| Binding | `snapshot: SnapshotKey`, `identity: ModelElementId`, `targetKind: TargetKind`, `selector: String`, `contractVersion: String`, `generatedAbiVersion: String`, `source: Source` |
+| Contract | Scala 3 enum `Operation(definition: CmlOperationDefinition)`, `Workflow(definition: WorkflowDefinition)`, `StateMachine(definition: CmlStateMachineDefinition)` |
+
+`Snapshot.key` MUST preserve the exact Component and source authority/path/
+revision tuple, excluding optional line. Actual metadata vectors and their
+objects MUST retain their order. Each binding supplies the qualified model
+identity independently of the native declaration selector. The selector is
+the exact declaration `name` within one selected snapshot and target kind;
+it MUST NOT issue, parse, normalize or substitute for model identity.
+
+Binding identity authority MUST equal binding source authority. Binding source
+authority, path and revision MUST equal the selected snapshot source; its
+positive line or None is independent of snapshot line. Contract version and
+target ABI MUST be separately observed opaque caller-supplied values. Native
+StateMachine numeric version, Workflow ID, source revision, producer,
+Component/package version and digests MUST NOT derive those values. The
+metadata types have no uniform contract revision/ABI to extract or externally
+verify. Actual acquisition remains the producer/framework caller's duty.
+
+#### Validation and exact selection
+
+Acquisition Rejected MUST take precedence over scope Rejected; the original
+diagnostic MUST be returned unchanged even when subsequent input is malformed.
+Acquired/Ready MUST validate the original scope under R12 before replacing
+targets. Both scope IDs MUST satisfy R11 text validity and agree exactly;
+disagreement is `Incompatible`. Original `scope.targetContracts` MUST be empty
+or fail `Malformed` at `/scope/targetContracts`.
+
+Every snapshot and binding in the batch MUST be valid before any Adapted
+result is constructed. Null carriers/vectors/elements, invalid Component,
+Source, key, qualified identity and text are `Malformed` at their owning
+`/acquisition` or `/bindings` pointer. Every native definition name MUST satisfy
+R11 literal text validity. This is no second procedural/runtime admission.
+Selected Operation `kind`, `inputType`, `outputType`, `inputValueKind` MUST be
+valid text. Selected Workflow MUST have a nonnull ID, registrations vector and
+entries. Selected StateMachine MUST have `Some(nonnull normalized)` with
+nonnull identity, matching name and nonnull positive version. Legacy
+`normalized=None` is `Unsupported` at the selected actual contract path; the
+adapter MUST NOT invent version 1 or rewrite normalized graphs.
+
+Repeated exact SnapshotKey is `Ambiguous` at the second
+`/acquisition/snapshots/i`, including equal data or different lines. A binding
+with no exact snapshot is `Unavailable` at `/bindings/i/snapshot`. With one
+snapshot, no same-kind selector is `Incompatible` at `/bindings/i/targetKind`
+if the literal selector exists in another kind, otherwise `Unavailable` at
+`/bindings/i/selector`. Multiple same-kind candidates are `Ambiguous`, even
+for equal objects. No deduplication, first/last selection or global fallback
+is permitted.
+
+Repeated complete `(component, identity, targetKind, contractVersion,
+generatedAbiVersion)` context MUST fail `Ambiguous` at the second binding.
+Repeated native `(SnapshotKey, targetKind, selector)` MUST also fail
+`Ambiguous`, even with different model IDs/versions. Independent snapshots
+may retain distinct historical versions. Unselected native metadata MUST NOT
+receive invented model identity. One adapted target MAY serve multiple edges.
+
+Diagnostics MUST retain their original nested pointer and only known exact
+scope, Component and Source context. No missing line/revision is fabricated.
+Failure MUST NOT yield partial targets, empty success, retry or downgrade.
+
+#### Private accepted states and R12 binding
+
+Only the adapter facade constructs these final classes; support parts return
+validated data/tuples rather than acceptance:
+
+| Adapter carrier | Exposed retained values |
+| --- | --- |
+| Adapted | Original `acquisition: Acquired`, original `scopeInput: ScopeInput.Ready`, supplied `bindings: Vector[Binding]`, `scope: Scope`, `targets: Vector[AdaptedTarget]` |
+| AdaptedTarget | Original `snapshot: Snapshot`, original `binding: Binding`, actual `contract: Contract`, R12 `target: TargetContract` |
+| Bound | Original `admitted: Admitted`, original `adapted: Adapted`, ordered `realizations: Vector[BoundRealization]` |
+| BoundRealization | Original `realization: ResolvedRealization`, selected actual `target: AdaptedTarget` |
+
+Adapted targets MUST follow supplied binding order. R12 TargetContract MUST
+use the actual snapshot Component and binding kind, identity, opaque contract
+version, ABI and Source. The effective scope copy MUST replace only
+`targetContracts`, retaining every other original fact, supplemental
+definition, source and order. Explicit empty acquired snapshots/bindings and
+a valid Ready scope MAY produce empty targets; they are no acquisition-failure
+fallback or `NoProvider` evidence.
+
+```scala
+ComponentCapabilityTargetAdapter.adapt(acquisition: AcquisitionInput, scopeInput: ScopeInput, bindings: Vector[Binding]): Either[Diagnostic, Adapted]
+ComponentCapabilityTargetAdapter.admit(projection: Projection, adapted: Adapted): Either[Diagnostic, Bound]
+ComponentCapabilityTargetAdapter.admitJson(input: SourceInput, adapted: Adapted): Either[Diagnostic, Bound]
+```
+
+`admit` and `admitJson` MUST delegate unchanged R12 with the effective scope.
+SourceInput.Rejected MUST be returned unchanged even if adapted is null;
+otherwise null adapted is `Malformed`. Only after successful original
+admission does each ResolvedRealization target join by the complete exact
+TargetContract tuple, including source, to exactly one AdaptedTarget. No match
+is a `Malformed` internal input inconsistency; multiple matches are
+`Ambiguous`. Bound preserves original admitted edge order, including Local
+and External edges; External has no target-binding waiver. Raw codec,
+identity, absence and traceability semantics remain R11/R12.
+
+Procedure, command/job/execution fields, workflow registrations/status rules
+and normalized StateMachine guards/actions stay on the original actual
+metadata objects. The adapter MUST NOT extract them into TargetContract or
+Capability, create an engine/resolver, invoke operations/events/threads,
+perform reflection/ClassLoader/network/source IO or parse CML. Only existing
+R11 decode handles JSON. Independent Specification/Evidence roles, sources and
+origins remain R12 traceability; they assert no execution, coverage,
+authorization or admission authority.
+
+#### Actual target working specifications
+
+The [adapter specification](../../src/test/scala/org/goldenport/cncf/component/capability/ComponentCapabilityTargetAdapterSpec.scala)
+and [binding specification](../../src/test/scala/org/goldenport/cncf/component/capability/ComponentCapabilityTargetBindingSpec.scala)
+cover these observable cases. Focused validation passed and independent
+protected Step conformance accepted CAP-78-03 on 2026-10-14, as recorded in
+[Phase 78](../phase/phase-78.md#cap-78-03-acceptance).
+Typed fixtures establish no normal Cozy production,
+Factory/package discovery or CBD ingestion proof.
+
+| Case | Observable contract | Requirements |
+| --- | --- | --- |
+| CPT01 | Three actual families, two Components and binding order retain original objects. | R13 acquisition, private states |
+| CPT02 | Model identity stays independent of same native selector across snapshots. | R2, R13 exact selection |
+| CPT03 | Snapshot, binding and later edge sources retain independent lines/revisions. | R5, R13 provenance |
+| CPT04 | Opaque contract and ABI values stay independent of native versions/IDs. | R4, R13 acquisition |
+| CPT05 | Original rejected scope is unchanged before malformed bindings. | R10, R13 precedence |
+| CPT06 | Original rejected acquisition precedes malformed scope/bindings. | R10, R13 precedence |
+| CPT07 | Scope IDs agree exactly or fail at owning pointer. | R13 validation |
+| CPT08 | Malformed carriers fail without partial targets; valid Unicode remains literal. | R11, R13 validation |
+| CPT09 | Repeated snapshot keys fail at the second snapshot. | R13 uniqueness |
+| CPT10 | Missing snapshot or exact native selector is Unavailable. | R13 exact selection |
+| CPT11 | Wrong native family is Incompatible. | R13 exact selection |
+| CPT12 | Repeated same-kind selectors stay Ambiguous. | R13 uniqueness |
+| CPT13 | Repeated complete target contexts stay Ambiguous. | R13 uniqueness |
+| CPT14 | Native aliases fail; independent historical snapshots stay distinct. | R13 uniqueness |
+| CPT15 | Explicit acquired/ready empty retains its originals. | R10, R13 private states |
+| CPT16 | Synthetic scope targets cannot bypass actual selection. | R13 private states |
+| CPT17 | Legacy unnormalized StateMachine is Unsupported. | R13 actual contract |
+| CPT18 | Normalized states/transitions/source/version remain original. | R13 actual contract |
+| CPT19 | Conflicting source or malformed selected contract fails. | R5, R13 validation |
+| CPT20 | Catalog enumeration cannot change exact selection or author order. | R13 exact selection |
+| CPT21 | Active literal identity property: at least 100 successes, zero discards. | R2, R13 exact selection |
+| CPT22 | Active source/catalog permutation property: at least 100 successes, zero discards. | R5, R13 exact selection |
+| CPT23 | Raw R12 admission binds all three actual families in original edge order. | R12, R13 binding |
+| CPT24 | Existing hand-authored strict wire binds independently built actual metadata. | R11, R12, R13 binding |
+| CPT25 | Original schema/ABI/raw/scope failures survive without partial Bound. | R11, R12, R13 binding |
+| CPT26 | Local and External realizations both require actual targets. | R12, R13 binding |
+| CPT27 | Present-empty and exact absent realizations retain zero bound edges. | R7, R12, R13 binding |
+| CPT28 | Independent Specification/Evidence links retain R12 kind/failure rules. | R9, R12, R13 traceability |
+| CPT29 | Wrong Component/model/kind/version/ABI fails for each native family. | R12, R13 binding |
+| CPT30 | Invalid duplicate/grounding/declaration admission produces no partial Bound. | R12, R13 binding |
+| CPT31 | JSON Rejected is unchanged even with null adapted; acquired/null is malformed. | R13 precedence |
+| CPT32 | Native procedure variations stay on actual contracts; mapping remains architectural. | R7, R9, R13 nonexecution |
+
 ## Semantic acceptance matrix
 
 These cases specify expected interpretations of the rules. They do not
@@ -460,8 +632,8 @@ validation and separately accepted executable evidence:
 
 | Step | Responsibility |
 | --- | --- |
-| CAP-78-02 | Concrete R11/R12 wire, codec, exact ABI set and pure selected-scope admission; authored executable specifications, pending validation and independent acceptance. |
-| CAP-78-03 | Implement exact binding to admitted Operation, Workflow, and StateMachine target contracts and its executable proof. |
+| CAP-78-02 | Accepted concrete R11/R12 wire, codec, exact ABI set and pure selected-scope admission. |
+| CAP-78-03 | Accepted R13 actual typed target adapters and CPT01..32 executable specifications, with focused validation and independent protected Step conformance. |
 | CAP-78-04 | Implement runtime-independent ComponentFactory and package/CAR exposure and discovery with executable proof. |
 | CAP-78-05 | Prove a real Cozy-generated fixture through CNCF admission/discovery and Textus CBD Support consumption with exact provenance. |
 

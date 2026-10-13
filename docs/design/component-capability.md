@@ -25,14 +25,54 @@ wire/scalar/snapshot contract;
 scope, exact binding, compatibility, public APIs and diagnostics. The
 [working specifications](../spec/component-capability.md#working-specifications-and-conformance-input)
 use hand-authored external input and independently supplied ready facts.
-Their validation and independent CAP-78-02 acceptance remain pending.
+Their validation and independent CAP-78-02 acceptance are complete as
+recorded in [Phase 78](../phase/phase-78.md#cap-78-02-acceptance-and-implementation-boundary).
 
-The next handoffs remain separate. CAP-78-03 extracts actual admitted
-Operation/Workflow/StateMachine target contracts and proves their provenance.
-CAP-78-04 selects the canonical ComponentFactory/package/CAR metadata source
+CAP-78-03 adds the accepted actual typed target adapter described below;
+focused validation and independent protected Step conformance accepted it on
+2026-10-14, as recorded in [Phase 78](../phase/phase-78.md#cap-78-03-acceptance).
+The next handoffs remain separate. CAP-78-04 selects the canonical ComponentFactory/package/CAR metadata source
 and exposes discovery from it. CAP-78-05 uses a real Cozy-generated input and
 records producer/admission/CBD interoperability. Pure binding against explicit
 scope facts does not establish these integration surfaces.
+
+## Actual typed target adapter structure
+
+[R13](../spec/component-capability.md#r13-actual-typed-target-adapter) owns
+acquisition, literal selection, source attribution, private accepted states
+and failure semantics. The five internal modules divide that responsibility:
+
+| Module | Responsibility |
+| --- | --- |
+| ComponentCapabilityTargetSource | Closed explicit acquisition/snapshot/key/binding carriers and three-family actual metadata Contract enum. |
+| ComponentCapabilityTargetAdapter | Sole construction of Adapted/AdaptedTarget and Bound/BoundRealization; orchestration of pure adaptation and unchanged R12 admission. |
+| ComponentCapabilityTargetValidationPart | Original ready-scope validation and scalar/source/key/context validation using existing R11/R12 helpers. |
+| ComponentCapabilityTargetSelectionPart | Exact finite snapshot/native-selector joins, uniqueness checks and supplied binding order. |
+| ComponentCapabilityTargetBindingPart | Kind-specific selected native shape and normalized machine checks; accepted R12 edge-to-actual-target joins. |
+
+```text
+Observed Acquired native metadata + original Ready scope + explicit bindings
+  -> validate original facts and finite snapshots
+  -> select exact snapshot/kind/native name
+  -> Adapted (original actual objects + effective R12 scope)
+
+Original raw Projection or strict R11 JSON
+  -> unchanged R12 admission using effective scope
+  -> original Admitted and ResolvedRealization
+  -> exact TargetContract join to AdaptedTarget
+  -> Bound (original admission + actual target objects in edge order)
+```
+
+The original R12 pipeline remains independently usable. The adapter supplies
+its target facts from selected actual immutable CmlOperationDefinition,
+WorkflowDefinition and normalized CmlStateMachineDefinition carriers, retaining
+the original acquisition and ready input. Support parts return validated data;
+the facade owns accepted construction. Native procedure metadata stays on
+retained actual objects. No Component, engine, source reader or runtime
+activation enters this structure. Explicit acquisition and opaque version
+observations belong to the caller; canonical acquisition/discovery remains
+CAP-78-04. The [R13 working specifications](../spec/component-capability.md#actual-target-working-specifications)
+locate the accepted CPT01..32 behavior inventory.
 
 ## Authority and scope
 
