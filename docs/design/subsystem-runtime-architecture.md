@@ -135,3 +135,17 @@ Capabilities/roles, not assumptions based on hostname or network position.
 
 Replacement does not repair stolen credentials, malicious persistent data or a
 compromised upstream authority. Those remain separate security concerns.
+
+## Configuration-driven Runtime
+
+Application/domain code does not own replica creation, role switching, cache
+warm-up orchestration, drain or scheduled rotation. These are runtime concerns.
+
+Subsystem configuration selects the Availability Architecture profile. CNCF
+Runtime and the Textus launcher/operations layer realize the declared desired
+state and expose its actual state. Application code sees the stable typed
+Operation boundary rather than A/B instance identities.
+
+This separation is essential to the Function-like Application Tier: callers do
+not need deployment-specific retry/switch logic merely because the Domain
+Subsystem is being rotated.
