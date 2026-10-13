@@ -92,7 +92,7 @@ Accepted contract and executable specifications:
 
 Focused validation passed and independent protected Step conformance accepted
 CAP-78-03 on 2026-10-14. The local Step commit binds this acceptance. Canonical
-acquisition/discovery is CAP-78-04; real Cozy producer/CBD consumer proof is
+acquisition/discovery is accepted in CAP-78-04; real Cozy producer/CBD consumer proof is
 CAP-78-05 with Cozy CAP-64-05 and CBD Phase 11. Separate participant Phase
 full validation, review and local release remain open.
 
@@ -105,14 +105,24 @@ full validation, review and local release remain open.
 ## CAP-78-04: Component/package exposure
 
 Stage Status:
-- Current status: OPEN
+- Current status: DONE
 - Owner: CNCF ComponentFactory and packaging owners
-- Update rule: Close only after ComponentFactory and the canonical package/CAR
-  surface expose one admitted contract.
+- Current step: R14 canonical Directory/CAR acquisition, public native
+  provider/catalog, Factory entry and 36 behavioral cases accepted.
+- Update rule: Retain acceptance established by focused validation and independent
+  protected Step conformance on 2026-10-14; the local Step commit binds this acceptance.
+- Closure basis: All three criteria below are checked against the accepted R14
+  contract, focused validation and independent protected Step conformance on 2026-10-14.
 
-- [ ] Integrate Capability discovery with ComponentFactory metadata.
-- [ ] Select and document the canonical package/CAR publication surface.
-- [ ] Prove no second CML parser or name-derived reconstruction is introduced.
+[R14](../spec/component-capability.md#r14-canonical-package-and-public-native-discovery)
+and the [module design](../design/component-capability.md#canonical-package-and-public-discovery-structure)
+define the accepted boundary. Focused validation passed and independent protected
+Step conformance accepted CAP-78-04 on 2026-10-14; the local Step commit binds
+this acceptance. Normal Cozy/CBD proof and participant Phase completion remain open.
+
+- [x] Integrate Capability discovery with ComponentFactory metadata.
+- [x] Select and document the canonical package/CAR publication surface.
+- [x] Prove no second CML parser or name-derived reconstruction is introduced.
 
 ## CAP-78-05: Cross-repository acceptance
 

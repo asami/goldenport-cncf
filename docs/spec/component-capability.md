@@ -10,6 +10,7 @@ traceability, and admission/query outcome boundaries. R1 through R10 are the
 self-contained normative semantic contract. R11 and R12 define the concrete
 external v1 format and metadata admission boundary. R13 defines the internal
 adapter from explicitly acquired actual typed target metadata to R12 binding.
+R14 defines canonical local package acquisition and public native discovery.
 
 The [Component Capability design](../design/component-capability.md)
 provides non-normative structural context. The existing Phase 56
@@ -23,8 +24,11 @@ specifications and independent Step acceptance are complete, as recorded in
 E1 through E10 remain semantic expectations. CAP-78-03 supplies the accepted
 actual target adapters and CPT01..32 specifications, as recorded in
 [Phase 78](../phase/phase-78.md#cap-78-03-acceptance).
-ComponentFactory/package discovery and real Cozy
-producer/consumer proof remain CAP-78-04 and CAP-78-05. The hand-authored conformance resource
+CAP-78-04 has accepted R14 canonical package and public native discovery through
+focused validation and independent protected Step conformance on 2026-10-14,
+as recorded in [Phase 78](../phase/phase-78.md#cap-78-04-canonical-package-and-discovery).
+Real Cozy producer/consumer proof
+remains CAP-78-05. The hand-authored conformance resource
 is external-contract input, not a generated fixture or interoperability proof.
 
 ## Rules
@@ -607,6 +611,224 @@ Factory/package discovery or CBD ingestion proof.
 | CPT31 | JSON Rejected is unchanged even with null adapted; acquired/null is malformed. | R13 precedence |
 | CPT32 | Native procedure variations stay on actual contracts; mapping remains architectural. | R7, R9, R13 nonexecution |
 
+### R14 Canonical package and public native discovery
+
+#### Selected package and publication
+
+The sole Capability publication layout is `meta/component-capability/index.json`
+beside the existing canonical CAR descriptor, with flat sibling R11 JSON
+resources. The index is exactly `{"schemaVersion":1,"projections":["filename.json"]}`;
+it contains filenames, never embedded projections or native metadata.
+`ComponentCapabilityPackageSource` exposes these explicit public carriers:
+
+| Carrier | Fields / alternatives |
+| --- | --- |
+| Location | `Directory(root: java.nio.file.Path)` or `Car(path: java.nio.file.Path)` |
+| PackageInput | `Selected(scopeId: String, location: Location, component: ComponentCoordinate, packageCoordinate: PackageCoordinate)` or `Rejected(diagnostic: Diagnostic)` |
+
+All fields MUST be supplied without defaults. Selected scope and coordinates
+are independently observed caller inputs, not authenticated acquisition.
+There MUST be no repository scan, URL selection, remote fetch, inferred
+release, provider registry, cache, persistence or second CML parser.
+
+#### Strict ordered index and inventory
+
+Use `JawnParser(allowDuplicateKeys = false)` and the existing codec's scalar,
+object and vector helpers. Exactly `schemaVersion` and `projections` are
+mandatory. Unknown/missing/null/wrong-type fields and duplicate JSON keys are
+`Malformed`; a non-1 integer schema is `Unsupported`. A projection filename
+MUST match `[A-Za-z0-9][A-Za-z0-9._-]*\.json` and MUST NOT be `index.json`.
+Slashes, backslashes, dot paths, absolute paths and URI lookup are forbidden.
+Repeated filenames are `Ambiguous` at the second `/index/projections/i`.
+Index array order MUST become catalog order; filenames and positions MUST NOT
+derive model identity. Direct JSON inventory excluding index MUST equal the
+indexed names. Missing indexed resources are `Unavailable`; unlisted or nested
+metadata JSON is `Malformed`. Unrelated non-JSON files and assets outside the
+canonical metadata prefix MUST be ignored. Empty index is an acquired empty
+batch; absent index is `Unavailable`.
+
+#### Local acquisition and coordinates
+
+Only the selected Directory root or regular `.car` file MAY be read. Reject
+symlink roots and metadata path components/index/payloads, directories used as
+files, and unsafe archive resource aliases. ZIP inventory MUST reject duplicate
+exact canonical index or selected metadata entries as `Ambiguous`, including
+equal bytes; first/last selection is forbidden. Acquisition MUST perform no
+extraction, writes, network, reflection, ClassLoader or Component construction.
+Above-root ancestry remains caller context. No authentication, multiwriter,
+transit-integrity or currentness assertion is introduced.
+
+UTF-8 decoding MUST use REPORT. Invalid UTF-8, JSON and exceeded bounds are
+`Malformed`. Limits are index 1 MiB, each projection 16 MiB, 256 projections,
+and summed projection bytes 64 MiB. Enforce actual size/stream bounds before
+returning a batch, with the owning index/resource pointer. Missing root/index/
+payload and ordinary IO failure are `Unavailable`; `AccessDeniedException` is
+`Unauthorized`. A supplied rejection, including `Stale` or `Unauthorized`,
+MUST remain unchanged. Failure MUST NOT yield empty success, retry or fallback.
+No hashes, seals, copied-control proofs or mtime-derived stale claims apply.
+
+The existing `ComponentDescriptorLoader.loadArchive` and
+`ComponentDescriptor.requireCanonicalIdentityC` MUST supply the original
+schema-3 descriptor and complete canonical ComponentId/release. Legacy,
+absent, malformed or incomplete descriptor identity is `Malformed`. Descriptor
+id/release MUST exactly equal Selected.component or fail `Incompatible`.
+CAR filename, componentlet and factory object MUST NOT infer identity.
+Decode every resource solely with the existing strict R11 codec. Envelope
+component id/release and package coordinate/version MUST exactly equal Selected
+coordinates or fail `Incompatible` at the resource's envelope pointer. Preserve
+all R11 producer/source/line/revision/ABI/model values. Acquisition location is
+separate provenance, never a replacement Source. Repeated complete envelope
+`(ComponentId, modelAuthority, path, sourceRevision)` snapshot keys are
+`Ambiguous` at the second resource; optional line is excluded.
+
+Only PackageLoader MAY construct final accepted `Acquired` and
+`LoadedProjection`, after the complete package validates:
+
+| Accepted carrier | Public readout |
+| --- | --- |
+| Acquired | `input: PackageInput.Selected`, original `descriptor: ComponentDescriptor`, ordered `index: Vector[String]`, `projections: Vector[LoadedProjection]` |
+| LoadedProjection | `filename: String`, literal canonical `resourcePath: String`, original raw `input: SourceInput.Acquired`, original decoded `projection: Projection` |
+
+`ComponentCapabilityPackageLoader.load(input: PackageInput)` returns
+`Either[Diagnostic, Acquired]`. Resource diagnostics retain their owning
+canonical resource prefix plus original nested R11 pointer and known context.
+No partial acquired batch is exposed.
+
+#### Pure public native provider
+
+The public trait `ComponentCapabilityMetadataProvider` declares
+`def componentCapabilityMetadata: NativeInput`. Its accessor is a pure data
+acquisition contract with no runtime activation. Its public companion owns:
+
+| Carrier | Explicit fields / alternatives |
+| --- | --- |
+| NativeInput | `acquisition: NativeAcquisition`, `scopeInput: ScopeInput`, `bindings: Vector[NativeBinding]` |
+| NativeAcquisition | `Acquired(scopeId: String, snapshots: Vector[NativeSnapshot])` or `Rejected(diagnostic: Diagnostic)` |
+| NativeSnapshot | `component: ComponentId`, `source: Source`, `operations: Vector[CmlOperationDefinition]`, `workflows: Vector[WorkflowDefinition]`, `stateMachines: Vector[CmlStateMachineDefinition]` |
+| NativeBinding | `snapshotComponent: ComponentId`, `snapshotSource: Source`, `target: TargetContract`, `selector: String` |
+| NativeContract | `Operation(definition: CmlOperationDefinition)`, `Workflow(definition: WorkflowDefinition)`, `StateMachine(definition: CmlStateMachineDefinition)` |
+
+There are no defaults or inferred contexts. SnapshotSource authority/path/
+revision and Component form the exact R13 snapshot key, excluding line. Target
+supplies independent identity/kind/Component/opaque version/ABI/binding Source,
+retaining line. Its Component MUST equal snapshotComponent. Original actual
+objects and contexts MUST survive; no uniform native revision can be inferred.
+No public signature MAY expose a `private[cncf]` R13 type.
+
+#### Discovery sequencing, binding and catalog
+
+`ComponentCapabilityDiscovery.discover(input: PackageInput, provider:
+ComponentCapabilityMetadataProvider): Either[Diagnostic, Discovered]` MUST
+finish package acquisition before inspecting or invoking provider. Rejected
+PackageInput remains unchanged even with null provider. A package failure
+MUST never access provider. After acquisition, null provider/input/carrier is
+`Malformed`; invoke the accessor exactly once. A NonFatal accessor exception
+is `Unavailable` at `/provider`, without retry. Retain the exact NativeInput.
+
+Lossless conversion MUST call original R13 `adapt` once for the whole native
+batch, preserving acquisition Rejected before ScopeRejected and their original
+diagnostics/pointers. Original Ready targets MUST be empty. Selected, native
+Acquired and Ready scope IDs MUST agree exactly or fail `Incompatible`.
+Each decoded original R11 projection MUST pass unchanged adapter `admit` and
+R12 admission before Discovered is constructed. Invalid selected native shape
+and unnormalized StateMachine retain original failure semantics. No execution,
+currentness or permission assertion is added.
+
+Only Discovery MAY construct these final accepted values; support parts return
+data/tuples and internal Bound/Adapted remain private:
+
+| Accepted carrier | Public readout |
+| --- | --- |
+| Discovered | `acquired: PackageLoader.Acquired`, exact `nativeInput: NativeInput`, ordered `entries: Vector[Entry]` |
+| Entry | `loaded: PackageLoader.LoadedProjection`, original `admitted: Admission.Admitted`, edge-ordered `realizations: Vector[ResolvedTarget]` |
+| ResolvedTarget | original `realization: Admission.ResolvedRealization`, `contract: NativeContract` holding the original definition, original `snapshot: NativeSnapshot`, original `binding: NativeBinding`, original R12 `target: TargetContract` |
+
+Retain Local/External edges, author order, independently supplied model/edge/
+target/snapshot sources and optional lines. Procedure, commands/jobs, Workflow
+registrations/status rules and StateMachine guards/actions stay on the actual
+objects and MUST NOT execute. Successful Ready/native acquisition plus empty
+index MAY yield empty entries. Missing input/provider failures never do.
+
+In addition to unchanged R13 and per-envelope R12 uniqueness, repeated
+Capability definition `(identity, contractVersion)` or complete DeclarationKey
+across resources MUST fail `Ambiguous` at the second resource's owning pointer,
+including equal data. No merge/dedup/first/last choice is permitted. Disjoint
+keys in different literal source snapshots of the same selected Component are
+allowed. Any later acquisition/admission/uniqueness failure rejects the whole
+catalog. Opaque revisions MUST NOT authorize fallback.
+
+#### Factory and participant ownership
+
+Both companion and instance `ComponentFactory.discoverCapabilities(input:
+PackageInput, provider: ComponentCapabilityMetadataProvider)` MUST delegate
+directly to Discovery and return its typed result. The instance uses the
+private self-typed `ComponentFactoryCapabilityPart`. Existing constructors and
+runtime discover/discoverC/bootstrap/repository/ClassLoader/engine behavior
+remain unchanged. The new entry MUST never activate runtime discovery or use
+repository defaults. Companion use requires no Factory instance.
+
+Cozy CAP-64-05 owns normal CML-generated per-source/per-component resources,
+ordered index publication and independently observed typed native contexts.
+CNCF CAP-78-05 owns real interoperability acceptance with Cozy and CBD Phase 11.
+These fixtures establish contract conformance only. Participant full validation,
+full review/local release and authorized Cozy main integration remain separate;
+CBD ingestion/catalog/query and Phase 11.1 aggregate exclusion retain their
+owners. There is no push obligation here.
+
+#### Package and discovery working specifications
+
+The following cases bind R14 in visible AnyWordSpec metadata, with Given/When/
+Then adjacent to actual setup/action/should expectations. The
+[loader suite](../../src/test/scala/org/goldenport/cncf/component/capability/ComponentCapabilityPackageLoaderSpec.scala),
+[discovery suite](../../src/test/scala/org/goldenport/cncf/component/capability/ComponentCapabilityDiscoverySpec.scala)
+and [Factory suite](../../src/test/scala/org/goldenport/cncf/component/capability/ComponentFactoryCapabilitySpec.scala)
+use actual temporary Directory/CAR/native inputs with cleanup. CPL16 and CPD14
+actively run ScalaCheck with at least 100 successes and zero discards, asserting
+actual checker counts. Source-shape, documentation text or closure assertions
+are not executable behavior proof. Focused validation passed and independent
+protected Step conformance accepted CAP-78-04 on 2026-10-14, as recorded in
+[Phase 78](../phase/phase-78.md#cap-78-04-canonical-package-and-discovery).
+The local Step commit binds this acceptance; normal Cozy/CBD proof remains CAP-78-05.
+
+| Case | Observable contract (R14) |
+| --- | --- |
+| CPL01 | Directory retains original R11 values/source independently of filename. |
+| CPL02 | CAR reads the canonical layout without extraction or writes. |
+| CPL03 | Explicit empty index succeeds; absence differs. |
+| CPL04 | Package rejection preserves its original diagnostic. |
+| CPL05 | Missing root/index/payload is Unavailable. |
+| CPL06 | Index fields/types/unknowns/duplicate keys fail; unknown integer schema is Unsupported. |
+| CPL07 | Unsafe/separator/traversal/absolute/reserved filenames fail. |
+| CPL08 | Repeated index names and exact ZIP entries are Ambiguous. |
+| CPL09 | Strict UTF-8/JSON/R11 schema or ABI rejects the batch. |
+| CPL10 | Symlink root/metadata/resource and file-directory mismatches fail. |
+| CPL11 | Legacy/invalid/incomplete descriptors fail; id/release mismatch is Incompatible. |
+| CPL12 | Envelope component and package coordinates equal selected facts. |
+| CPL13 | Ordered multi-source projections survive; duplicate snapshot keys fail. |
+| CPL14 | Index/resource/count/total byte bounds reject oversized input. |
+| CPL15 | Unlisted/nested JSON fails; unrelated assets remain unread. |
+| CPL16 | Active ordered safe-index property retains literal filenames. |
+| CPD01 | Three families retain actual objects/sources/edge order. |
+| CPD02 | Native Rejected precedes ScopeRejected unchanged. |
+| CPD03 | ScopeRejected/null/malformed native input cannot yield a partial catalog. |
+| CPD04 | Literal source/kind/selector/model/version contexts and alias failures survive. |
+| CPD05 | Legacy machine/invalid selected shape fails without invented metadata. |
+| CPD06 | Selected/native/Ready scope IDs agree exactly. |
+| CPD07 | Cross-resource definition/declaration duplicates reject the whole batch. |
+| CPD08 | Original grounding/semantic/traceability failures retain nested pointers. |
+| CPD09 | Local/External bind actual targets; absent/empty realizations stay distinct. |
+| CPD10 | Native procedure metadata remains original without invocation. |
+| CPD11 | Only acquired empty plus successful native Ready yields empty; no synthetic bypass. |
+| CPD12 | Provider reads once after success; throws/nulls are typed; package failure never reads it. |
+| CPD13 | Public acquired/entry/target retains descriptor/resource/source/object readout. |
+| CPD14 | Active literal-context/permutation property retains exact matches/index/edge order. |
+| CPF01 | Companion discovers nonempty canonical metadata. |
+| CPF02 | Instance consumes selected metadata independently of runtime repository. |
+| CPF03 | CAR succeeds with poison runtime names/invalid JAR bytes. |
+| CPF04 | Original acquisition/admission errors survive without fallback/retry. |
+| CPF05 | External client namespace consumes public provider/catalog/original targets. |
+| CPF06 | Per-call package/provider inputs remain independent without global cache. |
+
 ## Semantic acceptance matrix
 
 These cases specify expected interpretations of the rules. They do not
@@ -634,11 +856,11 @@ validation and separately accepted executable evidence:
 | --- | --- |
 | CAP-78-02 | Accepted concrete R11/R12 wire, codec, exact ABI set and pure selected-scope admission. |
 | CAP-78-03 | Accepted R13 actual typed target adapters and CPT01..32 executable specifications, with focused validation and independent protected Step conformance. |
-| CAP-78-04 | Implement runtime-independent ComponentFactory and package/CAR exposure and discovery with executable proof. |
+| CAP-78-04 | Accepted R14 runtime-independent ComponentFactory and canonical Directory/CAR acquisition, public native provider/catalog and discovery, with focused validation and independent protected Step conformance. |
 | CAP-78-05 | Prove a real Cozy-generated fixture through CNCF admission/discovery and Textus CBD Support consumption with exact provenance. |
 
 Cozy Phase 64 owns syntax, IR, normalization, and generated producer output.
 Textus CBD Support Phase 11 owns consumer ingestion, catalog, and queries.
 Their Step and Phase acceptance remain separately owned. This specification
-selects no canonical publication resource filename, package/CAR surface or
-running API. The portable test resource above is not a publication choice.
+selects the canonical package surface and static API in R14. The portable
+test resource above remains conformance input rather than producer proof.

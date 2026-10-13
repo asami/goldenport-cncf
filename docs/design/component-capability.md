@@ -31,10 +31,13 @@ recorded in [Phase 78](../phase/phase-78.md#cap-78-02-acceptance-and-implementat
 CAP-78-03 adds the accepted actual typed target adapter described below;
 focused validation and independent protected Step conformance accepted it on
 2026-10-14, as recorded in [Phase 78](../phase/phase-78.md#cap-78-03-acceptance).
-The next handoffs remain separate. CAP-78-04 selects the canonical ComponentFactory/package/CAR metadata source
-and exposes discovery from it. CAP-78-05 uses a real Cozy-generated input and
-records producer/admission/CBD interoperability. Pure binding against explicit
-scope facts does not establish these integration surfaces.
+CAP-78-04 has accepted the R14 canonical ComponentFactory/package/CAR metadata
+source and public native discovery integration through focused validation and
+independent protected Step conformance on 2026-10-14, as recorded in
+[Phase 78](../phase/phase-78.md#cap-78-04-canonical-package-and-discovery).
+CAP-78-05 retains real Cozy-generated input and producer/admission/CBD
+interoperability with Cozy CAP-64-05 and CBD Phase 11. Pure binding against
+explicit scope facts does not establish that normal producer/consumer proof.
 
 ## Actual typed target adapter structure
 
@@ -70,9 +73,48 @@ the original acquisition and ready input. Support parts return validated data;
 the facade owns accepted construction. Native procedure metadata stays on
 retained actual objects. No Component, engine, source reader or runtime
 activation enters this structure. Explicit acquisition and opaque version
-observations belong to the caller; canonical acquisition/discovery remains
-CAP-78-04. The [R13 working specifications](../spec/component-capability.md#actual-target-working-specifications)
+observations belong to the caller; canonical acquisition/discovery is accepted
+in [CAP-78-04](../phase/phase-78.md#cap-78-04-canonical-package-and-discovery).
+The [R13 working specifications](../spec/component-capability.md#actual-target-working-specifications)
 locate the accepted CPT01..32 behavior inventory.
+
+## Canonical package and public discovery structure
+
+[R14](../spec/component-capability.md#r14-canonical-package-and-public-native-discovery)
+owns the publication grammar, local acquisition bounds, public provider/catalog
+contract, failure precedence and Factory behavior. Nine modules implement this
+structure:
+
+| Module | Responsibility |
+| --- | --- |
+| ComponentFactory | Preserve runtime API and expose companion metadata delegation. |
+| ComponentFactoryCapabilityPart | Self-typed instance metadata delegation independent of runtime repository. |
+| ComponentCapabilityPackageSource | Explicit public selected/rejected location and coordinate carriers; layout constants. |
+| ComponentCapabilityPackageLoader | Acquisition orchestration and sole accepted package/projection construction. |
+| ComponentCapabilityPackageIndexPart | Strict index grammar, filename/order/count and inventory validation. |
+| ComponentCapabilityPackageArchivePart | Local Directory/CAR inventory and bounded UTF-8 reads, original static descriptor/identity evidence. |
+| ComponentCapabilityMetadataProvider | Public pure native acquisition/snapshot/binding/contract carriers. |
+| ComponentCapabilityDiscovery | Package-before-provider sequencing, original adaptation/admission, batch uniqueness and sole accepted catalog construction. |
+| ComponentCapabilityDiscoveryBindingPart | Lossless public-to-R13 conversion and original native-object joins; returns data. |
+
+```text
+Explicit Directory/CAR selection
+  -> strict index + complete bounded resources + original canonical descriptor
+  -> Acquired (ordered original R11 projections and raw source inputs)
+  -> exactly one public provider read
+  -> original R13 whole-native adaptation
+  -> unchanged R12 admission for every projection + batch uniqueness
+  -> Discovered (original package/native input + entries + original targets)
+
+ComponentFactory companion / instance -> this static Discovery pipeline
+```
+
+Acquisition provenance and model provenance remain separate retained values.
+The public bridge carries actual native definitions while keeping accepted
+R13 Adapted/Bound internal. Support modules cannot construct accepted catalog
+states. Cozy CAP-64-05 supplies the normal generator/publication path; CNCF
+CAP-78-05 and CBD Phase 11 consume it for real interoperability. Authored
+fixtures leave those obligations and participant Phase closure open.
 
 ## Authority and scope
 
