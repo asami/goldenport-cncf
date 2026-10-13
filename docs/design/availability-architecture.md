@@ -131,3 +131,41 @@ replacement state machine as far as their preconditions allow.
 
 The trigger/reason is recorded separately from the replacement mechanism. This
 avoids maintaining a rarely exercised emergency-only failover implementation.
+
+## Failure Boundary and Cost Decision
+
+Availability is selected against an explicit failure boundary and business
+recovery requirement, not by assuming every production system needs the largest
+topology.
+
+Initial profiles are single, local-ha and host-ha. Single permits planned
+downtime/rebuild. local-ha runs Active and Standby on one host and protects
+against application/runtime failure, bad runtime state and planned immutable
+replacement, but not host/OS/power loss. host-ha places the roles on separate
+hosts and adds application-host failure tolerance.
+
+local-ha is intentionally useful for ordinary business systems whose main need
+is protection from application/runtime defects and zero-downtime maintenance,
+while accepting host recovery time for lower operational cost.
+
+Runtime host HA does not imply system-wide host HA. PostgreSQL/DataStore,
+messaging, storage, identity/secrets and other stateful dependencies require
+compatible availability before the complete system can claim host-failure
+tolerance. Control Center should present achieved failure boundaries by layer
+rather than a single misleading HA badge.
+
+## Current Scope and Multi-AZ Boundary
+
+Current Textus scope covers process/runtime failure, application defects,
+zero-downtime immutable replacement, regular Active/Standby rotation and,
+where selected, separate-host failover.
+
+Multi-AZ/site availability is a future consideration, not a current platform
+promise or Phase 108 requirement. Meaningful site-failure architecture must
+include DataStore replication, messaging, storage, network/routing,
+identity/secrets and consistency/partition policy. Starting a second Domain
+Subsystem in another AZ alone is not multi-AZ availability.
+
+The Active/Standby abstraction remains extensible for future experience, but
+current implementation must not introduce distributed-consensus, cross-region
+or global active-active complexity speculatively.
