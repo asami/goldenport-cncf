@@ -40,3 +40,31 @@ Standby use, rejects Standby mutation, creates/warms a fresh replacement,
 switches new work without planned downtime, drains the old Active, preserves
 durable Job/Workflow semantics, and subsequently rotates the former Standby/Active
 roles. A failed readiness check cannot acquire Active mutation authority.
+
+## Configuration-driven Availability Profile
+
+Phase 108 must make Active/Standby an opt-in deployment/runtime profile rather
+than an application programming exercise.
+
+Add a small versioned configuration model with at least single/development
+operation, standard Active/Standby operation, Standby read-only query/cache
+policy, rotation policy/cadence, warm-up/readiness policy, and graceful drain
+policy.
+
+The ordinary production choice should be expressible as a single standard
+profile. Detailed fields are overrides, not mandatory boilerplate.
+
+CNCF/Launcher interprets desired state and drives the lifecycle. Applications
+must not implement A/B switching or know which physical instance is Active.
+
+Scheduled rotation, CAR-version replacement, failure takeover and
+security-triggered replacement feed one common replacement engine with a typed
+reason/trigger. Do not implement four independent transition paths.
+
+### Additional acceptance
+
+A representative Subsystem can move from single-instance configuration to the
+standard Active/Standby profile without application-code changes. Enabling the
+profile creates/warms the Standby, establishes role authority, performs an
+automatic scheduled rotation, drains the old Active and records the rotation
+result. Changing the admitted CAR uses the same replacement engine.
