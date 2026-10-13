@@ -78,6 +78,109 @@ WAF, API gateways, rate limiting and bot controls are useful deployment
 controls, but are defense in depth and never substitutes for application
 authorization or safe data access.
 
+## Safe-by-Construction Application Security
+
+Textus standard application development MUST make the safe path the ordinary
+path. Developers should not have to remember a per-handler security ritual for
+common Web vulnerabilities. The architecture follows four ordered defenses:
+
+1. **Impossible by default** — omit dangerous primitive APIs from ordinary
+   application surfaces where a typed framework operation can replace them.
+2. **Safe by construction** — CML, generated code, logical types, adapters and
+   runtime mechanisms automatically preserve the relevant safety property.
+3. **Explicit escape hatch** — exceptional unsafe/powerful operations are named,
+   typed and statically identifiable rather than hidden in ordinary strings or
+   generic APIs.
+4. **Lint and Review** — CAR lint detects deterministic escape/boundary misuse;
+   CBD Review assesses cross-cutting security meaning and justification.
+
+Lint is therefore not the primary defense against SQL injection, XSS or CSRF.
+The normal API/runtime path should prevent the vulnerability first.
+
+### SQL injection and persistent-store access
+
+Ordinary application code uses typed Entity/Repository/DataStore query and
+mutation APIs. Values are bound as parameters by the DataStore implementation;
+application values are not concatenated into generated SQL.
+
+Raw/native SQL, where genuinely required, is an explicit Security Escape Hatch.
+It must be statically identifiable and reviewable. Direct JDBC/DataStore access
+outside declared framework/provider boundaries is not the normal application
+path and is eligible for CAR lint/CBD Review findings.
+
+### XSS and output contexts
+
+Display/UI models distinguish ordinary text from trusted markup and other output
+contexts. Ordinary text is escaped by the renderer for its actual context.
+HTML, URL, script and style contexts must not be treated as interchangeable
+Strings.
+
+Trusted/raw markup is an explicit escape hatch. A plain String must not become
+trusted HTML merely by calling a convenient public constructor. Sanitization or
+another declared trust-producing boundary is required when untrusted rich text
+must become renderable markup.
+
+URL/redirect targets should use logical types/policies that reject unsafe
+schemes and unintended external redirects rather than relying on caller string
+discipline.
+
+### CSRF and HTTP mutation semantics
+
+CNCF/Cozy Web exposure derives HTTP mutation semantics from declared Operation
+semantics. Read/query operations may map to safe retrieval methods; state
+mutation must not be exposed as GET merely for convenience.
+
+For browser sessions whose authentication is automatically attached by the
+browser, the Web ingress/runtime supplies CSRF protection (for example
+token/origin policy) before invoking a mutation Operation. Individual business
+handlers do not own ad-hoc CSRF checks. Non-cookie/API authentication profiles
+may use a different declared policy where CSRF is not applicable.
+
+### Input binding and mass assignment
+
+External request bodies bind to declared Operation input models, not directly to
+persistent Entity instances. Only declared input fields can participate in the
+command. Persistence-only, authority-bearing or administrative fields are not
+implicitly writable because a caller supplied matching JSON/property names.
+
+### Authorization before handler execution
+
+Authorization is a runtime boundary, not a helper that handlers are expected to
+remember to call. An exposed Operation reaches its business handler only after
+the applicable subject, Capability/Guard and authorization policy have been
+evaluated.
+
+### Sensitive and dangerous logical types
+
+Security-sensitive values such as credentials, secrets, access tokens and API
+keys should have explicit logical/runtime types or metadata where practical.
+Their default stringification, logging, serialization and Display Model
+projection must be redacted or prohibited as appropriate.
+
+Upload and other hostile binary/content ingress should likewise use a bounded
+framework model for size, media/content policy, filename handling and temporary
+storage rather than exposing unrestricted raw host resources to application
+logic.
+
+### Security Escape Hatch Registry
+
+Textus maintains a conceptually common registry/classification of operations
+that intentionally cross a safe default boundary. Initial candidates include:
+
+- Raw/native SQL;
+- trusted/raw HTML or equivalent markup;
+- external/unvalidated redirect targets;
+- direct filesystem access;
+- direct network access;
+- process execution;
+- native-library execution;
+- unsafe/general deserialization.
+
+The registry is metadata for visibility and review, not a mandate to implement
+one giant security API. Each owning subsystem keeps the actual typed mechanism.
+Escape-hatch use must be attributable to a source/component and available to
+CAR lint/CBD Review without requiring speculative whole-program inference.
+
 ## Data Protection
 
 Persistent data is separated from replaceable runtime state.
