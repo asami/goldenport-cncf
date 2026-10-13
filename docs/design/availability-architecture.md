@@ -264,3 +264,48 @@ explicitly stronger decision/human approval.
 Scheduled rotation and CAR-version deployment deliberately share the same
 switch/drain machinery; the difference is that a release rotation changes the
 admitted CAR version.
+
+## Normal Update and Maintenance Update
+
+Availability Architecture adopts [DataStore ABI](datastore-abi.md) as the
+simplifying boundary for release operations.
+
+### Normal Update
+
+Normal Update is the everyday release path. It MUST preserve the DataStore ABI
+needed by the retained fallback CAR for the complete Fallback Retention Window.
+
+A Normal Update is eligible for automatic-compatible policy and the ordinary
+Deployment Transaction:
+
+```text
+compatible CAR -> Admit -> Warm/Probe -> Switch
+ -> Fallback Retention -> Commit -> Retire
+```
+
+Because persistent backward compatibility is an admission invariant, the normal
+path does not need generic reverse-schema migration, database rollback or
+per-release expand/contract orchestration merely to support switch-back.
+
+### Maintenance Update
+
+A release that cannot preserve the required DataStore ABI is classified as a
+Maintenance Update before ordinary automatic deployment.
+
+Maintenance Update is a separate operation with an explicit migration contract.
+It may require human approval, maintenance window, backup/recovery preparation,
+dedicated migration validation and downtime. Ordinary fallback-ready semantics
+must not be advertised unless that specific migration actually provides them.
+
+After maintenance establishes the new DataStore ABI baseline, later compatible
+releases return to Normal Update.
+
+### Deliberate simplification
+
+Textus deliberately prefers a strong backward-compatibility constraint on daily
+persistent evolution over a platform that attempts to make arbitrary breaking
+database changes transparently zero-downtime.
+
+This keeps the standard availability/release engine small, routinely exercised
+and understandable. Exceptional complexity is paid only by the exceptional
+breaking update that requires it.
