@@ -97,3 +97,37 @@ instance or persistent state is uncompromised.
 The same rotation mechanism should support security-triggered replacement.
 Security must not add speculative memory-integrity checking or management hashes
 where discard/reconstruct is the intended recovery mechanism.
+
+## Declarative Availability Profiles
+
+Availability is a runtime/deployment concern and should not require application
+developers to implement Active/Standby orchestration. A Subsystem selects a
+small declarative availability profile and optionally overrides bounded policy.
+
+The normal production profile should be selectable simply as availability
+profile "standard". It means a Textus-managed Active/Standby pair with a
+read-only-capable Standby, required readiness/warm-up before promotion, graceful
+drain, regular rotation, and failure reporting. Exact defaults, including
+rotation cadence, are deployment policy and versioned configuration rather than
+application code.
+
+An expanded configuration form may express only intentional deviations:
+active-standby profile, Standby read-only query policy, rotation interval,
+required warm-up, and graceful drain.
+
+The configuration describes desired availability behavior, not an imperative
+sequence of shell/process operations. CNCF Runtime/Launcher owns realization of
+the profile.
+
+Initial profile vocabulary should remain small: a development/single-instance
+profile and a standard Active/Standby profile are preferable to many subtly
+different modes. Additional profiles require demonstrated operational meaning.
+
+## Unified Replacement Engine
+
+Scheduled rotation, admitted CAR release, unexpected failure/takeover,
+infrastructure refresh and security-triggered replacement use the same core
+replacement state machine as far as their preconditions allow.
+
+The trigger/reason is recorded separately from the replacement mechanism. This
+avoids maintaining a rarely exercised emergency-only failover implementation.
