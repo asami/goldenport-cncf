@@ -119,3 +119,25 @@ infrastructure/operator) as operational evidence.
 Phase 108 coordinates with Phase 100/follow-up DataStore work: it must not claim
 switch-back compatibility if a migration has already made the retained CAR
 unable to operate on authoritative state.
+
+## Normal versus Maintenance release
+
+Consume the canonical DataStore ABI classification.
+
+A CAR release may enter automatic-compatible Deployment Transaction only as a
+Normal Update whose required DataStore ABI remains backward compatible with the
+fallback CAR for the configured retention window.
+
+If admission identifies a breaking DataStore ABI change, Phase 108 must stop
+the normal automatic path and return/classify Maintenance Update required. It
+must not generate reverse migration, schema rollback, dual-write or other
+complexity automatically merely to preserve the normal path.
+
+Maintenance Update is a separately authorized operation and is outside the
+daily rotation/release mechanism. After it establishes a new admitted baseline,
+normal immutable rotation resumes.
+
+Acceptance must demonstrate both branches: a compatible CAR updates
+automatically with fallback-ready old Active, while a deliberately incompatible
+DataStore ABI candidate is refused by automatic-compatible policy and surfaced
+as Maintenance Update required.
