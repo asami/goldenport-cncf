@@ -89,3 +89,33 @@ of Phase 108 scope.
 Availability acceptance must state the failure boundary actually proven. A
 two-runtime single-host test proves runtime/local-ha behavior, not host-failure
 tolerance.
+
+## Deployment Transaction and CAR update
+
+Implement release-aware immutable replacement as a first-class use of the
+common Replacement Engine.
+
+Required flow:
+
+1. receive/select a newly admitted CAR candidate;
+2. require deployment-policy compatibility evidence;
+3. build and warm it as the non-Active runtime;
+4. execute representative readiness/usage-contract probes;
+5. switch new work only after admission;
+6. keep the former Active fallback-ready for the configured retention window;
+7. treat the new Active as probationary during observation;
+8. switch back to the retained old Active on an admitted failure decision;
+9. commit deployment only after the window/decision succeeds;
+10. then retire or rebuild the old runtime using the committed CAR.
+
+Add release policies sufficient to distinguish manual/notify from
+automatic-compatible operation. A standard profile should be able to request an
+approximately one-day fallback window without application code.
+
+The implementation must expose Deployment Transaction state and
+ReplacementReason (scheduled rotation, CAR release, failure, security,
+infrastructure/operator) as operational evidence.
+
+Phase 108 coordinates with Phase 100/follow-up DataStore work: it must not claim
+switch-back compatibility if a migration has already made the retained CAR
+unable to operate on authoritative state.
