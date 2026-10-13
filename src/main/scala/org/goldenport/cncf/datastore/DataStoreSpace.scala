@@ -19,7 +19,8 @@ import org.goldenport.record.io.RecordEncoder
  * @since   Feb. 25, 2026
  *  version Apr. 15, 2026
  *  version May. 11, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class DataStoreSpace private (
@@ -279,6 +280,45 @@ class DataStoreSpace private (
             plan.readbackRequirement
           )
       } yield admitted
+    }
+
+  def compareAndDeleteEntity(
+    plan: EntityCompareAndDeletePlan
+  )(using ctx: ExecutionContext): Consequence[EntityCompareAndDeleteResult] =
+    EntityObservedDeleteSupport.validate(plan).flatMap { _ =>
+      _with_calltree_c(
+        "space:datastore:entity-compare-and-delete",
+        _datastore_space_attributes("entity-compare-and-delete", plan.collection),
+        "space"
+      ) {
+        for {
+          datastore <- dataStore(plan.collection)
+          result <- datastore match {
+            case provider: EntityVersionedMutationDataStore =>
+              for {
+                _ <- EntityObservedDeleteSupport.requireCapabilities(
+                  provider.entityMutationProviderCapabilities,
+                  plan.sideEffects.nonEmpty
+                )
+                _ <- _ensure_same_provider(datastore, plan.sideEffects)
+                response <- Consequence {
+                  provider.compareAndDeleteEntity(plan)
+                }.flatMap { outcome =>
+                  if (outcome == null)
+                    EntityObservedDeleteSupport.invalidResult[EntityCompareAndDeleteResult]
+                  else
+                    outcome
+                }.recoverWith(EntityVersionedMutationFailure.normalizeProvider)
+              } yield response
+            case _ =>
+              EntityNativeMutationSupport.unsupported(
+                "entity-compare-and-delete",
+                EntityMutationProviderFeature.OptimisticCompareAndDelete
+              )
+          }
+          admitted <- EntityObservedDeleteSupport.validateResult(plan, result)
+        } yield admitted
+      }
     }
 
   def mutateVersionedEntity(

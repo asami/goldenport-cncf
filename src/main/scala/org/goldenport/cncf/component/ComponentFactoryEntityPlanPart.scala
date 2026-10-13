@@ -37,7 +37,7 @@ import scala.util.Try
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 private[component] trait ComponentFactoryEntityPlanPart { self: ComponentFactory =>
@@ -57,6 +57,7 @@ private[component] trait ComponentFactoryEntityPlanPart { self: ComponentFactory
       if (plans.nonEmpty) plans.map(_.entityName)
       else _entity_collection_names(component)
     for {
+      logicaluidefinitions <- _admit_generated_logical_ui_metadata_c(component)
       _ <- _bootstrap_generated_workflow_metadata_c(component)
       _ <- _bootstrap_generated_provided_api_metadata_c(component)
       _ <- _bootstrap_state_machine_provided_api_dispatcher_c(component)
@@ -72,7 +73,7 @@ private[component] trait ComponentFactoryEntityPlanPart { self: ComponentFactory
         revisionbindings,
         concurrencypolicies
       )
-    } yield {
+      _ <- Consequence.success {
       val effectiveplans = plans.map { plan =>
         plan.copy(
           concurrencyPolicy =
@@ -117,6 +118,13 @@ private[component] trait ComponentFactoryEntityPlanPart { self: ComponentFactory
       }
       _bootstrap_state_machine_planners(component, effectiveplans)
       _bootstrap_event_reception(component)
+      }
+      displayruntime <- _bind_display_runtime_c(component, logicaluidefinitions)
+      displayregistration <- _prepare_display_service_c(component, logicaluidefinitions, displayruntime)
+    } yield {
+      component._with_admitted_logical_ui_definitions(logicaluidefinitions)
+      component._with_display_runtime(displayruntime)
+      component._with_display_registration(displayregistration)
       component.withCollectionsBootstrapped()
     }
   }

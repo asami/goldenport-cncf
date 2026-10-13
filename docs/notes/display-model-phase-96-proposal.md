@@ -4,6 +4,21 @@ Document role: non-normative specification proposal for the Phase 96 initial
 vertical slice. Proposed protocol schema: `cncf.display-model.v1`, major
 version `1`; neither is frozen or admitted by this note.
 
+## P96-01C promotion and navigation
+
+The selected ownership, static ABI/provider and runtime behavior subset is
+promoted to [runtime design](../design/display-model-runtime.md),
+[generated ABI spec](../spec/logical-ui-generated-abi.md) and
+[runtime spec](../spec/display-model-runtime.md), with the
+[promotion journal](../journal/2026/10/2026-10-03-phase-96-contract-promotion.md)
+recording scope and pending proof. Earlier candidate statements are superseded
+only for that subset, including canonical display.query/read and mutation
+invariants. The proposal text below remains history. Wire examples, proposed
+schema/envelope/media/HTTP bindings, mutation physical schemas and context
+detail remain non-normative and are not blanket-promoted. Implementation,
+executable verification and Phase acceptance remain pending. Independent
+P96-01C review and parent admission accept only the promoted documentary subset;
+the linked promotion journal records P96-01 closure and its remaining proof owners.
 The behavior described below is proposed for review. Requirement-style wording
 describes the candidate contract, not an accepted implementation obligation.
 Promotion into design/spec requires the corresponding review and acceptance.
@@ -23,12 +38,15 @@ that sample; it does not admit a production CaptureSession, Knowledge
 Candidate, Workbench review, or KnowledgeHub admission API.
 
 Semantic View remains CNCF's meaning-preserving read contract. A Display
-Projection consumes an already obtained semantic View and application
-projection definition, and produces a target-neutral Cozy
-`Model(Metadata, Screen)` conforming exactly to
-`CozyLogicalUiRuntime.minimumContract` (`cozy.logical-ui-runtime.v1`, version
-`1`). It does not change the semantic View, write the source, or expose a
-public Aggregate/View runtime service. The component-scoped DisplayService
+Projection consumes an already obtained semantic View, admitted CNCF Logical UI
+definitions and explicit application converters/bindings, and produces a
+CNCF-owned Display Model instance conforming to the mapped Phase 74 semantics.
+The [generated ABI proposal](logical-ui-generated-abi-display-runtime-boundary.md)
+defines the producer/consumer boundary: Cozy generates Scala 3 definitions and
+provider metadata against CNCF's public ABI. The Cozy reference
+`Model(Metadata, Screen)` is semantic evidence, not a runtime dependency or a
+wire layout to copy. Projection does not change the semantic View, write the
+source, or expose a public Aggregate/View runtime service. The component-scoped DisplayService
 owns UI-facing Display reads and standard mutations. Ordinary Business
 Operations retain their existing REST Operation authority.
 
@@ -37,15 +55,15 @@ Operations retain their existing REST Operation authority.
 A Display response's `data` payload carries one versioned Display object. Its
 logical fields are the exact protocol schema and major version; component
 identity; resource-type identity; presentation kind (`list` or `detail`);
-one Cozy runtime `Model`; and Display metadata. The Cozy `Model` preserves
-its own exact descriptor, provenance, screen, ordered sections/items/fields,
-typed values, roles, and actions. CNCF must not add source-property names,
-mutation targets, routes, callbacks, or authorization tokens to Cozy `Field`
-or `Action`. The protocol codec must be lossless for every admitted Cozy value
-variant and must preserve order and opaque identities. Unsupported protocol
-or Cozy descriptor versions are rejected, not downgraded or silently repaired.
+one CNCF Display Model instance; and Display metadata. The instance preserves
+ordered screens/sections/items/fields, admitted typed values, roles and inert
+actions according to the Phase 74 semantic mapping. Static Logical UI
+definitions and their ABI are separate from this resource-specific wire payload.
+The codec must be lossless for every admitted value and preserve order and
+opaque identities. Unsupported protocol/semantic versions are rejected;
+incompatible generated definitions are rejected during ABI admission.
 
-Display metadata is separate from the Cozy model and contains:
+Display metadata is separate from presentation values and contains:
 
 - exact component and resource-type identity, with per-resource opaque ID and
   expected source revision for a Detail or mutation result;
@@ -57,7 +75,7 @@ Display metadata is separate from the Cozy model and contains:
 - for derived/unbound fields, explicit read-only status; and
 - for available Business Operation actions, an application-owned operation
   binding descriptor for the ordinary REST Operation path, not a mutation
-  command or an executable Cozy `Action`.
+  command or an executable presentation action.
 
 An application binding identity names a registered server-side converter and
 Entity/Aggregate update target. It is not a raw source path that a client can
@@ -102,11 +120,11 @@ post-commit projection failure cannot be represented as an uncommitted update.
 
 The service must reject missing/foreign identity, stale revision, duplicate
 field ID, unknown or read-only field, wrong Display value type, violated
-application constraint, and unsupported protocol/Cozy descriptor. These
+application constraint, and unsupported protocol/semantic contract. These
 failure categories stay distinct; neither an opaque string-only failure nor
 best-effort conversion is sufficient. Authorization is evaluated by the
 existing component/Operation security path and cannot be granted by Display
-metadata or a Cozy action descriptor.
+metadata or a generated/presented action descriptor.
 
 Business Operation actions are descriptive. Invocation uses the ordinary
 CNCF REST Operation interface and its own input/authorization contract, never
@@ -117,8 +135,12 @@ promise a refreshed Display. Push invalidation is deferred.
 
 ## Required proof and release boundary
 
-The first focused proof replays the ESS2-01 fixture: ordered List and matching
-Detail, `title`/`status`/`description` roles, exact Cozy descriptor, title
+First prove the hand-written expected-generated Scala 3 fixture through CNCF
+ABI admission, ComponentFactory discovery and pure List/Detail projection.
+Hand that contract to Cozy Phase 76 and accept its real generated fixture
+through the same path (LUI-ABI-01 -> LUI-GEN-01 -> LUI-ACCEPT-01).
+The subsequent DisplayService proof replays ESS2-01: ordered List and matching
+Detail, `title`/`status`/`description` roles, Phase 74 semantic conformance, title
 update at managed revision `1` and reprojected revision `2`, read-only `stage`
 rejection, stale revision conflict, explicit unsupported create/delete,
 deterministic lossless codec round-trip, and Business Operation/direct-REST
@@ -141,7 +163,7 @@ The existing contracts impose three constraints on this proposal:
   start persisted managed revision at `1`. Observed revision is transport
   metadata, not a business parameter; the strict Aggregate APIs are
   `aggregate_update_observed` and `aggregate_command_observed`.
-- Cozy IDs are container-scoped. A Detail edit therefore needs the logical
+- Phase 74 identity semantics are container-scoped. A Detail edit therefore needs the logical
   screen ID, section ID, and field ID as well as resource identity. The
   producer's snapshot provenance is distinct from managed Entity revision.
 
@@ -193,11 +215,13 @@ tuple `(screenId, sectionId, fieldId)`, not merely `fieldId`.
 
 Candidate Display `data` members are `schema`, `version`, `componentId`,
 `resourceType`, `definitionVersion`, `model`, and `metadata`. The `model`
-encodes Cozy `metadata` and `screen`; the screen has discriminator `type`
-(`list` or `detail`) and the public case-class fields. Optional section title
-is absent when `None`. Runtime-derived purpose/display/pattern are reconstructed
-from screen/action type rather than independently mutable wire fields.
-Cozy descriptor/provenance members retain their public names and exact values.
+encodes CNCF instance metadata and a screen whose discriminator `type` is
+`list` or `detail`. Its exact members are defined by the CNCF codec contract,
+not by reflection or a copy of Cozy case-class fields. Optional section title
+is absent when `None`. Runtime-derived purpose/display/pattern are constrained
+by screen/action semantics rather than independently mutable wire fields.
+The mapping records Phase 74 semantic provenance separately from generated
+ABI/definition version, wire protocol version and resource revision.
 The outer `metadata` contains explicit type capabilities, per-resource
 identity/revision/entity tag and availability, scoped field bindings, and
 scoped action bindings. A List supplies per-item resource metadata; its
@@ -205,7 +229,7 @@ snapshot provenance is never used as the mutation precondition.
 
 Candidate typed values use the following closed JSON representations:
 
-| Cozy value | Proposed JSON object |
+| Phase 74 value semantics (reference names) | Proposed CNCF JSON object |
 | --- | --- |
 | `TextValue` | `{"type":"text","text":"..."}` |
 | `NumberValue` | `{"type":"number","number":"<decimal>"}` |
@@ -257,7 +281,9 @@ codec shape and compatibility policy, post-commit/pending representation,
 deletion receipt, and server-owned binding-definition versioning. Recheck the
 current Entity and execution contracts at Phase 96 start because CNCF parallel
 development may change the applicable baseline. The sample and wire objects
-above are preparation proposals, not published protocol versions.
+above are preparation proposals, not published protocol versions. This note's
+`query/read` names remain candidates until P96-01 reconciles the journal's
+`list/get` names into one canonical Operation pair.
 
 ## UI-driven Presentation Context extension proposal — 2026-10-02
 

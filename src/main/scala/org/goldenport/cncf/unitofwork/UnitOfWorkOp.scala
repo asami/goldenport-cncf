@@ -39,7 +39,8 @@ import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
  *  version Mar. 24, 2026
  *  version Apr. 29, 2026
  *  version May.  4, 2026
- * @version Jul. 26, 2026
+ *  version Jul. 26, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -398,6 +399,12 @@ object UnitOfWorkOp {
     id: EntityId,
     authorization: Option[UnitOfWorkAuthorization] = None
   ) extends UnitOfWorkOp[Unit]
+
+  final case class EntityStoreDeleteObserved(
+    id: EntityId,
+    expectedRevision: EntityRevision,
+    authorization: Option[UnitOfWorkAuthorization] = None
+  ) extends UnitOfWorkOp[EntityDeletionResult]
 
   final case class EntityStoreRestore(
     id: EntityId,

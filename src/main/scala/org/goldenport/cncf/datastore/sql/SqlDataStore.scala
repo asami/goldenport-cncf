@@ -28,6 +28,9 @@ import org.goldenport.cncf.datastore.{
   EntityTransientEventDataStore,
   EntityConditionalTransitionSupport,
   EntityCompareAndSetMutationPlan,
+  EntityCompareAndDeletePlan,
+  EntityCompareAndDeleteResult,
+  EntityDeleteRootMutation,
   EntityDirectMutationPlan,
   EntityMutationExclusionGuard,
   EntityMutationProviderCapabilities,
@@ -36,6 +39,7 @@ import org.goldenport.cncf.datastore.{
   EntityMutationProviderResult,
   EntityMutationReadbackRequirement,
   EntityNativeMutationSupport,
+  EntityObservedDeleteSupport,
   EntityVersionedMutationCheckpoint,
   EntityVersionedMutationDataStore,
   EntityVersionedMutationFailure,
@@ -72,7 +76,7 @@ import org.simplemodeling.model.datatype.EntityRevision
  *  version May. 26, 2026
  *  version Jul. 26, 2026
  *  version Sep. 29, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -165,7 +169,9 @@ class SqlDataStore(
         EntityMutationProviderCapabilities.guardedBaseline.features ++
           Set(
             EntityMutationProviderFeature.DirectAlwaysWrite,
-            EntityMutationProviderFeature.OptimisticCompareAndSet
+            EntityMutationProviderFeature.OptimisticCompareAndSet,
+            EntityMutationProviderFeature.OptimisticCompareAndDelete,
+            EntityMutationProviderFeature.AuthoritativeDeleteResult
           )
     )
 
@@ -329,6 +335,35 @@ class SqlDataStore(
           EntityVersionedMutationFailure.normalizeProvider
         )
       }
+
+  override def compareAndDeleteEntity(
+    plan: EntityCompareAndDeletePlan
+  )(using ctx: ExecutionContext): Consequence[EntityCompareAndDeleteResult] =
+    EntityObservedDeleteSupport.validate(plan).flatMap { _ =>
+      val changes = plan.rootMutation match {
+        case EntityDeleteRootMutation.Physical => Record.empty
+        case EntityDeleteRootMutation.Logical(patch) => patch
+      }
+      (for {
+        _ <- EntityObservedDeleteSupport.requireCapabilities(
+          entityMutationProviderCapabilities, plan.sideEffects.nonEmpty
+        )
+        _ <- _validate_native_mutation_columns(plan.revisionField, changes)
+        _ <-
+          if (_record_columns(changes).exists(_._1 == "id"))
+            Consequence.argumentPolicyViolation(
+              "rootMutation.changes", "framework-managed-identity",
+              "patch without normalized id column", "id"
+            )
+          else Consequence.unit
+        _ <- _prepare_native_mutation_schema(
+          plan.collection, plan.entryId, plan.revisionField, changes, plan.exclusionGuards
+        )
+        result <- _with_versioned_mutation(connection =>
+          _compare_and_delete_entity(connection, plan, changes)
+        )
+      } yield result).recoverWith(EntityVersionedMutationFailure.normalizeProvider)
+    }
 
   def mutateVersionedEntity(
     plan: EntityVersionedMutationPlan
@@ -1214,6 +1249,87 @@ class SqlDataStore(
           }
     } yield result
 
+  private def _compare_and_delete_entity(
+    connection: Connection,
+    plan: EntityCompareAndDeletePlan,
+    changes: Record
+  ): Consequence[EntityCompareAndDeleteResult] =
+    for {
+      existingoption <- _select_conditional_root(connection, plan.collection, plan.entryId)
+      existing <- existingoption.map(Consequence.success)
+        .getOrElse(Consequence.DataStoreNotFound(plan.entryId.print))
+      _ <- _admit_observed_delete_existing(plan, existing)
+      actual <- EntityVersionedMutationSupport.revision(existing, plan.revisionField)
+      result <-
+        if (actual != plan.expectedRevision)
+          Consequence.success(EntityCompareAndDeleteResult.Stale(plan.expectedRevision, actual))
+        else
+          actual.nextC.flatMap { _ =>
+            for {
+              count <- plan.rootMutation match {
+                case EntityDeleteRootMutation.Physical =>
+                  _native_delete_count(connection, plan)
+                case _: EntityDeleteRootMutation.Logical =>
+                  _native_mutation_update_count(
+                    connection, plan.collection, plan.entryId, plan.revisionField,
+                    changes, Some(plan.expectedRevision), plan.exclusionGuards
+                  )
+              }
+              outcome <-
+                if (count == 1)
+                  for {
+                    _ <- versioned_mutation_checkpoint(EntityVersionedMutationCheckpoint.RootPrepared)
+                    _ <- _apply_conditional_side_effects(connection, plan.sideEffects)
+                    _ <- versioned_mutation_checkpoint(EntityVersionedMutationCheckpoint.SideEffectsPrepared)
+                    _ <- versioned_mutation_checkpoint(EntityVersionedMutationCheckpoint.BeforePublish)
+                  } yield EntityCompareAndDeleteResult.Deleted(actual)
+                else if (count == 0)
+                  _diagnose_observed_delete_failure(connection, plan)
+                else
+                  EntityVersionedMutationFailure.providerFailure(
+                    "Observed Entity deletion affected an unexpected row count"
+                  )
+            } yield outcome
+          }
+    } yield result
+
+  private def _diagnose_observed_delete_failure(
+    connection: Connection,
+    plan: EntityCompareAndDeletePlan
+  ): Consequence[EntityCompareAndDeleteResult] =
+    for {
+      record <- _required_record(connection, plan.collection, plan.entryId)
+      _ <- _admit_observed_delete_existing(plan, record)
+      actual <- EntityVersionedMutationSupport.revision(record, plan.revisionField)
+      result <-
+        if (actual != plan.expectedRevision)
+          Consequence.success(EntityCompareAndDeleteResult.Stale(plan.expectedRevision, actual))
+        else
+          actual.nextC.flatMap(_ =>
+            EntityVersionedMutationFailure.providerFailure(
+              "Observed Entity deletion affected no row with an unchanged revision"
+            )
+          )
+    } yield result
+
+  private def _admit_observed_delete_existing(
+    plan: EntityCompareAndDeletePlan,
+    record: Record
+  ): Consequence[Unit] = {
+    def _read_field_(name: String): String =
+      if (config.normalizeColumnNames &&
+          !SimpleEntityStorageShapePolicy.isConcurrencyRevisionStorageField(name))
+        _to_property_name(_column_name(name))
+      else name
+    val guards = plan.exclusionGuards.map {
+      case EntityMutationExclusionGuard.EqualTo(fieldname, value) =>
+        EntityMutationExclusionGuard.EqualTo(_read_field_(fieldname), value)
+      case EntityMutationExclusionGuard.Present(fieldname) =>
+        EntityMutationExclusionGuard.Present(_read_field_(fieldname))
+    }
+    EntityNativeMutationSupport.admitExisting(plan.entryId, record, guards)
+  }
+
   private def _mutate_entity_direct(
     connection: Connection,
     plan: EntityDirectMutationPlan
@@ -1960,6 +2076,39 @@ class SqlDataStore(
             statement.setLong(guardoffset, EntityRevision.INITIAL.value)
             statement.setLong(guardoffset + 1, Long.MaxValue)
         }
+        statement.executeUpdate()
+      } finally {
+        statement.close()
+      }
+    }
+
+  private def _native_delete_count(
+    connection: Connection,
+    plan: EntityCompareAndDeletePlan
+  ): Consequence[Int] =
+    Consequence {
+      val revisioncolumn = _column_name(plan.revisionField)
+      val exclusions = plan.exclusionGuards.map {
+        case EntityMutationExclusionGuard.EqualTo(fieldname, _) =>
+          val column = dialect.quoteIdentifier(_column_name(fieldname))
+          s" AND ($column IS NULL OR $column <> ?)"
+        case EntityMutationExclusionGuard.Present(fieldname) =>
+          s" AND ${dialect.absentValueSql(_column_name(fieldname))}"
+      }.mkString
+      val equalities = plan.exclusionGuards.collect {
+        case guard: EntityMutationExclusionGuard.EqualTo => guard
+      }
+      val sql =
+        s"DELETE FROM ${dialect.quoteIdentifier(_table_name(plan.collection))} WHERE ${dialect.quoteIdentifier("id")} = ? AND ${dialect.quoteIdentifier(revisioncolumn)} = ?$exclusions AND ${dialect.entityRevisionGuardSql(revisioncolumn)}"
+      val statement = _prepare_statement(connection, sql)
+      try {
+        statement.setString(1, plan.entryId.print)
+        statement.setLong(2, plan.expectedRevision.value)
+        equalities.zipWithIndex.foreach { case (guard, index) =>
+          statement.setObject(3 + index, _column_value(guard.value))
+        }
+        statement.setLong(3 + equalities.size, EntityRevision.INITIAL.value)
+        statement.setLong(4 + equalities.size, Long.MaxValue)
         statement.executeUpdate()
       } finally {
         statement.close()

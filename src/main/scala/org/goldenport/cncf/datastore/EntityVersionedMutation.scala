@@ -18,7 +18,9 @@ import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   Jul. 24, 2026
- * @version Sep. 29, 2026
+ *  version Jul. 26, 2026
+ *  version Sep. 29, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class EntityVersionedRootMutation
@@ -84,6 +86,8 @@ enum EntityMutationProviderFeature {
   case BusinessStateComparison
   case AtomicSideEffects
   case AuthoritativeRecordResult
+  case OptimisticCompareAndDelete
+  case AuthoritativeDeleteResult
 }
 
 final case class EntityMutationProviderCapabilities(
@@ -402,6 +406,14 @@ trait EntityVersionedMutationDataStore { self: DataStore =>
   def mutateVersionedEntity(
     plan: EntityVersionedMutationPlan
   )(using ctx: ExecutionContext): Consequence[EntityVersionedMutationResult]
+
+  def compareAndDeleteEntity(
+    plan: EntityCompareAndDeletePlan
+  )(using ctx: ExecutionContext): Consequence[EntityCompareAndDeleteResult] =
+    EntityNativeMutationSupport.unsupported(
+      "entity-compare-and-delete",
+      EntityMutationProviderFeature.OptimisticCompareAndDelete
+    )
 }
 
 object EntityVersionedMutationFailure {

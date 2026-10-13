@@ -49,7 +49,7 @@ import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 case class CreateResult[T](
@@ -63,3 +63,9 @@ case class CreateResult[T](
 case class GetResult[T]()
 case class UpdateResult[T]()
 case class DeleteResult[T]()
+
+/** The authoritative prior revision matched by an acknowledged provider deletion. */
+final case class EntityDeletionResult(
+  id: EntityId,
+  matchedRevision: EntityRevision
+)

@@ -24,7 +24,8 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
  *  version Apr. 13, 2026
  *  version Apr. 14, 2026
  *  version May. 11, 2026
- * @version Jul. 29, 2026
+ *  version Jul. 29, 2026
+ * @version Oct.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 class EntityStoreSpace {
@@ -673,6 +674,22 @@ class EntityStoreSpace {
         r <- entitystore.delete(op.id)
       } yield r
     }
+
+  def deleteObserved(
+    op: EntityStoreDeleteObserved
+  )(using ctx: ExecutionContext): Consequence[EntityDeletionResult] =
+    if (op == null)
+      Consequence.argumentMissing("operation")
+    else
+      EntityStore._admit_observed_delete(op.id, op.expectedRevision).flatMap { _ =>
+        _with_calltree(
+          "space:entitystore:delete-observed",
+          _entitystore_space_attributes("delete-observed", op.id.collection) +
+            ("entity_id" -> op.id.print)
+        ) {
+          _by_collection(op.id.collection).flatMap(_.deleteObserved(op.id, op.expectedRevision))
+        }
+      }
 
   def restore(op: EntityStoreRestore)(using ctx: ExecutionContext): Consequence[Unit] =
     _with_calltree(

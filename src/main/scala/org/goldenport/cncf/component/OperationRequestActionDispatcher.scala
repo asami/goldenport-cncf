@@ -12,7 +12,8 @@ import org.goldenport.cncf.naming.NamingConventions
 /*
  * @since   Mar. 21, 2026
  *  version Mar. 28, 2026
- * @version Jul. 15, 2026
+ *  version Jul. 15, 2026
+ * @version Oct.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationRequestActionDispatcher(
@@ -51,12 +52,12 @@ final class OperationRequestActionDispatcher(
   }
 
   private def _to_request(
-    actionName: String,
+    actionname: String,
     event: ReceptionDomainEvent
   ): Consequence[Request] =
-    _parse_action_name(actionName).flatMap { case (component, service, operation) =>
+    _parse_action_name(actionname).flatMap { case (component, service, operation) =>
       _resolve_selector(component, service, operation).map { resolved =>
-        val parameters = _build_parameters(event, resolved.parameterKinds)
+        val parameters = _build_parameters(event, resolved.parameterkinds)
         Request.of(
           component = resolved.component,
           service = resolved.service,
@@ -68,14 +69,14 @@ final class OperationRequestActionDispatcher(
       }
     }
 
-  private final case class _ResolvedSelector(
+  private final case class ResolvedSelector(
     component: String,
     service: String,
     operation: String,
-    parameterKinds: Map[String, ParameterDefinition.Kind]
+    parameterkinds: Map[String, ParameterDefinition.Kind]
   )
 
-  private final case class _RequestParameters(
+  private final case class RequestParameters(
     arguments: List[Argument],
     switches: List[Switch],
     properties: List[Property]
@@ -100,13 +101,13 @@ final class OperationRequestActionDispatcher(
     component: String,
     service: String,
     operation: String
-  ): Consequence[_ResolvedSelector] = {
-    val resolvedComponent =
+  ): Consequence[ResolvedSelector] = {
+    val resolvedcomponent =
       if (NamingConventions.equivalentByNormalized(component, logic.component.name))
         logic.component.name
       else
         component
-    logic.component.core.protocol.services.services.find(s =>
+    logic.component.protocol.services.services.find(s =>
       NamingConventions.equivalentByNormalized(service, s.name)
     ) match {
       case Some(serviceDefinition) =>
@@ -114,8 +115,8 @@ final class OperationRequestActionDispatcher(
           NamingConventions.equivalentByNormalized(operation, op.name)
         ) match {
           case Some(operationDefinition) =>
-            Consequence.success(_ResolvedSelector(
-              resolvedComponent,
+            Consequence.success(ResolvedSelector(
+              resolvedcomponent,
               serviceDefinition.name,
               operationDefinition.name,
               operationDefinition.specification.request.parameters.map(x => x.name -> x.kind).toMap
@@ -130,16 +131,16 @@ final class OperationRequestActionDispatcher(
 
   private def _build_parameters(
     event: ReceptionDomainEvent,
-    parameterKinds: Map[String, ParameterDefinition.Kind]
-  ): _RequestParameters = {
+    parameterkinds: Map[String, ParameterDefinition.Kind]
+  ): RequestParameters = {
     val params = event.payload ++ event.attributes ++ Map(
       "event_name" -> event.name,
       "event_kind" -> event.kind
     )
-    params.toVector.sortBy(_._1).foldLeft(_RequestParameters(Nil, Nil, Nil)) {
+    params.toVector.sortBy(_._1).foldLeft(RequestParameters(Nil, Nil, Nil)) {
       case (z, (name, rawvalue)) =>
         val value = _to_argument_value(rawvalue)
-        parameterKinds.get(name) match {
+        parameterkinds.get(name) match {
           case Some(ParameterDefinition.Kind.Property) =>
             z.copy(properties = z.properties :+ Property(name, value, None))
           case Some(ParameterDefinition.Kind.Switch) =>

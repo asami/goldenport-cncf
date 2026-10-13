@@ -56,7 +56,7 @@ import org.simplemodeling.model.directive.Update
  *  version May. 11, 2026
  *  version Aug.  1, 2026
  *  version Sep. 19, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -186,8 +186,18 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   private def _execute[A](
     op: UnitOfWorkOp[A]
   ): Consequence[A] =
-    uow.executionOperationAdmissionC.flatMap(_ => _validate_entity_collection_resolution(op))
+    uow.executionOperationAdmissionC
+      .flatMap(_ => _admit_observed_delete(op))
+      .flatMap(_ => _validate_entity_collection_resolution(op))
       .flatMap(_ => _execute_validated(op))
+
+  private def _admit_observed_delete[A](op: UnitOfWorkOp[A]): Consequence[Unit] =
+    op match {
+      case null => Consequence.argumentMissing("operation")
+      case deletion: UnitOfWorkOp.EntityStoreDeleteObserved =>
+        EntityStore._admit_observed_delete(deletion.id, deletion.expectedRevision)
+      case _ => Consequence.unit
+    }
 
   private def _execute_validated[A](
     op: UnitOfWorkOp[A]
@@ -947,6 +957,28 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         }
       }
 
+    case m: UnitOfWorkOp.EntityStoreDeleteObserved =>
+      val id = m.id
+      val authorization = m.authorization.map(_.copy(
+        targetId = Some(id),
+        collectionName = Some(id.collection.name),
+        accessKind = "delete"
+      ))
+      val op = m.copy(authorization = authorization)
+      val result = _with_calltree(
+        "uow:entitystore:delete-observed",
+        _entity_calltree_attributes(id, "entity-store", realio = true)
+      ) {
+        _authorize(authorization, Some(() => _load_record(id))).flatMap { _ =>
+          _entity_store_space.deleteObserved(op).map { deleted =>
+            _entity_space_evict(id)
+            _view_space_invalidate_all()
+            deleted
+          }
+        }
+      }
+      _reconcile_versioned_failure(id, result)
+
     case m: UnitOfWorkOp.EntityStoreDelete =>
       _with_calltree("uow:entitystore:delete") {
         val id = m.id
@@ -1344,6 +1376,8 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       case m: UnitOfWorkOp.EntityStoreUpdateByIdUnversioned[?] =>
         Vector(m.id.collection)
       case m: UnitOfWorkOp.EntityStoreDelete =>
+        Vector(m.id.collection)
+      case m: UnitOfWorkOp.EntityStoreDeleteObserved =>
         Vector(m.id.collection)
       case m: UnitOfWorkOp.EntityStoreRestore =>
         Vector(m.id.collection)

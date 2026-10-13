@@ -4,7 +4,8 @@ package org.goldenport.cncf.unitofwork
  * Metadata-independent planning values for the UnitOfWork operation algebra.
  *
  * @since   Sep.  8, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] enum UnitOfWorkEffectClass {
@@ -60,6 +61,7 @@ private[cncf] object UnitOfWorkOperationClassifier {
           UnitOfWorkOp.EntityStoreUpdateUnversioned(_, _, _, _) |
           UnitOfWorkOp.EntityStoreUpdateByIdUnversioned(_, _, _, _, _) |
           UnitOfWorkOp.EntityStoreDelete(_, _) |
+          UnitOfWorkOp.EntityStoreDeleteObserved(_, _, _) |
           UnitOfWorkOp.EntityStoreRestore(_, _) |
           UnitOfWorkOp.EntityStoreDeleteHard(_) |
           UnitOfWorkOp.EntityStoreSearch(_, _, _) |
