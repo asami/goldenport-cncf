@@ -149,3 +149,25 @@ Operation boundary rather than A/B instance identities.
 This separation is essential to the Function-like Application Tier: callers do
 not need deployment-specific retry/switch logic merely because the Domain
 Subsystem is being rotated.
+
+## Deployment Driver Boundary
+
+CNCF owns logical Subsystem lifecycle and availability semantics; deployment
+technology owns physical container/process/host realization. A narrow deployment
+driver boundary keeps those concerns separate.
+
+Docker Compose is the preferred initial deployment target for ordinary business
+systems and development/small-to-medium operations. It can realize local-ha and,
+with appropriate host-level arrangement, participate in host-ha without making
+Kubernetes a prerequisite for Textus availability semantics.
+
+Kubernetes is an optional scale-out/enterprise infrastructure driver when node
+scheduling, large replica counts, autoscaling, multi-node orchestration or a
+customer standard platform justifies its operational cost. Kubernetes
+readiness/restart/routing mechanisms are physical primitives; CNCF remains the
+owner of Textus ACTIVE/STANDBY authority, warm-up admission, drain and rotation
+meaning.
+
+Other drivers such as cloud container/serverless platforms may be added later.
+Application code and the logical Subsystem lifecycle must not depend on a
+specific driver.
