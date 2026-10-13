@@ -200,19 +200,31 @@ authority.
 
 ## Replaceable Runtime
 
-Textus favors immutable release artifacts and replaceable runtime instances:
+The canonical runtime and availability semantics are defined by
+[Subsystem Runtime Architecture](subsystem-runtime-architecture.md) and
+[Availability Architecture](availability-architecture.md). Security consumes
+those architectures rather than defining a separate security-only failover
+mechanism.
 
-```text
-admitted CAR / configuration
-        -> runtime instance
-        -> discard and recreate when replaced or untrusted
+Textus favors immutable release artifacts and replaceable Domain Subsystem
+instances. Memory-resident caches are allowed for performance but are
+reconstructable; authoritative persistent state remains outside the disposable
+runtime instance.
 
-persistent Entity/DataStore state remains outside the disposable instance
-```
+Active mutation authority and Standby read-only/takeover authority are explicit.
+A Standby does not gain mutation rights merely because it is reachable or
+healthy. Regular planned Active/Standby rotation continuously exercises
+readiness, switch, drain and reconstruction paths, reducing the risk that an
+emergency Standby fails only when first needed.
 
-This is an operational recovery and containment principle, not a requirement
-for continuous Moving Target Defense. Runtime recreation does not by itself
-protect persistent data, credentials, or compromised upstream authority.
+The preferred externally exposed Application Tier is Function-like/ephemeral
+where practical and reaches Domain Subsystems through bounded Operations rather
+than direct DataStore authority. This limits persistence in the public-facing
+tier and hides Domain Subsystem replacement from clients.
+
+Runtime replacement is containment and recovery, not proof of cleanliness and
+not continuous Moving Target Defense. It does not repair stolen credentials,
+malicious persistent data or compromised upstream authority.
 
 Security must not reintroduce management hashes, repeated artifact comparison,
 whole-tree copies, bespoke rollback machinery, or speculative corruption checks
