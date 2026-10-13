@@ -293,3 +293,25 @@ breaking migrations.
 This requirement does not turn Phase 100 into a generic schema-migration
 platform or require every logical-type change to use multi-step migration. It
 adds the compatibility contract needed by immutable CAR deployment.
+
+## DataStore ABI
+
+The canonical contract is [Textus DataStore ABI](../design/datastore-abi.md).
+Phase 100 logical-type declarations, storage mappings and existing-data
+recovery are producer inputs to that ABI.
+
+Implementation/planning must make compatibility assessable at the logical
+persistent contract, not merely by comparing physical SQL schema. Relevant
+changes include logical type/codec, required property/collection, storage
+mapping and identity/key semantics.
+
+Normal Update requires backward compatibility with the retained previous CAR.
+A detected incompatible persistent change is not repaired by inventing generic
+rollback machinery; it is classified as Maintenance Update and handed to an
+explicit migration operation.
+
+The earlier availability handoff's expand/migrate/contract mechanism is an
+available technique for a migration that chooses to preserve compatibility, not
+a mandatory ceremony for every Normal Update. The default Normal Update should
+remain simple because DataStore ABI compatibility is already an admission
+precondition.
