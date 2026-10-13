@@ -16,9 +16,10 @@ import DurableJobMigrationCheckpointFixtures.*
 
 /*
  * @since   Oct.  4, 2026
- * @version Oct.  4, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobDurableMigrationStartupSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _scenario(example: String, rules: String) =
     afterWord(s"in spec:durable-job-migration-checkpoint, example:$example, rules:$rules, phase:69.7, slice:D2")

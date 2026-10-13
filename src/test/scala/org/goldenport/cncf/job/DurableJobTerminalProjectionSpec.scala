@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * this path, and the assertions retain the executable maps as the boundary.
  *
  * @since   Sep.  9, 2026
- * @version Oct.  3, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DurableJobTerminalProjectionSpec
@@ -142,7 +142,7 @@ final class DurableJobTerminalProjectionSpec
     }
 
     "E1 retain task order, parent references, and events for an admitted deep terminal hierarchy" must _e1 {
-      "when terminal recovery projects a sufficiently deep closed task chain" in {
+      "when terminal recovery projects a sufficiently deep closed task chain" taggedAs org.scalatest.tagobjects.Slow in {
         Given("docs/spec/durable-job-terminal-projection-contract.md; R1-R5; E1; an admitted terminal durable record with a deep committed task hierarchy")
         val fixture = _fixture()
         given ExecutionContext = fixture.context

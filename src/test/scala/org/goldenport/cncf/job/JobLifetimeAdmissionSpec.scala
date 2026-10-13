@@ -16,9 +16,10 @@ import org.scalacheck.rng.Seed
 
 /*
  * @since   Oct. 1, 2026
- * @version Oct. 1, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobLifetimeAdmissionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import JobLifetimeFixtures.*
   import JobInputBoundsFixtures.{instant, sync, success, input, descriptor, access}

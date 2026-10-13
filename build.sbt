@@ -585,9 +585,7 @@ lazy val root = project
     (Test / test / testOptions) += Tests.Argument(
       TestFrameworks.ScalaTest,
       "-l",
-      "org.goldenport.tags.ManualSpec",
-      "-l",
-      "org.goldenport.tags.TimingSpec"
+      "org.goldenport.tags.ManualSpec org.goldenport.tags.TimingSpec org.scalatest.tags.Slow"
     ),
     Test / testOnly / fork := true,
     Test / testOnly / testOptions := Seq.empty

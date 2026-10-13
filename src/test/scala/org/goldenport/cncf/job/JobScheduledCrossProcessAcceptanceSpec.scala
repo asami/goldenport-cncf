@@ -12,9 +12,10 @@ import JobScheduledCrossProcessFixtures.Child
  * Four real sequential process scenarios consume unchanged native contracts.
  *
  * @since   Oct.  4, 2026
- * @version Oct.  4, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobScheduledCrossProcessAcceptanceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _scenario(example: String, rules: String) =
     afterWord(s"in spec:job-scheduled-cross-process, example:$example, rules:$rules, phase:69.7, slice:JM69-10C1")

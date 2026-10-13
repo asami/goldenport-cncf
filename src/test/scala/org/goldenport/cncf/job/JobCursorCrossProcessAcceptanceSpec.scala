@@ -13,9 +13,10 @@ import JobCursorCrossProcessFixtures.{Child, Mode}
  * example:E1..E7 rules:UC1..UC6
  *
  * @since   Oct.  5, 2026
- * @version Oct.  5, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 class JobCursorCrossProcessAcceptanceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _native_pages = afterWord("independent native management readers")
 

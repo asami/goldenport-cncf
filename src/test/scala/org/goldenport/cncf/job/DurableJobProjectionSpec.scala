@@ -15,9 +15,10 @@ import org.scalatest.wordspec.AnyWordSpec
  *
  * @since   Sep.  9, 2026
  *  version Sep. 14, 2026
- * @version Oct. 6, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class DurableJobProjectionSpec
     extends AnyWordSpec
     with Matchers

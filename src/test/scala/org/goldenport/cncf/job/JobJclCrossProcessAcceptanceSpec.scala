@@ -12,9 +12,10 @@ import JobJclCrossProcessFixtures.{Child, Identity, Scenario, identity, withCase
  * Each generated invocation retains its own adjacent setup/action/oracles.
  *
  * @since   Oct.  6, 2026
- * @version Oct.  6, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobJclCrossProcessAcceptanceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "JM69-10C9 real public JCL across sequential JVMs" should {
     "E1_JX1 canonical inline Persistent root" which {

@@ -20,9 +20,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * Fresh allocation, immutable provider ownership and failed-publication rollback.
  *
  * @since   Oct.  1, 2026
- * @version Oct.  1, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class DurableJobOwnedBlobPayloadsSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import BlobRepository.given
   import DurableJobOwnedBlobPayloads.*

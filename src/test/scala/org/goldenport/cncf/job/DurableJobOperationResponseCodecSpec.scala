@@ -16,9 +16,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  4, 2026
- * @version Oct.  4, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class DurableJobOperationResponseCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _prefix = "{\"format\":{\"schemaId\":\"cncf.job-operation-response\",\"version\":1},\"response\":"
   private val _maximum_bytes = 8388608

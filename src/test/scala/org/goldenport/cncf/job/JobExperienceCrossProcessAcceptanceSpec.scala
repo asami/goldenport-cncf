@@ -12,9 +12,10 @@ import JobExperienceCrossProcessFixtures.{CallerMode, Child, Identity, Selection
  * Eight semantic examples use the real production facade in independent JVMs.
  *
  * @since   Oct.  5, 2026
- * @version Oct.  5, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobExperienceCrossProcessAcceptanceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _scenario(example: String, rules: String): AfterWord = {
     afterWord(s"in spec:job-cross-process-acceptance, example:$example, rules:$rules, phase:69.7, slice:JM69-10C6")

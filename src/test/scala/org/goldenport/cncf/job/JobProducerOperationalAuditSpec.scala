@@ -21,9 +21,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  4, 2026
- * @version Oct.  4, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobProducerOperationalAuditSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import JobProducerOperationalAuditTestSupport.*
 

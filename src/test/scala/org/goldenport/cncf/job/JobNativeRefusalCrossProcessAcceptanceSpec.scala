@@ -13,9 +13,10 @@ import JobNativeRefusalCrossProcessFixtures.{Child, Fault, withCase}
  * Seven actual native fault examples consume the original startup contracts.
  *
  * @since   Oct.  5, 2026
- * @version Oct.  5, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobNativeRefusalCrossProcessAcceptanceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _scenario(example: String) = {
     afterWord(s"spec:job-cross-process-acceptance, example:$example, rules:NF1,NF2,NF3,NF4,NF5,NF6,NF7,NF8, phase:69.7, slice:JM69-10C4")

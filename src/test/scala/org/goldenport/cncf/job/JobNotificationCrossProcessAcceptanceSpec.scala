@@ -12,9 +12,10 @@ import JobNotificationCrossProcessFixtures.{Child, Identity, Mode, withCase}
  * Actual Job lifecycle notifications and fresh native no-replay acceptance.
  *
  * @since   Oct.  5, 2026
- * @version Oct.  5, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobNotificationCrossProcessAcceptanceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _scenario(example: String, rules: String): AfterWord = {
     afterWord(s"in spec:job-cross-process-acceptance, example:$example, rules:$rules, phase:69.7, slice:JM69-10C7")
