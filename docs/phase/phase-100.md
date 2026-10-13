@@ -30,10 +30,13 @@ This allocates one independent Phase. It does not start implementation, accept
 the current working tree, reopen an existing Phase or authorize a live database
 migration. All work groups remain OPEN in the checklist.
 
-The user explicitly limited the current work to establishing this development
-plan. The routes below are the implementation target, not a claim that they
-are already implemented. Implementation and validation execution await a
-subsequent development instruction.
+The plan was initially prepared without implementation authority. On
+2026-10-05 the user instructed dedicated-checkout development of CNCF Phase 100
+and Cozy Phase 78 for Workbench, then explicitly added dedicated Core and
+SimpleModeler checkouts. That subsequent direction now authorizes the
+coordinated prerequisites and implementation. Core canonical types are being
+implemented first. The routes below remain the target; separate CNCF and Cozy
+Phase acceptance and all OPEN checklist requirements are retained.
 
 ## Requirement baseline
 
@@ -261,6 +264,9 @@ distributed/shared-transaction redesign, a new Record implementation, automatic
 type guessing for historical rows, or unapproved production data rewriting.
 
 ## References
+
+- [Logical type mapping contract proposal](../spec/datastore-logical-type-mapping.md): DSM-100-02 behavior and fixture inputs; implementation and exact producer ABI remain pending.
+- [Source inventory](../journal/2026/10/2026-10-05-phase100-source-inventory.md): selected branch evidence and canonical source owners.
 
 - [Allocation and evidence](../journal/2026/10/2026-10-03-datastore-logical-type-mapping-phase.md)
 - [DataStore and Aggregate persistence model](../design/datastore-and-aggregate-persistence-model.md)

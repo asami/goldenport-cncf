@@ -18,11 +18,42 @@ import org.simplemodeling.model.value.SecurityAttributes
  *  version Mar. 24, 2026
  *  version Apr. 26, 2026
  *  version Jul. 30, 2026
- * @version Sep.  1, 2026
+ *  version Sep.  1, 2026
+ * @version Oct.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EntityPersistent[E] extends RecordCodex[E]
     with Identified[E, EntityId] {
+  def storeRowMapping: Option[EntityStoreRowMapping] = None
+
+  def toLogicalStoreRecord(e: E): Consequence[Record] = {
+    Consequence.success(toRecord(e))
+  }
+
+  def admitLogicalStoreRecord(r: Record): Consequence[Record] = {
+    Consequence.success(r)
+  }
+
+  def decodeAdmittedLogicalStoreRecord(r: Record): Consequence[E] = {
+    fromRecord(r)
+  }
+
+  def toStoreRecordC(collection: EntityCollectionId, e: E): Consequence[Record] = {
+    EntityStorePersistenceStage._encode(collection, storeRowMapping, toLogicalStoreRecord(e))
+  }
+
+  def admitStoreRecordC(collection: EntityCollectionId, r: Record): Consequence[Record] = {
+    EntityStorePersistenceStage._admit(collection, storeRowMapping, r)(admitLogicalStoreRecord)
+  }
+
+  def decodeAdmittedStoreRecordC(collection: EntityCollectionId, r: Record): Consequence[E] = {
+    EntityStorePersistenceStage._decode_admitted(collection, storeRowMapping, r)(decodeAdmittedLogicalStoreRecord)
+  }
+
+  def fromStoreRecordC(collection: EntityCollectionId, r: Record): Consequence[E] = {
+    admitStoreRecordC(collection, r).flatMap(decodeAdmittedStoreRecordC(collection, _))
+  }
+
   def toStoreRecord(e: E): Record =
     toRecord(e)
 
@@ -167,6 +198,16 @@ trait EntityPersistentCreate[E] extends RecordEncoder[E]
     with Identifiable[E, EntityId] {
   def collection(e: E): EntityCollectionId
 
+  def storeRowMapping: Option[EntityStoreRowMapping] = None
+
+  def toLogicalStoreRecord(e: E): Consequence[Record] = {
+    Consequence.success(toRecord(e))
+  }
+
+  def toStoreRecordC(collection: EntityCollectionId, e: E): Consequence[Record] = {
+    EntityStorePersistenceStage._encode(collection, storeRowMapping, toLogicalStoreRecord(e))
+  }
+
   def toStoreRecord(e: E): Record =
     toRecord(e)
 
@@ -193,6 +234,12 @@ object EntityPersistentCreate {
         persistent.id(entity).collection
       def toRecord(entity: E): Record =
         persistent.toRecord(entity)
+      override def storeRowMapping: Option[EntityStoreRowMapping] = {
+        persistent.storeRowMapping
+      }
+      override def toLogicalStoreRecord(e: E): Consequence[Record] = {
+        persistent.toLogicalStoreRecord(e)
+      }
       override def toStoreRecord(entity: E): Record =
         persistent.toStoreRecord(entity)
   }
@@ -245,6 +292,16 @@ trait EntityPersistableQuery extends RecordPresentable
 
 trait EntityPersistentUpdate[E] extends RecordCodex[E] {
   def collection(e: E): EntityCollectionId
+
+  def storeRowMapping: Option[EntityStoreRowMapping] = None
+
+  def toLogicalStoreRecord(e: E): Consequence[Record] = {
+    Consequence.success(toRecord(e))
+  }
+
+  def toStoreChangesRecordC(collection: EntityCollectionId, e: E): Consequence[Record] = {
+    EntityStorePersistenceStage._encode_changes(collection, storeRowMapping, toLogicalStoreRecord(e))
+  }
 
   def toStoreRecord(e: E): Record =
     toRecord(e)

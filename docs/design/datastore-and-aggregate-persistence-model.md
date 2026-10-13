@@ -37,6 +37,10 @@ Example:
 
 ## DataStore Abstraction
 
+Logical field conversion and provider text ownership are specified in the
+Phase 100 [logical type mapping contract proposal](../spec/datastore-logical-type-mapping.md).
+Its implementation and producer ABI acceptance remain pending.
+
 ### Role of DataStore
 - DataStore owns physical persistence concerns:
   - Tables

@@ -1,3 +1,7 @@
+/*
+ * @version Oct. 5, 2026
+ * @author  ASAMI, Tomoharu
+ */
 import sbt.TestFrameworks
 import sbt.Tests
 import java.nio.charset.StandardCharsets
@@ -16,6 +20,7 @@ lazy val generateTextusRuntimeCatalog = taskKey[File]("Generate Textus runtime c
 lazy val exportTextusRuntimeCatalog = taskKey[File]("Export Textus runtime catalog metadata for local development consumers.")
 lazy val generateCncfRuntimeDescriptor = taskKey[File]("Generate CNCF runtime self descriptor for the runtime jar.")
 lazy val cncfRuntimeClasspathFile = taskKey[File]("Write the local CNCF runtime classpath consumed by cncf --runtime-dev-dir.")
+lazy val cncfCozyRuntimeDevDirectory = settingKey[Option[File]]("Optionally select an explicit development Cozy checkout for CNCF generation.")
 lazy val resolveInformationCmlGenerationInputs = taskKey[CncfGenerationInputs]("Resolve the exact Cozy generator, CNCF target, and runtime descriptor for Information CML generation.")
 lazy val generateInformationCmlModel = taskKey[Seq[File]]("Generate CNCF Information vocabulary model from CML.")
 lazy val verifyInformationCmlGenerationDeterminism = taskKey[Unit]("Verify repeated Information CML generation emits the same Scala file set and bytes.")
@@ -404,6 +409,8 @@ lazy val root = project
 
     scalaVersion := scala3Version,
 
+    cncfCozyRuntimeDevDirectory := sys.props.get("cncf.cozy.runtimeDevDir").map(value => new java.io.File(value)),
+
     Test / unmanagedSources += baseDirectory.value / "project" / "CncfGenerationBuildContract.scala",
 
     resolvers ++= Seq(
@@ -520,7 +527,8 @@ lazy val root = project
         version.value,
         generateCncfRuntimeDescriptor.value,
         baseDirectory.value,
-        baseDirectory.value / "src/main/cozy/information.cml"
+        baseDirectory.value / "src/main/cozy/information.cml",
+        cncfCozyRuntimeDevDirectory.value
       ).fold(
         errors => sys.error(errors.mkString("CNCF generation input resolution failed: ", " ", "")),
         identity

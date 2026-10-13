@@ -4,6 +4,11 @@ import java.io.File
 import java.nio.file.Files
 import java.security.MessageDigest
 
+/*
+ * @since   Jul. 28, 2026
+ * @version Oct. 5, 2026
+ * @author  ASAMI, Tomoharu
+ */
 final case class CncfGenerationInputs(
   cozyGeneratorVersion: String,
   cncfTargetVersion: String,
@@ -11,7 +16,8 @@ final case class CncfGenerationInputs(
   runtimeDescriptorSha256: String,
   source: File,
   sourceIdentity: String,
-  sourceSha256: String
+  sourceSha256: String,
+  cozyRuntimeDevDirectory: Option[File] = None
 )
 
 final case class CncfGenerationSnapshot(
@@ -34,7 +40,8 @@ object CncfGenerationBuildContract {
     cncfTargetVersion: String,
     runtimeDescriptor: File,
     projectDirectory: File,
-    source: File
+    source: File,
+    cozyRuntimeDevDirectory: Option[File] = None
   ): Either[Vector[String], CncfGenerationInputs] = {
     val cozyversion = Option(cozyGeneratorVersion).map(_.trim).getOrElse("")
     val cncfversion = Option(cncfTargetVersion).map(_.trim).getOrElse("")
@@ -58,6 +65,7 @@ object CncfGenerationBuildContract {
       !sourcefile.get.toPath.startsWith(projectdir.get.toPath)
     )
       errors += "The Information CML source must be inside the CNCF project directory."
+    _runtime_prefix(cozyversion, cozyRuntimeDevDirectory).left.foreach(errors ++= _)
     val result = errors.result()
     if (result.nonEmpty)
       Left(result)
@@ -74,7 +82,8 @@ object CncfGenerationBuildContract {
         _sha256(descriptor.get),
         sourcefile.get,
         sourceidentity,
-        _sha256(sourcefile.get)
+        _sha256(sourcefile.get),
+        cozyRuntimeDevDirectory.map(_.toPath.normalize().toFile)
       ))
     }
   }
@@ -91,14 +100,13 @@ object CncfGenerationBuildContract {
       errors += "The Information CML source changed after generation inputs were resolved."
     if (outputdir.isEmpty)
       errors += "The generation output directory is required."
+    val prefix = _runtime_prefix(inputs.cozyGeneratorVersion, inputs.cozyRuntimeDevDirectory)
+    prefix.left.foreach(errors ++= _)
     val result = errors.result()
     if (result.nonEmpty)
       Left(result)
     else
-      Right(Vector(
-        "cozy",
-        "--runtime",
-        inputs.cozyGeneratorVersion,
+      Right(prefix.toOption.get ++ Vector(
         "modeler-scala-value",
         inputs.source.getAbsolutePath,
         "--cncf-version",
@@ -134,14 +142,13 @@ object CncfGenerationBuildContract {
       errors += "The Information CML source is required."
     if (outputdir.isEmpty)
       errors += "The generation output directory is required."
+    val prefix = _runtime_prefix(inputs.cozyGeneratorVersion, inputs.cozyRuntimeDevDirectory)
+    prefix.left.foreach(errors ++= _)
     val result = errors.result()
     if (result.nonEmpty)
       Left(result)
     else
-      Right(Vector(
-        "cozy",
-        "--runtime",
-        inputs.cozyGeneratorVersion,
+      Right(prefix.toOption.get ++ Vector(
         "generation-provenance-validate",
         inputs.source.getAbsolutePath,
         s"--save=${outputdir.get.getAbsolutePath}",
@@ -192,6 +199,21 @@ object CncfGenerationBuildContract {
         Left(Vector("At least one generated Scala artifact is required."))
       else
         Right(CncfGenerationSnapshot(artifacts, _sha256(provenance.get)))
+    }
+  }
+
+  private def _runtime_prefix(
+    cozyversion: String,
+    directory: Option[File]
+  ): Either[Vector[String], Vector[String]] = {
+    val prefix = Vector("cozy", "--runtime", cozyversion)
+    directory match {
+      case None => Right(prefix)
+      case Some(selected) if selected != null && selected.isAbsolute &&
+          selected.isDirectory && new File(selected, "build.sbt").isFile =>
+        Right(prefix ++ Vector("--runtime-dev-dir", selected.getAbsolutePath))
+      case _ =>
+        Left(Vector("The selected Cozy runtime development directory must be an absolute directory containing build.sbt."))
     }
   }
 
