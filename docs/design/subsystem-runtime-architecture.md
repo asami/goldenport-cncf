@@ -171,3 +171,17 @@ meaning.
 Other drivers such as cloud container/serverless platforms may be added later.
 Application code and the logical Subsystem lifecycle must not depend on a
 specific driver.
+
+## Release-aware Replacement
+
+The Replacement Engine consumes an admitted desired CAR/runtime version rather
+than mutating an existing instance in place. Release detection, compatibility
+admission and deployment policy precede physical replacement.
+
+After switching to a new CAR, the former Active may remain in a
+fallback-ready lifecycle state for the Availability Architecture retention
+window. It must remain isolated from normal mutation traffic while preserving
+the ability to reacquire Active authority through an authorized switch-back.
+
+Only after deployment commit may the old instance be discarded/rebuilt as the
+new Standby according to policy.
