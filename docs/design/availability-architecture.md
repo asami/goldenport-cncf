@@ -169,3 +169,98 @@ Subsystem in another AZ alone is not multi-AZ availability.
 The Active/Standby abstraction remains extensible for future experience, but
 current implementation must not introduce distributed-consensus, cross-region
 or global active-active complexity speculatively.
+
+## Operational Safety by Construction
+
+Textus treats sophisticated availability/release practice as a platform
+capability rather than an application-specific SRE procedure. The ordinary
+production path should be safe by construction from a small declarative policy.
+
+A Subsystem should be able to request the standard availability/release behavior
+without implementing Active/Standby switching, deployment scripts, rollback
+scripts or bespoke health orchestration. Conceptually, a standard availability
+profile plus an automatic-compatible release policy and a fallback-retention
+policy is sufficient.
+
+This is the operational counterpart of Safe-by-Construction Application
+Security: common safety must come from framework/runtime structure first, with
+application-specific escape or override only where necessary.
+
+## Deployment Transaction
+
+A compatible immutable release is treated as a long-running Deployment
+Transaction:
+
+```text
+Admit
+  -> Create/Warm candidate
+  -> Probe
+  -> Switch
+  -> Observe during Fallback Retention Window
+       -> anomaly: Switch-back
+       -> healthy: Commit deployment
+  -> Retire/rebuild old runtime
+```
+
+The switch is not the deployment commit. During the observation window the new
+runtime is probationary Active and the former Active remains fallback-ready.
+
+The fallback instance is valuable because it is not merely a stored old image:
+it is the runtime that recently served real production traffic with known
+configuration, connectivity and persistent-state access.
+
+A switch-back reactivates that known runtime. It does not restore arbitrary
+files, reverse an in-place patch or reconstruct a speculative rollback snapshot.
+
+## Fallback Retention Window
+
+The retention duration is deployment policy. Approximately one business day
+(24 hours) is a useful standard-profile default candidate because it allows the
+new release to encounter normal production workload before the previous Active
+is retired. It is not a hard CNCF constant.
+
+During the window, the platform observes bounded operational signals such as
+Operation failures/error rate, latency, Job/Workflow failures, DataStore errors,
+authorization/security anomalies and declared application health probes.
+
+Automatic switch-back policy must be bounded and explicit; ambiguous business
+correctness remains a human/operational decision rather than an invented
+generic metric.
+
+## Data Compatibility During Fallback
+
+Fallback is meaningful only while the retained CAR can still operate against
+the authoritative persistent state. Destructive/incompatible DataStore contract
+changes therefore cannot be committed merely because traffic switched.
+
+Schema/data evolution should support an expand/migrate/contract style where
+appropriate:
+
+```text
+expand to old+new compatible state
+ -> switch new CAR
+ -> fallback retention / observation
+ -> deployment commit
+ -> contract old compatibility when explicitly safe
+```
+
+The exact DataStore migration mechanism is owned by the DataStore architecture
+and Phase 100/follow-up work. Availability Architecture owns the invariant that
+a release must not claim switch-back capability after making the retained
+runtime incompatible with authoritative state.
+
+## CAR Release Operations
+
+CAR publication is not automatic deployment authority. A release progresses
+through compatibility/admission and deployment policy before the Replacement
+Engine acts.
+
+A useful policy vocabulary includes manual, notify and automatic-compatible.
+The automatic-compatible policy may automatically deploy only when required
+runtime, configuration, dependency and DataStore/switch-back compatibility
+evidence is admitted. Breaking or migration-sensitive changes require an
+explicitly stronger decision/human approval.
+
+Scheduled rotation and CAR-version deployment deliberately share the same
+switch/drain machinery; the difference is that a release rotation changes the
+admitted CAR version.
