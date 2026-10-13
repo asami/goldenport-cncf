@@ -6,7 +6,8 @@ import org.goldenport.cncf.resource.{ResourceTreeLimits, ResourceTreeReference, 
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 22, 2026
+ *  version Jul. 22, 2026
+ * @version Oct.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ProcessCapabilityId private (value: String) {
@@ -329,108 +330,6 @@ object ProcessExecutionLimits {
     } yield result
 }
 
-enum ProcessArgumentAdmission {
-  case Registered
-  case BoundedText
-}
-
-final case class ProcessArgumentPolicy(
-  fixedPrefix: Vector[String],
-  permittedArguments: Set[String] = Set.empty,
-  permittedArgumentVectors: Set[Vector[String]] = Set.empty,
-  admission: ProcessArgumentAdmission = ProcessArgumentAdmission.Registered
-) {
-  def validateC(arguments: Vector[String], limits: ProcessExecutionLimits): Consequence[Unit] =
-    for {
-      _ <- _validate_arguments_c(arguments)
-      _ <- _validate_count_c(arguments, limits.argumentCount)
-      _ <- _validate_bytes_c(arguments, limits.argumentBytes)
-    } yield ()
-
-  private def _validate_arguments_c(arguments: Vector[String]): Consequence[Unit] = {
-    if (admission == ProcessArgumentAdmission.BoundedText)
-      _validate_bounded_text_c(arguments)
-    else if (permittedArgumentVectors.nonEmpty)
-      if (permittedArgumentVectors.contains(arguments))
-        Consequence.unit
-      else
-        Consequence.argumentPolicyViolation(
-          "arguments",
-          "process.execution.argument-policy",
-          "registered argument vector",
-          "unapproved"
-        )
-    else {
-      val rejected = arguments.find(x => !permittedArguments.contains(x))
-      rejected match {
-        case Some(_) =>
-          Consequence.argumentPolicyViolation(
-            "arguments",
-            "process.execution.argument-policy",
-            "registered argument value",
-            "unapproved"
-          )
-        case None => Consequence.unit
-      }
-    }
-  }
-
-  private def _validate_bounded_text_c(arguments: Vector[String]): Consequence[Unit] = {
-    val rejected = arguments.find(argument =>
-      argument.trim.isEmpty ||
-      argument.exists(character => character.isControl && character != '\n' && character != '\r' && character != '\t')
-    )
-    if (arguments.isEmpty)
-      Consequence.argumentPolicyViolation(
-        "arguments",
-        "process.execution.argument-policy",
-        "at least one bounded text argument",
-        "absent"
-      )
-    else rejected match {
-      case Some(_) =>
-        Consequence.argumentFormatError(
-          "arguments",
-          "non-empty bounded text arguments without unsafe control characters",
-          "invalid"
-        )
-      case None => Consequence.unit
-    }
-  }
-
-  private def _validate_count_c(
-    arguments: Vector[String],
-    maximum: Option[Long]
-  ): Consequence[Unit] =
-    maximum match {
-      case Some(value) if arguments.length.toLong > value =>
-        Consequence.argumentLimitExceeded(
-          "arguments",
-          value,
-          arguments.length.toLong,
-          "process.execution.argument-count"
-        )
-      case _ => Consequence.unit
-    }
-
-  private def _validate_bytes_c(
-    arguments: Vector[String],
-    maximum: Option[Long]
-  ): Consequence[Unit] = {
-    val size = arguments.foldLeft(0L)((z, x) => z + x.getBytes("UTF-8").length.toLong)
-    maximum match {
-      case Some(value) if size > value =>
-        Consequence.argumentLimitExceeded(
-          "arguments",
-          value,
-          size,
-          "process.execution.argument-bytes"
-        )
-      case _ => Consequence.unit
-    }
-  }
-}
-
 final class ProcessProgramDefinition private (
   val capability: ProcessCapabilityId,
   val safeProgramIdentity: String,
@@ -650,6 +549,7 @@ object ProcessProgramDefinition {
       _ <- _validate_identity_c(identity)
       _ <- _validate_executable_c(executable)
       _ <- _validate_argument_policy_c(fixedarguments, argumentpolicy)
+      _ <- argumentpolicy.validateDeclarationC
       _ <- maximumlimits.requireFiniteC
       _ <- _validate_input_file_paths_c(allowedinputfiles, allowedinputfilepaths)
       _ <- _validate_resource_tree_limits_c(allowedresourcetrees)
@@ -733,8 +633,25 @@ final case class ProcessExecutionGrant(
  */
 final class ProcessExecutionAdmission private (
   policy: ProcessExecutionPolicy,
-  grants: Map[ProcessCapabilityId, ProcessExecutionGrant]
+  grants: Map[ProcessCapabilityId, ProcessExecutionGrant],
+  componentadmissions: Option[Map[org.goldenport.cncf.component.ComponentId, ProcessExecutionAdmission]] = None
 ) {
+  private[cncf] def admitForScopeC(
+    scope: ScopeContext,
+    request: ProcessExecutionRequest
+  ): Consequence[ResolvedProcessExecution] = componentadmissions match {
+    case None => admitC(request)
+    case Some(admissions) =>
+      def _owner_(current: ScopeContext): Option[org.goldenport.cncf.component.ComponentId] = current match {
+        case context: org.goldenport.cncf.component.Component.Context => Some(context.component.componentId)
+        case _ => current.parent.flatMap(_owner_)
+      }
+      Option(scope).flatMap(_owner_).flatMap(admissions.get).fold[Consequence[ResolvedProcessExecution]](
+        Consequence.argumentPolicyViolation("capability", "process.execution.component-grant",
+          "runtime-authorized component execution scope", "unapproved")
+      )(_.admitC(request))
+  }
+
   def admitC(request: ProcessExecutionRequest): Consequence[ResolvedProcessExecution] =
     grants.get(request.capability).map(policy.resolveC(request, _)).getOrElse(
       Consequence.argumentPolicyViolation(
@@ -747,6 +664,18 @@ final class ProcessExecutionAdmission private (
 }
 
 object ProcessExecutionAdmission {
+  /** Host runtime grants are selected by the actual Component.Context, not a scope label. */
+  private[cncf] def forComponentsC(
+    policy: ProcessExecutionPolicy,
+    grants: Map[org.goldenport.cncf.component.ComponentId, Vector[ProcessExecutionGrant]]
+  ): Consequence[ProcessExecutionAdmission] =
+    grants.foldLeft(Consequence.success(Map.empty[org.goldenport.cncf.component.ComponentId, ProcessExecutionAdmission])) {
+      case (acc, (owner, values)) => for {
+        installed <- acc
+        admission <- createC(policy, values)
+      } yield installed.updated(owner, admission)
+    }.map(admissions => new ProcessExecutionAdmission(policy, Map.empty, Some(admissions)))
+
   def createC(
     policy: ProcessExecutionPolicy,
     grants: Vector[ProcessExecutionGrant]
@@ -776,7 +705,7 @@ object ProcessExecutionAdmission {
     request: ProcessExecutionRequest
   ): Consequence[ResolvedProcessExecution] =
     scope.processExecutionAdmissionOption
-      .map(_.admitC(request))
+      .map(_.admitForScopeC(scope, request))
       .getOrElse(Consequence.serviceUnavailable("Process Execution admission is not configured"))
 }
 

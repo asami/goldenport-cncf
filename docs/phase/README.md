@@ -15,7 +15,29 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Latest closed phase: [Phase 69.7](phase-69.7.md) /
+- [Phase 106](phase-106.md) / [checklist](phase-106-checklist.md) is PLANNED:
+  generic Review Evidence/Admission integration driven by sm-workflow Phase 6,
+  with Cozy 81 and cbd-support 15. Reuse Phase 90 CAM; add only actual missing
+  connections and verify the bounded consumer route. No STEP/PHASE/FINAL ABI,
+  unchanged-content proof or reopening of Phase 105 hygiene scope.
+
+- [Phase 105](phase-105.md) is CLOSED: Workflow validation hygiene, no feature
+  additions. Public interfaces, non-public managed `completeC`, native CAS and
+  persisted layouts are preserved. The connected Step, sole Phase full review
+  and bounded host-spec repair are accepted; final full test4348/4348 passed.
+  The explicitly selected CNCF0.5.3-SNAPSHOT artifact passed the existing
+  consumer E12 eight-case integration check. [Checklist](phase-105-checklist.md)
+  and Phase handoff record the tested cutoff, four nonblocking Hygiene items
+  and separate sm-workflow obligations. No consumer Phase completion, main
+  merge, push, publication or deployment is claimed.
+
+- [Phase 103](phase-103.md) plans the shared Validation/Test Metadata ABI and
+  operation discovery, driven by sm-workflow Phase 5. textus-cbd-support static
+  analysis/KPI is a separate Mac mini consumer; its completion does not block
+  the producer/runtime slice. [Checklist](phase-103-checklist.md).
+
+
+- Closed Job Management phase: [Phase 69.7](phase-69.7.md) /
   [checklist](phase-69.7-checklist.md), closed on 2026-10-07 in local release
   `f394034fff40a20cd635f196de7d61a3a9e4f5af`. The CNCF Job Management
   sequence is closed. Aggregate CNCF validation completed 604 suites and
@@ -690,6 +712,10 @@ retain their dated inventory status. This inventory changes no acceptance author
 | [phase-93](phase-93.md) | No top-level status declared |
 | [phase-94-checklist](phase-94-checklist.md) | status=planned |
 | [phase-94](phase-94.md) | status=planned |
+| [phase-103](phase-103.md) | status=planned |
+| [phase-103-checklist](phase-103-checklist.md) | status=planned |
+| [phase-105](phase-105.md) | status=closed |
+| [phase-105-checklist](phase-105-checklist.md) | status=closed |
 
 ## Textus EAI Requirement Intake — 2026-10-03
 

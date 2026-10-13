@@ -45,6 +45,12 @@ import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
 sealed trait UnitOfWorkOp[A]
 
 object UnitOfWorkOp {
+  /** Unit means declarative intent accepted, never physical write completed.
+    * Only the managed closing preparation interpreter admits this operation.
+    */
+  private[cncf] final case class StageWorkflowClosingLocalIntent(
+    intent: org.goldenport.cncf.datastore.WorkflowClosingLocalIntent
+  ) extends UnitOfWorkOp[Unit]
 
   // ------------------------------------------------------------
   // State machine Provider operations

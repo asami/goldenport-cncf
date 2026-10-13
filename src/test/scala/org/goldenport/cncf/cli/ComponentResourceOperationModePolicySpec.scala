@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * OperationMode out of Component-domain values and APIs.
  *
  * @since   Aug. 21, 2026
- * @version Aug. 21, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentResourceOperationModePolicySpec
@@ -30,8 +30,6 @@ final class ComponentResourceOperationModePolicySpec
   private val _documentation_id = ComponentId(s"$_namespace.RscDocumentation")
   private val _source_id = ComponentId(s"$_namespace.RscSourceCode")
   private val _external_platform_id = ComponentId(s"$_namespace.RscWebPresentation")
-  private val _sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-  private val _signature = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
   private val _repository = "https://repo.example.invalid/cncf/rsc"
   private val _develop_precedence = Vector(
     ComponentResourceSourceKind.DevelopmentDirectory,
@@ -332,7 +330,6 @@ final class ComponentResourceOperationModePolicySpec
         sourceKind = sourcekind,
         repository = _repository,
         artifactCoordinate = coordinate,
-        sha256 = _sha256,
         normalizedRelativePath = path,
         logicalSource = logicalsource,
         physicalSource = physicalsource,
@@ -398,8 +395,6 @@ final class ComponentResourceOperationModePolicySpec
       classification = classification,
       artifact = ComponentSubcomponentArtifact(
         coordinate = coordinate,
-        sha256 = _sha256,
-        signature = _signature,
         repository = _repository,
         physicalPath = physicalpath
       ),

@@ -2,7 +2,6 @@ package org.goldenport.cncf.component
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
-import java.security.MessageDigest
 import java.util.Comparator
 import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters._
@@ -45,7 +44,8 @@ import org.scalacheck.{Gen, Prop, Test}
 /*
  * @since   Jul. 22, 2026
  *  version Aug. 11, 2026
- * @version Sep.  7, 2026
+ *  version Sep.  7, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentInitializationBootstrapSpec
@@ -58,6 +58,77 @@ final class ComponentInitializationBootstrapSpec
     afterWord("in spec:component-runtime-boundary-capabilities, example:E14, rules:R3a,R10, phase:12, slice:P12-S12C-1C-DYNAMIC-PATH")
 
   "Component initialization bootstrap" should {
+    "bind resolved owner metadata before the existing Factory service-composition hook" in {
+      Given("a named instance, a required typed setting and its actual owning Subsystem")
+      val owner = TestComponentFactory.emptySubsystem("owned-service-composition")
+      val identity = ComponentId("org.goldenport.cncf.test.OwnedComposition")
+      val setting = ComponentParameterKey.requiredInt("composition.limit")
+      var hooks = 0
+      var initialized = 0
+      var snapshot = Option.empty[ComponentInitializationParameters]
+      var captured = Option.empty[Component]
+      final class OwnedComponent extends Component {
+        override protected def initialize_component_c(params: ComponentInit): Consequence[Unit] = {
+          initialized += 1
+          initializationParameters should be theSameInstanceAs snapshot.value
+          Consequence.unit
+        }
+      }
+      val factory = new Component.Factory {
+        override def initializationParameterDeclarations = Vector(setting)
+        protected def create_Component(params: ComponentCreate): Component = new OwnedComponent
+        protected def create_Core(params: ComponentCreate, component: Component): Component.Core =
+          spec_create(identity.name, identity, Vector.empty[spec.ServiceDefinition])
+        override protected def initialize_component_c(component: Component, params: ComponentInit): Consequence[Component] = {
+          hooks += 1
+          captured = Some(component)
+          component.core should be theSameInstanceAs params.core
+          component.subsystem.value should be theSameInstanceAs owner
+          component.instanceId shouldBe ComponentInstanceId(identity, "selected")
+          component.core.jobEngine should be theSameInstanceAs owner.jobEngine
+          component.initializationParameters should be theSameInstanceAs params.initializationParameters
+          snapshot = Some(params.initializationParameters)
+          an[IllegalStateException] should be thrownBy { component.services }
+          initialized shouldBe 0
+          val composition = component.logic.executionContext()
+          val subject = org.goldenport.cncf.security.SecuritySubject.current(using composition)
+          subject.isProviderAuthenticated shouldBe false
+          subject.isTrustedLocalAuthenticated shouldBe false
+          if (params.initializationParameters.resolve(setting).toOption.value.value.contains(99))
+            Consequence.configurationInvalid("test-owned composition refuses its setting")
+          else super.initialize_component_c(component, params)
+        }
+      }
+      val descriptor = ComponentDescriptor(name = Some(identity.name), componentName = Some(identity.name),
+        version = Some("0.1.0"), schemaVersion = Some(3), componentId = Some(identity))
+      def creation(value: String) = ComponentCreate(owner, ComponentOrigin.Builtin, Vector(descriptor))
+        .withInstanceMetadata(ComponentInstanceMetadata(identity.name, "selected",
+          Map(setting.name -> value), componentId = Some(identity)))
+      When("typed parameter resolution succeeds and the Factory composes services")
+      val result = factory.createPrimaryC(creation("23"))
+      val built = withClue(result) { result.toOption.value }
+      Then("the hook sees real ownership, not an artificial authenticated caller, and ordinary initialization runs once")
+      hooks shouldBe 1
+      initialized shouldBe 1
+      built should be theSameInstanceAs captured.value
+      built.services.services.map(_.serviceDefinition.name) shouldBe Vector("meta", "system")
+      built.initializationParameters should be theSameInstanceAs snapshot.value
+
+      When("a malformed required setting is supplied to the same Factory")
+      factory.createPrimaryC(creation("invalid")).isSuccess shouldBe false
+      Then("neither the composition hook nor component initialization is entered")
+      hooks shouldBe 1
+      initialized shouldBe 1
+
+      When("the existing composition hook explicitly rejects an otherwise resolved instance")
+      initialized = 0
+      factory.createPrimaryC(creation("99")).isSuccess shouldBe false
+      Then("the unexposed component has owner metadata but no services or ordinary initialization")
+      hooks shouldBe 2
+      initialized shouldBe 0
+      an[IllegalStateException] should be thrownBy { captured.value.services }
+    }
+
     "E12 deliver context-bound snapshots" must _e12_metadata {
       "resolve required typed parameters before component initialization" in {
         Given("Spec: docs/spec/component-runtime-boundary-capabilities.md; Rules: R3a,R10; Example: E12; a factory declaration and packaged component parameter default")
@@ -96,7 +167,7 @@ final class ComponentInitializationBootstrapSpec
           .componentInitializationParameterSnapshot
           .summary
           .cumulative
-          .total shouldBe metricsbefore + 1L
+          .total shouldBe math.min(metricsbefore + 1L, 10000L)
         RuntimeDashboardMetrics.componentInitializationParameterRecords.last.print should include (
           "packaged-default"
         )
@@ -602,7 +673,7 @@ final class ComponentInitializationBootstrapSpec
           .componentInitializationParameterSnapshot
           .summary
           .cumulative
-          .total shouldBe metricsbefore + 1L
+          .total shouldBe math.min(metricsbefore + 1L, 10000L)
         RuntimeDashboardMetrics.componentInitializationParameterRecords.last.print should include ("empty")
       }
 
@@ -800,29 +871,20 @@ final class ComponentInitializationBootstrapSpec
       StandardCharsets.UTF_8
     )
     val evidence = Vector(
-      ("target/cncf.d/runtime-classpath.txt", _sha256(classpath), Some(_sha256("project:target/classes".getBytes(StandardCharsets.UTF_8)))),
-      ("target/cncf.d/component-descriptor.json", _sha256(descriptor), None),
-      ("src/main/car/abi-manifest.json", _sha256(abi), None)
+      "target/cncf.d/runtime-classpath.txt",
+      "target/cncf.d/component-descriptor.json",
+      "src/main/car/abi-manifest.json"
     )
-    val entries = evidence.map { case (path, digest, logical) =>
-      val logicalfield = logical.map(value => s"\"logicalSha256\":\"$value\",").getOrElse("")
-      s"{$logicalfield\"path\":\"$path\",\"sha256\":\"$digest\"}"
+    val entries = evidence.map { path =>
+      s"""{"path":"$path"}"""
     }.mkString("[", ",", "]")
-    val evidencedigest = _sha256(evidence.map { case (path, digest, logical) =>
-      s"$path\t$digest\t${logical.getOrElse("")}"
-    }.mkString("\n").getBytes(StandardCharsets.UTF_8))
     val artifact = "test-repository-parameter-probe"
     Files.writeString(
       cncfdir.resolve("car-runtime-manifest.json"),
-      s"""{"schemaVersion":"cncf.car-development-runtime-manifest.v2","sourceKind":"development-directory","car":{"name":"$artifact","version":"$release","component":"$component"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$evidencedigest"}}""",
+      s"""{"schemaVersion":"cncf.car-development-runtime-manifest.v2","sourceKind":"development-directory","car":{"name":"$artifact","version":"$release","component":"$component"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries}""",
       StandardCharsets.UTF_8
     )
   }
-
-  private def _sha256(path: Path): String = _sha256(Files.readAllBytes(path))
-
-  private def _sha256(bytes: Array[Byte]): String =
-    MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
 
   private final class ParameterProbeComponent extends Component {
     var limit: Option[Int] = None

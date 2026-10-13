@@ -8,7 +8,7 @@ import org.goldenport.cncf.datastore.sql.{ManagedSqlDataStoreResource, SqlDataSt
 
 /*
  * @since   Aug.  2, 2026
- * @version Aug.  2, 2026
+ * @version Oct.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SystemNode private (
@@ -26,6 +26,7 @@ final class SystemNode private (
   private var _bindings: Set[SystemNodeDataStoreBinding] = Set.empty
   private var _shutdown_in_progress: Boolean = false
   private var _shutdown_result: Option[Consequence[Unit]] = None
+  private var _runtime_resources: Vector[AutoCloseable] = Vector.empty
   private val _registry = new SystemNodeSqlDataStoreRegistry(_is_lease_admitted, onflightwait)
 
   def state: State = synchronized(_state)
@@ -40,6 +41,17 @@ final class SystemNode private (
     if (_state == State.Running)
       _state = State.Stopping
   }
+
+  /** Ownership stays at runtime assembly; Component factories do not register drivers. */
+  private[cncf] def ownRuntimeResourceC(resource: AutoCloseable): Consequence[Unit] =
+    Consequence {
+      synchronized {
+        if (_state != State.Running)
+          throw new IllegalStateException("SystemNode is not accepting runtime resources")
+        if (!_runtime_resources.exists(_ eq resource))
+          _runtime_resources = _runtime_resources :+ resource
+      }
+    }
 
   def shutdownC(onTimeout: () => Unit = () => ()): Consequence[Unit] = {
     val owner = synchronized {
@@ -71,6 +83,12 @@ final class SystemNode private (
         // runs, then restore interruption after terminalization.
         val interruptflag = Thread.interrupted()
         val interrupted = draininterrupted || interruptflag
+        val resources = synchronized {
+          val values = _runtime_resources.reverse
+          _runtime_resources = Vector.empty
+          values
+        }
+        val runtimeclose = resources.map(resource => Consequence(resource.close()))
         val closeresult = try {
           _registry.closeAllC(force = drainresult match {
             case Consequence.Failure(_) => true
@@ -82,7 +100,7 @@ final class SystemNode private (
           if (interrupted)
             Thread.currentThread().interrupt()
         }
-        _aggregate(Vector(drainresult, closeresult))
+        _aggregate(Vector(drainresult) ++ runtimeclose :+ closeresult)
       }
       synchronized {
         _state = State.Stopped

@@ -17,7 +17,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 12, 2026
  *  version Apr. 26, 2026
  *  version May. 26, 2026
- * @version Jul. 15, 2026
+ *  version Jul. 15, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqliteDataStoreSpec
@@ -104,18 +105,27 @@ class SqliteDataStoreSpec
     }
 
     "encode parent-owned single value objects as JSON text" in {
+      Given("a record with scalar columns, an owned address value object, complete JSON payloads and SQL NULL")
       val path = Files.createTempFile("cncf-sqlite-value-object", ".db").toString
       val datastore = SqlDataStore.sqlite(path)
       val collection = DataStore.CollectionId("value_object")
       val ctx = ExecutionContext.create()
       given ExecutionContext = ctx
 
-      Given("a record with scalar columns and an owned address value object")
       val entryid = DataStore.StringEntryId("vo1")
+      val objectfixture = """{"baselineReportId":null,"emptyObject":{},"emptyArray":[],"nested":{"value":null,"empty":{},"items":[]},"items":[null,{},[],{"value":null,"items":[],"number":7}],"matrix":[[null,{}],[]],"text":"東京・review","enabled":true,"count":7,"ratio":1.5,"precise":12345678901234567890.12345678901234567890}"""
       val record = Record.data(
         "id" -> "vo1",
         "name" -> "alice",
-        "address" -> AddressValue("Tokyo", "100-0001")
+        "address" -> AddressValue("Tokyo", "100-0001"),
+        "metadata" -> objectfixture,
+        "emptyobject" -> "{}",
+        "emptyarray" -> "[]",
+        "plain" -> "plain text",
+        "blank" -> " 	 ",
+        "malformedobject" -> " {broken} ",
+        "malformedarray" -> " [broken] ",
+        "sqlnull" -> org.simplemodeling.model.directive.Update.SetNull
       )
 
       When("creating and loading the record")
@@ -130,27 +140,45 @@ class SqliteDataStoreSpec
           val address = r.getRecord("address").getOrElse(fail("address should be decoded as Record"))
           address.getString("city") shouldBe Some("Tokyo")
           address.getString("postal_code") shouldBe Some("100-0001")
+
+          And("JSON metadata preserves explicit null, empty structures, nested arrays and precise object numbers")
+          val metadata = r.getRecord("metadata").getOrElse(fail("metadata should be decoded as Record"))
+          io.circe.parser.parse(metadata.toJsonString) shouldBe io.circe.parser.parse(objectfixture)
+          metadata.getAny("count") shouldBe Some(BigDecimal(7))
+
+          And("root empty JSON structures stay present, text fallbacks remain exact and SQL NULL is omitted")
+          r.getRecord("emptyobject").map(_.fields) shouldBe Some(Vector.empty)
+          r.getVector("emptyarray") shouldBe Some(Vector.empty)
+          r.getString("plain") shouldBe Some("plain text")
+          r.getString("blank") shouldBe Some(" 	 ")
+          r.getString("malformedobject") shouldBe Some(" {broken} ")
+          r.getString("malformedarray") shouldBe Some(" [broken] ")
+          r.getAny("sqlnull") shouldBe None
+          r.fields.exists(_.key == "sqlnull") shouldBe false
         case other =>
           fail(s"unexpected result: $other")
       }
     }
 
     "encode parent-owned repeated value objects as JSON array text" in {
+      Given("a record with scalar columns, repeated owned line values, a complete JSON array payload and SQL NULL")
       val path = Files.createTempFile("cncf-sqlite-value-object-array", ".db").toString
       val datastore = SqlDataStore.sqlite(path)
       val collection = DataStore.CollectionId("value_object_array")
       val ctx = ExecutionContext.create()
       given ExecutionContext = ctx
 
-      Given("a record with scalar columns and repeated owned line values")
       val entryid = DataStore.StringEntryId("order1")
+      val arrayfixture = """[null,{},[],{"value":null,"empty":{},"items":[]},[null,{},[]],"東京",true,7,1.5]"""
       val record = Record.data(
         "id" -> "order1",
         "name" -> "order-a",
         "lines" -> Vector(
           LineValue("sku-1", 2),
           LineValue("sku-2", 1)
-        )
+        ),
+        "metadata" -> arrayfixture,
+        "sqlnull" -> org.simplemodeling.model.directive.Update.SetNull
       )
 
       When("creating and loading the record")
@@ -165,6 +193,12 @@ class SqliteDataStoreSpec
           val lines = r.getVector("lines").getOrElse(fail("lines should be decoded as Vector"))
           lines.collect { case rec: Record => rec.getString("sku") } shouldBe Vector(Some("sku-1"), Some("sku-2"))
           lines.collect { case rec: Record => _int_value(rec, "quantity") } shouldBe Vector(Some(2), Some(1))
+
+          And("JSON arrays preserve null, empty structures, nested arrays and scalar values while SQL NULL is omitted")
+          io.circe.parser.parse(r.toJsonString).toOption.flatMap(_.hcursor.downField("metadata").focus) shouldBe
+            io.circe.parser.parse(arrayfixture).toOption
+          r.getAny("sqlnull") shouldBe None
+          r.fields.exists(_.key == "sqlnull") shouldBe false
         case other =>
           fail(s"unexpected result: $other")
       }

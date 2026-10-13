@@ -34,8 +34,8 @@ external-platform deployment boundary, in R3, R5, R8, and R9.
 ## Identity and Provenance Boundary
 
 Logical Component release and physical artifact evidence are different forms
-of identity. Artifact digest, path, source, and provenance belong to the
-physical evidence boundary. The specification defines the required identity,
+of identity. Artifact coordinates, path, source, and provenance belong to
+the physical evidence boundary. The specification defines the required identity,
 provenance, authorization, integrity, and availability behavior in R7, R10,
 and R11.
 

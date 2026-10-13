@@ -63,7 +63,7 @@ final class CandidateAdmissionProducerAbiSpec
       _diagnostic(admission).code shouldBe DiagnosticCode.UnsupportedSchema
     }
 
-    "reject an unsupported schema or generator provenance" in {
+    "reject an unsupported schema but accept compatible generation provenance" in {
       Given("the otherwise complete frozen artifact with altered producer identities")
       val artifact = _artifact
       val unsupportedschema = artifact.copy(schemaVersion = "cozy.cml.candidate-admission-producer-abi.v2")
@@ -71,9 +71,9 @@ final class CandidateAdmissionProducerAbiSpec
       When("receiver admission evaluates the version and generator boundary")
       val schemaresult = CandidateAdmissionProducerAbi.admitC(unsupportedschema)
       val generatorresult = CandidateAdmissionProducerAbi.admitC(unsupportedgenerator)
-      Then("both producer compatibility violations fail with stable diagnostics")
+      Then("schema incompatibility fails while generator provenance is diagnostic")
       _diagnostic(schemaresult).code shouldBe DiagnosticCode.UnsupportedSchema
-      _diagnostic(generatorresult).code shouldBe DiagnosticCode.UnsupportedGenerator
+      generatorresult shouldBe a[Consequence.Success[?]]
     }
 
     "reject blank or unprovenanced model Judgment Admission and Required-SPI facts" in {

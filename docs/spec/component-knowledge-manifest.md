@@ -93,14 +93,18 @@ authority boolean.
 
 Safe provenance has exactly these owned fields: source kind, artifact
 coordinate, logical source, resolution step, external-deployment-required, and
-matching digest. It cannot carry repository locations, physical or normalized
+matching digest. The authored document entry SHA-256 and matching digest
+remain lowercase 64-hex values and must equal each other. They are independent
+caller-authored document metadata, without a resource-artifact SHA binding.
+Safe provenance cannot carry repository locations, physical or normalized
 paths, content, credentials, activation, operation, MCP, deployment, or
 disclosure authority.
 
 `ComponentKnowledgeManifest.createC(suppliedResources, candidate)` accepts
 only caller-supplied Phase 58 `ResolvedComponentResources`. Every entry must
-refer to exactly one supplied logical identity and exactly match its digest,
-safe provenance, availability, integrity, and authorization values. The
+refer to exactly one supplied logical identity and exactly match its source
+kind, artifact coordinate, logical source, resolution step, deployment
+requirement, availability, integrity, and authorization values. The
 adapter performs no resource discovery, scan, source selection, content read,
 network access, or resolver call.
 

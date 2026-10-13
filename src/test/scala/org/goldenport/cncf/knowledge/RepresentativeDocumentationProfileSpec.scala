@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * bytes, archives, repositories, or networks, and it grants no authority.
  *
  * @since   Aug. 27, 2026
- * @version Aug. 27, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RepresentativeDocumentationProfileSpec
@@ -337,7 +337,6 @@ final class RepresentativeDocumentationProfileSpec
         sourceKind = ComponentResourceSourceKind.ExpandedCar,
         repository = "https://repo.example.invalid/phase598",
         artifactCoordinate = "org.goldenport.cncf:phase598-representative:0.1.0",
-        sha256 = _digest,
         normalizedRelativePath = s"private/phase598/${definition.logicalpath}",
         logicalSource = logicalresource,
         physicalSource = s"expanded-car:private-${definition.key}",

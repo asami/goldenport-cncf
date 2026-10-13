@@ -4,7 +4,8 @@ import org.goldenport.{Conclusion, Consequence}
 
 /*
  * @since   Sep. 21, 2026
- * @version Sep. 27, 2026
+ *  version Sep. 27, 2026
+ * @version Oct. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 /** Provider-neutral persistence boundary for an independently durable workflow
@@ -51,9 +52,8 @@ object WorkflowInstancePersistence {
   final case class WorkflowAbiIdentity(value: String)
   final case class BootstrapAbiIdentity(value: String)
   final case class ProducerRevision(value: String)
-  final case class FixtureSha256(value: String)
 
-  /** A version-pinned, source-correlated persistence view of an admitted ABI. */
+  /** An admitted execution definition. Source/producer metadata are diagnostic only. */
   final class DefinitionBinding private[workflow] (
     val workflowIdentity: WorkflowDefinitionIdentity,
     val workflowRevision: WorkflowDefinitionRevision,
@@ -62,7 +62,6 @@ object WorkflowInstancePersistence {
     val workflowAbiIdentity: WorkflowAbiIdentity,
     val bootstrapAbiIdentity: BootstrapAbiIdentity,
     val producerRevision: ProducerRevision,
-    val fixtureSha256: FixtureSha256,
     private[workflow] val admittedDefinition: GeneratedWorkflowAbi.Definition,
     private[workflow] val admittedCandidateDefinition: Option[CandidateWorkflowAbi.Definition] = None,
     private[workflow] val admittedEntryDefinition: Option[GeneratedEntryWorkflowAbi.Definition] = None
@@ -141,13 +140,22 @@ object WorkflowInstancePersistence {
       expectedRevision: InstanceRevision,
       entry: HistoryEntry
     ): Consequence[InstanceRecord] =
-      validateC.flatMap { current =>
-        if (expectedRevision != current.revision)
+      validateC.flatMap(_._append_c_unchecked(expectedRevision, entry))
+
+    /** Precondition: this current record was consumed and validated in this
+      * call chain. Only the new entry is admitted; actual prior history is kept.
+      */
+    private[workflow] def _append_c_unchecked(
+      expectedrevision: InstanceRevision,
+      entry: HistoryEntry
+    ): Consequence[InstanceRecord] = {
+      val current = this
+        if (expectedrevision == null || expectedrevision != current.revision)
           _failure_c(Diagnostic(
             DiagnosticCode.IncorrectExpectedRevision,
             Map(
               "actual" -> current.revision.value.toString,
-              "expected" -> _revision_value(expectedRevision),
+              "expected" -> _revision_value(expectedrevision),
               "instance" -> _identity_value(current.identity)
             )
           ))
@@ -161,29 +169,11 @@ object WorkflowInstancePersistence {
             DiagnosticCode.NonAppendOnlyHistory,
             Map("instance" -> _identity_value(current.identity), "reason" -> "missing-entry")
           ))
-        else {
-          val expectedsequence = HistorySequence(current.history.size.toLong + 1L)
-          val expectednext = current.revision.next
-          if (entry.sequence != expectedsequence)
-            _failure_c(Diagnostic(
-              DiagnosticCode.InvalidNextSequence,
-              Map(
-                "actual" -> entry.sequence.value.toString,
-                "expected" -> expectedsequence.value.toString,
-                "instance" -> _identity_value(current.identity)
-              )
-            ))
-          else if (entry.revision != expectednext)
-            _failure_c(Diagnostic(
-              DiagnosticCode.InvalidNextRevision,
-              Map(
-                "actual" -> entry.revision.value.toString,
-                "expected" -> expectednext.value.toString,
-                "instance" -> _identity_value(current.identity)
-              )
-            ))
-          else {
-            val next = current.copy(
+        else _entry_diagnostic(current.identity, entry, current.history.size,
+          current.history.lastOption) match {
+          case Some(diagnostic) => _failure_c(diagnostic)
+          case None =>
+            Consequence.success(current.copy(
               revision = entry.revision,
               lifecycle = entry.lifecycle,
               currentProgression = entry.currentProgression,
@@ -193,11 +183,9 @@ object WorkflowInstancePersistence {
               committedPredecessor = entry.committedPredecessor,
               suspension = entry.suspension,
               history = current.history :+ entry
-            )
-            WorkflowInstancePersistence.validateC(next)
-          }
+            ))
         }
-      }
+    }
   }
 
   final case class WorkflowStoreIdentity(value: String)
@@ -270,7 +258,7 @@ object WorkflowInstancePersistence {
   /** Binds generated metadata only after its closed ABI admission has succeeded. */
   def bindDefinitionC(
     definition: GeneratedWorkflowAbi.Definition
-  ): Consequence[DefinitionBinding] =
+  ): Consequence[DefinitionBinding] = {
     if (definition == null)
       _failure_c(Diagnostic(
         DiagnosticCode.MissingAbiProvenance,
@@ -297,11 +285,11 @@ object WorkflowInstancePersistence {
         workflowAbiIdentity = WorkflowAbiIdentity(accepted.workflowAbiIdentity.value),
         bootstrapAbiIdentity = BootstrapAbiIdentity(accepted.bootstrapSchemaIdentity.value),
         producerRevision = ProducerRevision(accepted.producerRevision.value),
-        fixtureSha256 = FixtureSha256(accepted.fixtureSha256.value),
         admittedDefinition = accepted
       )
       }
 
+  }
   /** Binds the separately admitted Cozy Candidate-Admission workflow and sidecar. */
   def bindCandidateDefinitionC(
     definition: CandidateWorkflowAbi.Definition
@@ -318,7 +306,6 @@ object WorkflowInstancePersistence {
         workflowAbiIdentity = WorkflowAbiIdentity(CandidateWorkflowAbi.schemaVersion),
         bootstrapAbiIdentity = BootstrapAbiIdentity("not-applicable"),
         producerRevision = ProducerRevision(accepted.sidecar.generator.schemaVersion),
-        fixtureSha256 = FixtureSha256(accepted.sha256),
         admittedDefinition = null,
         admittedCandidateDefinition = Some(accepted)
       )
@@ -329,7 +316,7 @@ object WorkflowInstancePersistence {
     */
   def bindEntryDefinitionC(
     definition: GeneratedEntryWorkflowAbi.Definition
-  ): Consequence[DefinitionBinding] =
+  ): Consequence[DefinitionBinding] = {
     if (definition == null)
       Consequence.stateConflict("generated entry Workflow definition is missing")
     else definition.validateC.map { admitted =>
@@ -344,64 +331,50 @@ object WorkflowInstancePersistence {
         workflowAbiIdentity = WorkflowAbiIdentity(GeneratedEntryWorkflowAbi.workflowSchemaVersion),
         bootstrapAbiIdentity = BootstrapAbiIdentity(GeneratedEntryWorkflowAbi.providedApiSchemaVersion),
         producerRevision = ProducerRevision(admitted.workflowRevision),
-        fixtureSha256 = FixtureSha256(admitted.fixtureSha256),
         admittedDefinition = null,
         admittedEntryDefinition = Some(admitted)
       )
     }
 
-  def validateC(binding: DefinitionBinding): Consequence[DefinitionBinding] =
-    if (binding == null)
-      _failure_c(Diagnostic(DiagnosticCode.MissingAbiProvenance, Map("kind" -> "definition-binding")))
-    else if (binding.admittedEntryDefinition.nonEmpty)
-      binding.admittedEntryDefinition.get.validateC.flatMap { admitted =>
-        _binding_diagnostic(binding).orElse(_entry_binding_consistency_diagnostic(binding, admitted)) match {
-          case Some(diagnostic) => _failure_c(diagnostic)
-          case None => Consequence.success(binding)
-        }
-      }
-    else if (binding.admittedCandidateDefinition.nonEmpty)
-      CandidateWorkflowAbi.admitC(binding.admittedCandidateDefinition.get).flatMap { admitted =>
-        _binding_diagnostic(binding).orElse(_candidate_binding_consistency_diagnostic(binding, admitted)) match {
-          case Some(diagnostic) => _failure_c(diagnostic)
-          case None => Consequence.success(binding)
-        }
-      }
-    else
-      _admit_definition_c(binding.admittedDefinition).flatMap { admitted =>
-        _binding_diagnostic(binding).orElse(_binding_consistency_diagnostic(binding, admitted)) match {
-          case Some(diagnostic) => _failure_c(diagnostic)
-          case None => Consequence.success(binding)
-        }
-      }
+  // The factories establish admission once. Reopening resolves that admitted
+  // execution definition; it does not re-admit raw bytes or certify mirrored
+  // source/producer facts on every record transition.
+  }
+  def validateC(binding: DefinitionBinding): Consequence[DefinitionBinding] = {
+    _binding_diagnostic(binding) match {
+      case Some(diagnostic) => _failure_c(diagnostic)
+      case None => Consequence.success(binding)
+    }
+  }
 
-  def validateC(boundary: SuspensionBoundary): Consequence[SuspensionBoundary] =
+  def validateC(boundary: SuspensionBoundary): Consequence[SuspensionBoundary] = {
     _suspension_diagnostic(boundary, None) match {
       case Some(diagnostic) => _failure_c(diagnostic)
       case None => Consequence.success(boundary)
     }
+  }
 
-  def validateC(configuration: Configuration): Consequence[Configuration] =
+  def validateC(configuration: Configuration): Consequence[Configuration] = {
     _configuration_diagnostic(configuration) match {
       case Some(diagnostic) => _failure_c(diagnostic)
       case None => Consequence.success(configuration)
     }
+  }
 
-  def validateC(record: InstanceRecord): Consequence[InstanceRecord] =
+  def validateC(record: InstanceRecord): Consequence[InstanceRecord] = {
     if (record == null)
       _record_diagnostic(record) match {
         case Some(diagnostic) => _failure_c(diagnostic)
         case None => Consequence.success(record)
       }
     else
-      validateC(record.definition).flatMap { _ =>
-        _record_diagnostic(record) match {
-          case Some(diagnostic) => _failure_c(diagnostic)
-          case None => Consequence.success(record)
-        }
+      _record_diagnostic(record) match {
+        case Some(diagnostic) => _failure_c(diagnostic)
+        case None => Consequence.success(record)
       }
+  }
 
-  private def _admit_definition_c(definition: GeneratedWorkflowAbi.Definition): Consequence[GeneratedWorkflowAbi.Definition] =
+  private def _admit_definition_c(definition: GeneratedWorkflowAbi.Definition): Consequence[GeneratedWorkflowAbi.Definition] = {
     if (definition == null)
       _failure_c(Diagnostic(DiagnosticCode.MissingAbiProvenance, Map("kind" -> "generated-definition")))
     else
@@ -421,168 +394,20 @@ object WorkflowInstancePersistence {
               ))
           }
       }
-
-  private def _binding_consistency_diagnostic(
-    binding: DefinitionBinding,
-    admitted: GeneratedWorkflowAbi.Definition
-  ): Option[Diagnostic] = {
-    val sourceCorrelation = SourceCorrelation(
-      SourceLocation(admitted.workflow.source.root.resource, admitted.workflow.source.root.line, admitted.workflow.source.root.column),
-      SourceLocation(admitted.workflow.source.definition.resource, admitted.workflow.source.definition.line, admitted.workflow.source.definition.column)
-    )
-    if (binding.workflowIdentity != WorkflowDefinitionIdentity(admitted.workflow.identity.value))
-      Some(Diagnostic(DiagnosticCode.InvalidDefinitionIdentity, Map("kind" -> "workflow-identity")))
-    else if (binding.workflowRevision != WorkflowDefinitionRevision(admitted.workflow.revision.value))
-      Some(Diagnostic(DiagnosticCode.InvalidDefinitionIdentity, Map("kind" -> "workflow-revision")))
-    else if (binding.sourceCorrelation != sourceCorrelation)
-      Some(Diagnostic(DiagnosticCode.InvalidDefinitionIdentity, Map("kind" -> "source-correlation")))
-    else {
-      val provenance = Vector(
-        "producer-abi" -> _value(binding.producerAbiIdentity),
-        "workflow-abi" -> _value(binding.workflowAbiIdentity),
-        "bootstrap-abi" -> _value(binding.bootstrapAbiIdentity),
-        "producer-revision" -> _value(binding.producerRevision),
-        "fixture-sha256" -> _value(binding.fixtureSha256)
-      )
-      val expected = Vector(
-        "producer-abi" -> admitted.producerAbiIdentity.value,
-        "workflow-abi" -> admitted.workflowAbiIdentity.value,
-        "bootstrap-abi" -> admitted.bootstrapSchemaIdentity.value,
-        "producer-revision" -> admitted.producerRevision.value,
-        "fixture-sha256" -> admitted.fixtureSha256.value
-      )
-      provenance.zip(expected).collectFirst { case ((kind, actual), (_, required)) if actual != required =>
-        Diagnostic(
-          DiagnosticCode.UnsupportedAbiProvenance,
-          Map("actual" -> actual, "expected" -> required, "kind" -> kind, "workflow" -> _definition_identity_value(binding.workflowIdentity))
-        )
-      }
-    }
   }
 
-  private def _candidate_binding_consistency_diagnostic(
-    binding: DefinitionBinding,
-    admitted: CandidateWorkflowAbi.Definition
-  ): Option[Diagnostic] = {
-    val expectedSource = SourceCorrelation(
-      SourceLocation(admitted.sourceResource, admitted.workflow.rootLine),
-      SourceLocation(admitted.sourceResource, admitted.workflow.definitionLine)
-    )
-    if (binding.admittedDefinition != null ||
-        binding.workflowIdentity != WorkflowDefinitionIdentity(admitted.workflow.identity) ||
-        binding.workflowRevision != WorkflowDefinitionRevision(admitted.workflow.version) ||
-        binding.sourceCorrelation != expectedSource)
-      Some(Diagnostic(DiagnosticCode.InvalidDefinitionIdentity, Map("kind" -> "candidate-workflow")))
-    else {
-      val expected = Vector(
-        "producer-abi" -> admitted.sidecar.schemaVersion,
-        "workflow-abi" -> CandidateWorkflowAbi.schemaVersion,
-        "bootstrap-abi" -> "not-applicable",
-        "producer-revision" -> admitted.sidecar.generator.schemaVersion,
-        "fixture-sha256" -> admitted.sha256
-      )
-      val actual = Vector(
-        "producer-abi" -> _value(binding.producerAbiIdentity),
-        "workflow-abi" -> _value(binding.workflowAbiIdentity),
-        "bootstrap-abi" -> _value(binding.bootstrapAbiIdentity),
-        "producer-revision" -> _value(binding.producerRevision),
-        "fixture-sha256" -> _value(binding.fixtureSha256)
-      )
-      actual.zip(expected).collectFirst { case ((kind, value), (_, required)) if value != required =>
-        Diagnostic(DiagnosticCode.UnsupportedAbiProvenance,
-          Map("kind" -> kind, "actual" -> value, "expected" -> required))
-      }
-    }
-  }
-
-  private def _entry_binding_consistency_diagnostic(
-    binding: DefinitionBinding,
-    admitted: GeneratedEntryWorkflowAbi.Definition
-  ): Option[Diagnostic] = {
-    val expectedSource = SourceCorrelation(
-      SourceLocation(admitted.sourceResource, admitted.rootLine),
-      SourceLocation(admitted.sourceResource, admitted.definitionLine)
-    )
-    if (binding.admittedDefinition != null || binding.admittedCandidateDefinition.nonEmpty ||
-        binding.workflowIdentity != WorkflowDefinitionIdentity(admitted.workflowIdentity) ||
-        binding.workflowRevision != WorkflowDefinitionRevision(admitted.workflowRevision) ||
-        binding.sourceCorrelation != expectedSource)
-      Some(Diagnostic(DiagnosticCode.InvalidDefinitionIdentity, Map("kind" -> "generated-entry-workflow")))
-    else None
-  }
-
-  private def _binding_diagnostic(binding: DefinitionBinding): Option[Diagnostic] =
+  private def _binding_diagnostic(binding: DefinitionBinding): Option[Diagnostic] = {
     if (binding == null)
       Some(Diagnostic(DiagnosticCode.MissingAbiProvenance, Map("kind" -> "definition-binding")))
     else if (_blank(binding.workflowIdentity) || _blank(binding.workflowRevision))
-      Some(Diagnostic(DiagnosticCode.InvalidDefinitionIdentity, Map(
-        "workflow" -> _definition_identity_value(binding.workflowIdentity)
-      )))
-    else if (_source_diagnostic(binding.sourceCorrelation).nonEmpty)
-      Some(Diagnostic(DiagnosticCode.MissingAbiProvenance, Map(
-        "kind" -> "source-correlation",
-        "workflow" -> _definition_identity_value(binding.workflowIdentity)
-      )))
-    else {
-      val provenance = Vector(
-        "producer-abi" -> _value(binding.producerAbiIdentity),
-        "workflow-abi" -> _value(binding.workflowAbiIdentity),
-        "bootstrap-abi" -> _value(binding.bootstrapAbiIdentity),
-        "producer-revision" -> _value(binding.producerRevision),
-        "fixture-sha256" -> _value(binding.fixtureSha256)
-      )
-      provenance.collectFirst {
-        case (kind, value) if _blank(value) =>
-          Diagnostic(DiagnosticCode.MissingAbiProvenance, Map(
-            "kind" -> kind,
-            "workflow" -> _definition_identity_value(binding.workflowIdentity)
-          ))
-      }.orElse {
-        val expected = if (binding.admittedEntryDefinition.nonEmpty) Vector(
-          "producer-abi" -> GeneratedEntryWorkflowAbi.producerIdentity,
-          "workflow-abi" -> GeneratedEntryWorkflowAbi.workflowSchemaVersion,
-          "bootstrap-abi" -> GeneratedEntryWorkflowAbi.providedApiSchemaVersion,
-          "producer-revision" -> binding.admittedEntryDefinition.get.workflowRevision,
-          "fixture-sha256" -> binding.admittedEntryDefinition.get.fixtureSha256
-        ) else if (binding.admittedCandidateDefinition.nonEmpty) Vector(
-          "producer-abi" -> CandidateAdmissionProducerAbi.acceptedSchemaVersion,
-          "workflow-abi" -> CandidateWorkflowAbi.schemaVersion,
-          "bootstrap-abi" -> "not-applicable",
-          "producer-revision" -> CandidateAdmissionProducerAbi.acceptedSchemaVersion,
-          "fixture-sha256" -> binding.admittedCandidateDefinition.get.sha256
-        ) else Vector(
-          "producer-abi" -> binding.admittedDefinition.producerAbiIdentity.value,
-          "workflow-abi" -> binding.admittedDefinition.workflowAbiIdentity.value,
-          "bootstrap-abi" -> binding.admittedDefinition.bootstrapSchemaIdentity.value,
-          "producer-revision" -> binding.admittedDefinition.producerRevision.value,
-          "fixture-sha256" -> binding.admittedDefinition.fixtureSha256.value
-        )
-        provenance.zip(expected).collectFirst {
-          case ((kind, actual), (_, required)) if actual != required =>
-            Diagnostic(DiagnosticCode.UnsupportedAbiProvenance, Map(
-              "actual" -> actual,
-              "expected" -> required,
-              "kind" -> kind,
-              "workflow" -> _definition_identity_value(binding.workflowIdentity)
-            ))
-        }
-      }
-    }
-
-  private def _source_diagnostic(source: SourceCorrelation): Option[Unit] =
-    if (source == null || _location_diagnostic(source.root) || _location_diagnostic(source.definition))
-      Some(())
-    else
-      None
-
-  private def _location_diagnostic(location: SourceLocation): Boolean =
-    location == null || _blank(location.resource) || location.line < 1 ||
-      location.column.exists(_ < 1)
+      Some(Diagnostic(DiagnosticCode.InvalidDefinitionIdentity, Map("kind" -> "definition-reference")))
+    else None
+  }
 
   private def _suspension_diagnostic(
     boundary: SuspensionBoundary,
     recordrevision: Option[InstanceRevision]
-  ): Option[Diagnostic] =
+  ): Option[Diagnostic] = {
     if (boundary == null)
       Some(Diagnostic(DiagnosticCode.IncompleteSuspensionBoundary, Map("kind" -> "boundary")))
     else if (_blank(boundary.continuationIdentity) ||
@@ -605,8 +430,9 @@ object WorkflowInstancePersistence {
       )))
     else
       None
+  }
 
-  private def _configuration_diagnostic(configuration: Configuration): Option[Diagnostic] =
+  private def _configuration_diagnostic(configuration: Configuration): Option[Diagnostic] = {
     if (configuration == null || configuration.workflowStore == null ||
       _blank(configuration.workflowStore.name) || _blank(configuration.workflowStore.identity))
       Some(Diagnostic(DiagnosticCode.MissingPersistencePolicy, Map("kind" -> "workflow-store")))
@@ -649,12 +475,15 @@ object WorkflowInstancePersistence {
         case null =>
           Some(Diagnostic(DiagnosticCode.MissingPersistencePolicy, Map("kind" -> "delivery")))
       }
+  }
 
-  private def _record_diagnostic(record: InstanceRecord): Option[Diagnostic] =
+  private def _record_diagnostic(record: InstanceRecord): Option[Diagnostic] = {
     if (record == null)
       Some(Diagnostic(DiagnosticCode.InvalidInstanceIdentity, Map("kind" -> "record")))
     else if (record.identity == null || _blank(record.identity.value))
       Some(Diagnostic(DiagnosticCode.InvalidInstanceIdentity, Map("kind" -> "instance")))
+    else if (record.history == null)
+      Some(Diagnostic(DiagnosticCode.NonAppendOnlyHistory, Map("reason" -> "missing-history")))
     else
       _binding_diagnostic(record.definition)
         .orElse(_references_diagnostic(
@@ -675,8 +504,9 @@ object WorkflowInstancePersistence {
           else
             _history_diagnostic(record)
         }
+  }
 
-  private def _initial_record_diagnostic(record: InstanceRecord): Option[Diagnostic] =
+  private def _initial_record_diagnostic(record: InstanceRecord): Option[Diagnostic] = {
     if (record.revision != initialRevision)
       Some(Diagnostic(DiagnosticCode.InvalidInitialRevision, Map(
         "actual" -> _revision_value(record.revision),
@@ -691,6 +521,7 @@ object WorkflowInstancePersistence {
       )))
     else
       None
+  }
 
   private def _history_diagnostic(record: InstanceRecord): Option[Diagnostic] = {
     val entries = record.history
@@ -734,7 +565,7 @@ object WorkflowInstancePersistence {
     entry: HistoryEntry,
     index: Int,
     previous: Option[HistoryEntry]
-  ): Option[Diagnostic] =
+  ): Option[Diagnostic] = {
     if (entry == null)
       Some(Diagnostic(DiagnosticCode.NonAppendOnlyHistory, Map(
         "instance" -> _identity_value(identity),
@@ -745,13 +576,13 @@ object WorkflowInstancePersistence {
       val expectedrevision = InstanceRevision(index.toLong + 1L)
       if (entry.sequence != expectedsequence)
         Some(Diagnostic(DiagnosticCode.InvalidNextSequence, Map(
-          "actual" -> entry.sequence.value.toString,
+          "actual" -> Option(entry.sequence).map(_.value.toString).getOrElse(""),
           "expected" -> expectedsequence.value.toString,
           "instance" -> _identity_value(identity)
         )))
       else if (entry.revision != expectedrevision)
         Some(Diagnostic(DiagnosticCode.InvalidNextRevision, Map(
-          "actual" -> entry.revision.value.toString,
+          "actual" -> _revision_value(entry.revision),
           "expected" -> expectedrevision.value.toString,
           "instance" -> _identity_value(identity)
         )))
@@ -772,30 +603,35 @@ object WorkflowInstancePersistence {
           identity
         ))
     }
+  }
 
   private def _references_diagnostic(
     correlation: CorrelationReference,
     causation: CausationReference,
     derived: Option[DerivedCompositeOccurrenceReference],
     predecessor: Option[CommittedEntityTransitionReference]
-  ): Option[Diagnostic] =
-    if (_blank(correlation) || _blank(causation) || derived.exists(_blank) || predecessor.exists(_blank))
+  ): Option[Diagnostic] = {
+    if (_blank(correlation) || _blank(causation) || derived == null || predecessor == null ||
+        derived.exists(_blank) || predecessor.exists(_blank))
       Some(Diagnostic(DiagnosticCode.MissingCorrelationOrCausation, Map(
         "kind" -> "correlation/causation/provenance"
       )))
     else
       None
+  }
 
   private def _lifecycle_diagnostic(
     lifecycle: Lifecycle,
     progression: Option[ProgressionReference],
     suspension: Option[SuspensionBoundary],
     revision: InstanceRevision
-  ): Option[Diagnostic] =
+  ): Option[Diagnostic] = {
     if (revision == null || revision.value < 0L)
       Some(Diagnostic(DiagnosticCode.InvalidInitialRevision, Map("kind" -> "revision")))
     else if (lifecycle == null)
       Some(Diagnostic(DiagnosticCode.IllegalLifecycleProgression, Map("reason" -> "missing-lifecycle")))
+    else if (progression == null || suspension == null)
+      Some(Diagnostic(DiagnosticCode.IllegalLifecycleProgression, Map("reason" -> "missing-progression-or-suspension")))
     else if (progression.exists(reference => reference == null || _blank(reference.value)))
       Some(Diagnostic(DiagnosticCode.IllegalLifecycleProgression, Map("reason" -> "empty-progression")))
     else
@@ -817,12 +653,13 @@ object WorkflowInstancePersistence {
         case _ =>
           None
       }
+  }
 
   private def _transition_diagnostic(
     previous: Lifecycle,
     next: Lifecycle,
     identity: InstanceIdentity
-  ): Option[Diagnostic] =
+  ): Option[Diagnostic] = {
     (previous, next) match {
       case (Lifecycle.NotStarted, Lifecycle.Active) |
           (Lifecycle.Active, Lifecycle.Active) |
@@ -835,6 +672,7 @@ object WorkflowInstancePersistence {
           "to" -> Option(next).map(_.value).getOrElse("")
         )))
     }
+  }
 
   private def _failure_c[A](diagnostic: Diagnostic): Consequence[A] =
     Consequence.Failure(Conclusion.from(new WorkflowInstancePersistenceException(diagnostic)))
@@ -900,9 +738,6 @@ object WorkflowInstancePersistence {
     Option(value).map(_.value).getOrElse("")
 
   private def _value(value: ProducerRevision): String =
-    Option(value).map(_.value).getOrElse("")
-
-  private def _value(value: FixtureSha256): String =
     Option(value).map(_.value).getOrElse("")
 
   private def _value(value: WorkflowStoreIdentity): String =

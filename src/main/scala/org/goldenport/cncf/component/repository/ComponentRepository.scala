@@ -32,7 +32,8 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Mar. 22, 2026
  *  version Apr. 25, 2026
  *  version May. 25, 2026
- * @version Aug. 27, 2026
+ *  version Aug. 27, 2026
+ * @version Oct.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -2629,7 +2630,7 @@ object ComponentRepository extends GlobalObservable {
     }
   }
 
-  private def _find_factory_class(
+  private[repository] def _find_factory_class(
     loader: URLClassLoader,
     classnames: Seq[String],
     artifactname: String,
@@ -2646,7 +2647,8 @@ object ComponentRepository extends GlobalObservable {
           _is_factory_class(cls) &&
           !cls.isInterface &&
           !Modifier.isAbstract(cls.getModifiers) &&
-          !cls.getName.endsWith("$")
+          !cls.getName.endsWith("$") &&
+          _has_public_noarg_constructor(cls)
         ) {
           Some(cls)
         } else {
@@ -2656,6 +2658,18 @@ object ComponentRepository extends GlobalObservable {
     }.toVector
     factories.sortBy(_factory_priority).headOption
   }
+
+  // Host-composed factories may implement the same type while requiring
+  // constructor dependencies. They are not reflection-discovery entry points.
+  // Inspect metadata only; selected factory initialization must still fail closed.
+  private def _has_public_noarg_constructor(cls: Class[_]): Boolean =
+    if (!Modifier.isPublic(cls.getModifiers)) false
+    else try {
+      Modifier.isPublic(cls.getDeclaredConstructor().getModifiers)
+    } catch {
+      case _: NoSuchMethodException => false
+      case _: SecurityException => false
+    }
 
   private def _is_factory_class(cls: Class[_]): Boolean =
     classOf[Component.BundleFactory].isAssignableFrom(cls) ||

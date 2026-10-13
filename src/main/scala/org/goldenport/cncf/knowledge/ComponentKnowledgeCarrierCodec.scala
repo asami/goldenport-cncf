@@ -11,12 +11,12 @@ import org.goldenport.Consequence
  * carrier is declaration-only and never reads or returns consumer content.
  *
  * @since   Aug. 26, 2026
- * @version Aug. 26, 2026
+ * @version Oct.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentKnowledgeCarrierCodec {
   private val _strict_json_parser = JawnParser(allowDuplicateKeys = false)
-  private val _fields = Set("carrierSchema", "consumerContractSchema", "logicalPath", "sha256")
+  private val _fields = Set("carrierSchema", "consumerContractSchema", "logicalPath")
 
   def decodeC(json: String): Consequence[ComponentKnowledgeCarrier] =
     _decode(json).fold(Consequence.argumentInvalid, Consequence.success)
@@ -33,12 +33,11 @@ object ComponentKnowledgeCarrierCodec {
       for {
         json <- _strict_json_parser.parse(text).left.map(error => s"Invalid Component knowledge carrier JSON: ${error.message}")
         root <- json.asObject.toRight("Component knowledge carrier must be a JSON object")
-        _ <- Either.cond(root.keys.toSet == _fields, (), "Component knowledge carrier must contain exactly carrierSchema, consumerContractSchema, logicalPath, and sha256")
-        carrierSchema <- _string(root, "carrierSchema")
-        consumerContractSchema <- _string(root, "consumerContractSchema")
-        logicalPath <- _string(root, "logicalPath")
-        sha256 <- _string(root, "sha256")
-        value = ComponentKnowledgeCarrier(carrierSchema, consumerContractSchema, logicalPath, sha256)
+        _ <- Either.cond(root.keys.toSet == _fields, (), "Component knowledge carrier must contain exactly carrierSchema, consumerContractSchema, and logicalPath")
+        carrierschema <- _string(root, "carrierSchema")
+        consumercontractschema <- _string(root, "consumerContractSchema")
+        logicalpath <- _string(root, "logicalPath")
+        value = ComponentKnowledgeCarrier(carrierschema, consumercontractschema, logicalpath)
         _ <- ComponentKnowledgeCarrier.validateC(value).toOption.toRight("Component knowledge carrier violates v1 validation")
       } yield value
     } catch {
@@ -52,7 +51,6 @@ object ComponentKnowledgeCarrierCodec {
     Json.obj(
       "carrierSchema" -> Json.fromString(value.carrierSchema),
       "consumerContractSchema" -> Json.fromString(value.consumerContractSchema),
-      "logicalPath" -> Json.fromString(value.logicalPath),
-      "sha256" -> Json.fromString(value.sha256)
+      "logicalPath" -> Json.fromString(value.logicalPath)
     )
 }

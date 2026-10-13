@@ -2,7 +2,6 @@ package org.goldenport.cncf.component.testutil
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
-import java.security.MessageDigest
 import java.util.zip.{ZipEntry, ZipOutputStream}
 import scala.util.Using
 
@@ -14,7 +13,8 @@ import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
 
 /*
  * @since   Jul. 28, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Oct.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 object CarArchiveFixture {
@@ -53,7 +53,7 @@ object CarArchiveFixture {
             )
         withabi :+ (
           CarRuntimeAdmission.MANIFEST_FILE ->
-            _runtime_manifest(name, version, component, withabi).getBytes(StandardCharsets.UTF_8)
+            _runtime_manifest(name, version, component).getBytes(StandardCharsets.UTF_8)
         )
       }.getOrElse(entries)
     }
@@ -144,12 +144,8 @@ object CarArchiveFixture {
   private def _runtime_manifest(
     name: String,
     version: String,
-    component: String,
-    entries: Seq[(String, Array[Byte])]
+    component: String
   ): String = {
-    val integrity = entries.sortBy(_._1).map { case (path, bytes) =>
-      s"""{"path":${_json_string(path)},"sha256":${_json_string(_sha256(bytes))}}"""
-    }.mkString("[", ",", "]")
     s"""{
        |  "schemaVersion": "${CarRuntimeAdmission.MANIFEST_SCHEMA}",
        |  "car": {
@@ -164,19 +160,10 @@ object CarArchiveFixture {
        |      "excluded": [],
        |      "tested": [${_json_string(CncfVersion.current)}]
        |    }
-       |  },
-       |  "integrity": {
-       |    "algorithm": "SHA-256",
-       |    "entries": $integrity
        |  }
        |}
        |""".stripMargin
   }
-
-  private def _sha256(bytes: Array[Byte]): String =
-    MessageDigest.getInstance("SHA-256").digest(bytes)
-      .map(byte => f"${byte & 0xff}%02x")
-      .mkString
 
   private def _json_string(value: String): String =
     "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""

@@ -25,7 +25,7 @@ import org.simplemodeling.model.datatype.EntityId
  * and multibyte text do not leak into application models.
  *
  * @since   May.  4, 2026
- * @version Jul. 24, 2026
+ * @version Sep. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 object ContentBodyStoragePolicy {
@@ -195,6 +195,8 @@ object ContentBodyStoragePolicy {
       z.flatMap { _ =>
         ctx.dataStoreSpace.dataStore(effect.collection).flatMap { datastore =>
           effect match {
+            case EntityVersionedSideEffect.Create(collection, entryid, record) =>
+              datastore.create(collection, entryid, record)
             case EntityVersionedSideEffect.Save(
                   collection,
                   entryid,

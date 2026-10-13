@@ -21,6 +21,7 @@ component.d
 ### Metals (VS Code Scala extension) ###
 .metals/
 project/**/.metals/
+*.semanticdb
 
 # metals.sbt をすべての階層で無視
 metals.sbt

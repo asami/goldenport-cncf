@@ -442,6 +442,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
         security.principal.attributes should not contain key("local_subject")
         security.principal.attributes should not contain key("subject_kind")
         subject.isAuthenticated shouldBe true
+        subject.isTrustedLocalAuthenticated shouldBe true
         subject.isProviderAuthenticated shouldBe false
         subject.hasRole("user") shouldBe true
       }
@@ -470,6 +471,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
         security.subjectKind shouldBe SubjectKind.User
         security.hasCapability("user") shouldBe true
         security.hasCapability("notification:read") shouldBe true
+        subject.isTrustedLocalAuthenticated shouldBe true
         subject.isProviderAuthenticated shouldBe false
       }
 
@@ -771,6 +773,8 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
         result shouldBe a[Consequence.Success[_]]
         val resolved = result.toOption.get.executionContext
         resolved.security.principal.id.value shouldBe "controlled-user"
+        SecuritySubject.from(resolved.security).isTrustedLocalAuthenticated shouldBe false
+        SecuritySubject.from(resolved.security).isProviderAuthenticated shouldBe false
         resolved.runtime.dataStoreSpace should be theSameInstanceAs base.runtime.dataStoreSpace
         resolved.runtime.entityStoreSpace should be theSameInstanceAs base.runtime.entityStoreSpace
         resolved.runtime.unitOfWork.executionContext.security.principal.id shouldBe resolved

@@ -1,8 +1,5 @@
 package org.goldenport.cncf.workflow
 
-import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
-
 import org.goldenport.Consequence
 
 /*
@@ -66,12 +63,10 @@ object GeneratedEntryWorkflowAbi {
     def validateC: Consequence[Definition] =
       if (workflowSchema != workflowSchemaVersion ||
           providedApiSchema != providedApiSchemaVersion ||
-          providedGenerator != providedGeneratorIdentity ||
           !_name(workflowIdentity) || !_name(workflowRevision) ||
           providedWorkflowIdentity != workflowIdentity ||
           providedWorkflowRevision != workflowRevision ||
           !_name(sourceResource) || rootLine <= 0 || definitionLine <= 0 ||
-          providedRootLine != rootLine || providedDefinitionLine != definitionLine ||
           postEntryOperation == null || terminalOperation == null ||
           additionalTerminalOperations == null || additionalStageOperations == null ||
           additionalStageOperations.nonEmpty && postEntryOperation.isEmpty ||
@@ -80,7 +75,6 @@ object GeneratedEntryWorkflowAbi {
           states == null || states.size != 1 + _stages.size + _terminals.size ||
           states.exists(state => state == null || !_name(state.identity) || state.sourceLine <= 0) ||
           states.map(_.identity).distinct.size != states.size ||
-          states.map(_.sourceLine).distinct.size != states.size ||
           actionCount != 0 || requiredOperationCount != 0 ||
           providedOperationCount != 1 + _stages.size + _terminals.size ||
           startOperation == null || !_name(startOperation.service) ||
@@ -92,53 +86,20 @@ object GeneratedEntryWorkflowAbi {
             operation.operation.startsWith("start") ||
             operation.service != startOperation.service ||
             !_name(operation.inputType) || !_name(operation.resultType) ||
-            operation.sourceLine <= startOperation.sourceLine) ||
+            operation.sourceLine <= 0) ||
           _stages.map(_.operation).distinct.size != _stages.size ||
-          _stages.map(_.sourceLine).sliding(2).exists {
-            case Vector(left, right) => left >= right
-            case _ => false
-          } ||
           _terminals.exists(operation => operation == null ||
             !_name(operation.service) || !_name(operation.operation) ||
             operation.operation.startsWith("start") ||
             operation.service != startOperation.service ||
             _stages.exists(_.operation == operation.operation) ||
             !_name(operation.inputType) || !_name(operation.resultType) ||
-            operation.sourceLine <= _stages.last.sourceLine) ||
-          _terminals.map(_.operation).distinct.size != _terminals.size ||
-          _terminals.map(_.sourceLine).sliding(2).exists {
-            case Vector(left, right) => left >= right
-            case _ => false
-          })
+            operation.sourceLine <= 0) ||
+          _terminals.map(_.operation).distinct.size != _terminals.size)
         Consequence.stateConflict("generated entry Workflow ABI is incomplete or not actionless")
       else Consequence.success(this)
 
-    def fixtureSha256: String = _sha256((Vector(
-      workflowSchema, providedApiSchema, providedGenerator, workflowIdentity, workflowRevision,
-      providedWorkflowIdentity, providedWorkflowRevision, sourceResource,
-      rootLine.toString, definitionLine.toString,
-      providedRootLine.toString, providedDefinitionLine.toString,
-      states.head.identity, states.head.sourceLine.toString,
-      actionCount.toString, requiredOperationCount.toString, providedOperationCount.toString,
-      startOperation.service, startOperation.operation, startOperation.inputType,
-      startOperation.resultType, startOperation.sourceLine.toString
-    ) ++ _stages.zipWithIndex.flatMap { case (operation, index) =>
-      Vector(states(index + 1).identity, states(index + 1).sourceLine.toString,
-        operation.service, operation.operation, operation.inputType,
-        operation.resultType, operation.sourceLine.toString)
-    } ++
-      _terminals.zipWithIndex.flatMap { case (operation, index) =>
-        Vector(states(index + _stages.size + 1).identity,
-          states(index + _stages.size + 1).sourceLine.toString,
-          operation.service, operation.operation, operation.inputType,
-          operation.resultType, operation.sourceLine.toString)
-      }).map(_framed).mkString)
   }
 
   private def _name(value: String): Boolean = value != null && value.trim.nonEmpty
-  private def _framed(value: String): String = s"${value.length}:$value"
-  private def _sha256(value: String): String =
-    MessageDigest.getInstance("SHA-256")
-      .digest(value.getBytes(StandardCharsets.UTF_8))
-      .map(byte => f"${byte & 0xff}%02x").mkString
 }

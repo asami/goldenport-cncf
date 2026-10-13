@@ -25,7 +25,8 @@ import scala.concurrent.duration.DurationInt
  * observability boundary without granting content or authorization authority.
  *
  * @since   Aug. 21, 2026
- * @version Aug. 22, 2026
+ *  version Aug. 22, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentResourceLifecycleSpec
@@ -39,7 +40,6 @@ final class ComponentResourceLifecycleSpec
   private val _documentation_id = ComponentId(s"$_namespace.RscDocumentation")
   private val _source_id = ComponentId(s"$_namespace.RscSourceCode")
   private val _repository = "https://repo.example.invalid/cncf/rsc"
-  private val _digest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
   private val _e1 = afterWord(
     "in spec:docs/notes/phase-58-rsc01b-failing-first-acceptance-registry.md, example:E1, rules:RSC07-AC-01, phase:58.6, slice:RSC-07A"
@@ -58,7 +58,7 @@ final class ComponentResourceLifecycleSpec
     "share one immutable resolved resource and coalesce concurrent owners to one loader execution" must _e1 {
       "when two owners resolve one stable lifecycle key concurrently" in {
         Given("one immutable ResolvedComponentResource, one stable ComponentResourceLifecycleKey, and a deterministic blocked loader")
-        val resource = _resource(_documentation_id, "Documentation", _digest)
+        val resource = _resource(_documentation_id, "Documentation")
         val key = _key(resource)
         val loader = new BlockingLoader(resource)
         val store = new ComponentResourceLifecycleStore()
@@ -100,8 +100,8 @@ final class ComponentResourceLifecycleSpec
     "return the completed first refresh flight to a concurrently admitted refresh owner" must _e1 {
       "when a second refresh reaches admission while the first refresh loader remains blocked" in {
         Given("a ready generation, a blocked replacement loader, and a second refresh request released only after it reaches the admission boundary")
-        val initial = _resource(_documentation_id, "Documentation", _digest)
-        val replacement = _resource(_documentation_id, "Documentation", _digest)
+        val initial = _resource(_documentation_id, "Documentation")
+        val replacement = _resource(_documentation_id, "Documentation")
         val key = _key(initial)
         val loader = new BlockingLoader(replacement)
         val store = new ComponentResourceLifecycleStore()
@@ -136,8 +136,8 @@ final class ComponentResourceLifecycleSpec
     "refresh deterministically creates a new generation and invalidation prevents stale reuse" must _e1 {
       "when a claimed resource is refreshed and then invalidated" in {
         Given("a stable key with immutable generation-one and generation-two evidence")
-        val firstresource = _resource(_documentation_id, "Documentation", _digest)
-        val secondresource = _resource(_documentation_id, "Documentation", _digest)
+        val firstresource = _resource(_documentation_id, "Documentation")
+        val secondresource = _resource(_documentation_id, "Documentation")
         val key = _key(firstresource)
         val store = new ComponentResourceLifecycleStore()
 
@@ -160,7 +160,7 @@ final class ComponentResourceLifecycleSpec
     "retain independent owner claims while one owner releases a shared resource" must _e1 {
       "when one of two owners releases its claim" in {
         Given("one ready resource claimed by two component instances")
-        val resource = _resource(_documentation_id, "Documentation", _digest)
+        val resource = _resource(_documentation_id, "Documentation")
         val key = _key(resource)
         val store = new ComponentResourceLifecycleStore()
         store.resolveBlocking(key, "component-instance-a", () => resource)
@@ -180,7 +180,7 @@ final class ComponentResourceLifecycleSpec
     "retain another owner claim when one component instance shuts down" must _e1 {
       "when shutdown is requested for only one owner of a shared resource" in {
         Given("one ready resource claimed by two component instances")
-        val resource = _resource(_documentation_id, "Documentation", _digest)
+        val resource = _resource(_documentation_id, "Documentation")
         val key = _key(resource)
         val store = new ComponentResourceLifecycleStore()
         store.resolveBlocking(key, "component-instance-a", () => resource)
@@ -202,7 +202,7 @@ final class ComponentResourceLifecycleSpec
     "preserve the actual first terminal outcome when release and unload race" must _e2 {
       "when two terminal operations contend for one ready generation" in {
         Given("one ready lifecycle generation and deterministic simultaneous release/unload contenders")
-        val resource = _resource(_documentation_id, "Documentation", _digest)
+        val resource = _resource(_documentation_id, "Documentation")
         val key = _key(resource)
         val store = new ComponentResourceLifecycleStore()
         store.resolveBlocking(key, "component-instance-a", () => resource)
@@ -237,7 +237,7 @@ final class ComponentResourceLifecycleSpec
     "let shutdown win once and preserve it against subsequent release or unload calls" must _e2 {
       "when a store is shut down after a resource has been loaded" in {
         Given("a store with one loaded resource and an owner claim")
-        val resource = _resource(_documentation_id, "Documentation", _digest)
+        val resource = _resource(_documentation_id, "Documentation")
         val key = _key(resource)
         val store = new ComponentResourceLifecycleStore()
         store.resolveBlocking(key, "component-instance-a", () => resource)
@@ -258,7 +258,7 @@ final class ComponentResourceLifecycleSpec
     "preserve cancellation as the terminal outcome and never publish canceled evidence" must _e2 {
       "when cancellation wins while resolution is still in flight" in {
         Given("a blocked loader, a cancellation token, and an empty cache generation")
-        val resource = _resource(_source_id, "SourceCode", _digest)
+        val resource = _resource(_source_id, "SourceCode")
         val key = _key(resource)
         val loader = new BlockingLoader(resource)
         val cancellation = new ComponentResourceLifecycleCancellation()
@@ -285,7 +285,7 @@ final class ComponentResourceLifecycleSpec
     "isolate a loading owner cancellation from an admitted waiting owner" must _e2 {
       "when the producer is canceled only after a second owner is observed in the shared flight" in {
         Given("a blocked producer with its own cancellation token and a second owner waiting in the same flight")
-        val resource = _resource(_source_id, "SourceCode", _digest)
+        val resource = _resource(_source_id, "SourceCode")
         val key = _key(resource)
         val loader = new BlockingLoader(resource)
         val cancellation = new ComponentResourceLifecycleCancellation()
@@ -328,7 +328,7 @@ final class ComponentResourceLifecycleSpec
     "cancel only a waiting owner while the loading owner publishes the shared resource" must _e2 {
       "when one waiter is admitted before its cancellation arrives and the first blocked loader completes" in {
         Given("a blocked loading owner, an observable admitted waiter, and a cancellation token owned only by that waiter")
-        val resource = _resource(_source_id, "SourceCode", _digest)
+        val resource = _resource(_source_id, "SourceCode")
         val key = _key(resource)
         val loader = new BlockingLoader(resource)
         val cancellation = new ComponentResourceLifecycleCancellation()
@@ -368,8 +368,8 @@ final class ComponentResourceLifecycleSpec
     "keep the first terminal cancellation when refresh races with an in-flight generation" must _e2 {
       "when refresh is requested after cancellation has won" in {
         Given("a canceled key with a replacement resource available to a later refresh request")
-        val original = _resource(_documentation_id, "Documentation", _digest)
-        val replacement = _resource(_documentation_id, "Documentation", _digest.reverse)
+        val original = _resource(_documentation_id, "Documentation")
+        val replacement = _resource(_documentation_id, "Documentation")
         val key = _key(original)
         val cancellation = new ComponentResourceLifecycleCancellation()
         cancellation.cancel() shouldBe true
@@ -390,7 +390,7 @@ final class ComponentResourceLifecycleSpec
     "propagate an interrupted wait without corrupting the producer flight or its owner claims" must _e2 {
       "when a waiting caller thread is interrupted while another owner remains in the blocked loader" in {
         Given("one blocked producer, one waiter thread, and a captured interruption result")
-        val resource = _resource(_source_id, "SourceCode", _digest)
+        val resource = _resource(_source_id, "SourceCode")
         val key = _key(resource)
         val loader = new BlockingLoader(resource)
         val store = new ComponentResourceLifecycleStore()
@@ -432,7 +432,7 @@ final class ComponentResourceLifecycleSpec
     "propagate a fatal loader error unchanged to an admitted waiter and permit a later retry" must _e2 {
       "when a LinkageError is raised after the waiter has joined the blocked shared flight" in {
         Given("a blocked fatal loader, an admitted waiter, and valid immutable retry evidence")
-        val resource = _resource(_source_id, "SourceCode", _digest)
+        val resource = _resource(_source_id, "SourceCode")
         val key = _key(resource)
         val failure = new LinkageError("fatal loader failure")
         val loader = new BlockingFailureLoader(failure)
@@ -483,7 +483,7 @@ final class ComponentResourceLifecycleSpec
     "propagate an interrupted loader exception unchanged to an admitted waiter and permit a later retry" must _e2 {
       "when an InterruptedException is raised after the waiter has joined the blocked shared flight" in {
         Given("a blocked interrupted loader, an admitted waiter, and valid immutable retry evidence")
-        val resource = _resource(_source_id, "SourceCode", _digest)
+        val resource = _resource(_source_id, "SourceCode")
         val key = _key(resource)
         val failure = new InterruptedException("interrupted loader failure")
         val loader = new BlockingFailureLoader(failure)
@@ -536,10 +536,9 @@ final class ComponentResourceLifecycleSpec
     "separate producer cancellation from admitted waiter provenance failure and permit a valid retry" must _rsc07b {
       "when a canceled loading producer releases mismatched evidence after a waiter is admitted" in {
         Given("a blocked producer with a cancellation token, an admitted waiter, mismatched loader evidence, and valid retry evidence")
-        val resource = _resource(_source_id, "SourceCode", _digest)
+        val resource = _resource(_source_id, "SourceCode")
         val mismatched = resource.copy(provenance = resource.provenance.copy(
-          sourceKind = ComponentResourceSourceKind.RemoteRepository,
-          sha256 = _digest.reverse
+          sourceKind = ComponentResourceSourceKind.RemoteRepository
         ))
         val key = _key(resource)
         val loader = new BlockingLoader(mismatched)
@@ -599,7 +598,7 @@ final class ComponentResourceLifecycleSpec
     "preserve a completed release result when waiter cancellation arrives afterward" must _rsc07b {
       "when release completes a blocked shared flight before the waiter's cancellation" in {
         Given("a blocked producer, an admitted waiter with a cancellation token, and one shared lifecycle flight")
-        val resource = _resource(_documentation_id, "Documentation", _digest)
+        val resource = _resource(_documentation_id, "Documentation")
         val key = _key(resource)
         val loader = new BlockingLoader(resource)
         val cancellation = new ComponentResourceLifecycleCancellation()
@@ -661,7 +660,7 @@ final class ComponentResourceLifecycleSpec
     "preserve a completed unload result when waiter cancellation arrives afterward" must _rsc07b {
       "when unload completes a blocked shared flight before the waiter's cancellation" in {
         Given("a blocked producer, an admitted waiter with a cancellation token, and one shared lifecycle flight")
-        val resource = _resource(_documentation_id, "Documentation", _digest)
+        val resource = _resource(_documentation_id, "Documentation")
         val key = _key(resource)
         val loader = new BlockingLoader(resource)
         val cancellation = new ComponentResourceLifecycleCancellation()
@@ -722,7 +721,7 @@ final class ComponentResourceLifecycleSpec
     "preserve a completed store shutdown result when waiter cancellation arrives afterward" must _rsc07b {
       "when store shutdown completes a blocked shared flight before the waiter's cancellation" in {
         Given("a blocked producer, an admitted waiter with a cancellation token, and one shared lifecycle flight")
-        val resource = _resource(_documentation_id, "Documentation", _digest)
+        val resource = _resource(_documentation_id, "Documentation")
         val key = _key(resource)
         val loader = new BlockingLoader(resource)
         val cancellation = new ComponentResourceLifecycleCancellation()
@@ -792,8 +791,7 @@ final class ComponentResourceLifecycleSpec
             componentId = _source_id,
             logicalRelease = _release,
             role = "SourceCode credential=unbounded",
-            sourceKind = ComponentResourceSourceKind.ExpandedCar,
-            artifactDigest = _digest
+            sourceKind = ComponentResourceSourceKind.ExpandedCar
           )
         }
 
@@ -804,12 +802,11 @@ final class ComponentResourceLifecycleSpec
     }
 
     "reject mismatched resource provenance before cache publication and permit a later valid retry" must _e3 {
-      "when loader evidence has a different source identity and digest than its lifecycle key" in {
-        Given("a valid key and immutable resource evidence whose source kind and digest do not match that key")
-        val resource = _resource(_source_id, "SourceCode", _digest)
+      "when loader evidence has a different source kind than its lifecycle key" in {
+        Given("a valid key and resource evidence whose source kind does not match that key")
+        val resource = _resource(_source_id, "SourceCode")
         val mismatched = resource.copy(provenance = resource.provenance.copy(
-          sourceKind = ComponentResourceSourceKind.RemoteRepository,
-          sha256 = _digest.reverse
+          sourceKind = ComponentResourceSourceKind.RemoteRepository
         ))
         val key = _key(resource)
         val store = new ComponentResourceLifecycleStore()
@@ -828,7 +825,7 @@ final class ComponentResourceLifecycleSpec
       }
     }
 
-    "emit only bounded component, release, role, source, digest, operation, and outcome evidence" must _e3 {
+    "emit only bounded component, release, role, source, operation, and outcome evidence" must _e3 {
       "when a failing resource produces more diagnostics than the configured bound" in {
         Given("a lifecycle store with a bounded diagnostic budget and an enabled optional CallTreeContext")
         val calltree = CallTreeContext.enabled
@@ -837,7 +834,7 @@ final class ComponentResourceLifecycleSpec
           callTreeContext = Some(calltree),
           callTreeEventLimit = 3
         )
-        val resource = _resource(_source_id, "SourceCode", _digest)
+        val resource = _resource(_source_id, "SourceCode")
         val key = _key(resource)
         val secret = "source-content:do-not-disclose credential=password secret=phase58-secret"
 
@@ -854,7 +851,6 @@ final class ComponentResourceLifecycleSpec
           diagnostic.release shouldBe _release
           diagnostic.role shouldBe "SourceCode"
           diagnostic.sourceKind shouldBe ComponentResourceSourceKind.ExpandedCar
-          diagnostic.artifactDigest shouldBe _digest
           diagnostic.operation shouldBe "resolve"
           diagnostic.outcome shouldBe ComponentResourceLifecycleOutcome.Failed
           val rendered = diagnostic.toString
@@ -884,8 +880,8 @@ final class ComponentResourceLifecycleSpec
         Given("one failing source resource and an independent documentation resource with separate lifecycle keys")
         val calltree = CallTreeContext.enabled
         val store = new ComponentResourceLifecycleStore(callTreeContext = Some(calltree))
-        val failedresource = _resource(_source_id, "SourceCode", _digest)
-        val goodresource = _resource(_documentation_id, "Documentation", _digest.reverse)
+        val failedresource = _resource(_source_id, "SourceCode")
+        val goodresource = _resource(_documentation_id, "Documentation")
         val failedkey = _key(failedresource)
         val goodkey = _key(goodresource)
 
@@ -911,16 +907,15 @@ final class ComponentResourceLifecycleSpec
       componentId = resource.logicalIdentity.componentId,
       logicalRelease = resource.logicalIdentity.logicalRelease,
       role = resource.logicalIdentity.childRole,
-      sourceKind = resource.provenance.sourceKind,
-      artifactDigest = resource.provenance.sha256
+      sourceKind = resource.provenance.sourceKind
     )
 
-  private def _resource(componentId: ComponentId, role: String, digest: String): ResolvedComponentResource =
+  private def _resource(componentid: ComponentId, role: String): ResolvedComponentResource =
     ResolvedComponentResource(
       logicalIdentity = ComponentResourceLogicalIdentity(
-        componentId = componentId,
+        componentId = componentid,
         logicalRelease = _release,
-        parentComponentId = if (componentId == _parent_id) None else Some(_parent_id),
+        parentComponentId = if (componentid == _parent_id) None else Some(_parent_id),
         childRole = role,
         logicalResource = s"urn:cncf:resource:phase58/${role.toLowerCase}"
       ),
@@ -928,7 +923,6 @@ final class ComponentResourceLifecycleSpec
         sourceKind = ComponentResourceSourceKind.ExpandedCar,
         repository = _repository,
         artifactCoordinate = s"org.example:rsc-${role.toLowerCase}:0.1.0",
-        sha256 = digest,
         normalizedRelativePath = s"expanded/rsc-${role.toLowerCase}/resource",
         logicalSource = s"composition-registry:rsc-${role.toLowerCase}",
         physicalSource = s"expanded-car:rsc-${role.toLowerCase}",

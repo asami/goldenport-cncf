@@ -8,13 +8,14 @@ import java.util.{IllformedLocaleException, Locale}
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{ExecutionIdMode, ExecutionOrderingMode, ExecutionProfileMode, ExecutionRandomMode, ExecutionSchedulerMode, ExecutionTimeMode, RuntimeClock}
 import org.goldenport.cncf.http.WebDisplayFormatPolicyId
-import org.goldenport.cncf.subsystem.SubsystemUserMode
+import org.goldenport.cncf.subsystem.{SubsystemStoragePlan, SubsystemStoragePlanCodec, SubsystemUserMode}
+import org.goldenport.cncf.processexecution.{RuntimeProcessExecutionPlan, RuntimeProcessExecutionPlanCodec}
 import org.goldenport.configuration.{CanonicalParameterId, ConfigurationParameter, ConfigurationValue, ConfigurationValueCodec}
 
 /*
  * @since   Aug.  3, 2026
  *  version Aug.  4, 2026
- * @version Oct.  3, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfConfigurationParameterCatalog private[config] (
@@ -62,6 +63,8 @@ object CncfConfigurationParameterCatalog {
   val STARTUP_IMPORT_DATA_FILE_KEY = "textus.import.data.file"
   val STARTUP_IMPORT_ENTITY_FILE_KEY = "textus.import.entity.file"
   val SYSTEM_NODE_SHUTDOWN_DRAIN_TIMEOUT_MILLIS_KEY = "textus.system-node.shutdown.drain-timeout-millis"
+  val SUBSYSTEM_STORAGE_PLAN_KEY = "textus.subsystem.storage.plan"
+  val SUBSYSTEM_PROCESS_EXECUTION_PLAN_KEY = "textus.subsystem.process-execution.plan"
   val OPERATION_MODE_KEY = "textus.operation-mode"
   val WEB_DEVELOP_ANONYMOUS_ADMIN_KEY = "textus.web.develop.anonymous-admin"
   val WEB_DEMO_ASSIST_ENABLED_KEY = "textus.web.demo-assist.enabled"
@@ -485,6 +488,11 @@ object CncfConfigurationParameterCatalog {
   private val _execution_environment_allow_parameter = _tokens_parameter(EXECUTION_ENVIRONMENT_ALLOW_KEY)
   private val _execution_environment_values_parameter = _environment_values_parameter(EXECUTION_ENVIRONMENT_VALUES_KEY)
 
+  private val _subsystem_storage_plan_parameter = _take(ConfigurationParameter.create(
+    _take(CanonicalParameterId.parse(SUBSYSTEM_STORAGE_PLAN_KEY)), SubsystemStoragePlanCodec))
+  private val _subsystem_process_execution_plan_parameter = _take(ConfigurationParameter.create(
+    _take(CanonicalParameterId.parse(SUBSYSTEM_PROCESS_EXECUTION_PLAN_KEY)), RuntimeProcessExecutionPlanCodec))
+
   private val _definitions =
     Vector(
       _take(
@@ -501,6 +509,14 @@ object CncfConfigurationParameterCatalog {
           Set(CncfConfigurationTargetKind.SubsystemInstance)
         )
       ),
+      _take(CncfConfigurationParameterDefinition.registered(
+        SUBSYSTEM_STORAGE_PLAN_KEY, Vector.empty, _subsystem_storage_plan_parameter,
+        Vector("phase-88: host storage configuration"), isConfidential = true,
+        Set(CncfConfigurationTargetKind.SubsystemInstance))),
+      _take(CncfConfigurationParameterDefinition.registered(
+        SUBSYSTEM_PROCESS_EXECUTION_PLAN_KEY, Vector.empty, _subsystem_process_execution_plan_parameter,
+        Vector("runtime-owned Process Execution bootstrap"), isConfidential = true,
+        Set(CncfConfigurationTargetKind.SubsystemInstance))),
       _web_definition(_web_execution_locale_parameter),
       _web_definition(_web_execution_timezone_parameter),
       _web_definition(_web_execution_date_format_parameter),
@@ -563,6 +579,10 @@ object CncfConfigurationParameterCatalog {
 
   val subsystemUserMode: ConfigurationParameter[SubsystemUserMode] =
     _subsystem_user_mode_parameter
+  private[cncf] val subsystemStoragePlan: ConfigurationParameter[SubsystemStoragePlan] =
+    _subsystem_storage_plan_parameter
+  private[cncf] val subsystemProcessExecutionPlan: ConfigurationParameter[RuntimeProcessExecutionPlan] =
+    _subsystem_process_execution_plan_parameter
   val fixedUserId: ConfigurationParameter[String] = _fixed_user_id_parameter
   val fixedUserDisplayName: ConfigurationParameter[String] = _fixed_user_display_name_parameter
   val fixedUserLocale: ConfigurationParameter[Locale] = _fixed_user_locale_parameter

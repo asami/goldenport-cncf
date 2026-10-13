@@ -55,7 +55,8 @@ import org.simplemodeling.model.directive.Update
  *  version Apr. 29, 2026
  *  version May. 11, 2026
  *  version Aug.  1, 2026
- * @version Sep. 19, 2026
+ *  version Sep. 19, 2026
+ * @version Oct.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -185,12 +186,14 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   private def _execute[A](
     op: UnitOfWorkOp[A]
   ): Consequence[A] =
-    _validate_entity_collection_resolution(op)
+    uow.executionOperationAdmissionC.flatMap(_ => _validate_entity_collection_resolution(op))
       .flatMap(_ => _execute_validated(op))
 
   private def _execute_validated[A](
     op: UnitOfWorkOp[A]
   ): Consequence[A] = op match {
+    case UnitOfWorkOp.StageWorkflowClosingLocalIntent(_) =>
+      Consequence.stateConflict("Closing local intent requires its managed preparation interpreter")
     case UnitOfWorkOp.Authorize(authorization) =>
       _with_calltree("uow:authorize") {
         _authorize(Some(authorization))
@@ -1878,10 +1881,14 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     request: ProviderExecutionRequest
   ): Consequence[ProviderExecutionRequest] =
     if (request == null || request.runId == null || request.requiredOperation == null ||
-        request.requiredOperation.identity == null || request.context == null)
+        request.requiredOperation.identity == null || request.context == null || request.executionRequirement == null)
       Consequence.stateConflict("StateMachine Provider request is incomplete")
-    else
-      Consequence.success(request)
+    else request.executionRequirement match {
+      case Some(requirement) if requirement == null =>
+        Consequence.stateConflict("StateMachine Provider execution requirement is incomplete")
+      case Some(requirement) => requirement.validateC.map(_ => request)
+      case None => Consequence.success(request)
+    }
 
   private def _admit_state_machine_provider_result_c(
     request: ProviderExecutionRequest,

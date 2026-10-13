@@ -64,7 +64,7 @@ The [Step acceptance journal](../journal/2026/10/2026-10-04-phase-69.7-jm69-09-s
 records the review, selected validation and retained findings. Dated authored
 sections below retain their historical pending states; this current summary
 supersedes those JM69-09 status projections without rewriting their evidence.
-JM69-10 remains OPEN and Phase 69.7 remains IN_PROGRESS. Real CNCF two-process
+JM69-10 remains OPEN and Phase 69.7 remains IN_PROGRESS. Real CNCF two-process/CBD
 acceptance, predecessor audits, aggregate full validation, the sole epoch-1
 Phase full review and final local release remain required.
 
@@ -240,6 +240,280 @@ Evidence:
   criterion is checked; Step review and commit remain pending. D and JM69-10 must
   still prove configured production maintenance ownership and fresh-process
   behavior; authored B2 scenarios do not close these obligations.
+
+- JM69-09B3B3C2A authors shared State lifetime policy8192 task slots/524288
+  history credits/16384 admissions with inclusive positive lower-only binding.
+  Root/Retry batch costs2n/32+64n/one admission/prepaid Cancel; initial notes add
+  exact rows. Sync/Async child costs2/96/one/prepaid Cancel, including nested
+  single-lease execution. Apply controls and Unit annotations pay before effects;
+  Replay is free, fixed profile note is once-only and prepaid closure/compensation
+  survives expansion exhaustion. Published charges never refund on completion,
+  Cancel, retry clear, removal, failure, shutdown or another owner attachment.
+  Complete pure bootstrap/native conservative floors preserve current structure,
+  existing tickets/claims and signed native revision/timestamps/bytes. Retry field
+  merges retain all latest-record history. [Job Lifetime Resource Contract](../spec/job-lifetime-resource-contract.md),
+  [JobLifetimeAdmissionSpec](../../src/test/scala/org/goldenport/cncf/job/JobLifetimeAdmissionSpec.scala),
+  [JobLifetimeConcurrencySpec](../../src/test/scala/org/goldenport/cncf/job/JobLifetimeConcurrencySpec.scala)
+  and [JobLifetimeRecoverySpec](../../src/test/scala/org/goldenport/cncf/job/JobLifetimeRecoverySpec.scala)
+  author23 LS/LC/LR scenarios and24 fixed-seed real action checks per Spec with
+  manual engine/EventStore/physical timer/counter facts, bounded shared-owner
+  races and signed native positive/refused recovery. Actual C2A
+  `PHASE-69.7-JM69-09B3B3C2A-VAL-003` discovered50 suites and passed433 tests,
+  zero failures, zero compiler warnings and one existing SqliteDataStore pending
+  example. Immutable receipt SHA256 is
+  `b6dc2aea3c4ef0ccfea78d10ef1b79ec4874c5047583aa41710ae66425401f37`.
+  Independent review, Step acceptance and commit remain pending. Mandatory C2B
+  must provide native persisted lifetime/unused-credit authority and integration;
+  runtime seed floors cannot supply process-restart proof. Original50 Specs,
+  C1 semantic assertions, both
+  exact B3B2 fixture corrections and all validated predecessor slices remain
+  preserved. Canonical HYG-PH697-SQL-SIZE-01 remains separate maintenance.
+  No Step/Phase/aggregate checklist criterion is closed; C/D, every JM69-10
+  fixture/CBD Support acceptance, ancestry audit, aggregate final validation,
+  independent reviews, version evidence and local/release commits remain required.
+
+- JM69-09B3B3C2B1 authors one private native Pending/Published lifetime singleton,
+  exact lower-only persisted policy, original paid deltas, unused normal slots,
+  once-only association/original claim and prepaid Cancel intent. Held bytes are
+  4096+4096×chargedTasks per entry with bounded512-byte opaque IDs; capacity is
+  prepaid before future normal/claim spelling exists. Native compatible routes,
+  one bounded empty Job census, exact signed root/owner proof and acknowledged
+  observed-revision OCC own provider authority. Explicit stale/duplicate-bootstrap
+  retries are at most eight; generic/lost acknowledgements never retry or refund.
+  [Durable Job Lifetime Quota Contract](../spec/durable-job-lifetime-quota-contract.md)
+  and [DurableJobLifetimeQuotaSpec](../../src/test/scala/org/goldenport/cncf/job/DurableJobLifetimeQuotaSpec.scala)
+  author LQ1..LQ16 against real SQLite independent owners, closed-provider reopen,
+  native CAS races, actual commit-before-response-loss faults, exact metadata and
+  24 fixed-seed finite sequences. B1 VAL-003 completed51 suites:449 tests ran,
+  433 passed and16 new lifetime examples failed with zero compiler warnings and
+  one existing pending example. Parent diagnosis confirmed the shared SQL
+  reader omitted lifetime native text preservation. After the SQL correction,
+  B1 VAL-004 completed51 suites:449 tests ran,447 passed and2 failed with zero
+  compiler warnings and one existing pending example. All8 SQL cases and15 of16
+  lifetime cases passed. Remaining LQ14 used an unused zero-response hook; LC5
+  selected an original by unstable page position. The bounded fixture correction
+  targets the actual versioned update and unique compensation linkage. Of the
+  prior50 Specs,48 remain byte-identical; only SQL canonical text and LC5 fixtures
+  change. Other existing production Scala sources remained unchanged by B1.
+  Current B1 `PHASE-69.7-JM69-09B3B3C2B1-VAL-005` passed449 tests in51 suites,
+  zero failures, zero compiler warnings and one existing pending example;
+  receipt SHA256 is
+  `1f5b2332120960147b6b8b91145e6f02f644ac120133beccee5a519ab20aa646`.
+  Sealed independent combined M2 PASS SHA256 is
+  `414d9ab586ead4ffe5c7ed9a8bef628ed53b8d3f78d844678764a36676f25392`.
+  This accepted incremental B1 proof does not establish Step/Phase acceptance
+  or a commit. Existing unit1/2/3 repair ledgers and exhausted B1 pre-review
+  repair budget remain unchanged. Root A is authored; actual production still
+  has no bridge-binding caller.
+  Mandatory C2B2B must bind actual State/runtime child/control/Retry/annotation/normal/compensation,
+  bootstrap/native runtime/terminal recovery and legacy/missing-authority fixtures.
+  Source/port precedence, signed truth, original candidate discard and prepaid
+  closure stay mandatory; historical floors cannot silently reconstruct missing
+  restart authority or refund Pending evidence. Persisted Cancel intent must be
+  honored before recovery/new work. B1 does not close original C2B or any real
+  JM69-10 two-process/actual CBD Support fresh-runtime acceptance. Ten prior
+  accumulators, remaining C/D, predecessor69.4–69.6 ancestry/deferred obligations,
+  independent Step reviews/local commits, aggregate final full validation, one
+  mandatory Phase full review and local release commit remain required.
+  HYG-PH697-SQL-SIZE-01 stays separate maintenance. All criteria remain unchecked;
+  JM69-09/Phase69.7 remain IN_PROGRESS and JM69-10 OPEN.
+
+- JM69-09B3B3C2B2A authors the first concrete C2B2 root acknowledgement pipeline:
+  pure actual State lower-only lifetime/task/note admission, one original closed
+  Admission evidence/projectV2, acknowledged Pending reserve, ordinary signed
+  revision1 Store create, then acknowledged Published confirmation before bridge
+  handles or local lifetime/physical publication/scope/record/event/timer/queue/
+  body. The Store factory uses its exact constructor-owned EntityStore; configured
+  global caps/default4096 jobs/67108864 bytes and persisted matching remain exact.
+  Failed acknowledgement retains actual paid Pending/Published/signed ghosts
+  without refund/readback inference and releases the physical provisional lease.
+  The existing publish confirmation-unavailable failure remains unchanged.
+  [JobDurableLifetimeAdmissionSpec](../../src/test/scala/org/goldenport/cncf/job/JobDurableLifetimeAdmissionSpec.scala)
+  authors NRA1..NRA8, real SQLite/manual Sync/Async engine fixtures, exactly one
+  fault delivery after actual writes, fresh closed/reopened owners and24 seeded
+  finite native sequences with actual adjacent GWT/direct should. Focused validation passed after the frozen test-only repairs.
+  Actual root A `PHASE-69.7-JM69-09B3B3C2B2A-VAL-001` completed53 suites:
+  463 tests ran,458 succeeded and5 failed, with zero compiler warnings and one
+  existing pending example. Receipt SHA256 is `95ec13eb66279d2a89a04dc9d9325af75e8cd7fc3294a96e5700f53f2dd10966`.
+  The five failures are NRA2 (missing fixture Detached JobEntity binding), NRA7
+  (nonterminal V1 fixture), NRA8 (generated failure context hidden), and the two
+  existing durable cancellation scenarios (pending removal assertions). The frozen
+  test-only repair installs the declared Detached fixture binding, creates a legal
+  terminal V1 record, adds ScalaCheck Test.Result clues, and asserts synchronous
+  cancel pending removal with once-only terminal/event gates and finally cleanup.
+  VAL-002 stopped before tests because Cozy's development classpath was stale;
+  the authorized build-only classpath refresh succeeded. VAL-003 and diagnostic
+  VAL-004 each completed53 suites:463 tests ran,462 passed and only NRA8 failed,
+  with zero compiler warnings and one existing pending example. Diagnostic
+  evidence exposed a sequential fixture declaring every task as a root while
+  the engine correctly gave subsequent tasks a parent. The test-only repair
+  declares the first task root and subsequent tasks child, retains original
+  counters, seed6970933621, normal shrinking and at least24 successful runs,
+  and verifies live and signed parent-chain observations.
+
+  Actual `PHASE-69.7-JM69-09B3B3C2B2A-VAL-005` completed53 suites:463 tests ran
+  and all463 succeeded, with zero failures, zero compiler warnings and one
+  existing pending example. Receipt SHA256 is
+  `fa5db495b95e3f0c78a3aff7c75299f75d466b1e7c2344bd00832a6933b1eace`.
+  Original LC5 and LQ14 remain passed. All eleven prior validated implementation
+  accumulators are preserved; independent root conformance review is PASS.
+  The two lifecycle-event cancellation scenarios are explicitly admitted and
+  the prior B1 validation vector remains intact. Root A is focused-validated;
+  C2B2, Step and Phase remain incomplete. No Step/full-Phase acceptance or
+  full-Phase review PASS is claimed. Root conformance PASS is bounded incremental proof.
+  [Oct2 journal](../journal/2026/10/2026-10-02-phase-69.7-native-lifetime-root-admission.md)
+  records this bounded Slice. Its binding is quota/access ownership only, with
+  unused native normals retained until actual dispatch. Authored B1 now installs
+  State/runtime child/Retry/control/annotation/association/claim/Cancel authority,
+  with focused validation complete; independent Slice conformance, Step acceptance
+  and commit remain pending. B2 exact fresh-State runtime/terminal registration
+  retains actual `PH697-B2-ACC-002` 55-suite/503-success and `PH697-B2-LR-005` 6/6
+  focused validation; independent review remains pending.
+  Original Phase69.7 and C2B2 are incomplete; A/B introduce no Phase split or
+  Step acceptance. Current production has no bridge-binding caller, leaving
+  JM69-09D/JM69-10 actual configured wiring, real two-process and CBD Support
+  fresh-runtime acceptance owed. Full predecessor69.4–69.6 ancestry/deferred
+  obligations, independent Step reviews/local commits, aggregate final full
+  validation, one comprehensive Phase review and final local release remain
+  required. HYG-PH697-SQL-SIZE-01 remains separate maintenance. No checkbox closes.
+
+- JM69-09B3B3C2B2B1 revision2 authors the complete native live-runtime boundary
+  under the existing State monitor, using admitted root context/Bridge/shared
+  scope and exact authenticated native paid proof. Ambiguous claims/association
+  close normal settlement and retain ghosts, with no refunds/readback success;
+  uncertain original selectors cannot be reissued but other owed claims/prepaid
+  safety remain available. Same-State bootstrap restores exact native supersets
+  after whole pure validation; no floor/max imports or regenerated Cancel credit.
+  V2 normal aggregates are validated without erasure or invented descriptors;
+  absent-action missing requires completed committed original/nonblank failure/
+  no companion/both recovery flags, and actual companions retain strict equality.
+  NRT-A..K/P1..P3 and NRA1/NRA8 changes passed current runtime VAL-003 focused
+  validation; independent Slice conformance, Step acceptance and commit remain pending.
+  All12 Slice accumulators and exact receipt/review identities remain unchanged;
+  root pre-review3/3, prior B1 units1/2/3 exhausted, Step/Phase cycles0/3 and
+  planepoch1 are retained. HYG-PH697-ROOTA-VALIDATION-PROJECTION-01 is corrected
+  from existing Root A VAL-005/conformance PASS, without new assurance.
+  Authored B2 fresh-State runtime/terminal registration authenticates Published
+  native Seeds, preserves original source/load/classifier/port/input precedence,
+  and refuses missing/corrupt/legacy authority or observes Cancel before timer/queue.
+  Actual B2 `PH697-B2-ACC-002` completed 55 suites with 503 succeeded, zero failed
+  and one existing pending; `PH697-B2-LR-005` passed 6/6 focused checks.
+  Independent review remains pending. C/D, JM69-10, predecessor
+  audit, aggregate full validation, independent reviews and local/release commits
+  remain mandatory; no checkbox is closed. See the
+  [runtime journal](../journal/2026/10/2026-10-02-phase-69.7-native-lifetime-runtime.md).
+
+- JM69-09B3B3C2B2B2 revision3 authors exact Published V2 recovery with explicit
+  supplied-store/complete-policy/access/caller-context authentication and whole
+  signed snapshot/provider-revision equality. Pure obligations/local collision
+  checks precede native reads; physical staging and one atomic bridge adoption
+  precede State Seed/record/due publication. Registration pays nothing and imports
+  no floors, maxima or Cancel credits. Closed terminal binding has authoritative
+  bridge=None and authenticated numeric diagnostics, with no executable record.
+  Confirmed Cancel applies original once-only safety before metadata/timer/queue
+  and uses only its narrow authenticated zero-model terminal checkpoint.
+  Normal JobRun preserves closed history and continues N-relative OCC; stale/
+  lost/refused acknowledgement withholds later body/canonical success. Recovery
+  RetryRun/Control signed-write exclusions and new-root1/2/3 remain intact.
+  [JobDurableLifetimeRecoverySpec](../../src/test/scala/org/goldenport/cncf/job/JobDurableLifetimeRecoverySpec.scala)
+  authors NR1..NR24, real SQLite close/reopen, actual acknowledgement faults,
+  bounded adoption race and independent Seed6970933641/min24 shrinking arithmetic.
+  Positive legacy fixtures use genuine native publication, complete metadata and
+  exact paid vectors; LR5/IR5/accepted IR6 signed named Absent inputs retain their
+  unchanged transient input/sanitizer checks. Original negative boundaries and
+  local LR1/LR2 remain. See the
+  [B2 authoring journal](../journal/2026/10/2026-10-02-phase-69.7-native-lifetime-recovery.md).
+
+Pending B2 acceptance checkpoints (actual focused receipts retained; acceptance is pending):
+
+- [ ] Parent verifies exact27-path authoring, same-file compliance and all NR1..NR24/legacy GWT mappings against immutable revision3.
+- [ ] Parent confirms the selected B2 representative/accumulator receipt binding: retained `PH697-B2-ACC-002` completed 55 suites with 503 succeeded, zero failed and one existing pending, and `PH697-B2-LR-005` passed 6/6 focused checks; prior B1 VAL-00554-suite/479-success evidence remains B1 only.
+- [ ] Complete independent incremental and whole-Step review, including CPB-PH697-NRT-DISPATCH-REFUSAL-01 and CPB-PH697-NRT-CANCEL-SETTLEMENT-01, Step acceptance and local commit.
+- [ ] Preserve HYG-PH697-SQL-SIZE-01 and HYG-PH697-ROOTA-VALIDATION-PROJECTION-01 as separate maintenance and every original C/D/JM69-10/ancestry/final-validation/review/version/release obligation.
+
+Authored JM69-09C1 operational lifecycle metrics:
+
+- One optional JobEngine capability and exact same-State recorder observe the
+  fourteen native emitted facts in 56 finite cumulative saturated cells, using
+  exactly family/operation/outcome/persistence/run_mode labels. Snapshot reads
+  add no clock/ID/provider/management/health effects; counters are non-authoritative
+  and nonpersisted, with no old recovery reconstruction or sink acknowledgement claim.
+- The actual metrics component uses a deferred subsystem-engine supplier,
+  appending exact points before existing OTEL export and preserving old scopes
+  and four-argument service callers. The
+  [Job Operational Metrics Contract](../spec/job-operational-metrics-contract.md)
+  links the three Specs authoring OM1..OM4, ON1..ON6 and MC1..MC2 with GWT/should.
+- [x] Parent verified exact14-path C1 authoring/current before-state and scenario evidence; actual selected representative `PH697-C1-REP-004` passed3 suites12/12 and extended original accumulator `PH697-C1-ACC-001` passed61 suites519/519, zero failed, one existing pending, zero compiler warnings; known JVM Unsafe baseline separate.
+- [ ] Complete independent C1 conformance, M2 assurance of five fixture substitutions in two Specs, and original whole-Step review/acceptance/local commit; authoring and focused receipts do not close these gates.
+- [ ] Finish C authoritative refusal/admission, immediate queue/child/attempt, pagination, storage, expiry, corruption and payload metrics, all original correlation/redaction/audit entities and health/readiness/configured-capability refusal.
+- [ ] Finish D configured production lifecycle/write-bridge/maintenance owner, integrity, backup/restore/migration checkpoint and actual owner-close/fresh-runtime evidence.
+
+All JM69-10 actual two-process/CBD Support fixtures, predecessor69.4–69.6
+ancestry/deferred audit, independent complete Step reviews/local commits, final
+aggregate full validation, original epoch1 sole full Phase review, version and
+local release remain mandatory. Original CPBs/repair ledgers/HYG records remain.
+JM69-09/Phase remain IN_PROGRESS and JM69-10 OPEN; no aggregate checkbox closes.
+See the [Oct3 journal](../journal/2026/10/2026-10-03-phase-69.7-operational-metrics.md).
+
+Authored JM69-09C2 public operation metrics:
+
+- [Job Operation Metrics Contract](../spec/job-operation-metrics-contract.md) authors
+  eleven closed completed-result cells, strict identical-result wrappers, preserved
+  double submit preflight/default order, policy-before-shape and lazy readers,
+  same-State history and independent snapshots. Closed two-label metrics introduce
+  no diagnostic retention or durable/audit/health authority.
+- PM1..PM3 and PN1..PN8 are authored in the two new Specs; ON1..ON6 and MC1..MC2
+  retain their original GWT and native evidence with exact additive expectations.
+- [x] Parent verified exact16-path C2 authoring/current source observations and
+  original scenario evidence; actual `PH697-C2-REP-002` passed4 suites19/19 and
+  `PH697-C2-ACC-001` passed63 suites530/530, zero failed and one original pending,
+  with typed readers0 and released locks. REP001 had14 passed/5 failed of19 before
+  four frozen substitutions in two Specs. This checks completed-call implementation
+  and those historical catalog23 receipts only; both C1/C2 M2 independent assurance
+  items remain pending-not-waived.
+- [ ] Original complete JM69-09 independent review/M2 assurance, remaining C
+  authoritative operation metrics/security/correlation/audit/configured health,
+  D production ownership, and local Step acceptance remain open.
+
+No aggregate admission/control/pagination or Step/Phase gate is checked by this
+partial metrics layer. Every original JM69-10 fixture, ancestry/deferred audit,
+aggregate final full validation, sole epoch1 Phase review and release remains.
+See the [C2 Oct3 journal](../journal/2026/10/2026-10-03-phase-69.7-operation-metrics.md).
+
+Authored JM69-09C3 durable operation metrics:
+
+- [Durable Job Operational Metrics Contract](../spec/durable-job-operational-metrics-contract.md)
+  defines59 explicit result cells with two fixed labels and exact error subsets,
+  one recorder per native Store, original authorization/effect/result/OCC/quota
+  semantics and primitive-only snapshot reads. Fresh Store is empty; counters
+  neither reconstruct durable history nor grant readiness/disposal authority.
+- [x] C3 authored/selected-validation-passed child item only: exact18 paths include
+  five strict native adapters, recorder/catalog24, DU1..DU3/DS1..DS5/DM1..DM6
+  (14 actual GWT/afterWord/should leaves), native SQLite/Blob fixture helper and
+  MC1 catalog24 companion update. Actual `PH697-C3-REP-006` passed4 suites16/16,
+  0 failed/0 pending; `PH697-C3-ACC-001` passed66 suites (original63+3)544/544,
+  0 failed/1 original pending. Both had0 aborted suites,0 compiler warnings,
+  SBT/wrapper/native executor exits0, typed readers0 and released locks. Exact
+  preprojection18-path subjects (REP006 revision6, ACC001 revision7) are retained;
+  twelve tested program paths are unchanged by the separate four-doc projection.
+  No receipt rebinding, full-repository or aggregate acceptance follows; prior
+  C2 receipts remain historical.
+- [ ] C3 independent complete original JM69-09 Step assurance remains pending.
+  Both C1/C2 and C3 fixture-qualifier/message-qualifier/native-assertion M2
+  items remain pending-not-waived. Override-only M0 has exact-diff and existing
+  focused compile evidence, with no independent review claimed. The predecessor
+  three-unit compiler batch and narrow one-unit assertion successor remain.
+  Original CPBs, remaining C correlation/redaction/audit/
+  configured health and D configured lifecycle/maintenance owner/integrity/
+  backup/restore/migration/close remain. Actual local scheduler callbacks/close
+  are not production-owner or fresh-process evidence.
+
+No aggregate JM69-09C/D, JM69-10, ancestry/deferred audit, complete Step review,
+aggregate final validation, sole epoch1 Phase review or release gate is closed by
+C3. Step1/3 and Phase0/3 repair histories, original Goal/base/epoch1 and both
+Hygiene follow-ups are retained. C3 selected validation passed; no remote action or
+successor work is recorded. See the
+[C3 Oct3 journal](../journal/2026/10/2026-10-03-phase-69.7-durable-job-operational-metrics.md).
 
 - JM69-09B3B3C2A authors shared State lifetime policy8192 task slots/524288
   history credits/16384 admissions with inclusive positive lower-only binding.

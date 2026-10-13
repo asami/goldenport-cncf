@@ -1,7 +1,6 @@
 package org.goldenport.cncf.projection
 
 import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.component._
@@ -22,7 +21,8 @@ import org.scalatest.wordspec.AnyWordSpec
  *
  * @since   Aug. 22, 2026
  *  version Aug. 26, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ResolvedComponentResourcesConsumerSpec
@@ -50,7 +50,6 @@ final class ResolvedComponentResourcesConsumerSpec
     _ordinary_subcomponent_id
   )
   private val _repository = "https://repo.example.invalid/cncf/rsc"
-  private val _trusted_signing_key = "phase58-rsc-signing-key-1"
   private val _safe_view_fields = Vector(
     "componentId",
     "logicalRelease",
@@ -62,7 +61,6 @@ final class ResolvedComponentResourcesConsumerSpec
     "authorization",
     "sourceKind",
     "artifactCoordinate",
-    "sha256",
     "logicalSource",
     "resolutionStep",
     "externalDeploymentRequired"
@@ -193,7 +191,7 @@ final class ResolvedComponentResourcesConsumerSpec
         if resource.logicalIdentity.componentId == _documentation_id then restricted else resource
       })
       val content = _content(_documentation_id)
-      val request = _request(composition, restricted, content)
+      val request = _request( restricted, content)
 
       When("the Help consumer inventories and requests the restricted resource")
       val inventory = ResolvedComponentResourcesConsumerProjection.inventory(
@@ -224,7 +222,7 @@ final class ResolvedComponentResourcesConsumerSpec
       val composition = _composition
       val resource = _resource(_documentation_id)
       val content = _content(_documentation_id)
-      val request = _request(composition, resource, content)
+      val request = _request( resource, content)
 
       When("the Admin consumer requests content through the consumer projection")
       val access = _access(
@@ -281,7 +279,7 @@ final class ResolvedComponentResourcesConsumerSpec
         val composition = _composition
         val resource = _resource(_documentation_id)
         val content = _content(_documentation_id)
-        val request = _request(composition, resource, content)
+        val request = _request( resource, content)
 
         When("the Direct-AI consumer requests the exact supplied resource through the existing authorization policy")
         val access = _access(
@@ -320,7 +318,6 @@ final class ResolvedComponentResourcesConsumerSpec
       authorization = resource.authorization,
       sourceKind = resource.provenance.sourceKind,
       artifactCoordinate = resource.provenance.artifactCoordinate,
-      sha256 = resource.provenance.sha256,
       logicalSource = resource.provenance.logicalSource,
       resolutionStep = resource.provenance.resolutionStep,
       externalDeploymentRequired = resource.provenance.externalDeploymentRequired
@@ -353,7 +350,6 @@ final class ResolvedComponentResourcesConsumerSpec
       case _ =>
         ("Subcomponent", "ordinary-subcomponent", "org.example:rsc-ordinary-subcomponent-car:0.1.0", false)
     }
-    val content = _content(componentid)
     val sourcepath = s"expanded/$resourceid/resource.bin"
     ResolvedComponentResource(
       logicalIdentity = ComponentResourceLogicalIdentity(
@@ -367,7 +363,6 @@ final class ResolvedComponentResourcesConsumerSpec
         sourceKind = ComponentResourceSourceKind.ExpandedCar,
         repository = _repository,
         artifactCoordinate = coordinate,
-        sha256 = _sha256(content),
         normalizedRelativePath = sourcepath,
         logicalSource = s"composition-registry:$resourceid",
         physicalSource = s"expanded-car:$resourceid",
@@ -452,8 +447,6 @@ final class ResolvedComponentResourcesConsumerSpec
       classification = classification,
       artifact = ComponentSubcomponentArtifact(
         coordinate = _coordinate(componentid),
-        sha256 = _sha256(_content(componentid)),
-        signature = _signature(componentid),
         repository = _repository,
         physicalPath = physicalpath
       ),
@@ -465,30 +458,16 @@ final class ResolvedComponentResourcesConsumerSpec
     )
 
   private def _request(
-    composition: ComponentSubcomponentComposition,
     resource: ResolvedComponentResource,
     content: Array[Byte]
   ): ComponentResourceAccessRequest =
     ComponentResourceAccessRequest(
       resource = resource,
       content = content,
-      signature = _expected_signature(composition, resource.logicalIdentity.componentId),
-      signingKeyId = _trusted_signing_key,
       grantedRoles = Set(resource.logicalIdentity.childRole),
       admittedRepositories = Set(resource.provenance.repository),
-      trustedSignaturesByKeyId = Map(
-        _trusted_signing_key -> Set(_expected_signature(composition, resource.logicalIdentity.componentId))
-      ),
-      archiveEntries = Vector(ComponentResourceArchiveEntry(resource.provenance.normalizedRelativePath)),
-      managedCacheVerified = true
+      archiveEntries = Vector(ComponentResourceArchiveEntry(resource.provenance.normalizedRelativePath))
     )
-
-  private def _expected_signature(
-    composition: ComponentSubcomponentComposition,
-    componentid: ComponentId
-  ): String =
-    if componentid == composition.parent.componentId then composition.parent.primaryCar.artifact.signature
-    else composition.members.find(_.componentId == componentid).get.subcomponentCar.artifact.signature
 
   private def _content(componentid: ComponentId): Array[Byte] =
     s"phase58 RSC08 content for ${_component_token(componentid)}".getBytes(StandardCharsets.UTF_8)
@@ -502,12 +481,7 @@ final class ResolvedComponentResourcesConsumerSpec
       case _ => "org.example:rsc-ordinary-subcomponent-car:0.1.0"
     }
 
-  private def _signature(componentid: ComponentId): String =
-    s"phase58-artifact-signature-${_component_token(componentid)}-v1"
-
   private def _component_token(componentid: ComponentId): String =
     componentid.name.split("\\.").last.stripPrefix("Rsc").toLowerCase
 
-  private def _sha256(bytes: Array[Byte]): String =
-    MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
 }

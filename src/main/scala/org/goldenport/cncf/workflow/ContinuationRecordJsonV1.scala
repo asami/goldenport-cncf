@@ -6,7 +6,11 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.workflow.ContinuationRuntimePersistence.{Record, Status}
 import org.goldenport.cncf.workflow.WorkflowResultJsonV1.{_decodeReferences, _decodeSnapshot, _expect, _fields, _optional, _optional_string, _reference, _snapshot, _string}
 
-/** Strict local persistence encoding for one Continuation claim state. */
+/**
+ * Strict local persistence encoding for one Continuation claim state.
+ * @since   Sep. 25, 2026
+ * @version Oct.  8, 2026
+ */
 object ContinuationRecordJsonV1 {
   val schemaVersion = "cncf.continuation-record.v1"
 
@@ -154,7 +158,8 @@ object ContinuationRecordJsonV1 {
         !_name(context.snapshot.workflowRevision) ||
         record.claimId == null ||
         (record.status == Status.Available && record.claimId.nonEmpty) ||
-        (record.status != Status.Available && !record.claimId.exists(_name)))
+        (record.status == Status.Claimed && !record.claimId.exists(_name)) ||
+        record.claimId.exists(x => !_name(x)))
       Consequence.stateConflict("Continuation record is incomplete or inconsistent")
     else Consequence.success(record)
   }

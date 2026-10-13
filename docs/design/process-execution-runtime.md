@@ -232,3 +232,49 @@ or account credentials.
 This design excludes container and remote drivers, process retention, arbitrary
 shell access, automatic legacy-shell migration, live Textus AI/Codex provider
 integration, BPM/process orchestration, and an independent process scheduler.
+
+## Runtime-declared argument templates
+
+Repository effects need a native object token at a fixed argument position,
+without opening the whole command to dynamic text or a floating reference.
+ProcessArgumentAdmission.Template keeps that validation at the existing
+program-admission chokepoint. Complete ordered templates combine literal slots
+with finite-width ASCII lower-hex slots and literal affixes, not arbitrary
+regex/predicate execution. The component cannot define or widen templates.
+The runtime still owns executable, prefix, target/environment, grant and limits;
+the workflow owns native token selection and effect-stage preconditions.
+See [the public contract](../spec/process-argument-templates.md).
+
+## Owning-runtime host configuration bootstrap
+
+`textus.subsystem.process-execution.plan` is a confidential, canonical
+Subsystem-instance parameter. The owning runtime admits only a winning Home,
+Project or CWD file binding before Component construction. A CAR descriptor,
+request, environment value, or direct CLI grant is not an owning-host grant.
+No component-local driver fallback or global mutable program registry is added.
+
+The `cncf.runtime-process-execution.v1` JSON string declares `programs` and
+`grants`. Each program declares capability, safe identity, absolute executable,
+fixed arguments, complete literal/lower-hex argument templates, explicit fixed
+environment, all eleven finite process limits, artifacts, input-file paths and
+working-directory permission. Grants select canonical component IDs and declared
+capabilities. V1 does not encode resource-tree or per-grant limit extensions;
+those richer existing SPI contracts are not silently truncated by the codec.
+
+The runtime creates one local driver, registers it with its own SystemNode and
+installs it plus the scoped admission into the GlobalRuntimeContext inherited
+by Component/Service/Action contexts. Admission uses the actual Component.Context
+identity, never a display label or a fabricated generic Component scope. A
+runtime-level direct request has no component grant. Existing explicitly supplied
+single-scope test admissions retain their original behavior.
+
+The owning SystemNode closes runtime resources after drain and before SQL pool
+close, including initialization failure. Close failure is accumulated while the
+other resources and pool are still closed; repeated shutdown keeps the terminal
+result. Component factories neither create nor close this driver. Normal startup
+without a host plan retains missing driver/admission rather than widening access.
+
+This candidate is uncompiled/unexecuted until the registered serial SBT runner
+validates the codec, runtime initialization, existing process DSL and shutdown
+suites. It does not by itself establish sm-workflow's native three-workflow default
+factory, independent Human/review ingress, product SBT bridge, or Phase acceptance.

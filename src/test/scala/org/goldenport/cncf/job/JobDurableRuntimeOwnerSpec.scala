@@ -21,7 +21,7 @@ import JobDurableRuntimeFixtures.*
 
 /*
  * @since   Oct.  3, 2026
- * @version Oct.  3, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobDurableRuntimeOwnerSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -49,9 +49,9 @@ final class JobDurableRuntimeOwnerSpec extends AnyWordSpec with Matchers with Gi
         fixture.node.managedDataStoreCount shouldBe 0
         task.runs.get() shouldBe 1
         val catalog = CncfConfigurationParameterCatalog.closed.definitions
-        catalog.size shouldBe 55
+        catalog.size shouldBe 57
         val keys = catalog.map(_.canonicalSpelling)
-        keys.distinct.size shouldBe 55
+        keys.distinct.size shouldBe 57
         keys should contain allOf(JobDurableRuntimeConfiguration.providerKey, JobDurableRuntimeConfiguration.periodKey,
           JobDurableRuntimeConfiguration.candidatesKey, "textus.subsystem.user-mode")
       }
