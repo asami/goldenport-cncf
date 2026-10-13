@@ -272,3 +272,24 @@ type guessing for historical rows, or unapproved production data rewriting.
 During DSM-100-02, update the affected canonical spec/design documents and link
 the executable specifications there. This work plan is not a substitute for the
 frozen public contract or proof that the planned behavior already exists.
+
+## Availability / fallback compatibility handoff
+
+Textus Availability Architecture and Phase 108 introduce a Deployment
+Transaction with a configurable Fallback Retention Window. DataStore evolution
+must preserve the semantic truth of that promise.
+
+A new CAR may switch to probationary Active only with declared/admitted
+DataStore compatibility appropriate to its release policy. While the previous
+CAR is advertised as fallback-ready, migration must not perform a destructive
+contract step that prevents that retained CAR from operating on authoritative
+state.
+
+Plan/follow-up implementation should support expand/migrate/contract-style
+evolution where the logical/physical change requires it, and expose enough
+compatibility state for release admission to distinguish switch-back-safe from
+breaking migrations.
+
+This requirement does not turn Phase 100 into a generic schema-migration
+platform or require every logical-type change to use multi-step migration. It
+adds the compatibility contract needed by immutable CAR deployment.
