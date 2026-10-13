@@ -17,7 +17,8 @@ import scala.util.control.NonFatal
  *  version Feb. 25, 2026
  *  version May.  2, 2026
  *  version Jul. 26, 2026
- * @version Aug.  5, 2026
+ *  version Aug.  5, 2026
+ * @version Oct.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 trait DataStore extends CommitParticipant {
@@ -217,7 +218,9 @@ object DataStore {
           EntityMutationProviderCapabilities.guardedBaseline.features ++
             Set(
               EntityMutationProviderFeature.DirectAlwaysWrite,
-              EntityMutationProviderFeature.OptimisticCompareAndSet
+              EntityMutationProviderFeature.OptimisticCompareAndSet,
+              EntityMutationProviderFeature.OptimisticCompareAndDelete,
+              EntityMutationProviderFeature.AuthoritativeDeleteResult
             )
       )
 
@@ -397,6 +400,35 @@ object DataStore {
         } yield result
       }
 
+    override def compareAndDeleteEntity(
+      plan: EntityCompareAndDeletePlan
+    )(using ctx: ExecutionContext): Consequence[EntityCompareAndDeleteResult] =
+      synchronized {
+        for {
+          _ <- EntityObservedDeleteSupport.validate(plan)
+          _ <- EntityObservedDeleteSupport.requireCapabilities(
+            entityMutationProviderCapabilities,
+            plan.sideEffects.nonEmpty
+          )
+          rootcollection <- take_collection(plan.collection)
+          rootkey <- rootcollection._entry_key(plan.entryId)
+          existing <- rootcollection._entries_snapshot.get(rootkey)
+            .map(Consequence.success)
+            .getOrElse(Consequence.DataStoreNotFound(plan.entryId.print))
+          _ <- EntityNativeMutationSupport.admitExisting(
+            plan.entryId, existing, plan.exclusionGuards
+          )
+          actual <- EntityVersionedMutationSupport.revision(existing, plan.revisionField)
+          result <-
+            if (actual != plan.expectedRevision)
+              Consequence.success(EntityCompareAndDeleteResult.Stale(plan.expectedRevision, actual))
+            else
+              actual.nextC.flatMap(nextrevision =>
+                _apply_observed_delete(plan, rootkey, existing, actual, nextrevision)
+              )
+        } yield result
+      }
+
     def mutateVersionedEntity(
       plan: EntityVersionedMutationPlan
     )(using
@@ -510,6 +542,49 @@ object DataStore {
 
     def abort(tx: TransactionContext): Unit =
       record_abort(recorder)
+
+    private def _apply_observed_delete(
+      plan: EntityCompareAndDeletePlan,
+      rootkey: String,
+      existing: Record,
+      actual: EntityRevision,
+      nextrevision: EntityRevision
+    ): Consequence[EntityCompareAndDeleteResult] = {
+      val collections = plan.sideEffects.map(_.collection).prepended(plan.collection).distinct
+      val collectionids = collections.map(collection => collection_key(collection) -> collection).toMap
+      val initialstates = collections.map { collection =>
+        val key = collection_key(collection)
+        key -> _collections.get(key).map(_._entries_snapshot).getOrElse(VectorMap.empty)
+      }.toMap
+      val rootcollectionkey = collection_key(plan.collection)
+      val rootentries = plan.rootMutation match {
+        case EntityDeleteRootMutation.Physical =>
+          initialstates(rootcollectionkey).removed(rootkey)
+        case EntityDeleteRootMutation.Logical(changes) =>
+          initialstates(rootcollectionkey).updated(
+            rootkey,
+            InMemoryDataStore._normalize_record(
+              EntityNativeMutationSupport.updatedRecord(existing, plan.revisionField, changes, nextrevision)
+            )
+          )
+      }
+      val rooted = initialstates.updated(rootcollectionkey, rootentries)
+      for {
+        _ <- versioned_mutation_checkpoint(EntityVersionedMutationCheckpoint.RootPrepared)
+        prepared <- _apply_side_effects(plan.sideEffects, rooted)
+        _ <- versioned_mutation_checkpoint(EntityVersionedMutationCheckpoint.SideEffectsPrepared)
+        _ <- versioned_mutation_checkpoint(EntityVersionedMutationCheckpoint.BeforePublish)
+      } yield {
+        val nextcollections = prepared.foldLeft(_collections) {
+          case (result, (key, entries)) =>
+            val collection = new InMemoryDataStore.Collection(collectionids(key))
+            collection._replace_entries(entries)
+            result.updated(key, collection)
+        }
+        _collections = nextcollections
+        EntityCompareAndDeleteResult.Deleted(actual)
+      }
+    }
 
     private def _apply_versioned_mutation(
       plan: EntityVersionedMutationPlan,

@@ -25,7 +25,8 @@ import org.simplemodeling.model.datatype.EntityId
  * and multibyte text do not leak into application models.
  *
  * @since   May.  4, 2026
- * @version Jul. 24, 2026
+ *  version Jul. 24, 2026
+ * @version Oct.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 object ContentBodyStoragePolicy {
@@ -134,6 +135,9 @@ object ContentBodyStoragePolicy {
   )(using ctx: ExecutionContext): Consequence[Unit] =
     _delete_overflow(id)
 
+  def planForDelete(id: EntityId): Vector[EntityVersionedSideEffect.Delete] =
+    Vector(_delete_effect(id))
+
   def hydrate(
     id: EntityId,
     record: Record
@@ -180,7 +184,7 @@ object ContentBodyStoragePolicy {
 
   private def _delete_effect(
     id: EntityId
-  ): EntityVersionedSideEffect =
+  ): EntityVersionedSideEffect.Delete =
     EntityVersionedSideEffect.Delete(
       _overflow_collection,
       DataStore.StringEntryId(_overflow_ref(id))

@@ -49,11 +49,11 @@ import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 class StandardEntityStore(
-) extends EntityStore with StandardEntityCreatePart with StandardEntityReadSavePart with StandardEntityUpdatePart with StandardEntityLifecycleQueryPart with StandardEntityRecordPart with StandardEntityConditionalPart with StandardEntityRevisionPart with StandardEntityObservabilityPart {
+) extends EntityStore with StandardEntityCreatePart with StandardEntityReadSavePart with StandardEntityUpdatePart with StandardEntityLifecycleQueryPart with StandardEntityRecordPart with StandardEntityConditionalPart with StandardEntityRevisionPart with StandardEntityObservabilityPart with StandardEntityObservedDeletePart {
   import EntityStore.*
 
   private[entity] val _upsert_locks = Array.fill(64)(new Object)
