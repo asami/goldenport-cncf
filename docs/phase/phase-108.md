@@ -68,3 +68,24 @@ standard Active/Standby profile without application-code changes. Enabling the
 profile creates/warms the Standby, establishes role authority, performs an
 automatic scheduled rotation, drains the old Active and records the rotation
 result. Changing the admitted CAR uses the same replacement engine.
+
+## Deployment targets and scope
+
+The first physical integration should prove runtime semantics with Docker
+Compose before requiring Kubernetes. Define a narrow Deployment Driver/SPI for
+the physical operations actually needed by the common replacement engine; do
+not reproduce a general container orchestrator inside CNCF.
+
+Phase 108 must demonstrate at least local-ha. Its contracts must support
+host-ha placement without application changes; implementation of the necessary
+second-host driver/operations may be sliced according to available
+infrastructure.
+
+Kubernetes integration is a later/optional driver unless an implementation
+dependency proves it necessary. Multi-AZ/site HA, cross-region failover,
+distributed database availability and global active-active are explicitly out
+of Phase 108 scope.
+
+Availability acceptance must state the failure boundary actually proven. A
+two-runtime single-host test proves runtime/local-ha behavior, not host-failure
+tolerance.
