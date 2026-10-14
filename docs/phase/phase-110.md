@@ -18,24 +18,29 @@ Prevent bugs, mistaken input/configuration and unexpected AI-generated code from
 ### P110-01 External Effect policy vocabulary
 Define the minimal CNCF-owned classification shared by Runtime Sandbox, CAR Loading Admission and CAR lint/review metadata. Reuse Phase 107 escape-hatch metadata where applicable. Do not introduce a general OS ACL language.
 
-### P110-02 Runtime Sandbox scope
+### P110-02 ExecutionContext sandbox resolution
+Define `SandboxDefinition`, deterministic `SandboxResolver` and resolved `SandboxContext`. Resolve Server, Client and Operation definitions by narrowing/intersection before Operation execution and bind the Effective Sandbox to `ExecutionContext`. A child scope cannot widen its parent. Preserve provenance sufficient for diagnostics without making runtime consumers re-resolve policy.
+
+Prove CLI/command use and resident-server use share the same Operation model: command invocation maps to Client scope; later server deployment supplies the outer Server scope.
+
+### P110-03 Runtime Sandbox scope
 Define and implement the operation/CAR execution scope that binds admitted runtime capabilities and logical resources. Integrate existing UnitOfWork, ResourceTreeAccess/Query, ProcessExec, datastore/entity and managed provider paths. Managed runtime effects that do not pass through UnitOfWork receive the same Safety Sandbox semantics without artificial UnitOfWorkOps.
 
-### P110-03 Runtime enforcement
+### P110-04 Runtime enforcement
 Deterministically reject requests outside the admitted logical scope. ResourceTree operations stay within bound logical trees; persistence stays on admitted framework routes; ProcessExec uses trusted registered definitions/grants; managed network/provider authority cannot be widened by application input; failures use normal CNCF Consequence/Conclusion diagnostics.
 
-### P110-04 CAR Loading Admission
+### P110-05 CAR Loading Admission
 Add a bounded admission stage to the existing CAR loading path before ordinary component activation. Classify packaged bytecode references for direct filesystem, network/socket/HTTP, ProcessBuilder/Runtime.exec/shell, JDBC/raw persistence, native/JNI/Unsafe/internal JVM, and deterministic dynamic/reflection escape classes.
 
 A CAR capability declaration never converts direct JVM access into an allowed Safety Sandbox route.
 
-### P110-05 Admission profiles and hard-isolation handoff
+### P110-06 Admission profiles and hard-isolation handoff
 Define the normal Safety Sandbox profile and the handoff to Docker/process isolation. Do not attempt adversarial hostile-code proof in JVM. Native/untrusted/unrestricted execution is classified for hard isolation.
 
-### P110-06 Shared lint/review contract
+### P110-07 Shared lint/review contract
 Expose External Effect/admission classifications to CAR lint and CBD Review so textus-cbd-support Phase 16 does not invent a second taxonomy. CAR lint is early feedback; Loading Admission is runtime-entry enforcement; Runtime Sandbox bounds effects after admission.
 
-### P110-07 Executable end-to-end specification
+### P110-08 Executable end-to-end specification
 Prove:
 1. direct Files / ProcessBuilder usage is attributable and rejected by Loading Admission;
 2. a CAR using CNCF ResourceTree/ProcessExec routes is admitted;
@@ -52,6 +57,12 @@ Prove:
 - Ordinary CARs do not require SELinux-like policy administration.
 - Malicious CAR containment is explicitly a non-goal for in-JVM Safety Sandbox and is handed to Docker/process isolation.
 - No SecurityManager recreation, management hash, duplicate integrity machinery or speculative rollback/checking is introduced.
+
+## sm-workflow development-driver adoption
+
+Phase 110 provides the generic runtime/admission primitives. sm-workflow adopts Safety Sandbox only after its basic workflow operation is working; Safety Sandbox must not become a prerequisite that delays that foundation.
+
+During adoption, sm-workflow is the practical development driver for the three-scope model and for CNCF/cbd-support integration. Concrete gaps found while constraining sm-workflow Git/SBT/worktree/process effects are fixed at their owning layer: CNCF Runtime for managed execution/enforcement/admission, CBD Support for lint/review interpretation, and sm-workflow only for its own scope/profile definitions. Do not add product-specific bypasses to make the trial pass.
 
 ## Handoff
 textus-cbd-support Phase 16 consumes the shared External Effect / escape classification for deterministic CAR lint and CBD Review. Phase 13 remains the human-in-the-loop resolution workflow. sm-workflow consumes resulting review/admission evidence through its existing review route.
