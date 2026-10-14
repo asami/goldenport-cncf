@@ -31,6 +31,36 @@ trusted-but-possibly-buggy CAR + possibly-hostile input -> Safety Sandbox
 possibly-hostile CAR                               -> Docker/process isolation
 ```
 
+## ExecutionContext and hierarchical sandbox resolution
+
+`ExecutionContext` is the runtime unit that carries the resolved **Effective Sandbox** for an Operation. Sandbox definitions may be contributed by three scopes:
+
+- **Server Sandbox Definition** — the maximum authority of the hosting server/runtime deployment;
+- **Client Sandbox Definition** — the authority of the invoking client/command/request/project session;
+- **Operation Sandbox Definition** — the minimum authority required by the concrete Operation/worker/step.
+
+Before Operation execution CNCF deterministically resolves them by narrowing/intersection:
+
+```text
+Server Sandbox Definition
+        +
+Client Sandbox Definition
+        +
+Operation Sandbox Definition
+        -> SandboxResolver
+        -> SandboxContext (Effective Sandbox)
+        -> ExecutionContext
+        -> Operation
+```
+
+A child definition cannot widen authority granted by its parent. In set terms the effective authority is bounded by `Operation ∩ Client ∩ Server`. Deny/restriction semantics must fail closed where definitions conflict or cannot be resolved safely.
+
+`SandboxDefinition` is declarative input. `SandboxResolver` is deterministic framework logic. `SandboxContext` is the resolved runtime authority exposed through `ExecutionContext`. Runtime enforcement points such as UnitOfWork, ResourceTreeAccess, ProcessExec and managed providers consume the same effective context; UnitOfWork is an enforcement point, not the owner of the sandbox boundary.
+
+This model supports both CLI and resident-server execution. A CLI may supply a local/default Server definition plus Command-as-Client definition; a resident server supplies its deployment definition and derives a Client definition from each admitted request/session. Operation definitions remain unchanged across that transition.
+
+Authorization remains orthogonal: `SecuritySubject` answers who may perform an application action, while `SandboxContext` answers which External Effects this execution may perform. Both belong to the ExecutionContext and both may deny one Operation.
+
 ## Three enforcement stages
 
 ### 1. CAR Lint Check
@@ -73,6 +103,14 @@ Examples include:
 A CAR using ResourceTreeAccess can be admitted while Runtime Sandbox limits it to the bound logical tree. A CAR containing direct `java.nio.file.Files` access is a loading-admission violation even if it requests a filesystem capability.
 
 A CAR may request a registered ProcessExec capability. This does not grant arbitrary shell execution: the trusted runtime owns the program definition, arguments/environment policy, WorkArea and limits.
+
+## Development driver: sm-workflow
+
+sm-workflow is a primary practical consumer of this architecture after its basic workflow functions are operational. Its AI-driven Git/SBT/source-editing work provides a demanding Safety Sandbox use case without changing the hostile-code threat model.
+
+For sm-workflow the generic scopes map naturally to `Server -> Client/Command -> Operation/Worker`. Initial command operation uses Command as the Client scope; later resident-server operation adds the real Server deployment boundary without changing Operation sandbox semantics.
+
+The sm-workflow adoption is also a development driver for CNCF Runtime and CBD Support: real sandbox violations, missing managed-effect routes and lint/admission classification gaps discovered while sandboxing sm-workflow should feed bounded CNCF Runtime and CBD Support development rather than be patched with sm-workflow-specific bypasses.
 
 ## AI Safety Harness
 
