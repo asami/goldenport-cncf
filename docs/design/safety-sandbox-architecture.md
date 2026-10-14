@@ -89,6 +89,8 @@ Lint, Loading Admission and Runtime Sandbox must share CNCF-owned External Effec
 
 Examples include:
 
+- execution-boundary/entry-point escape (component-defined `main`, `@main`, application launcher, or direct invocation of such entry points);
+
 - filesystem/resource-tree;
 - datastore/persistence;
 - network/provider;
@@ -97,6 +99,14 @@ Examples include:
 - environment/configuration;
 - clock;
 - event/queue/blob/device as applicable.
+
+## Runtime ownership and entry-point rule
+
+CNCF Runtime owns the execution lifecycle of an ordinary CAR. Component/application code must not create a second execution root by defining and invoking its own `main`, Scala `@main`, `App`-style launcher, or equivalent program entry point.
+
+This is classified as an **Execution Boundary Escape / Runtime Ownership Violation**, even when the entry point does not yet contain a separately forbidden filesystem/network/process call. Reusable behavior belongs in Service/Operation/ordinary APIs and executes under the current ExecutionContext. A genuinely separate executable is invoked through an admitted ProcessExec/Docker boundary rather than by calling its `main` as a library method.
+
+CAR Lint should report the source-level definition/invocation early. CAR Loading Admission is the enforcing boundary for packaged ordinary CARs and rejects unadmitted entry-point definitions or calls. Framework-owned bootstrap, explicit test fixtures and separately executed admitted programs are owner-scoped exceptions; a generic suppression annotation must not turn arbitrary application `main` code into an ordinary CAR route.
 
 ## Runtime examples
 
