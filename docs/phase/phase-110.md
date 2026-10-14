@@ -28,24 +28,33 @@ Define `SandboxDefinition`, deterministic `SandboxResolver` and resolved `Sandbo
 
 Prove CLI/command use and resident-server use share the same Operation model: command invocation maps to Client scope; later server deployment supplies the outer Server scope.
 
-### P110-04 Runtime Sandbox scope
+### P110-04 Process and outbound-HTTP opt-in baseline
+Make external process execution and outbound HTTP default-deny for ordinary CARs. CAR metadata/manifest declares requested authority; deployment/server configuration grants authority; ExecutionContext carries only the resolved intersection. A declaration is a request, never a grant.
+
+Provide CNCF-owned typed execution DSLs for the high-frequency development tools **Git** and **SBT**. Expose semantic operations (for example status/diff/commit/fetch/push and compile/test/testOnly/publish as actually required) rather than arbitrary argv. Runtime adapters own executable selection, working directory, environment, bounded arguments/output and declared effect semantics.
+
+Other external commands use generic Process Execution only after explicit command-name opt-in. Shell interpreters (`sh`, `bash`, `zsh`, PowerShell/cmd equivalents) are not ordinary command-name opt-ins because they can launder arbitrary filesystem/network/process authority; unrestricted shell belongs to a stronger profile/hard isolation. Outbound HTTP similarly requires explicit admitted destination/provider scope.
+
+Treat use of Process Execution to implement an otherwise denied effect (for example cat/cp/rm for filesystem, curl for HTTP, database CLI for persistence) as **Capability Laundering**. Prevent it primarily by typed DSL/registered program definitions and bounded grants, with lint/review diagnostics for recognizable misuse.
+
+### P110-05 Runtime Sandbox scope
 Define and implement the operation/CAR execution scope that binds admitted runtime capabilities and logical resources. Integrate existing UnitOfWork, ResourceTreeAccess/Query, ProcessExec, datastore/entity and managed provider paths. Managed runtime effects that do not pass through UnitOfWork receive the same Safety Sandbox semantics without artificial UnitOfWorkOps.
 
-### P110-05 Runtime enforcement
+### P110-06 Runtime enforcement
 Deterministically reject requests outside the admitted logical scope. ResourceTree operations stay within bound logical trees; persistence stays on admitted framework routes; ProcessExec uses trusted registered definitions/grants; managed network/provider authority cannot be widened by application input; failures use normal CNCF Consequence/Conclusion diagnostics.
 
-### P110-06 CAR Loading Admission
+### P110-07 CAR Loading Admission
 Add a bounded admission stage to the existing CAR loading path before ordinary component activation. Classify packaged bytecode references for direct filesystem, network/socket/HTTP, ProcessBuilder/Runtime.exec/shell, JDBC/raw persistence, native/JNI/Unsafe/internal JVM, and deterministic dynamic/reflection escape classes.
 
 A CAR capability declaration never converts direct JVM access into an allowed Safety Sandbox route.
 
-### P110-07 Admission profiles and hard-isolation handoff
+### P110-08 Admission profiles and hard-isolation handoff
 Define the normal Safety Sandbox profile and the handoff to Docker/process isolation. Do not attempt adversarial hostile-code proof in JVM. Native/untrusted/unrestricted execution is classified for hard isolation.
 
-### P110-08 Shared lint/review contract
+### P110-09 Shared lint/review contract
 Expose External Effect/admission classifications to CAR lint and CBD Review so textus-cbd-support Phase 16 does not invent a second taxonomy. CAR lint is early feedback; Loading Admission is runtime-entry enforcement; Runtime Sandbox bounds effects after admission.
 
-### P110-09 Executable end-to-end specification
+### P110-10 Executable end-to-end specification
 Prove:
 1. direct Files / ProcessBuilder usage and CAR-owned main/entry-point definition+invocation are attributable and rejected by Loading Admission;
 2. a CAR using CNCF ResourceTree/ProcessExec routes is admitted;
@@ -62,6 +71,12 @@ Prove:
 - Ordinary CARs do not require SELinux-like policy administration.
 - Malicious CAR containment is explicitly a non-goal for in-JVM Safety Sandbox and is handed to Docker/process isolation.
 - No SecurityManager recreation, management hash, duplicate integrity machinery or speculative rollback/checking is introduced.
+
+## Phase 6 early delivery triggered by sm-workflow
+
+The full Safety Sandbox remains a post-foundation development stream, but a concrete Phase 6 defect has exposed an immediate upstream requirement: AI-generated code used Process Execution to read/write external files, laundering filesystem authority through an admitted process route. Therefore P110-01 plus the minimum P110-04 Git/SBT/process/HTTP policy and shared classification are pulled forward as a bounded producer slice needed by sm-workflow Phase 6.
+
+This early slice does not claim Phase 110 completion. Implement only enough generic CNCF functionality to remove the Phase 6 unsafe route and exercise the real sm-workflow command execution path. The remaining hierarchical SandboxContext, Loading Admission breadth and later server propagation continue under the normal Phase 110 sequence.
 
 ## sm-workflow development-driver adoption
 
