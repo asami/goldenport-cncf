@@ -47,7 +47,7 @@ Expose External Effect/admission classifications to CAR lint and CBD Review so t
 
 ### P110-09 Executable end-to-end specification
 Prove:
-1. direct Files / ProcessBuilder usage is attributable and rejected by Loading Admission;
+1. direct Files / ProcessBuilder usage and CAR-owned main/entry-point definition+invocation are attributable and rejected by Loading Admission;
 2. a CAR using CNCF ResourceTree/ProcessExec routes is admitted;
 3. an admitted CAR requesting an effect outside runtime logical scope is denied;
 4. a correctly scoped CAR succeeds;
