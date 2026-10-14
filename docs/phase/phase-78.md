@@ -81,7 +81,7 @@ runtime admission requirement.
 | CAP-78-02 | Define and implement the external Component projection for provided and required Capabilities, preserving admitted semantic grounding/provenance. | closed |
 | CAP-78-03 | Bind explicit realization references to admitted Operation, Workflow, and StateMachine contracts without embedding orchestration procedure. | closed |
 | CAP-78-04 | Integrate admission/discovery with ComponentFactory and package/CAR metadata, including semantic references where present. | closed |
-| CAP-78-05 | Prove Cozy producer and Textus CBD Support consumer interoperability with exact identity, source, ABI, semantic-reference, and realization provenance. | planned |
+| CAP-78-05 | Prove Cozy producer and Textus CBD Support consumer interoperability with exact identity, source, ABI, semantic-reference, and realization provenance. | closed |
 
 ## CAP-78-01 acceptance
 
@@ -94,6 +94,10 @@ records the closure basis. CAP-78-02 through CAP-78-05 retain the projection,
 binding, exposure, and executable interoperability obligations.
 
 ## CAP-78-02 acceptance and implementation boundary
+
+Historical pre-CAP-78-05 status — recorded before 2026-10-15: the acceptance
+and pending interoperability wording below is retained. Current producer/consumer
+acceptance is recorded in [CAP-78-05 acceptance](#cap-78-05-acceptance--2026-10-15).
 
 The [R11/R12 contract](../spec/component-capability.md#r11-concrete-v1-format)
 and metadata package provide the external v1 projection, strict codec, selected
@@ -136,6 +140,9 @@ The five modules and their responsibility split are described in the
 Focused validation passed and independent protected Step conformance accepted
 CAP-78-03 on 2026-10-14. The local Step commit binds this acceptance.
 
+Historical pre-CAP-78-05 status — 2026-10-14: the pending producer/consumer
+wording below is retained; see [current CAP-78-05 acceptance](#cap-78-05-acceptance--2026-10-15).
+
 CAP-78-04 has accepted canonical metadata acquisition/provider and
 ComponentFactory/package/CAR discovery. CAP-78-05 and Cozy CAP-64-05 retain
 normal producer/admission/CBD interoperability; CBD Support Phase 11 retains
@@ -157,6 +164,10 @@ Stage Status:
   [CAP-78-04 checklist](phase-78-checklist.md#cap-78-04-componentpackage-exposure),
   accepted focused validation and independent protected Step conformance on 2026-10-14.
 
+Historical pre-CAP-78-05 status — 2026-10-14: the acceptance and pending
+producer/consumer wording below is retained; see
+[current CAP-78-05 acceptance](#cap-78-05-acceptance--2026-10-15).
+
 [R14](../spec/component-capability.md#r14-canonical-package-and-public-native-discovery)
 is the package/discovery contract; the
 [design](../design/component-capability.md#canonical-package-and-public-discovery-structure)
@@ -165,6 +176,38 @@ protected Step conformance accepted CAP-78-04 on 2026-10-14. The local Step
 commit binds this acceptance. CAP-78-05, Cozy CAP-64-05 and CBD Phase 11 retain
 normal producer/consumer proof; participant full validation, review and local
 release remain owed. Phase 78 is incomplete.
+
+## CAP-78-05 acceptance — 2026-10-15
+
+Stage Status:
+- Current status: DONE
+- Owner: CNCF Phase 78 with Cozy Phase 64 and CBD Support Phase 11
+- Current step: Actual normal Cozy producer, canonical CNCF public
+  ComponentFactory Directory/CAR discovery, and source-free CBD consumption accepted.
+- Update rule: Retain acceptance established by focused validation and independent
+  protected own Step conformance on 2026-10-15; the local Step commit binds this acceptance.
+- Closure basis: The original four checked criteria in the
+  [CAP-78-05 checklist](phase-78-checklist.md#cap-78-05-cross-repository-acceptance),
+  accepted focused validation and independent protected own Step conformance.
+
+The accepted path uses actual dedicated Cozy production through normal generation,
+compiled generated accessors, canonical CNCF public ComponentFactory discovery
+of Directory and CAR products, and source-free Textus CBD Support consumption
+without semantic inference or CML reparsing. Exact Component source revision,
+producer version, generated ABI, package/release version, projection schema,
+native target contracts, and CBD management revision remain distinct provenance
+domains. Admitted semantic references and realization provenance are preserved.
+
+Common native stagedJob and fresh UnitOfWork compatibility is part of this
+accepted CAP-78-05 Step. Full transferred CBD Job acceptance in CBD Phase 14
+remains unaccepted context; the standalone Test fixture is not an accepted
+production deliverable. Positive ForwardUseCase production remains unadmitted.
+
+Focused validation passed and independent protected own Step conformance accepted
+CAP-78-05 on 2026-10-15. The local Step commit binds this acceptance. Each
+participant's Phase full review, full validation and local release remain pending,
+as does authorized Cozy Phase 64 main integration. CBD Phase 11 CAP-11-02 catalog
+and CAP-11-03 queries remain mandatory. Phase 78 remains in progress.
 
 ## Ownership boundary
 

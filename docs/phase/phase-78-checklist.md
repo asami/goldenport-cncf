@@ -59,6 +59,10 @@ Accepted contract and executable specifications:
 - [Codec specification CPJ-01..09](../../src/test/scala/org/goldenport/cncf/component/capability/ComponentCapabilityProjectionCodecSpec.scala)
 - [Admission specification CPA-01..16](../../src/test/scala/org/goldenport/cncf/component/capability/ComponentCapabilityAdmissionSpec.scala)
 
+Historical pre-CAP-78-05 status — recorded before 2026-10-15: the pending
+interoperability wording below is retained; see
+[current CAP-78-05 acceptance](phase-78.md#cap-78-05-acceptance--2026-10-15).
+
 This Step's runtime-independent discovery proof concerns external metadata
 decoding, selected-scope admission and readout with no runtime Component.
 The hand-authored fixture and explicit target facts are conformance input.
@@ -90,6 +94,10 @@ Accepted contract and executable specifications:
 - [Adapter specification CPT01..22](../../src/test/scala/org/goldenport/cncf/component/capability/ComponentCapabilityTargetAdapterSpec.scala)
 - [Binding specification CPT23..32](../../src/test/scala/org/goldenport/cncf/component/capability/ComponentCapabilityTargetBindingSpec.scala)
 
+Historical pre-CAP-78-05 status — 2026-10-14: the acceptance and pending
+producer/consumer wording below is retained; see
+[current CAP-78-05 acceptance](phase-78.md#cap-78-05-acceptance--2026-10-15).
+
 Focused validation passed and independent protected Step conformance accepted
 CAP-78-03 on 2026-10-14. The local Step commit binds this acceptance. Canonical
 acquisition/discovery is accepted in CAP-78-04; real Cozy producer/CBD consumer proof is
@@ -114,6 +122,10 @@ Stage Status:
 - Closure basis: All three criteria below are checked against the accepted R14
   contract, focused validation and independent protected Step conformance on 2026-10-14.
 
+Historical pre-CAP-78-05 status — 2026-10-14: the acceptance and pending
+producer/consumer wording below is retained; see
+[current CAP-78-05 acceptance](phase-78.md#cap-78-05-acceptance--2026-10-15).
+
 [R14](../spec/component-capability.md#r14-canonical-package-and-public-native-discovery)
 and the [module design](../design/component-capability.md#canonical-package-and-public-discovery-structure)
 define the accepted boundary. Focused validation passed and independent protected
@@ -127,12 +139,23 @@ this acceptance. Normal Cozy/CBD proof and participant Phase completion remain o
 ## CAP-78-05: Cross-repository acceptance
 
 Stage Status:
-- Current status: OPEN
+- Current status: DONE
 - Owner: CNCF Phase 78 with Cozy Phase 64 and CBD Support Phase 11
-- Update rule: Close only after one real producer/consumer path and exact
-  provenance are recorded; downstream Phase closure remains external.
+- Update rule: Retain the actual normal Cozy producer/canonical CNCF public
+  ComponentFactory Directory/CAR/source-free CBD consumer acceptance and distinct
+  exact provenance established by focused validation and independent protected
+  own Step conformance on 2026-10-15; the local Step commit binds this acceptance.
+- Closure basis: All four original criteria below are checked against the actual
+  producer/consumer path, separate Component source, producer, generated ABI,
+  package/release, schema, native target and CBD revision domains, accepted focused
+  validation and independent protected own Step conformance on 2026-10-15.
 
-- [ ] Admit one Cozy-generated Capability projection.
-- [ ] Expose it through the canonical CNCF Component/package surface.
-- [ ] Consume it from Textus CBD Support without semantic inference.
-- [ ] Record focused validation, independent review, and revision/ABI evidence.
+See [CAP-78-05 acceptance](phase-78.md#cap-78-05-acceptance--2026-10-15).
+Participant Phase full review, full validation and local release remain owed;
+authorized Cozy main integration and CBD Phase 11 CAP-11-02 catalog/CAP-11-03
+queries remain separate mandatory obligations. Phase 78 remains in progress.
+
+- [x] Admit one Cozy-generated Capability projection.
+- [x] Expose it through the canonical CNCF Component/package surface.
+- [x] Consume it from Textus CBD Support without semantic inference.
+- [x] Record focused validation, independent review, and revision/ABI evidence.

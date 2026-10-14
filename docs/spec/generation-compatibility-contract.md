@@ -13,8 +13,9 @@ Compile target and `packaging.car.runtime.cncf` runtime range remain independent
 Evidence schema/invariant validation and pure generation admission are
 operational in CV-02. CV-03 owns explicit-input resolution/wiring at the actual
 generation invocation and rejects absent or contradictory invocation sources.
-CV-04 owns runtime descriptor target/schema/digest validation only. CV-05 owns
-provenance and provenance/digest tampering. CV-06A owns CAR project-contract
+CV-04 owns runtime descriptor path/schema/runtime/exact-target and predefined
+Result validation. CV-05 owns current generation metadata and output-inventory
+validation. CV-06A owns CAR project-contract
 and package-gate consistency.
 
 For a CAR project, `project.yaml` is the package gate's authority for the exact
@@ -43,13 +44,13 @@ the accepted contract even when merged operation defaults disagree.
 Resolved-JAR identity remains a package-only requirement.
 
 When `target/cozy/generation-provenance.json` exists, package admission must
-rerun the authoritative validation of its source, generated Scala artifacts,
-aggregate output digest, and evidence digest. Its recorded CNCF target and Cozy
+rerun Cozy's authoritative validation of its readable source, declared inputs,
+and project-relative generated Scala inventory. Its recorded CNCF target and Cozy
 generator must equal the accepted CAR project contract. Successful packaging
 must preserve the bytes unchanged as the top-level
 `generation-provenance.json` CAR entry; validation or contract mismatch must
-fail before archive creation. Validation and archive writing must consume the
-same immutable byte snapshot. Non-generated and legacy CAR sources may omit
+fail before archive creation. Cozy owns metadata parsing, path validation,
+and projection into the archive. Non-generated and legacy CAR sources may omit
 this metadata. `src/main/car/generation-provenance.json` is reserved and must
 be rejected rather than admitted through generic CAR source packaging.
 
@@ -167,79 +168,128 @@ development counterpart.
 - E10: an incomplete schema-v2 componentStyle snapshot is rejected before development activation (R3, R6).
 - E11: a digest-valid v1 development directory retains its legacy source descriptor identity during migration (R2, R3).
 
+## Current Information Generation Contract
+
 The CNCF Information CML build resolves its invocation from the pinned Cozy
 generator version, the root build's effective CNCF artifact version, the output
 of the CNCF runtime-descriptor task, the CNCF project directory, and the
 Information CML source. Resolution must fail before Cozy is launched when
 either coordinate is blank, the descriptor/project/source is unavailable, or
-the source is outside the owning project. Resolution captures the
-project-relative source identity and pre-launch SHA-256. The supported command
-must carry the same values as `--runtime`, `--cncf-version`,
-`--cncf-runtime-descriptor`, `--cncf-runtime-descriptor-sha256`, and
-`--generation-source-identity`; it must not consult ambient version sources.
+the source is outside the owning project. The five resolved fields are
+`cozyGeneratorVersion`, `cncfTargetVersion`, `runtimeDescriptor`, `source`,
+and normalized project-relative `sourceIdentity`. They retain the selected
+paths and exact versions. The source at that path is consumed when generation
+runs; editing its content after resolution does not invalidate the command
+plan, while deleting it prevents both command preparations.
 
-The resolution and command plan are deterministic for cold, repeated, and
-concurrent evaluations. Cold and repeated generation of unchanged CML with the
-same explicit inputs must emit the same generated Scala file set and content.
-Before source emission, Cozy validates the readable descriptor file and supplied
-lowercase hexadecimal SHA-256, root schema `1`, runtime identity `cncf`, exact
-target version, and predefined Result schema
-`cncf.predefined-result.v1`. CLI and sbt-bridge invocation use the same
-validator and deterministic structured diagnostic fields. Project defaults,
-owning-build bridge settings, and request arguments must agree on target,
-descriptor, and digest values; contradictory values fail before generation.
-Global `~/.cozy` operation defaults are not generation sources. CV-05 remains
-the owner of generated-output provenance and provenance tampering.
+Generation uses `cozy --runtime <exact-Cozy-version> modeler-scala-value`
+with the selected source, `--cncf-version`, `--cozy-generator-version`,
+`--cncf-runtime-descriptor`, `--generation-source-identity`, and output
+`--save` selector. Cold, repeated, and concurrent command evaluations retain
+these same explicit selectors. No ambient version source participates.
 
-For complete CNCF descriptor-contract generation, Cozy packages
+Before source emission, Cozy validates the readable descriptor path, root
+schema `1`, runtime identity `cncf`, exact target version, and predefined
+Result schema `cncf.predefined-result.v1`. CLI and sbt-bridge invocation use the
+same validator and deterministic structured diagnostic fields. Project defaults,
+owning-build bridge settings, and request arguments must agree on target and
+descriptor; contradictory values fail before generation. Global `~/.cozy`
+operation defaults are not generation sources.
+
+The descriptor transports the actual packaged ComponentStyle JSON in
+`componentStyleCatalog` using `cncf.component-style-catalog-carrier.v1` with
+exactly `schemaVersion`, `resource`, `encoding`, and `bytes`. The resource is
+`META-INF/cncf/component-style-catalog.json`, the encoding is `base64`, and
+decoding `bytes` yields that original packaged resource. Catalog meanings and
+other runtime descriptor fields retain their existing contracts.
+
+For descriptor-contract generation, Cozy writes
 `target/cozy/generation-provenance.json` using
-`cozy.generation-provenance.v1`. It records the exact target and descriptor
-digest; exact Cozy, simple-modeler backend, and `simplemodeling-model`
-versions; an explicitly selected non-empty project-relative CML identity and
-digest; sorted relative
-generated Scala identities and file digests; an aggregate output digest; and a
-canonical evidence digest. Provenance is metadata only and is not embedded in
-generated Scala.
+`cozy.generation-provenance.v1`. It records the exact CNCF target; exact Cozy,
+simple-modeler backend, and `simplemodeling-model` versions; an explicitly
+selected non-empty project-relative CML identity; and sorted project-relative
+generated Scala paths. Provenance remains build-time metadata outside generated
+Scala. Machine-local paths, timestamps, and output-root names are not metadata
+identities. Absolute, parent-escaping, and Windows drive-prefixed source
+identities are rejected.
 
-Cold and repeated generation from the same logical inputs must emit
-byte-identical provenance across different output roots. Machine-local paths,
-timestamps, output-root names, and unstable traversal order are forbidden.
-Validation must reject malformed schemas, contradictory expected inputs,
-changed CML bytes, changed generated file identities or bytes, and provenance
-fields inconsistent with the evidence digest. CV-05A implements this Cozy
-producer/validator core. CV-05B pins Cozy `0.3.1-SNAPSHOT` for the explicit
-development workflow and, after generation, invokes
-`generation-provenance-validate` with the resolved output root, target,
-descriptor digest, generator coordinate, source identity, and pre-launch
-source digest. Validator success is required before generated Scala is
-accepted; CNCF must not reconstruct or partially validate Cozy-owned evidence.
+CV-05A owns schema, expected-input, source-readability, and current output-path
+inventory validation. CV-05B retains the build's pinned Cozy `0.3.3-SNAPSHOT`
+and invokes `generation-provenance-validate` after ordinary generation with the
+same source path, output selector, target, generator version, and source
+identity. Validator success is mandatory before generated Scala is accepted;
+CNCF does not reconstruct Cozy's metadata validation. The build retains normal
+source/resource generator wiring and requires a non-empty sorted Scala result.
+A generation or validation process failure is fatal. Current paths, versions,
+and output inventory govern each stage; descriptor, source, output, and metadata
+hashes, captured-byte drift checks, and a cold/repeated snapshot task do not
+participate in this contract.
 
-The build's cold/repeated snapshot must include both the complete sorted
-generated Scala identity/digest set and the SHA-256 of
-`target/cozy/generation-provenance.json`. Missing provenance, empty Scala
-output, source drift after input resolution, validator rejection, or any
-snapshot difference must fail deterministically.
+### Optional explicit generator project
 
-One immutable descriptor byte snapshot supplies validation, the predefined
-Result catalog, and the recorded descriptor digest. Changing the descriptor
-path after that snapshot cannot change the current generation contract.
-Missing or unreadable source/output evidence and invalid expected inputs return
-typed deterministic diagnostics rather than raw exceptions.
+The build passes `cncf.cozyGeneratorRoot` and `CNCF_COZY_GENERATOR_ROOT` to
+`selectedGeneratorRoot`. An explicitly present property takes precedence over
+the environment. With neither present, selection is `None` and the exact
+artifact invocation remains the default. A selected value is trimmed,
+canonicalized, and must name a directory containing a regular `build.sbt`.
+Blank, missing, non-directory, missing-build, or uncanonicalizable selections
+fail with the selected path and deterministic recovery guidance. An invalid
+property never falls through to the environment or artifact invocation.
 
-The CML identity and bytes are captured before generation, and absolute,
-parent-escaping, or Windows drive-prefixed identities are rejected. The modeler
-and CML metadata producer consume an isolated materialization of the captured
-bytes. Cozy clears stale provenance before generation and atomically publishes
-a replacement only after complete validation confirms that the original source
-still resolves to those bytes. Replacement, removal, unreadability, or failed
-final validation must therefore leave no newly committed provenance and cannot
-associate output with a later source revision.
+The build resolves this selection once before deleting or creating generation
+output, and uses the same selected root for generation and metadata validation.
+For a selected root, both commands insert
+`--runtime-dev-dir <canonical-root>` immediately after
+`--runtime <unchanged-exact-Cozy-version>`. The supported launcher owns existing
+classpath, exact version, readiness validation, and direct Java execution.
+This selection does not discover a root, refresh a generator, invoke nested
+SBT, or change the declared generator version.
+
+Executable specifications:
+
+- [ComponentStyleRuntimeDescriptorProjectionSpec](../../src/test/scala/org/goldenport/cncf/component/ComponentStyleRuntimeDescriptorProjectionSpec.scala)
+  decodes the actual generated resource and its four-field catalog carrier.
+- [Phase51Cv03BuildIntegrationSpec](../../src/test/scala/org/goldenport/cncf/phase51/build/Phase51Cv03BuildIntegrationSpec.scala)
+  specifies normalized inputs, invocation/failure behavior, and optional root selection.
+- [Phase51Cv05BuildProvenanceSpec](../../src/test/scala/org/goldenport/cncf/phase51/build/Phase51Cv05BuildProvenanceSpec.scala)
+  specifies notice severity, current generation/validation arguments, containment,
+  and consumption of the current edited source.
+
+### Historical build-prerequisite handoff — 2026-10-14
+
+This current-generation compatibility alignment is a necessary CAP-78-05 and
+CBD CAP-11-01 prerequisite. These behavior specifications do not establish
+Step or Phase acceptance. Dedicated Cozy Capability production and actual CNCF
+native Directory/CAR discovery followed by CBD consumption remain required.
+The independent packaged/development runtime-manifest, ABI, and activation
+contracts above retain their own subsequent synchronization and proof gates.
+
+Current own Step acceptance — 2026-10-15: actual dedicated Cozy production,
+canonical CNCF public ComponentFactory native Directory/CAR discovery and
+source-free CBD consumption, focused validation and independent protected own
+Step conformance are now accepted in
+[CAP-78-05 acceptance](../phase/phase-78.md#cap-78-05-acceptance--2026-10-15).
+Behavior specifications alone do not establish whole-Phase closure. Independent
+packaged/development runtime-manifest, ABI and activation contract requirements
+remain unchanged, with their separate synchronization and proof gates still owed.
+
+### Packaged Compile source-project exports
+
+The root enables `Compile / exportJars`; standard SBT `packageBin` and attributed
+`exportedProducts` supply its single main JAR through native source-project
+dependencies. Source-linked CBD root and output-exclusion fixture use that JAR
+for normal generation and CAR inputs. Test source fixtures and transitive
+dependencies retain their native Compile/Test mapping. Strict runtime descriptor
+resolution, ABI, and declared versions remain unchanged. Packaged/development
+runtime-manifest synchronization and its separate proof gates remain owed;
+this source export establishes no Step or Phase closure.
 
 ## Closure Validation Requirements
 
 Phase closure MUST execute the following ownership-preserving evidence:
 
-- CNCF cold and repeated Information generation through `build.sbt`;
+- CNCF ordinary actual Information generation and current metadata validation
+  through `build.sbt`;
 - Cozy exact-pair, descriptor, package, provenance, runtime-manifest, scaffold,
   review-evidence, and publication specifications;
 - sbt-cozy scripted CAR publication and review-evidence projects;

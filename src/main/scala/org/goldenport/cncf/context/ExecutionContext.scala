@@ -48,7 +48,8 @@ import cats.~>
  *  version Apr. 25, 2026
  *  version May. 31, 2026
  *  version Jul. 31, 2026
- * @version Aug. 12, 2026
+ *  version Aug. 12, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -459,6 +460,12 @@ object ExecutionContext {
     case _ =>
       ctx
   }
+
+  def withFreshUnitOfWorkContext(ctx: ExecutionContext): Consequence[ExecutionContext] =
+    ctx match {
+      case instance: Instance => Consequence.success(_rebind_runtime_context(instance))
+      case _ => Consequence.operationInvalid("execution-context-uow-rebind-unsupported")
+    }
 
   private def _with_runtime_context_preserving_execution_profile(
     ctx: ExecutionContext,
