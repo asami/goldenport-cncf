@@ -108,6 +108,22 @@ This is classified as an **Execution Boundary Escape / Runtime Ownership Violati
 
 CAR Lint should report the source-level definition/invocation early. CAR Loading Admission is the enforcing boundary for packaged ordinary CARs and rejects unadmitted entry-point definitions or calls. Framework-owned bootstrap, explicit test fixtures and separately executed admitted programs are owner-scoped exceptions; a generic suppression annotation must not turn arbitrary application `main` code into an ordinary CAR route.
 
+## File workspace and bounded data access
+
+Ordinary logical resource reads use the existing `read_resource` / `read_resource_text` Internal DSL. Safety limits do not create parallel application APIs such as `read_resource_bounded`; the normal operation is safe by construction and CNCF Runtime applies the effective `ExecutionLimits`.
+
+For development/workspace tools that require detailed filesystem manipulation, CNCF may expose a dedicated File Workspace Internal DSL following the normal convention, with operations such as `file_read`, `file_read_text`, `file_write`, `file_write_text`, `file_list`, `file_exists`, `file_mkdir`, `file_copy`, `file_move` and `file_delete`. The concrete minimal set is driven by real consumers such as sm-workflow.
+
+A File Workspace is a logical name bound in ExecutionContext/SandboxContext to one admitted directory root plus coarse authority (for example read-only or manage/read-write). Paths supplied to the DSL are relative to that logical workspace. Runtime resolution must keep every operation within the bound root; copy/move validate both source and destination. The intended usability model is broad freedom *inside* an admitted workspace, not a SELinux-like rule for every path.
+
+Authority and resource consumption are separate. `SandboxContext` decides what may be accessed; `ExecutionLimits` decides how much may be consumed. The initial candidate default for a normal full file/resource read is **1 MiB (1,048,576 bytes)**, configurable by runtime policy. `read_resource_text` / `file_read_text` inherit the same normal full-read limit rather than requiring callers to choose a special safe API.
+
+Large text/log inspection uses semantic partial-read operations rather than raising the full-read limit. Candidate extensions include `file_read_head`, `file_read_tail`, `file_read_lines` and `file_search_text`. Runtime limits bound returned bytes/lines, and implementations must not load the whole large file merely to slice a requested region.
+
+A later streaming extension may provide `file_stream_lines` and `file_stream_line_chunks` for incremental line/window processing of large logs. Requested window size does not grant resource authority; ExecutionLimits caps chunk lines/bytes and any applicable total consumption. Streaming implementations own resource lifetime, close/cancel, bounded buffering and backpressure and must not simulate streaming with an eager whole-file read. This streaming extension is not required for the initial Phase 6 Safety Sandbox slice.
+
+Process Execution is never an alternate File Workspace API. Using file utilities through ProcessExec to reproduce denied or managed file effects is Capability Laundering.
+
 ## Runtime examples
 
 A CAR using ResourceTreeAccess can be admitted while Runtime Sandbox limits it to the bound logical tree. A CAR containing direct `java.nio.file.Files` access is a loading-admission violation even if it requests a filesystem capability.
