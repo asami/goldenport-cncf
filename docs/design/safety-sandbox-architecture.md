@@ -128,6 +128,14 @@ Safety Sandbox reduces attack surface by removing ambient routes such as arbitra
 
 It does not claim that a deliberately hostile CAR cannot bypass an in-JVM boundary.
 
+## Deferred option: Java Agent reinforcement
+
+Java Agent / bytecode instrumentation is a deferred reinforcement option, not part of the initial Safety/Soft Sandbox completion criteria. First complete and exercise the architecture based on CAR Lint, CAR Loading Admission, ExecutionContext/SandboxContext resolution and managed Runtime Capability enforcement.
+
+After that baseline is operational, re-evaluate the JVM ecosystem and practical experience. A Java Agent may be useful as an additional safety layer that intercepts selected direct JDK filesystem/network/process or similar calls and consults the effective SandboxContext. The intended evaluation is accident prevention and defense-in-depth for ordinary code, not recreation of SecurityManager or proof of hostile-code containment.
+
+At evaluation time, review contemporary OpenJDK/JVM capabilities and production experience from projects using agent/instrumentation-based restrictions. Adopt only if the benefit is clear and the mechanism remains bounded, maintainable and compatible with the existing Loading Admission and Runtime Sandbox model. Docker/process isolation remains the hostile-code security boundary regardless of this option.
+
 ## Hard isolation
 
 Docker/process isolation is the security boundary for untrusted code, native execution, unrestricted tools and other workloads that require hostile-code containment. The same capability-oriented vocabulary should be reused across in-JVM and isolated execution where practical.
