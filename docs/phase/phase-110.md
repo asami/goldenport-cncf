@@ -65,6 +65,20 @@ Prove:
 
 ## sm-workflow development-driver adoption
 
+Development proceeds by vertical slices driven by real sm-workflow use after its basic command workflow is operational. Do not attempt to complete every sandbox family speculatively before the first consumer works.
+
+Recommended sequence:
+
+1. **Command/ExecutionContext slice** — propagate/resolve Client(Command) + Operation sandbox definitions and prove an Effective Sandbox reaches the actual sm-workflow Operation.
+2. **Worktree/resource slice** — constrain source/worktree reads and writes through CNCF logical resource boundaries; prove a sibling/unrelated repository write is denied.
+3. **Managed process slice** — run admitted Git and SBT operations through CNCF managed ProcessExec/program definitions; reject arbitrary shell/process construction.
+4. **Provider/network slice** — constrain admitted AI/provider network authority without exposing raw clients to workflow code.
+5. **Loading Admission + lint slice** — reject representative direct JVM escape routes in the packaged CAR and consume the same classification in cbd-support Phase 16.
+6. **Resident-server slice** — when sm-workflow server operation is introduced, add Server Sandbox and Client->Server ExecutionContext propagation; prove the existing Operation definitions need no semantic redesign.
+
+Each slice must end with a real sm-workflow scenario, not only a CNCF unit fixture. A missing generic primitive discovered by the scenario becomes bounded producer work in CNCF Phase 110 or cbd-support Phase 16 and is then re-consumed by sm-workflow.
+
+
 Phase 110 provides the generic runtime/admission primitives. sm-workflow adopts Safety Sandbox only after its basic workflow operation is working; Safety Sandbox must not become a prerequisite that delays that foundation.
 
 During adoption, sm-workflow is the practical development driver for the three-scope model and for CNCF/cbd-support integration. Concrete gaps found while constraining sm-workflow Git/SBT/worktree/process effects are fixed at their owning layer: CNCF Runtime for managed execution/enforcement/admission, CBD Support for lint/review interpretation, and sm-workflow only for its own scope/profile definitions. Do not add product-specific bypasses to make the trial pass.
