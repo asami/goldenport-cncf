@@ -18,29 +18,34 @@ Prevent bugs, mistaken input/configuration and unexpected AI-generated code from
 ### P110-01 External Effect policy vocabulary
 Define the minimal CNCF-owned classification shared by Runtime Sandbox, CAR Loading Admission and CAR lint/review metadata. Reuse Phase 107 escape-hatch metadata where applicable. Do not introduce a general OS ACL language.
 
-### P110-02 ExecutionContext sandbox resolution
+### P110-02 ExecutionContext propagation dependency
+Use the general ExecutionContext Propagation Architecture for Client -> Server transfer. Client Sandbox Definition is one registered propagated field family, not a sandbox-specific transport. Client functionality projects the local ExecutionContext into the allowlisted envelope; server ingress verifies/admit it and reconstructs a server-local ExecutionContext. No client value may widen server authority.
+
+Phase 110 implements/consumes the Sandbox-specific projection, ingress admission and narrowing semantics while generic envelope/transport machinery remains an ExecutionContext runtime concern.
+
+### P110-03 ExecutionContext sandbox resolution
 Define `SandboxDefinition`, deterministic `SandboxResolver` and resolved `SandboxContext`. Resolve Server, Client and Operation definitions by narrowing/intersection before Operation execution and bind the Effective Sandbox to `ExecutionContext`. A child scope cannot widen its parent. Preserve provenance sufficient for diagnostics without making runtime consumers re-resolve policy.
 
 Prove CLI/command use and resident-server use share the same Operation model: command invocation maps to Client scope; later server deployment supplies the outer Server scope.
 
-### P110-03 Runtime Sandbox scope
+### P110-04 Runtime Sandbox scope
 Define and implement the operation/CAR execution scope that binds admitted runtime capabilities and logical resources. Integrate existing UnitOfWork, ResourceTreeAccess/Query, ProcessExec, datastore/entity and managed provider paths. Managed runtime effects that do not pass through UnitOfWork receive the same Safety Sandbox semantics without artificial UnitOfWorkOps.
 
-### P110-04 Runtime enforcement
+### P110-05 Runtime enforcement
 Deterministically reject requests outside the admitted logical scope. ResourceTree operations stay within bound logical trees; persistence stays on admitted framework routes; ProcessExec uses trusted registered definitions/grants; managed network/provider authority cannot be widened by application input; failures use normal CNCF Consequence/Conclusion diagnostics.
 
-### P110-05 CAR Loading Admission
+### P110-06 CAR Loading Admission
 Add a bounded admission stage to the existing CAR loading path before ordinary component activation. Classify packaged bytecode references for direct filesystem, network/socket/HTTP, ProcessBuilder/Runtime.exec/shell, JDBC/raw persistence, native/JNI/Unsafe/internal JVM, and deterministic dynamic/reflection escape classes.
 
 A CAR capability declaration never converts direct JVM access into an allowed Safety Sandbox route.
 
-### P110-06 Admission profiles and hard-isolation handoff
+### P110-07 Admission profiles and hard-isolation handoff
 Define the normal Safety Sandbox profile and the handoff to Docker/process isolation. Do not attempt adversarial hostile-code proof in JVM. Native/untrusted/unrestricted execution is classified for hard isolation.
 
-### P110-07 Shared lint/review contract
+### P110-08 Shared lint/review contract
 Expose External Effect/admission classifications to CAR lint and CBD Review so textus-cbd-support Phase 16 does not invent a second taxonomy. CAR lint is early feedback; Loading Admission is runtime-entry enforcement; Runtime Sandbox bounds effects after admission.
 
-### P110-08 Executable end-to-end specification
+### P110-09 Executable end-to-end specification
 Prove:
 1. direct Files / ProcessBuilder usage is attributable and rejected by Loading Admission;
 2. a CAR using CNCF ResourceTree/ProcessExec routes is admitted;
