@@ -39,7 +39,7 @@ possibly-hostile CAR                               -> Docker/process isolation
 - **Client Sandbox Definition** — the authority of the invoking client/command/request/project session;
 - **Operation Sandbox Definition** — the minimum authority required by the concrete Operation/worker/step.
 
-Before Operation execution CNCF deterministically resolves them by narrowing/intersection:
+Before Operation execution CNCF deterministically resolves them. **Authority** and **resource limits** use different composition rules:
 
 ```text
 Server Sandbox Definition
@@ -53,7 +53,9 @@ Operation Sandbox Definition
         -> Operation
 ```
 
-A child definition cannot widen authority granted by its parent. In set terms the effective authority is bounded by `Operation ∩ Client ∩ Server`. Deny/restriction semantics must fail closed where definitions conflict or cannot be resolved safely.
+For authority, a child cannot widen admitted parent authority. Server configuration defines hard authority/envelopes; a Client may request a concrete authority inside that envelope, and an Operation may narrow it further. This is better understood as **admission/delegation plus narrowing** than as one universal intersection operator. Deny/restriction semantics fail closed where definitions conflict or cannot be admitted safely.
+
+For quantitative `ExecutionLimits`, Server configuration provides a **soft limit** (ordinary default) and **hard limit** (absolute ceiling). A Client ExecutionContext may request a value below or above the soft default, including a larger budget, but never above the hard limit. If no Client value is supplied, the soft limit applies. A request above the hard limit is rejected rather than silently granting it. Operation-specific limit semantics may be added where a concrete use case requires them; do not introduce a general matrix speculatively.
 
 `SandboxDefinition` is declarative input. `SandboxResolver` is deterministic framework logic. `SandboxContext` is the resolved runtime authority exposed through `ExecutionContext`. Runtime enforcement points such as UnitOfWork, ResourceTreeAccess, ProcessExec and managed providers consume the same effective context; UnitOfWork is an enforcement point, not the owner of the sandbox boundary.
 
@@ -116,7 +118,9 @@ For development/workspace tools that require detailed filesystem manipulation, C
 
 A File Workspace is a logical name bound in ExecutionContext/SandboxContext to one admitted directory root plus coarse authority (for example read-only or manage/read-write). Paths supplied to the DSL are relative to that logical workspace. Runtime resolution must keep every operation within the bound root; copy/move validate both source and destination. The intended usability model is broad freedom *inside* an admitted workspace, not a SELinux-like rule for every path.
 
-Authority and resource consumption are separate. `SandboxContext` decides what may be accessed; `ExecutionLimits` decides how much may be consumed. The initial candidate default for a normal full file/resource read is **1 MiB (1,048,576 bytes)**, configurable by runtime policy. `read_resource_text` / `file_read_text` inherit the same normal full-read limit rather than requiring callers to choose a special safe API.
+Server/deployment configuration defines one or more **hard filesystem roots**: absolute outer boundaries that execution can never exceed. A Client ExecutionContext may request a concrete workspace root for the current command/request (for example the selected repository or worktree). Server ingress/runtime admits that workspace only when it is contained by an allowed hard root and its requested coarse authority is permitted. The admitted Client workspace is then an authority in SandboxContext; an Operation may narrow to a sub-workspace or weaker authority. A Client-supplied path is therefore a workspace request, not authority by assertion. It cannot select a parent of the hard root or another filesystem tree.
+
+Authority and resource consumption are separate. `SandboxContext` decides what may be accessed; `ExecutionLimits` decides how much may be consumed. The initial candidate **soft** default for a normal full file/resource read is **1 MiB (1,048,576 bytes)**. Runtime configuration also defines a hard maximum. A Client ExecutionContext may request a different read budget within that hard ceiling; this is a bounded resource-budget override, not an expansion of filesystem authority. `read_resource_text` / `file_read_text` inherit the same normal full-read limit rather than requiring callers to choose a special safe API.
 
 Large text/log inspection uses semantic partial-read operations rather than raising the full-read limit. Candidate extensions include `file_read_head`, `file_read_tail`, `file_read_lines` and `file_search_text`. Runtime limits bound returned bytes/lines, and implementations must not load the whole large file merely to slice a requested region.
 
