@@ -175,3 +175,78 @@ Textus/CNCFでは、clientが解析され、API仕様とEntity IDが知られ、
 
 APK側hardeningは攻撃コストを上げる補助策として扱い、CNCFの安全性はその成否に依存
 しない。
+
+## Authorization Enforcement Architecture
+
+APK解析対策を実効的にするには、ABAC/ReBACのpolicy evaluatorを用意するだけでは足りない。
+難しいのは、すべての業務処理が必ずauthorization enforcement pointを通り、その判断に
+必要なsubject/authority/contextが処理の途中で失われないruntimeを作ることである。
+
+一般的なapplication library方式では、handler/serviceごとに
+`authorize(subject, action, resource)` を呼ぶ構造になりやすい。この方式では呼び忘れ、
+対象Entity resolve前後の評価漏れ、内部service callでのcontext消失、別adapterからの迂回が
+起こり得る。
+
+CNCFではauthorizationをapplication helperではなくruntime invariantとして扱う。
+
+```text
+Ingress
+  -> ExecutionContext / SecuritySubject
+  -> Operation Dispatcher
+  -> target/resource context
+  -> mandatory authorization enforcement
+       -> Capability
+       -> Guard
+       -> ABAC / ReBAC / ownership / relation
+  -> handler
+  -> EntityRealm / Repository / DataStore
+```
+
+通常の公開Operationにはauthorization enforcementを迂回してhandlerへ到達する経路を
+作らない。application developerはpolicy/relationshipを宣言するが、各handlerで
+authorization実行コードを書くことを標準にはしない。
+
+### ExecutionContext propagation
+
+認可判断にはuser identityだけでなく、tenant/organization、roles、capabilities、
+delegation、authentication facts、target relation、environment/risk等が必要になり得る。
+
+これらを個々のmethod parameterとしてapplication codeが手作業で持ち回る方式は採らず、
+CNCF ExecutionContext/SecuritySubject等のruntime contextとして伝播させる。
+
+同期callだけでなく以下の境界でもauthority provenanceを失わない設計が必要である。
+
+- nested Operation / service call;
+- Job作成とworker実行;
+- Workflow / StateMachine / Continuation resume;
+- Event / Service Bus delivery;
+- scheduled execution;
+- AI/agent等へのbounded delegation。
+
+非同期処理では「requestを開始したuser」と「worker process identity」を混同しない。
+Job/Continuation等に必要なauthority reference/snapshot/delegationをdurableに保持し、
+resume時にruntimeが再構成・再評価できる契約が必要になる。
+
+### PDPとPEP
+
+OPA/OpenFGA/Cerbos等の外部policy/relationship engineは将来Guardのdecision provider
+(PDP)として利用できる可能性がある。しかし外部PDPを導入しただけでは安全にならない。
+
+CNCFの主要責務は、全Operationが必ずPolicy Enforcement Point (PEP)を通り、必要な
+ExecutionContextとtarget informationをPDPへ供給し、denyならhandler/DataStoreへ
+進ませないAuthorization Enforcement Architectureを提供することである。
+
+したがってTextusの差別化点は独自policy languageそのものより、業務runtime全体へ
+authorization enforcementとcontext propagationを埋め込めることにある。
+
+### APK threatとの関係
+
+攻撃者がAPKから全API、Operation名、Entity ID形式、画面外の管理機能を把握しても、
+それらはauthorityを与えない。
+
+改造clientが正規UIを完全に迂回して直接Operationを呼ぶ場合こそ、CNCF Runtimeの
+mandatory PEPがSecuritySubject + Capability/Guard + target relationを評価する。
+
+したがってAPK解析耐性の根本はclient codeを秘密にすることではなく、
+**clientを完全に理解した攻撃者でも迂回できないserver-side authorization route**
+を構築することである。
