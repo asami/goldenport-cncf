@@ -24,7 +24,7 @@ Use the general ExecutionContext Propagation Architecture for Client -> Server t
 Phase 110 implements/consumes the Sandbox-specific projection, ingress admission and narrowing semantics while generic envelope/transport machinery remains an ExecutionContext runtime concern.
 
 ### P110-03 ExecutionContext sandbox resolution
-Define `SandboxDefinition`, deterministic `SandboxResolver` and resolved `SandboxContext`. Resolve Server, Client and Operation definitions by narrowing/intersection before Operation execution and bind the Effective Sandbox to `ExecutionContext`. A child scope cannot widen its parent. Preserve provenance sufficient for diagnostics without making runtime consumers re-resolve policy.
+Define `SandboxDefinition`, deterministic `SandboxResolver`, resolved `SandboxContext` and quantitative `ExecutionLimits`. Do not use one universal intersection rule. Authority uses server hard envelopes plus client admission/delegation and operation narrowing. Quantitative limits use server soft/default plus hard ceiling; a Client ExecutionContext may request a different budget, including above soft default, only within the hard ceiling. Bind resolved authority and limits to `ExecutionContext` and preserve provenance sufficient for diagnostics without making runtime consumers re-resolve policy.
 
 Prove CLI/command use and resident-server use share the same Operation model: command invocation maps to Client scope; later server deployment supplies the outer Server scope.
 
@@ -37,24 +37,29 @@ Other external commands use generic Process Execution only after explicit comman
 
 Treat use of Process Execution to implement an otherwise denied effect (for example cat/cp/rm for filesystem, curl for HTTP, database CLI for persistence) as **Capability Laundering**. Prevent it primarily by typed DSL/registered program definitions and bounded grants, with lint/review diagnostics for recognizable misuse.
 
-### P110-05 Runtime Sandbox scope
+### P110-05 File Workspace hard-root admission
+Define server/deployment hard filesystem roots as absolute outer boundaries. Let the Client ExecutionContext request named workspace roots (repository/worktree/state area) inside those roots with coarse authority. Admit only contained/permitted roots, bind them as logical File Workspaces, and let Operations narrow to sub-workspaces/weaker authority. Client paths are requests, not self-granted authority.
+
+Provide the minimum File Workspace DSL needed by sm-workflow Phase 6 and apply normal full-read ExecutionLimits. Use a 1 MiB initial soft/default full-read limit with a configurable hard maximum; Client context may request a different value only within that maximum. Keep large-log partial/streaming extensions separate unless the real Phase 6 scenario needs them.
+
+### P110-06 Runtime Sandbox scope
 Define and implement the operation/CAR execution scope that binds admitted runtime capabilities and logical resources. Integrate existing UnitOfWork, ResourceTreeAccess/Query, ProcessExec, datastore/entity and managed provider paths. Managed runtime effects that do not pass through UnitOfWork receive the same Safety Sandbox semantics without artificial UnitOfWorkOps.
 
-### P110-06 Runtime enforcement
+### P110-07 Runtime enforcement
 Deterministically reject requests outside the admitted logical scope. ResourceTree operations stay within bound logical trees; persistence stays on admitted framework routes; ProcessExec uses trusted registered definitions/grants; managed network/provider authority cannot be widened by application input; failures use normal CNCF Consequence/Conclusion diagnostics.
 
-### P110-07 CAR Loading Admission
+### P110-08 CAR Loading Admission
 Add a bounded admission stage to the existing CAR loading path before ordinary component activation. Classify packaged bytecode references for direct filesystem, network/socket/HTTP, ProcessBuilder/Runtime.exec/shell, JDBC/raw persistence, native/JNI/Unsafe/internal JVM, and deterministic dynamic/reflection escape classes.
 
 A CAR capability declaration never converts direct JVM access into an allowed Safety Sandbox route.
 
-### P110-08 Admission profiles and hard-isolation handoff
+### P110-09 Admission profiles and hard-isolation handoff
 Define the normal Safety Sandbox profile and the handoff to Docker/process isolation. Do not attempt adversarial hostile-code proof in JVM. Native/untrusted/unrestricted execution is classified for hard isolation.
 
-### P110-09 Shared lint/review contract
+### P110-10 Shared lint/review contract
 Expose External Effect/admission classifications to CAR lint and CBD Review so textus-cbd-support Phase 16 does not invent a second taxonomy. CAR lint is early feedback; Loading Admission is runtime-entry enforcement; Runtime Sandbox bounds effects after admission.
 
-### P110-10 Executable end-to-end specification
+### P110-11 Executable end-to-end specification
 Prove:
 1. direct Files / ProcessBuilder usage and CAR-owned main/entry-point definition+invocation are attributable and rejected by Loading Admission;
 2. a CAR using CNCF ResourceTree/ProcessExec routes is admitted;
