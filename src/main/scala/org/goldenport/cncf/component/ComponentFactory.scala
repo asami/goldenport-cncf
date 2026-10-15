@@ -34,7 +34,7 @@ import org.goldenport.cncf.workflow.WorkflowDefinition
 import org.goldenport.cncf.workflow.{ContinuationRuntimeSource, ContinuationSpiAdapter, IssuedWorkOrderPersistence, GeneratedProvidedApiAbi, GeneratedProvidedApiMetadataProvider, GeneratedWorkflowAbi, GeneratedWorkflowMetadataProvider, StateMachineProvidedApiDispatcher, StateMachineProvidedApiProgramSource, StateMachineProviderResolver, StateMachineProviderSource}
 import org.simplemodeling.model.value.BaseContent
 import scala.util.Try
-import org.goldenport.cncf.component.capability.{ComponentCapabilityDiscovery, ComponentCapabilityMetadataProvider}
+import org.goldenport.cncf.component.capability.{ComponentCapabilityDiscovery, ComponentCapabilityMetadataProvider, ComponentUsageCapabilityPackageLoader}
 import org.goldenport.cncf.component.capability.ComponentCapabilityPackageSource.PackageInput
 import org.goldenport.cncf.component.capability.ComponentCapabilityAdmissionScope.Diagnostic
 
@@ -47,7 +47,7 @@ import org.goldenport.cncf.component.capability.ComponentCapabilityAdmissionScop
  *  version Apr. 26, 2026
  *  version May.  7, 2026
  *  version Sep. 28, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -303,6 +303,10 @@ final class ComponentFactory(
 }
 
 object ComponentFactory {
+  def acquireUsageCapabilities(input: PackageInput): Either[Diagnostic, Option[ComponentUsageCapabilityPackageLoader.Acquired]] = {
+    ComponentUsageCapabilityPackageLoader.load(input)
+  }
+
   def discoverCapabilities(input: PackageInput, provider: ComponentCapabilityMetadataProvider): Either[Diagnostic, ComponentCapabilityDiscovery.Discovered] = {
     ComponentCapabilityDiscovery.discover(input, provider)
   }

@@ -6,7 +6,7 @@ import ComponentCapabilityProjection.{CapabilityDefinition, TargetKind}
 
 /*
  * @since   Oct. 5, 2026
- * @version Oct. 5, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentCapabilityAdmissionScope {
@@ -54,7 +54,7 @@ object ComponentCapabilityAdmissionScope {
     case UseCaseSlice extends ModelKind("USE_CASE_SLICE")
     case Component extends ModelKind("COMPONENT")
     case ComponentCapability extends ModelKind("COMPONENT_CAPABILITY")
-    case ApplicationCapability extends ModelKind("APPLICATION_CAPABILITY")
+    case ComponentUsageCapability extends ModelKind("COMPONENT_USAGE_CAPABILITY")
     case Specification extends ModelKind("SPECIFICATION")
     case Evidence extends ModelKind("EVIDENCE")
     case Operation extends ModelKind("OPERATION")

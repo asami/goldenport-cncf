@@ -11,6 +11,8 @@ self-contained normative semantic contract. R11 and R12 define the concrete
 external v1 format and metadata admission boundary. R13 defines the internal
 adapter from explicitly acquired actual typed target metadata to R12 binding.
 R14 defines canonical local package acquisition and public native discovery.
+R15 in the [Usage package contract](component-usage-capability-package.md#r15-acquisition-and-failures)
+defines the optional raw Usage transport alongside this unchanged Component contract.
 
 The [Component Capability design](../design/component-capability.md)
 provides non-normative structural context. The existing Phase 56
@@ -40,7 +42,8 @@ normalization, and production. CNCF owns the Component Capability semantic
 contract, version admission, and discovery. Textus CBD Support owns ingestion,
 catalog, and query.
 
-Application Capability MUST remain upstream and MUST NOT become Component ABI
+Component Usage Capability is a separate inductive usage model. It MUST NOT
+be merged into the deductive provided/required contract or Component ABI
 lifecycle data. Runtime invocation, availability, authorization, permission,
 and guards MUST remain separate concerns.
 
@@ -319,7 +322,7 @@ definitions and may include multiple versions acquired from separate snapshots.
 | TermFact | `identity: TermId`, `source: Source` |
 | RelationFact | `identity: RelationId`, `source: Source` |
 | ProfileFact | `identity: ProfileId`, `source: Source` |
-| ModelKind | `DOMAIN_CONCEPT \| GOAL \| USE_CASE \| SCENARIO \| USE_CASE_SLICE \| COMPONENT \| COMPONENT_CAPABILITY \| APPLICATION_CAPABILITY \| SPECIFICATION \| EVIDENCE \| OPERATION \| WORKFLOW \| STATE_MACHINE` |
+| ModelKind | `DOMAIN_CONCEPT \| GOAL \| USE_CASE \| SCENARIO \| USE_CASE_SLICE \| COMPONENT \| COMPONENT_CAPABILITY \| COMPONENT_USAGE_CAPABILITY \| SPECIFICATION \| EVIDENCE \| OPERATION \| WORKFLOW \| STATE_MACHINE` |
 | TargetContract | `targetKind: TargetKind`, `identity: ModelElementId`, `component: ComponentId`, `contractVersion: String`, `generatedAbiVersion: String`, `source: Source` |
 | Admitted | Private construction; exposes original `projection: Projection`, selected `scopeId: String`, combined bound `capabilities: Vector[CapabilityDefinition]`, `realizations: Vector[ResolvedRealization]` |
 | ResolvedRealization | Private construction; exposes original `edge: Realization` and exact selected `target: TargetContract` including independent target source/revision |
@@ -611,11 +614,40 @@ Factory/package discovery or CBD ingestion proof.
 | CPT31 | JSON Rejected is unchanged even with null adapted; acquired/null is malformed. | R13 precedence |
 | CPT32 | Native procedure variations stay on actual contracts; mapping remains architectural. | R7, R9, R13 nonexecution |
 
+### Component Usage package metadata amendment — 2026-10-15
+
+The [Component Usage Capability package contract](component-usage-capability-package.md)
+adds an optional inductive metadata family to the reviewed Component's own
+Directory/CAR. It supersedes the withdrawn Application-owned package proposal.
+CAP-78-PKG01 implementation, focused Step validation, the complete Capability
+accumulator and independent protected Step review are accepted. Earlier Step acceptances remain
+historical and do not accept these changed inputs. Common acquisition does not
+add Usage records to R11/R12 or make Usage evidence native admission.
+`ModelKind.ComponentUsageCapability` / `COMPONENT_USAGE_CAPABILITY` replaces
+the old Application Capability kind without aliases; unrelated information
+Application APIs and ModelRole mappings are unchanged.
+
+Both `ComponentFactory` companion and instance expose
+`acquireUsageCapabilities(input: ComponentCapabilityPackageSource.PackageInput):
+Either[Diagnostic, Option[ComponentUsageCapabilityPackageLoader.Acquired]]`,
+delegating directly to `ComponentUsageCapabilityPackageLoader.load` with the
+same result. Its loader-only constructed final carrier exposes original
+`input`, `descriptor`, canonical `resourcePath` and uninterpreted `content`.
+The fixed layout is `meta/component-usage-capability/index.json` selecting
+only sibling `usage.json`. Shared Directory/CAR transport retains strict
+index/UTF-8/resource limits and descriptor validation; `Right(None)` is only
+genuine family absence in a valid selected package. Present malformed,
+missing or unreadable metadata remains `Left(Diagnostic)`. No Component
+Capability resource, provider, native target or activation is required for
+Usage-only acquisition. CBD owns envelope/source/owner/producer/package
+semantics; UTF-8 transport success establishes none of them. R15 owns the
+complete public carrier and absence/failure contract.
+
 ### R14 Canonical package and public native discovery
 
 #### Selected package and publication
 
-The sole Capability publication layout is `meta/component-capability/index.json`
+The sole Component Capability publication layout is `meta/component-capability/index.json`
 beside the existing canonical CAR descriptor, with flat sibling R11 JSON
 resources. The index is exactly `{"schemaVersion":1,"projections":["filename.json"]}`;
 it contains filenames, never embedded projections or native metadata.
@@ -808,6 +840,7 @@ The local Step commit binds this acceptance; normal Cozy/CBD proof remains CAP-7
 | CPL14 | Index/resource/count/total byte bounds reject oversized input. |
 | CPL15 | Unlisted/nested JSON fails; unrelated assets remain unread. |
 | CPL16 | Active ordered safe-index property retains literal filenames. |
+| CPL17 | Component metadata remains independent of coexisting opaque Usage/config; accepted for CAP-78-PKG01. |
 | CPD01 | Three families retain actual objects/sources/edge order. |
 | CPD02 | Native Rejected precedes ScopeRejected unchanged. |
 | CPD03 | ScopeRejected/null/malformed native input cannot yield a partial catalog. |
@@ -828,6 +861,8 @@ The local Step commit binds this acceptance; normal Cozy/CBD proof remains CAP-7
 | CPF04 | Original acquisition/admission errors survive without fallback/retry. |
 | CPF05 | External client namespace consumes public provider/catalog/original targets. |
 | CPF06 | Per-call package/provider inputs remain independent without global cache. |
+| CPF07 | Public external namespace consumes raw Usage through companion API with poison CAR runtime payload; accepted for CAP-78-PKG01. |
+| CPF08 | Instance Usage acquisition is independent of runtime repository/collaborators and provider; accepted for CAP-78-PKG01. |
 
 ## Semantic acceptance matrix
 

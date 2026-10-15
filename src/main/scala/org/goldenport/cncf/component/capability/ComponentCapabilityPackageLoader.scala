@@ -1,18 +1,16 @@
 package org.goldenport.cncf.component.capability
 
 import org.goldenport.cncf.component.ComponentDescriptor
-import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
 import ComponentCapabilityAdmissionScope.*
 import ComponentCapabilityPackageSource.*
 import ComponentCapabilityProjection.Projection
 import ComponentCapabilityProjectionCodec.*
-import ComponentCapabilityProjectionValidationPart.{_component, _text}
 
 /*
  * Sole acceptance facade for complete canonical local metadata acquisition.
  *
  * @since   Oct. 14, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentCapabilityPackageLoader {
@@ -34,10 +32,9 @@ object ComponentCapabilityPackageLoader {
     case PackageInput.Rejected(diagnostic) => _nonnull(diagnostic, "/package/diagnostic").flatMap(value => Left(value))
     case selected: PackageInput.Selected =>
       val result = for {
-        _ <- _validate_selection(selected)
+        _ <- ComponentCapabilityPackageSelectionPart.validate(selected)
         data <- ComponentCapabilityPackageArchivePart.read(selected.location)
-        _ <- Either.cond(data.descriptor.componentId.contains(selected.component.componentId) && data.descriptor.version.contains(selected.component.version), (),
-          _diagnostic(DiagnosticKind.Incompatible, "Canonical descriptor and selected Component coordinates differ.", "/descriptor/component"))
+        _ <- ComponentCapabilityPackageSelectionPart.validateDescriptor(selected, data.descriptor)
         decoded <- _sequence(data.resources.map { (name, text) => _decode(selected, name, text) })
         _ <- _snapshot_uniqueness(decoded)
       } yield {
@@ -46,23 +43,8 @@ object ComponentCapabilityPackageLoader {
         }
         new Acquired(selected, data.descriptor, data.index, projections)
       }
-      result.left.map(error => error.copy(scopeId = error.scopeId.orElse(Option(selected.scopeId)),
-        component = error.component.orElse(Option(selected.component).flatMap(value => Option(value.componentId)))))
+      result.left.map(ComponentCapabilityPackageSelectionPart.contextualize(selected, _))
     case null => Left(_malformed("/package", "An explicit package acquisition outcome is required."))
-  }
-
-  private def _validate_selection(input: PackageInput.Selected): Either[Diagnostic, Unit] = {
-    for {
-      _ <- _text(input.scopeId, "/package/scopeId")
-      component <- _nonnull(input.component, "/package/component")
-      _ <- _component(component.componentId, "/package/component/componentId")
-      _ <- _text(component.version, "/package/component/version")
-      release = ComponentReleaseCoordinate.create(component.componentId.sharedIdentity, component.version)
-      _ <- Either.cond(release.isSuccess(), (), _malformed("/package/component/version", "A canonical Component release is required."))
-      coordinate <- _nonnull(input.packageCoordinate, "/package/package")
-      _ <- _text(coordinate.coordinate, "/package/package/coordinate")
-      _ <- _text(coordinate.version, "/package/package/version")
-    } yield ()
   }
 
   private def _decode(input: PackageInput.Selected, name: String, text: String): Either[Diagnostic, (String, SourceInput.Acquired, Projection)] = {

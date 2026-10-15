@@ -4,6 +4,32 @@ status=in-progress
 phase=[Phase 78](phase-78.md)
 development_item=DEV-011
 
+## CAP-78-PKG01: Component Usage model and Component-owned Directory/CAR
+
+Stage Status:
+- Current status: DONE
+- Owner: CNCF package metadata owner
+- Update rule: corrected scope replaces the Application-owned package proposal;
+  preserve prior Step acceptance and require focused new-boundary evidence.
+- Closure basis: Current public Usage acquisition, shared Directory/CAR transport,
+  focused Step validation and independent protected Step review are accepted.
+
+- [x] Expose Component-owned Usage metadata from Directory/CAR, separate from Component contracts.
+- [x] Keep inductive Usage and deductive Component Capability separate; preserve
+      explicit Component ownership, source/derivation evidence and many-to-many
+      mappings. Usage observations do not create PROVIDED/REQUIRED contracts.
+- [x] Delete old Application types/APIs/fields without aliases or forwarders;
+      compile affected callers/generated code so stale typed references fail.
+      Update CML/JSON/fixtures together; no dual reader, converter or fallback.
+- [x] Prove one normal generated Directory route without requiring a CAR or loose
+      JSON; prove multi-Component owner partitioning and external references.
+- [x] Prove equivalent semantic results from that Directory and normal CAR,
+      with config and separate capability namespaces coexisting.
+- [x] Preserve optional absence and actual upstream failures; reuse lower-layer
+      guarantees. Complete focused owner review/validation and record actual
+      versions without claiming old separate-file proof accepts this change.
+
+
 ## CAP-78-01: Semantic contract
 
 Stage Status:

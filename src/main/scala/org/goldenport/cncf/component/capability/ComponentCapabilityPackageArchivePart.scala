@@ -3,7 +3,7 @@ package org.goldenport.cncf.component.capability
 import java.io.{ByteArrayOutputStream, InputStream, RandomAccessFile}
 import java.nio.{ByteBuffer, ByteOrder}
 import java.nio.charset.{CharacterCodingException, CodingErrorAction, StandardCharsets}
-import java.nio.file.{AccessDeniedException, Files, LinkOption, Path}
+import java.nio.file.{AccessDeniedException, Files, LinkOption, NoSuchFileException, Path}
 import java.nio.file.attribute.BasicFileAttributes
 import java.util.zip.ZipFile
 import scala.jdk.CollectionConverters.*
@@ -13,16 +13,17 @@ import org.goldenport.cncf.component.{ComponentDescriptor, ComponentDescriptorLo
 import ComponentCapabilityAdmissionScope.*
 import ComponentCapabilityProjectionCodec.*
 import ComponentCapabilityPackageSource.*
+import ComponentCapabilityPackageIndexPart.MetadataFamily
 
 /*
  * Local read-only metadata acquisition; never extracts or activates a CAR.
  *
  * @since   Oct. 14, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 private[capability] object ComponentCapabilityPackageArchivePart {
-  final case class ReadPackage(descriptor: ComponentDescriptor, index: Vector[String], resources: Vector[(String, String)]) {}
+  final case class ReadPackage(descriptor: ComponentDescriptor, index: Vector[String], resources: Vector[(String, String)], present: Boolean) {}
   private val _index_limit = 1024L * 1024
   private val _resource_limit = 16L * 1024 * 1024
   private val _total_limit = 64L * 1024 * 1024
@@ -30,9 +31,13 @@ private[capability] object ComponentCapabilityPackageArchivePart {
     Vector("json", "yaml", "yml", "conf", "hocon", "xml").map(extension => s"$name.$extension")
   } ++ Vector("json", "yaml", "yml", "conf", "hocon", "xml").map(extension => s"meta/component-descriptor.$extension")
 
-  def read(location: Location): Either[Diagnostic, ReadPackage] = location match {
-    case Location.Directory(root) => _nonnull(root, "/location/root").flatMap(_read_directory)
-    case Location.Car(path) => _nonnull(path, "/location/path").flatMap(_read_car)
+  def read(location: Location): Either[Diagnostic, ReadPackage] = _read(location, MetadataFamily.Component)
+
+  def readUsage(location: Location): Either[Diagnostic, ReadPackage] = _read(location, MetadataFamily.Usage)
+
+  private def _read(location: Location, family: MetadataFamily): Either[Diagnostic, ReadPackage] = location match {
+    case Location.Directory(root) => _nonnull(root, "/location/root").flatMap(_read_directory(_, family))
+    case Location.Car(path) => _nonnull(path, "/location/path").flatMap(_read_car(_, family))
     case null => Left(_malformed("/location", "An explicit local package location is required."))
   }
 
@@ -55,27 +60,57 @@ private[capability] object ComponentCapabilityPackageArchivePart {
     }
   }
 
-  private def _read_directory(root: Path): Either[Diagnostic, ReadPackage] = {
-    _io("/location/root") {
-      for {
-        _ <- _kind(root, true, "/location/root")
-        _ <- _kind(root.resolve("meta"), true, "/meta")
-        _ <- _kind(root.resolve(metadataDirectory), true, "/" + metadataDirectory)
-        indextext <- _read_file(root.resolve(indexPath), _index_limit, "/index")
-        index <- ComponentCapabilityPackageIndexPart.decode(indextext._1)
-        inventory <- _directory_inventory(root)
-        _ <- ComponentCapabilityPackageIndexPart.validateInventory(index, inventory)
-        descriptor <- _directory_descriptor(root)
-        resources <- _resources(index) { (name, limit) =>
-          _read_file(root.resolve(metadataDirectory).resolve(name), limit, "/" + metadataDirectory + "/" + name)
+  private def _directory_present(root: Path, family: MetadataFamily): Either[Diagnostic, Boolean] = {
+    def _directory_(path: Path, location: String): Either[Diagnostic, Boolean] = {
+      _io(location) {
+        try {
+          val attributes = Files.readAttributes(path, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS)
+          Either.cond(!attributes.isSymbolicLink && attributes.isDirectory, true,
+            _malformed(location, "A selected package path must be a directory without symlinks."))
+        } catch {
+          case _: NoSuchFileException => Right(false)
         }
-      } yield ReadPackage(descriptor, index, resources)
+      }
+    }
+    if (family.optional) {
+      _directory_(root.resolve("meta"), "/meta").flatMap {
+        case false => Right(false)
+        case true => _directory_(root.resolve(family.directory), "/" + family.directory)
+      }
+    } else {
+      for {
+        _ <- _kind(root.resolve("meta"), true, "/meta")
+        _ <- _kind(root.resolve(family.directory), true, "/" + family.directory)
+      } yield true
     }
   }
 
-  private def _directory_inventory(root: Path): Either[Diagnostic, Vector[String]] = {
-    _io("/" + metadataDirectory) {
-      val stream = Files.walk(root.resolve(metadataDirectory))
+  private def _read_directory(root: Path, family: MetadataFamily): Either[Diagnostic, ReadPackage] = {
+    _io("/location/root") {
+      for {
+        _ <- _kind(root, true, "/location/root")
+        present <- _directory_present(root, family)
+        result <- if (!present) {
+          _directory_descriptor(root).map(descriptor => ReadPackage(descriptor, Vector.empty, Vector.empty, false))
+        } else {
+          for {
+            indextext <- _read_file(root.resolve(family.indexPath), _index_limit, "/index")
+            index <- ComponentCapabilityPackageIndexPart.decode(indextext._1, family)
+            inventory <- _directory_inventory(root, family)
+            _ <- ComponentCapabilityPackageIndexPart.validateInventory(index, inventory, family)
+            descriptor <- _directory_descriptor(root)
+            resources <- _resources(index) { (name, limit) =>
+              _read_file(root.resolve(family.directory).resolve(name), limit, "/" + family.directory + "/" + name)
+            }
+          } yield ReadPackage(descriptor, index, resources, true)
+        }
+      } yield result
+    }
+  }
+
+  private def _directory_inventory(root: Path, family: MetadataFamily): Either[Diagnostic, Vector[String]] = {
+    _io("/" + family.directory) {
+      val stream = Files.walk(root.resolve(family.directory))
       try {
         val paths = stream.iterator().asScala.toVector
         Right(paths.filterNot(Files.isDirectory(_, LinkOption.NOFOLLOW_LINKS)).map(path => root.relativize(path).toString.replace('\\', '/')))
@@ -111,7 +146,7 @@ private[capability] object ComponentCapabilityPackageArchivePart {
     }
   }
 
-  private def _read_car(path: Path): Either[Diagnostic, ReadPackage] = {
+  private def _read_car(path: Path, family: MetadataFamily): Either[Diagnostic, ReadPackage] = {
     _io("/location/path") {
       for {
         _ <- _kind(path, false, "/location/path")
@@ -122,25 +157,31 @@ private[capability] object ComponentCapabilityPackageArchivePart {
             val entries = zip.entries().asScala.toVector
             val names = entries.map(_.getName)
             for {
-              _ <- _archive_inventory(names)
-              _ <- _archive_symlinks(path, names)
-              indexbytes <- _zip_read(zip, indexPath, _index_limit, "/index")
-              index <- ComponentCapabilityPackageIndexPart.decode(indexbytes._1)
-              _ <- ComponentCapabilityPackageIndexPart.validateInventory(index, names)
-              descriptor <- _descriptor(path)
-              resources <- _resources(index) { (name, limit) =>
-                _zip_read(zip, metadataDirectory + "/" + name, limit, "/" + metadataDirectory + "/" + name)
+              _ <- _archive_inventory(names, family)
+              _ <- _archive_symlinks(path, names, family)
+              result <- if (family.optional && !names.exists(_metadata_name(_, family))) {
+                _descriptor(path).map(descriptor => ReadPackage(descriptor, Vector.empty, Vector.empty, false))
+              } else {
+                for {
+                  indexbytes <- _zip_read(zip, family.indexPath, _index_limit, "/index")
+                  index <- ComponentCapabilityPackageIndexPart.decode(indexbytes._1, family)
+                  _ <- ComponentCapabilityPackageIndexPart.validateInventory(index, names, family)
+                  descriptor <- _descriptor(path)
+                  resources <- _resources(index) { (name, limit) =>
+                    _zip_read(zip, family.directory + "/" + name, limit, "/" + family.directory + "/" + name)
+                  }
+                } yield ReadPackage(descriptor, index, resources, true)
               }
-            } yield ReadPackage(descriptor, index, resources)
+            } yield result
           } finally zip.close()
         }
       } yield result
     }
   }
 
-  private def _archive_inventory(names: Vector[String]): Either[Diagnostic, Unit] = {
-    val prefix = metadataDirectory + "/"
-    val metadata = names.filter(_metadata_name)
+  private def _archive_inventory(names: Vector[String], family: MetadataFamily): Either[Diagnostic, Unit] = {
+    val prefix = family.directory + "/"
+    val metadata = names.filter(_metadata_name(_, family))
     metadata.find { name =>
       val parts = name.stripSuffix("/").split("/", -1)
       name.startsWith("/") || name.contains("\\") || parts.exists(part => part.isEmpty || part == "." || part == "..") || !name.startsWith(prefix)
@@ -155,7 +196,7 @@ private[capability] object ComponentCapabilityPackageArchivePart {
     }
   }
 
-  private def _metadata_name(name: String): Boolean = {
+  private def _metadata_name(name: String, family: MetadataFamily): Boolean = {
     val parts = name.replace('\\', '/').split("/", -1).foldLeft(Vector.empty[String]) { (values, part) =>
       part match {
         case "" | "." => values
@@ -163,7 +204,7 @@ private[capability] object ComponentCapabilityPackageArchivePart {
         case _ => values :+ part
       }
     }
-    name.startsWith(metadataDirectory + "/") || parts.take(2) == Vector("meta", "component-capability")
+    name.startsWith(family.directory + "/") || parts.take(2) == family.directory.split("/").toVector
   }
 
   private def _unsigned_short(bytes: Array[Byte], offset: Int): Int = {
@@ -174,7 +215,7 @@ private[capability] object ComponentCapabilityPackageArchivePart {
     ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).getInt(offset).toLong & 0xffffffffL
   }
 
-  private def _archive_symlinks(path: Path, names: Vector[String]): Either[Diagnostic, Unit] = {
+  private def _archive_symlinks(path: Path, names: Vector[String], family: MetadataFamily): Either[Diagnostic, Unit] = {
     // ZipFile reads entry bytes without interpreting Unix link attributes.
     // Inspect central-directory mode bits only for canonical metadata roles.
     _io("/location/path") {
@@ -214,8 +255,8 @@ private[capability] object ComponentCapabilityPackageArchivePart {
                 file.readFully(namebytes)
                 val name = new String(namebytes, StandardCharsets.UTF_8)
                 val mode = (_unsigned_int(header, 38) >>> 16) & 0xf000L
-                if (mode == 0xa000L && (name.stripSuffix("/") == "meta" || name.stripSuffix("/") == metadataDirectory ||
-                    (_metadata_name(name) && name.endsWith(".json")) || _descriptor_names.contains(name))) {
+                if (mode == 0xa000L && (name.stripSuffix("/") == "meta" || name.stripSuffix("/") == family.directory ||
+                    (_metadata_name(name, family) && name.endsWith(".json")) || _descriptor_names.contains(name))) {
                   error = Some(_malformed("/" + name, "Archive metadata symlinks are forbidden."))
                 }
                 file.seek(file.getFilePointer + _unsigned_short(header, 30) + _unsigned_short(header, 32))

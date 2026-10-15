@@ -16,7 +16,7 @@ import ComponentCapabilityPackageLoaderSpec.*
 
 /*
  * @since   Oct. 14, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentCapabilityPackageLoaderSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -25,6 +25,23 @@ final class ComponentCapabilityPackageLoaderSpec extends AnyWordSpec with Matche
   private def _left[A](result: Either[Diagnostic, A]): Diagnostic = result.fold(value => value, _ => fail("Expected package rejection."))
 
   "Canonical package acquisition" should {
+    "CPL17 coexist with optional Usage and configuration" should _metadata("CPL17") {
+      "keep Component admission independent of raw Usage content" in {
+        Given("Spec: docs/spec/component-capability.md; R14,R15; CPL17; an original Component projection alongside deliberately opaque Usage and config")
+        _with_directory { root =>
+          val selected = _package(root, Vector("first.json" -> _empty_projection))
+          ComponentUsageCapabilityPackageLoaderSpec._write_usage(root)
+          _write(root, "config/default.conf", "component.enabled = true\n")
+          val carinput = selected.copy(location = Location.Car(_car(root)))
+          When("the Component family is acquired from Directory and CAR")
+          val results = Vector(selected, carinput).map(input => _right(ComponentCapabilityPackageLoader.load(input)))
+          Then("only the original indexed Component projection is decoded and admitted to acquisition")
+          results.map(_.index) shouldBe Vector.fill(2)(Vector("first.json"))
+          results.map(_.projections.map(_.projection)) shouldBe Vector.fill(2)(Vector(_empty_projection))
+          Files.readString(root.resolve("config/default.conf")) shouldBe "component.enabled = true\n"
+        }
+      }
+    }
     "CPL01 preserve Directory projection provenance" should _metadata("CPL01") {
       "retain original values independently of resource spelling" in {
         Given("Spec: docs/spec/component-capability.md; R14; CPL01; a canonical directory and literal R11 input")

@@ -7,6 +7,37 @@ development_item=DEV-011
 predecessor=[Phase 77.2](phase-77.2.md)
 checklist=[Phase 78 Checklist](phase-78-checklist.md)
 
+## Package metadata amendment — 2026-10-15
+
+Current corrected work: **CAP-78-PKG01**. This replaces the earlier
+Application-owned package assumption; it does not create another parallel item.
+
+The [Component Usage package contract](../spec/component-usage-capability-package.md)
+replaces the Application-owned package proposal. Extend public metadata acquisition
+for the reviewed Component's inductive Usage family without merging it into the
+deductive Component ABI. Reuse Directory/CAR resource handling. Delete obsolete
+Application bridge symbols, preserve existing native Component discovery and expose
+actual owner/resource/acquisition context to CBD.
+
+Execution order: settle the corrected typed model and owner/source mapping ->
+Cozy source/IR/request and CNCF Directory acquisition -> CBD ingestion/catalog/query
+through one real Directory path -> normal CAR and parity -> Phase 11.1 Web/MCP.
+Migrate affected producer/consumer call sites together. Delete old symbols and
+use compilation to expose missed callers; do not retain aliases, deprecated
+forwarders, dual readers or automatic old-format conversion. This is pre-release
+work, so update CML/JSON fixtures and regenerate outputs instead of maintaining
+compatibility. Existing Component provided/required compatibility semantics are
+unchanged; they are not compatibility with the removed Application model.
+
+Earlier accepted Steps keep their historical evidence. The current amendment
+is accepted at the Step boundary: implementation, Step validation and independent
+protected Step review are complete. The local Step commit is being prepared.
+It is required before the owning Phase closes. The coordinated plan covers
+the revised semantic/ownership/wire scope; the earlier transport-only estimate
+does not establish its acceptance. Each owner retains its existing
+review/full-validation duties; CBD aggregate full validation remains Phase 11.1.
+Phase full review, full validation and local release remain pending.
+
 ## Purpose
 
 Make provided and required Component Capability a first-class, externally
@@ -18,15 +49,15 @@ without executing Capability itself or parsing CML.
 The reconciled SimpleModeling model distinguishes:
 
 ```text
-Application Capability
-  = stable application structure / development-management capability
+Component Usage Capability
+  = inductively derived Component usage capability
 
 Component Capability
   = architectural capability exposed/provided/required by Components
 ```
 
-CNCF Phase 78 owns the latter. It must not absorb Application Capability
-planning semantics, Use Case grouping, or application-management state into the
+CNCF Phase 78 owns the latter. It must not absorb Component Usage Capability
+planning semantics, Use Case grouping, or usage-observation state into the
 runtime Component contract.
 
 ## Model continuity
@@ -37,7 +68,7 @@ The intended continuity is:
 Goal / Use Case
       |
       v
-Application Capability       (SimpleModeling / Cozy)
+Component Usage Capability       (SimpleModeling / Cozy)
       |
       | requires / realized by
       v
@@ -48,7 +79,7 @@ Component Capability         (CNCF external contract)
       +-- StateMachine
 ```
 
-Use Case and Application Capability may be many-to-many. CNCF does not infer
+Use Case and Component Usage Capability may be many-to-many. CNCF does not infer
 that relation and does not require Use Case Group containment. CNCF receives an
 admitted Component Capability projection with stable identity and provenance
 from Cozy.
@@ -77,6 +108,7 @@ runtime admission requirement.
 
 | ID | Outcome | Status |
 | --- | --- | --- |
+| CAP-78-PKG01 | Expose Component-owned Usage metadata from Directory/CAR, separate from Component contracts. | closed |
 | CAP-78-01 | Freeze Component Capability identity, vocabulary, semantic-reference shape, versioning, and compatibility boundaries. | closed |
 | CAP-78-02 | Define and implement the external Component projection for provided and required Capabilities, preserving admitted semantic grounding/provenance. | closed |
 | CAP-78-03 | Bind explicit realization references to admitted Operation, Workflow, and StateMachine contracts without embedding orchestration procedure. | closed |

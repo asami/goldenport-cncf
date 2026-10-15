@@ -82,7 +82,7 @@ locate the accepted CPT01..32 behavior inventory.
 
 [R14](../spec/component-capability.md#r14-canonical-package-and-public-native-discovery)
 owns the publication grammar, local acquisition bounds, public provider/catalog
-contract, failure precedence and Factory behavior. Nine modules implement this
+contract, failure precedence and Factory behavior. Eleven modules implement this
 structure:
 
 | Module | Responsibility |
@@ -91,6 +91,8 @@ structure:
 | ComponentFactoryCapabilityPart | Self-typed instance metadata delegation independent of runtime repository. |
 | ComponentCapabilityPackageSource | Explicit public selected/rejected location and coordinate carriers; layout constants. |
 | ComponentCapabilityPackageLoader | Acquisition orchestration and sole accepted package/projection construction. |
+| ComponentUsageCapabilityPackageLoader | Optional raw Usage acquisition and sole construction of its public opaque accepted carrier. |
+| ComponentCapabilityPackageSelectionPart | Shared exact selected package validation, descriptor/Component release comparison and diagnostic context. |
 | ComponentCapabilityPackageIndexPart | Strict index grammar, filename/order/count and inventory validation. |
 | ComponentCapabilityPackageArchivePart | Local Directory/CAR inventory and bounded UTF-8 reads, original static descriptor/identity evidence. |
 | ComponentCapabilityMetadataProvider | Public pure native acquisition/snapshot/binding/contract carriers. |
@@ -109,6 +111,45 @@ Explicit Directory/CAR selection
 ComponentFactory companion / instance -> this static Discovery pipeline
 ```
 
+The approved [R15 Usage contract](../spec/component-usage-capability-package.md#r15-acquisition-and-failures)
+adds a separate metadata-only branch:
+
+```text
+ComponentFactory companion / instance acquireUsageCapabilities(PackageInput)
+  -> ComponentUsageCapabilityPackageLoader.load(PackageInput)
+  -> shared selection + fixed Usage family in existing Directory/CAR reader/index
+  -> validate original canonical descriptor against selected Component/release
+  -> Right(None) only when Usage family has no entries
+  -> Right(Some(Acquired(input, descriptor, resourcePath, content))) when present
+```
+
+The public return type is
+`Either[Diagnostic, Option[ComponentUsageCapabilityPackageLoader.Acquired]]`.
+Only the Usage loader constructs this final carrier; its four public immutable
+fields retain the exact selected input, original descriptor, fixed relative
+`meta/component-usage-capability/usage.json` path and original decoded text.
+Present broken index/resource, unreadable bytes and unsafe/ambiguous entries
+remain typed failures. An absent family still retains descriptor evidence for
+selection comparison without rereading the package. Directory absence uses
+no-follow path attributes, with access/IO failure kept distinct.
+
+ArchivePart and IndexPart share exactly two fixed internal family selections,
+Component and Usage, retaining the original resource limits, strict UTF-8,
+inventory, symlink/alias/duplicate handling and stream closure. No public
+metadata registry or second reader is introduced. The Usage index selects
+only `usage.json`; Component grammar/order/empty behavior and package-before-
+provider discovery sequencing remain unchanged. A Usage-only canonical
+Component has no native-provider/target or Component projection requirement.
+The Usage branch never parses its envelope or checks model/owner/source/
+producer/package semantics; CBD owns that interpretation.
+
+The finite scope now names the inductive model
+`ModelKind.ComponentUsageCapability` / `COMPONENT_USAGE_CAPABILITY`; unrelated
+information Application APIs, Component ABI/PROVIDED/REQUIRED and ModelRole
+mappings remain unchanged. CAP-78-PKG01 code, focused Step validation, the complete
+Capability accumulator and independent protected Step review are accepted.
+Earlier Step acceptance records above retain their historical scope.
+
 Acquisition provenance and model provenance remain separate retained values.
 The public bridge carries actual native definitions while keeping accepted
 R13 Adapted/Bound internal. Support modules cannot construct accepted catalog
@@ -126,9 +167,14 @@ below identify that authority without defining a second behavioral contract.
 ## Ownership and non-instantiated Capability boundary
 
 The responsibility boundary connects Cozy's model production, CNCF's
-Component contract, and Textus CBD Support's catalog consumption. Application
-Capability belongs to the upstream application model; Component Capability
-belongs to the architectural description of a Component.
+Component contract, and Textus CBD Support's catalog consumption.
+ComponentUsageCapability is the separate inductive model of Component use;
+ComponentCapability is the deductive architectural provided/required contract.
+Both describe the reviewed Component and can share its Directory/CAR while
+remaining separate typed families. Application/Domain is a different model/tier
+axis. The [Usage package contract](../spec/component-usage-capability-package.md)
+owns transport; Cozy owns Usage model generation. The pre-release migration
+removes old Application symbols, with no aliases or backward-compatible reader.
 
 The model contract and the runtime execution boundary occupy separate layers.
 [R1](../spec/component-capability.md#r1-ownership-and-non-instantiated-contract)

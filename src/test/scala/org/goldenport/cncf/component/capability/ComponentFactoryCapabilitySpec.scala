@@ -10,10 +10,11 @@ package org.goldenport.cncf.component.capability {
   import ComponentCapabilityProjectionCodecSpec._empty_projection
   import ComponentCapabilityPackageLoaderSpec.{_with_directory, _package, _write, _car, _descriptor, _json}
   import ComponentCapabilityDiscoverySpec.{_native, _projection, _snapshots, CountingProvider}
+  import ComponentUsageCapabilityPackageLoaderSpec.{_usage_package, _raw_usage, _usage_path}
 
   /*
    * @since   Oct. 14, 2026
-   * @version Oct. 14, 2026
+   * @version Oct. 15, 2026
    * @author  ASAMI, Tomoharu
    */
   final class ComponentFactoryCapabilitySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -22,6 +23,42 @@ package org.goldenport.cncf.component.capability {
     private def _left[A](result: Either[Diagnostic, A]): Diagnostic = result.fold(value => value, _ => fail("Expected Factory metadata rejection."))
 
     "ComponentFactory static metadata entry" should {
+      "CPF07 expose public opaque Usage acquisition" should afterWord("in spec:component-usage-capability-package, example:CPF07, rules:R15, phase:78") {
+        "let an external namespace consume the exact public acquired type" in {
+          Given("Spec: docs/spec/component-usage-capability-package.md; R15; CPF07; a Usage-only CAR with opaque non-JSON content, poison runtime names and invalid JAR bytes")
+          _with_directory { root =>
+            val selected = _usage_package(root)
+            val poison = _descriptor.dropRight(1) + ",\"componentlets\":[{\"name\":\"Poison\",\"implementationClass\":\"missing.must.not.Load\",\"factoryObject\":\"missing.must.not.Initialize\"}]}"
+            _write(root, "component-descriptor.json", poison)
+            _write(root, "component/poison.jar", "Not a runtime JAR.")
+            val input = selected.copy(location = Location.Car(_car(root)))
+            When("the external client invokes the public companion Usage API")
+            val result: Option[ComponentUsageCapabilityPackageLoader.Acquired] = _right(_root_.capability.client.PublicCapabilityClient.acquireUsage(input))
+            Then("the public carrier exposes exact raw transport without Usage parsing or native activation")
+            val acquired = result.getOrElse(fail("Expected public Usage witness."))
+            acquired.input should be theSameInstanceAs input
+            _root_.capability.client.PublicCapabilityClient.usageContent(acquired) shouldBe _raw_usage
+            acquired.resourcePath shouldBe _usage_path
+            acquired.descriptor.componentlets.head.implementationClass shouldBe Some("missing.must.not.Load")
+          }
+        }
+      }
+      "CPF08 expose runtime-independent instance Usage acquisition" should afterWord("in spec:component-usage-capability-package, example:CPF08, rules:R15, phase:78") {
+        "delegate directly despite poison runtime dependencies" in {
+          Given("Spec: docs/spec/component-usage-capability-package.md; R15; CPF08; a Usage-only Directory and a Factory with null runtime repository and collaborators")
+          _with_directory { root =>
+            val input = _usage_package(root)
+            val factory = new ComponentFactory(_component_repository_space = null, _collaborators = null, workingsetclock = java.time.Clock.systemUTC())
+            When("the public instance acquires Usage without a native provider")
+            val result = _right(factory.acquireUsageCapabilities(input))
+            Then("the same selected package and uninterpreted content are available independently of runtime bootstrap")
+            val acquired = result.getOrElse(fail("Expected instance Usage witness."))
+            acquired.input should be theSameInstanceAs input
+            acquired.content shouldBe _raw_usage
+            acquired.resourcePath shouldBe _usage_path
+          }
+        }
+      }
       "CPF01 expose companion discovery" should _metadata("CPF01") {
         "return nonempty admitted metadata without a Factory instance" in {
           Given("Spec: docs/spec/component-capability.md; R14; CPF01; an actual selected package and pure native provider")
@@ -147,13 +184,19 @@ package org.goldenport.cncf.component.capability {
 
 package capability.client {
   import org.goldenport.cncf.component.ComponentFactory
-  import org.goldenport.cncf.component.capability.{ComponentCapabilityDiscovery, ComponentCapabilityMetadataProvider}
+  import org.goldenport.cncf.component.capability.{ComponentCapabilityDiscovery, ComponentCapabilityMetadataProvider, ComponentUsageCapabilityPackageLoader}
   import org.goldenport.cncf.component.capability.ComponentCapabilityAdmissionScope.Diagnostic
   import org.goldenport.cncf.component.capability.ComponentCapabilityPackageSource.PackageInput
   import org.goldenport.cncf.component.capability.ComponentCapabilityMetadataProvider.{NativeInput, NativeContract}
   import org.goldenport.cncf.operation.CmlOperationDefinition
 
   object PublicCapabilityClient {
+    def acquireUsage(input: PackageInput): Either[Diagnostic, Option[ComponentUsageCapabilityPackageLoader.Acquired]] = {
+      ComponentFactory.acquireUsageCapabilities(input)
+    }
+
+    def usageContent(acquired: ComponentUsageCapabilityPackageLoader.Acquired): String = acquired.content
+
     def discover(input: PackageInput, nativeInput: NativeInput): Either[Diagnostic, ComponentCapabilityDiscovery.Discovered] = {
       val provider = new ComponentCapabilityMetadataProvider {
         def componentCapabilityMetadata: NativeInput = nativeInput
