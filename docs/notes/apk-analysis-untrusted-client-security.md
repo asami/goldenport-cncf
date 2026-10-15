@@ -250,3 +250,42 @@ mandatory PEPがSecuritySubject + Capability/Guard + target relationを評価す
 したがってAPK解析耐性の根本はclient codeを秘密にすることではなく、
 **clientを完全に理解した攻撃者でも迂回できないserver-side authorization route**
 を構築することである。
+
+## Runtime Client Analysis
+
+The Untrusted Client threat model is not limited to static APK reverse
+engineering. A sufficiently controlled/instrumented device may expose values
+that exist only while the application is running, including decrypted
+identifiers, function inputs/outputs, request payloads and session credentials.
+
+Therefore encrypting Material IDs, Entity IDs or TKL URNs with an
+application/session key must not be treated as an authorization control. If the
+application must decrypt/use the identifier, runtime observation may recover
+the effective value.
+
+Textus adopts the principle:
+
+> **Client-visible information is not authority.**
+
+Material IDs, Entity IDs, URNs, Operation/API names and request shapes may be
+known to the client/attacker without granting resource authority. Server-side
+Operation authorization and internal DSL -> UnitOfWork Entity authorization
+remain authoritative.
+
+This does not assume every device is permanently fully compromised. Client
+hardening still has value for reducing exposure and attack cost:
+
+- OS application sandbox;
+- Android Keystore / iOS Keychain or equivalent protected credential storage;
+- short-lived/scoped session credentials;
+- minimum local persistence;
+- appropriate at-rest protection for cached sensitive working data;
+- optional platform integrity/attestation signals.
+
+The architectural boundary is that failure of those client protections must not
+turn knowledge of an identifier or request format into business authorization.
+
+Credentials are different from identifiers. OAuth/session/refresh tokens and
+provider credentials are genuine secrets and require protected storage,
+least authority, bounded lifetime and revocation. Encrypting non-secret IDs
+must not distract from protecting these actual credentials.
