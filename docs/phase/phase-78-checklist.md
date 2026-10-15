@@ -1,8 +1,23 @@
 # Phase 78 Checklist - Component Capability External Contract
 
-status=in-progress
+status=closed
 phase=[Phase 78](phase-78.md)
 development_item=DEV-011
+
+## Current Phase closure — 2026-10-16
+
+Closure binding: `cncf78-phase-closure-20261016-01@1`.
+All six declared Steps are locally committed. The independent whole-Phase
+review accepted all 25 criteria below and all five Phase completion conditions
+without blockers or follow-up findings. The configured full suite passed
+4,568 tests in 597 suites with no failed test or aborted suite; 13 canceled,
+one ignored and 46 pending tests remain explicitly nonexecuted. The local
+Phase release binds these accepted results and the current closed status.
+
+Earlier Step acceptance sections retain their historical pending statements.
+See the [current Phase closure](phase-78.md#phase-closure--2026-10-16) for the
+current local release boundary and remaining CBD Phase 11/11.1 obligations.
+This checklist does not accept transferred CBD Job work or start Phase 14.
 
 ## CAP-78-PKG01: Component Usage model and Component-owned Directory/CAR
 

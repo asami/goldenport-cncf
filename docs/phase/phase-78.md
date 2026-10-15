@@ -1,6 +1,6 @@
 # Phase 78 - Component Capability External Contract
 
-status=in-progress
+status=closed
 planned_at=2026-09-16
 reconciled_at=2026-09-18
 development_item=DEV-011
@@ -37,6 +37,30 @@ the revised semantic/ownership/wire scope; the earlier transport-only estimate
 does not establish its acceptance. Each owner retains its existing
 review/full-validation duties; CBD aggregate full validation remains Phase 11.1.
 Phase full review, full validation and local release remain pending.
+
+## Phase closure — 2026-10-16
+
+Closure binding: `cncf78-phase-closure-20261016-01@1`.
+
+All six declared Steps, including CAP-78-PKG01, have accepted local commits.
+The current independent whole-Phase review accepted all 25 checklist criteria
+and all five completion conditions without blockers or follow-up findings.
+The configured full suite completed with 4,568 successful tests in 597 suites,
+zero failed tests or aborted suites. Its 13 canceled, one ignored and 46 pending
+tests retain those states and are not claimed as executed. Main and Test
+compilation succeeded. The local Phase release binds this closure and the
+accepted CAR/source-layout and authorization-fixture corrections.
+
+The earlier Step sections preserve the pending states at their recording time;
+this section supplies the current Phase completion state. The original Phase
+base, accepted Step history and separation of Component Usage from Component
+Capability remain authoritative. No artifact publication or CNCF main merge
+is claimed. The project version remains `0.5.3-SNAPSHOT`.
+
+Cozy Phase 64 is complete and integrated into its canonical main. Textus CBD
+Support Phase 11 still owns its final review and local release. Its aggregate
+full validation remains deferred to Phase 11.1; neither Phase 11.1 nor the
+transferred CBD Job work in Phase 14 is executed or accepted by this closure.
 
 ## Purpose
 

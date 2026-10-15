@@ -37,10 +37,10 @@ import org.goldenport.cncf.association.{AssociationDomain, AssociationFilter, As
 import org.goldenport.cncf.blob.*
 import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
-import org.goldenport.cncf.component.{Component, ComponentDescriptor, ComponentFactory, ComponentId, ComponentInstanceId, ComponentletDescriptor}
+import org.goldenport.cncf.component.{Component, ComponentDescriptor, ComponentFactory, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin, ComponentletDescriptor}
 import org.goldenport.cncf.testutil.DevelopmentRuntimeManifestFixture
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
-import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, PrincipalId, RuntimeContext}
+import org.goldenport.cncf.context.{Capability, ExecutionContext, GlobalRuntimeContext, PrincipalId, RuntimeContext, SecurityContext, SecurityLevel, SessionContext, SubjectKind}
 import org.goldenport.cncf.security.{AuthenticationProvider, AuthenticationRequest, AuthenticationResult}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace, QueryDirective, SearchResult, SearchableDataStore, TotalCountCapability}
 import org.goldenport.cncf.entity.{
@@ -62,7 +62,7 @@ import org.goldenport.cncf.job.{ActionId, ActionTask, JobPersistencePolicy, JobR
 import org.goldenport.cncf.information.*
 import org.goldenport.cncf.knowledge.*
 import org.goldenport.cncf.path.AliasResolver
-import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.cncf.subsystem.{Subsystem, SubsystemExecutionProfile, SubsystemUserMode}
 import org.goldenport.cncf.subsystem.{GenericSubsystemAuthenticationBinding, GenericSubsystemAuthenticationProviderBinding, GenericSubsystemDescriptor, GenericSubsystemSecurityBinding}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.cncf.unitofwork.{PrepareResult, TransactionContext}
@@ -73,10 +73,90 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererAuthorizationSpec extends AnyWordSpec with Matchers with GivenWhenThen with StaticFormAppRendererSpecFixtures {
+  private def _install_audit_session(
+    subsystem: Subsystem,
+    summary: AuthComponent.SessionSummary
+  ): Unit = {
+    _install_auth_session(subsystem, summary)
+    val provider = new AuthenticationProvider {
+      override val name: String = "audit-viewer-authentication"
+
+      private def _result(summary: AuthComponent.SessionSummary): AuthenticationResult =
+        AuthenticationResult(
+          principalId = summary.principalId.map(PrincipalId.apply).getOrElse(PrincipalId("anonymous")),
+          attributes = summary.attributes,
+          capabilities = SecurityContext.Privilege.fromName(summary.securityLevel)
+            .map(_.capabilities)
+            .getOrElse(Set.empty[Capability]) ++ summary.capabilities.map(Capability.apply).toSet,
+          level = SecurityLevel(summary.securityLevel),
+          subjectKind = SubjectKind.User,
+          session = Some(SessionContext(sessionId = summary.sessionId))
+        )
+
+      override def authenticate(request: AuthenticationRequest)(using ExecutionContext): Consequence[Option[AuthenticationResult]] =
+        request.sessionId match {
+          case Some(sessionid) if summary.sessionId.contains(sessionid) =>
+            Consequence.success(Some(_result(summary)))
+          case _ =>
+            Consequence.success(None)
+        }
+
+      override def currentSession(request: AuthenticationRequest)(using ExecutionContext): Consequence[Option[AuthenticationResult]] =
+        authenticate(request)
+    }
+    val componentid = ComponentId("org.goldenport.cncf.test.AuditViewerAuthentication")
+    val component = new Component {
+      override def authenticationProviders: Vector[AuthenticationProvider] = Vector(provider)
+    }
+    val initialized = component.initialize(ComponentInit(
+      subsystem,
+      Component.Core.create(
+        componentid.name,
+        componentid,
+        ComponentInstanceId.default(componentid),
+        Protocol.empty,
+        jobEngine = subsystem.jobEngine
+      ),
+      ComponentOrigin.Builtin
+    )).withArtifactMetadata(Component.ArtifactMetadata(
+      sourceType = "spec",
+      name = "audit-viewer-authentication",
+      version = "0.0.0",
+      component = Some("audit-viewer-authentication")
+    ))
+    subsystem.add(Vector(initialized))
+    val descriptor = subsystem.descriptor.getOrElse(GenericSubsystemDescriptor(
+      path = Path.of("<memory>"),
+      subsystemName = subsystem.name
+    ))
+    val existingauthentication = descriptor.security
+      .flatMap(_.authentication)
+      .getOrElse(GenericSubsystemAuthenticationBinding())
+    val providerbinding = GenericSubsystemAuthenticationProviderBinding(
+      name = "audit-viewer-authentication",
+      component = "audit-viewer-authentication",
+      enabled = Some(true)
+    )
+    val providers =
+      if (existingauthentication.providers.exists(binding =>
+        binding.name == providerbinding.name && binding.component == providerbinding.component
+      )) existingauthentication.providers
+      else existingauthentication.providers :+ providerbinding
+    val authentication = existingauthentication.copy(
+      convention = Some("disabled"),
+      fallbackPrivilege = Some("disabled"),
+      providers = providers
+    )
+    val security = descriptor.security
+      .getOrElse(GenericSubsystemSecurityBinding())
+      .copy(authentication = Some(authentication))
+    subsystem.withDescriptor(descriptor.copy(security = Some(security)))
+  }
+
   "StaticFormAppRenderer" must _in_phase53_spec {
     "provide binding, admin API, and authorization contracts" which {
     "render operation image binding controls and Form API metadata" in {
@@ -806,15 +886,16 @@ final class StaticFormAppRendererAuthorizationSpec extends AnyWordSpec with Matc
       assembly.status.code shouldBe 200
     }
 
-    "allow audit viewer session to read production admin jobs but not system admin home" in {
-      Given("the prerequisites for allow audit viewer session to read production admin jobs but not system admin home")
+    "allow audit viewer session with job_admin to read production admin jobs but deny admin home and performance" in {
+      Given("a production multi-user subsystem and an audit_viewer session explicitly granted job_admin")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
+          SubsystemUserMode.CONFIGURATION_KEY -> ConfigurationValue.StringValue("multi-user"),
           RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production"),
           RuntimeConfig.webProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
         ))
       )
-      _install_auth_session(
+      _install_audit_session(
         subsystem,
         _session_summary(
           "audit-viewer-session",
@@ -823,10 +904,12 @@ final class StaticFormAppRendererAuthorizationSpec extends AnyWordSpec with Matc
             "role" -> "audit_viewer",
             "privilege" -> "system"
           )
-        )
+        ).copy(capabilities = Vector("job_admin"))
       )
+      subsystem.executionProfileC.toOption shouldBe Some(SubsystemExecutionProfile.Authenticated)
       val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
+      When("the authenticated audit viewer requests production admin jobs, admin home, and performance")
       val jobs = server
         .routes(null)
         .orNotFound
@@ -837,15 +920,106 @@ final class StaticFormAppRendererAuthorizationSpec extends AnyWordSpec with Matc
         .orNotFound
         .run(_with_session(_get_request("/web/system/admin"), "audit-viewer-session"))
         .unsafeRunSync()
-      When("allow audit viewer session to read production admin jobs but not system admin home is exercised")
       val performance = server
         .routes(null)
         .orNotFound
         .run(_with_session(_get_request("/web/system/performance"), "audit-viewer-session"))
         .unsafeRunSync()
 
-      Then("the observable contract for allow audit viewer session to read production admin jobs but not system admin home holds")
+      Then("job_admin permits operator jobs while the audit_viewer role remains denied admin home and performance")
       jobs.status.code shouldBe 200
+      home.status.code shouldBe 403
+      performance.status.code shouldBe 403
+    }
+
+    "allow audit viewer session with content_admin to read production admin jobs but deny admin home and performance" in {
+      Given("a production multi-user subsystem and an audit_viewer session explicitly granted content_admin")
+      val subsystem = _management_console_fixture_subsystem(
+        configuration = Configuration(Map(
+          SubsystemUserMode.CONFIGURATION_KEY -> ConfigurationValue.StringValue("multi-user"),
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.webProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
+        ))
+      )
+      _install_audit_session(
+        subsystem,
+        _session_summary(
+          "audit-content-admin-session",
+          "audit-viewer",
+          Map(
+            "role" -> "audit_viewer",
+            "privilege" -> "system"
+          )
+        ).copy(capabilities = Vector("content_admin"))
+      )
+      subsystem.executionProfileC.toOption shouldBe Some(SubsystemExecutionProfile.Authenticated)
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
+
+      When("the authenticated audit viewer requests production admin jobs, admin home, and performance")
+      val jobs = server
+        .routes(null)
+        .orNotFound
+        .run(_with_session(_get_request("/web/system/admin/jobs"), "audit-content-admin-session"))
+        .unsafeRunSync()
+      val home = server
+        .routes(null)
+        .orNotFound
+        .run(_with_session(_get_request("/web/system/admin"), "audit-content-admin-session"))
+        .unsafeRunSync()
+      val performance = server
+        .routes(null)
+        .orNotFound
+        .run(_with_session(_get_request("/web/system/performance"), "audit-content-admin-session"))
+        .unsafeRunSync()
+
+      Then("content_admin permits operator jobs while the audit_viewer role remains denied admin home and performance")
+      jobs.status.code shouldBe 200
+      home.status.code shouldBe 403
+      performance.status.code shouldBe 403
+    }
+
+    "deny role-only audit viewer session production admin jobs, admin home, and performance" in {
+      Given("a production multi-user subsystem and an audit_viewer session with privilege attributes but no operator capability")
+      val subsystem = _management_console_fixture_subsystem(
+        configuration = Configuration(Map(
+          SubsystemUserMode.CONFIGURATION_KEY -> ConfigurationValue.StringValue("multi-user"),
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.webProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
+        ))
+      )
+      _install_audit_session(
+        subsystem,
+        _session_summary(
+          "audit-role-only-session",
+          "audit-viewer",
+          Map(
+            "role" -> "audit_viewer",
+            "privilege" -> "system"
+          )
+        ).copy(capabilities = Vector.empty)
+      )
+      subsystem.executionProfileC.toOption shouldBe Some(SubsystemExecutionProfile.Authenticated)
+      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
+
+      When("the authenticated role-only audit viewer requests production admin jobs, admin home, and performance")
+      val jobs = server
+        .routes(null)
+        .orNotFound
+        .run(_with_session(_get_request("/web/system/admin/jobs"), "audit-role-only-session"))
+        .unsafeRunSync()
+      val home = server
+        .routes(null)
+        .orNotFound
+        .run(_with_session(_get_request("/web/system/admin"), "audit-role-only-session"))
+        .unsafeRunSync()
+      val performance = server
+        .routes(null)
+        .orNotFound
+        .run(_with_session(_get_request("/web/system/performance"), "audit-role-only-session"))
+        .unsafeRunSync()
+
+      Then("role and privilege attributes alone confer no operator jobs or system administration access")
+      jobs.status.code shouldBe 404
       home.status.code shouldBe 403
       performance.status.code shouldBe 403
     }
