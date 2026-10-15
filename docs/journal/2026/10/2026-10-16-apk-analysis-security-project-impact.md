@@ -122,3 +122,59 @@ authorization-before-handler invariantの具体化。
 
 APK難読化・attestation等のclient hardeningは、server-side authorizationが成立した後の
 defense in depthとしてmobile projectごとに選択する。
+
+## 追加考察: Authorization EngineよりEnforcement Architecture
+
+APK/Untrusted Client対策を検討した結果、BOLA/IDORの本質的な実装課題はABAC/ReBACの
+decision algorithmだけではない。
+
+業務applicationでfine-grained authorizationを個別実装する場合、全handler/serviceが
+認可libraryを必ず呼ぶこと、SecuritySubject/tenant/delegation等を全call chainで保持する
+こと、target Entity resolve後にrelationを評価すること、Job/Workflow/Event等の非同期境界で
+authority provenanceを復元することをapplication側が保証しなければならない。これは
+漏れなく実装・維持するのが非常に難しい。
+
+CNCFではPhase 107の中心を単なるAuthorization Engine追加ではなく
+**Authorization Enforcement Architecture** として捉える候補を採用する。
+
+検討対象:
+
+- Operation Dispatcherをmandatory PEPとする。
+- handler-before-authorization経路を通常APIから排除する。
+- ExecutionContext/SecuritySubject/Capability/delegationの伝播contractを明確化する。
+- nested Operation、Job、Workflow/Continuation、Event/Service Bus、scheduled executionで
+  context/authorityが失われないことをExecutable Specification化する。
+- target Entity/relationを必要とするReBAC/ABAC評価のresolve timingを設計する。
+- external PDP (OPA/OpenFGA/Cerbos等)はGuard provider候補とし、PEP/runtime強制経路の
+  ownerにはしない。
+- AI/agent delegationではhumanの全authorityを暗黙継承せず、bounded capabilityを
+  ExecutionContextへ載せる。
+
+### 各projectへの追加影響
+
+**CNCF Phase 107**
+P107-05をAuthorization-before-handlerだけでなくmandatory PEP + ExecutionContext
+propagationまで具体化する候補。IDOR testに加え、internal/nested callとasync resumeで
+authorization contextが欠落しないnegative/positive testを追加する。
+
+**Cozy Phase 83**
+generated handler/adapterが独自authorization helper callを散在生成するのではなく、
+CNCF mandatory enforcement routeへ接続するコードを生成する。生成物がPEPを迂回する
+direct Entity/DataStore routeを持たないことを確認する。
+
+**textus-cbd-support Phase 16**
+「authorize()を呼んでいるか」の単純patternだけでなく、公開Operationからhandler/
+Entity/DataStoreへの経路がCNCF enforcement boundaryを迂回していないかをarchitecture
+review対象にする。
+
+**sm-workflow Phase 6**
+authorization関連変更ではExecutionContext propagationとasync boundaryを含むfocused/
+Phase evidenceを選択可能にする。application側へad-hoc authorizationを追加する修正より、
+canonical runtime routeの利用を優先する。
+
+**Mobile app**
+client側にauthorization logicを複製してsecurity guaranteeとしない。UI表示制御はUXとして
+行ってよいが、server-side mandatory PEPを唯一の業務authority boundaryとする。
+
+この追加考察はAPK対策だけでなく、Web、MCP、AI agent等すべてのuntrusted/external
+clientに共通するため、成熟後はTextus Security Architecture本体へ昇格する候補とする。
