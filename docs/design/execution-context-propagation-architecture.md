@@ -28,9 +28,9 @@ Propagation can carry identity, assumptions and restrictions. It cannot mint ser
 
 For authority-bearing or authority-limiting fields, server policy is authoritative. A propagated client value may select within an admitted server range or narrow it; it cannot widen the server maximum authority.
 
-For Safety Sandbox the Effective Sandbox is the intersection of Server Sandbox Definition, propagated Client Sandbox Definition and Operation Sandbox Definition, and the result is bound to server ExecutionContext SandboxContext.
+For Safety Sandbox, propagated fields distinguish **authority requests/restrictions** from **quantitative resource-budget requests**. Server configuration owns the hard authority envelope and hard quantitative ceilings. A propagated Client workspace/root is admitted only when contained by a configured hard filesystem root and then may be narrowed by the Operation. A propagated Client quantitative limit may override the server soft/default value, including upward, only within the server hard limit. The resolved authority and limits are bound to the new server ExecutionContext as SandboxContext/ExecutionLimits.
 
-A forged or over-broad client sandbox value therefore cannot grant filesystem, network, process, datastore or other effect authority that the server does not already permit.
+A forged or over-broad client value therefore cannot grant filesystem, network, process, datastore or other effect authority outside the server envelope and cannot exceed a server hard resource limit. Client values are requests to be admitted/resolved, not ready-made authority.
 
 ## Client responsibility
 
