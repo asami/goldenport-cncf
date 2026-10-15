@@ -14,7 +14,7 @@ import org.goldenport.protocol.operation.OperationResponse
  * Test-only cross-project access to the original configured native fixture.
  *
  * @since   Oct.  6, 2026
- * @version Oct.  6, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object NativeCbdReviewJobFixtures {
@@ -47,6 +47,9 @@ object NativeCbdReviewJobFixtures {
     def cancellationScope(jobId: JobId): Option[JobCancellationScope] =
       Option(_native.engine._cancellation_scopes.get(jobId))
     def start(): Consequence[Unit] = _native.start()
+    def commit(context: ExecutionContext): Consequence[UnitOfWork.CommitResult] = context.runtime.commitC()
+    def abort(context: ExecutionContext): Consequence[UnitOfWork.AbortResult] = context.runtime.abortC()
+    def dispose(context: ExecutionContext): Unit = context.runtime.dispose()
     def managed[A](body: => Consequence[A]): Consequence[A] = _native.owner._execute_c(body)
     def advance(duration: Duration): Unit = _native.advance(duration)
     def drain(): Consequence[Int] = managed(Consequence.success(_native.engine.drainAll()))

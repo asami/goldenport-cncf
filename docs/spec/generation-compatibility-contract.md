@@ -253,6 +253,70 @@ Cozy/CNCF focused validation and native canonical repository discovery. E715-03 
 fixtures, E715-04 composition, E715-05 provider and warning dispositions remain
 OPEN, without exceptions or Step/Phase acceptance.
 
+## Current Information Generation Additions
+
+The normal build pins Cozy `0.3.3-SNAPSHOT`. A content edit is consumed through
+the selected CML source path; deleting the source prevents command preparation.
+
+### Optional explicit generator project
+
+The build passes `cncf.cozyGeneratorRoot` and `CNCF_COZY_GENERATOR_ROOT` to
+`selectedGeneratorRoot`. An explicitly present property takes precedence over
+the environment. With neither present, selection is `None` and the exact
+artifact invocation remains the default. A selected value is trimmed,
+canonicalized, and must name a directory containing a regular `build.sbt`.
+Blank, missing, non-directory, missing-build, or uncanonicalizable selections
+fail with the selected path and deterministic recovery guidance. An invalid
+property never falls through to the environment or artifact invocation.
+
+The build resolves this selection once before deleting or creating generation
+output, and uses the same selected root for generation and metadata validation.
+For a selected root, both commands insert
+`--runtime-dev-dir <canonical-root>` immediately after
+`--runtime <unchanged-exact-Cozy-version>`. The supported launcher owns existing
+classpath, exact version, readiness validation, and direct Java execution.
+This selection does not discover a root, refresh a generator, invoke nested
+SBT, or change the declared generator version.
+
+Executable specifications:
+
+- [ComponentStyleRuntimeDescriptorProjectionSpec](../../src/test/scala/org/goldenport/cncf/component/ComponentStyleRuntimeDescriptorProjectionSpec.scala)
+  decodes the actual generated resource and its four-field catalog carrier.
+- [Phase51Cv03BuildIntegrationSpec](../../src/test/scala/org/goldenport/cncf/phase51/build/Phase51Cv03BuildIntegrationSpec.scala)
+  specifies normalized inputs, invocation/failure behavior, and optional root selection.
+- [Phase51Cv05BuildProvenanceSpec](../../src/test/scala/org/goldenport/cncf/phase51/build/Phase51Cv05BuildProvenanceSpec.scala)
+  specifies notice severity, current generation/validation arguments, containment,
+  and consumption of the current edited source.
+
+### Historical build-prerequisite handoff — 2026-10-14
+
+This current-generation compatibility alignment is a necessary CAP-78-05 and
+CBD CAP-11-01 prerequisite. These behavior specifications do not establish
+Step or Phase acceptance. Dedicated Cozy Capability production and actual CNCF
+native Directory/CAR discovery followed by CBD consumption remain required.
+The independent packaged/development runtime-manifest, ABI, and activation
+contracts above retain their own subsequent synchronization and proof gates.
+
+Current own Step acceptance — 2026-10-15: actual dedicated Cozy production,
+canonical CNCF public ComponentFactory native Directory/CAR discovery and
+source-free CBD consumption, focused validation and independent protected own
+Step conformance are now accepted in
+[CAP-78-05 acceptance](../phase/phase-78.md#cap-78-05-acceptance--2026-10-15).
+Behavior specifications alone do not establish whole-Phase closure. Independent
+packaged/development runtime-manifest, ABI and activation contract requirements
+remain unchanged, with their separate synchronization and proof gates still owed.
+
+### Packaged Compile source-project exports
+
+The root enables `Compile / exportJars`; standard SBT `packageBin` and attributed
+`exportedProducts` supply its single main JAR through native source-project
+dependencies. Source-linked CBD root and output-exclusion fixture use that JAR
+for normal generation and CAR inputs. Test source fixtures and transitive
+dependencies retain their native Compile/Test mapping. Strict runtime descriptor
+resolution, ABI, and declared versions remain unchanged. Packaged/development
+runtime-manifest synchronization and its separate proof gates remain owed;
+this source export establishes no Step or Phase closure.
+
 ## Closure Validation Requirements
 
 Phase closure MUST execute the following ownership-preserving evidence:

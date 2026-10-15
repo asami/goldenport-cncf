@@ -7,7 +7,7 @@ import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkResource, UnitOfWor
  * Owns only an unpublished native lease, never a Job record or durable authority.
  *
  * @since   Oct.  6, 2026
- * @version Oct.  6, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] final class JobUnitOfWorkSubmission(
@@ -34,7 +34,7 @@ private[job] final class JobUnitOfWorkSubmission(
     } finally if (!staged) _release_pending()
   }
 
-  def releaseC(termination: UnitOfWorkTermination): Consequence[Unit] = {
+  override def releaseC(termination: UnitOfWorkTermination): Consequence[Unit] = {
     _release_pending()
     Consequence.unit
   }

@@ -10,7 +10,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWork
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
  *  version May. 31, 2026
- * @version Oct.  6, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 trait JobEngine {

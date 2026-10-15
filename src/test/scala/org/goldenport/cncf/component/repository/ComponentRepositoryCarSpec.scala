@@ -3,6 +3,7 @@ package org.goldenport.cncf.component.repository
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 import java.util.Comparator
+import java.util.jar.JarFile
 import java.util.zip.{ZipEntry, ZipOutputStream}
 
 import scala.jdk.CollectionConverters._
@@ -37,7 +38,7 @@ import org.goldenport.configuration.ConfigurationTrace
  *  version May. 25, 2026
  *  version Jul. 31, 2026
  *  version Aug. 27, 2026
- * @version Oct.  9, 2026
+ * @version Oct. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -3193,14 +3194,31 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         .getLocation
         .toURI
     )
-    val source = testclasses.resolve("devdirsample")
-    Files.createDirectories(target.resolve("devdirsample"))
-    Using.resource(Files.list(source)) { stream =>
-      stream.iterator().asScala
-        .filter(p => Files.isRegularFile(p) && p.getFileName.toString.endsWith(".class"))
-        .foreach { p =>
-          Files.copy(p, target.resolve("devdirsample").resolve(p.getFileName), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-        }
+    val targetpackage = target.resolve("devdirsample")
+    Files.createDirectories(targetpackage)
+    if (Files.isDirectory(testclasses)) {
+      val source = testclasses.resolve("devdirsample")
+      Using.resource(Files.list(source)) { stream =>
+        stream.iterator().asScala
+          .filter(p => Files.isRegularFile(p) && p.getFileName.toString.endsWith(".class"))
+          .foreach { p =>
+            Files.copy(p, targetpackage.resolve(p.getFileName), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+          }
+      }
+    } else {
+      val packageprefix = "devdirsample/"
+      Using.resource(new JarFile(testclasses.toFile)) { jar =>
+        jar.entries().asScala
+          .filter(entry => !entry.isDirectory && entry.getName.startsWith(packageprefix))
+          .foreach { entry =>
+            val filename = entry.getName.substring(packageprefix.length)
+            if (!filename.contains("/") && !filename.contains("\\") && filename.endsWith(".class")) {
+              Using.resource(jar.getInputStream(entry)) { stream =>
+                Files.copy(stream, targetpackage.resolve(filename), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+              }
+            }
+          }
+      }
     }
   }
 
