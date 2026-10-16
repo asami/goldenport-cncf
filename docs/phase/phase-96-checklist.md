@@ -4,8 +4,27 @@ status=in-progress
 phase=[Phase 96](phase-96.md)
 development_branch=codex/phase-96-display-service
 execution_baseline=6cbe877c53c116639feb11fa80546e79c051804c
-current_entry=P96-08
+current_entry=P96-09
 development_plan=[Development plan proposal](../journal/2026/10/2026-10-03-phase-96-development-plan-proposal.md)
+
+## Current P96-08 acceptance — 2026-10-16
+
+P96-08 is independently accepted on all four original criteria. The complete
+Step review `phase96-p96-08-step-review-001@1` and independent focused
+closure `phase96-p96-08-step-title-focused-result-001@1`, admitted in review
+ledger revision 37, resolve `CPB-P96-08-TITLE-CORRESPONDENCE-001`.
+The corrected property check passed 2/2 tests in one suite; the same focused
+40-suite accumulator passed 332/332, with terminal SBT0/wrapper0 and released
+serial locks. Formal Step repair 1 is closed accepted; nonconverging count 0.
+Known nonblocking Hygiene remains separately recorded, with no new finding.
+
+The checklist now has 41 checked/13 pending outcomes with all 54 criterion
+texts unchanged. P96-09 through P96-11 remain OPEN/not started. Phase 96
+remains in-progress: its sole full Phase review, final validation or admitted
+aggregate handoff, consumer acceptance and release are not established here.
+Step acceptance does not itself prove a completed Git commit. Earlier P96-08
+authoring/validation checkpoints below retain their historical pending status;
+this current acceptance record supersedes those pending-status projections.
 
 ## Ledger boundary
 
@@ -19,6 +38,8 @@ binary-consumption assumptions. The [reconciliation record](../journal/2026/10/2
 retains the original 47 obligations and adds explicit generated-ABI handoff proof.
 The original execution baseline above is preserved; this import is not a rebaseline.
 
+### Historical ledger checkpoint before P96-08 acceptance
+
 P96-01 is CLOSED on documentary contract evidence; P96-02 is CLOSED on
 static ABI admission and pure Display construction evidence. P96-03 is CLOSED
 on all seven criteria after independent whole-Step review and parent admission;
@@ -30,8 +51,35 @@ Step commit `4898201d5679408d6e44510024a6feaea442a66c`; P96-06 is independently
 accepted and CLOSED at local Step commit
 `1356e41cdee41dd40bc2212c1ef0297ab8875206`. P96-07 is independently accepted
 and CLOSED on all four criteria through whole-Step review and focused repair
-closure in ledger revision 34; its exact local Step commit is being prepared.
-P96-08 through P96-11 remain OPEN and are not started by this handoff. The
+closure in ledger revision 34, at local Step commit
+`3436aef7ae5bb2b3a12000c064159e11791b5282`.
+P96-08 is in-progress with A independently accepted through
+`phase96-p96-08a-protected-review-001@1` and original 23-suite/168-test PASS.
+B's direct canonical Business/explicit Detail specifications are authored;
+B representative001 failed Test compilation; representative002 compiled and
+completed with 2 passes and 8 failures; representative003 completed with 9
+passes and 1 failure. Representative004 then passed 10/10 tests in two suites,
+resolving the POST form-carrier cause. Accumulator001 completed 40 suites/332
+tests with 331 passes and one BRP1 trim-empty Title failure before mutation.
+Unit 4's lawful-title source repair passed property001 (1 suite/2 tests) and
+the same accumulator002 (40 suites/332 tests). Both completed with all tests
+passing, zero failed/aborted/canceled/ignored/pending, SBT0/wrapper0 and released
+serial lock; parent typed result readers accepted the prior assertions.
+Independent whole-Step review `phase96-p96-08-step-review-001@1` returned
+FINDINGS for `CPB-P96-08-TITLE-CORRESPONDENCE-001`, missing exact initial/reloaded
+semantic Title comparisons; no production corruption is alleged. First formal
+Step repair 1's first property attempt completed 1 suite/2 tests with 1 PASS/
+1 FAIL (SBT1/wrapper1, serial lock released): BRP1 failed before Business at
+the first newline/NUL revision-16 raw-store/decoded-title mismatch; BRP2 passed.
+The same consumed repair's decoded-View correction is now focused-validated.
+`phase96-p96-08-step-title-property-002` passed 1 suite/2 tests and
+`phase96-p96-08-step-title-accumulator-001` passed the same 40 suites/332 tests.
+Both had zero failed/aborted/canceled/ignored/pending, SBT0/wrapper0 and released
+serial lock; parent typed result readers accepted both results. Fresh independent
+focused M2 closure and exact Step acceptance/commit remain pending; the earlier
+B passes remain evidence of the prior assertions.
+All four Step criteria are unchecked. P96-09 through P96-11
+remain OPEN and are not started by this handoff. The
 [P96-07 acceptance entry](../journal/2026/10/2026-10-16-phase-96-display-list-lifecycle-integration.md#p96-07-step-acceptance-2026-10-16)
 records the criterion and PG1–PG12 correspondence, retained validation and
 single accepted Step repair. Stage acceptance is not a completed commit or
@@ -490,9 +538,36 @@ four-test repair. Parent admission in ledger revision 34 accepts all four
 criteria. Current focused 4-suite/21-test success supplements earlier
 39-suite/529-test and 138-suite/2127-test evidence; the latter retains five
 historical pending cases. Step repair 1 is accepted, nonconverging 0.
-The exact local Step commit remains a separate preparation/execution gate.
-The ledger now has 37 checked/17 pending criteria and current_entry=P96-08;
-P96-08..11 remain OPEN. Phase 96 stays in-progress, with zero full Phase
+The exact local Step commit subsequently completed at
+`3436aef7ae5bb2b3a12000c064159e11791b5282`; the preceding acceptance-time
+preparation status remains historical.
+Historical post-P96-07/pre-P96-08 checkpoint (superseded by Current acceptance):
+The ledger then had 37 checked/17 pending criteria and current_entry=P96-08;
+P96-08 is in-progress with A independently accepted through
+`phase96-p96-08a-protected-review-001@1`, original 23-suite/168-test PASS,
+and B's representative001 Test compilation failure and representative002
+compiled result of 2 passes/8 failures retained. Representative003 completed
+with 9 passes/1 failure; its missing-resource owner positive was not a Business
+success, and preceding production negatives are not yet accepted proof.
+Representative004 subsequently passed 10/10 tests in two suites, resolving the
+form-carrier cause. Accumulator001 completed 40 suites/332 tests with 331
+passes and one BRP1 trim-empty Title failure before mutation. Unit 4's
+lawful-title source repair passed property001 (1 suite/2 tests) and the same
+accumulator002 (40 suites/332 tests) on the prior assertions. Independent
+whole-Step review `phase96-p96-08-step-review-001@1` returned FINDINGS for
+`CPB-P96-08-TITLE-CORRESPONDENCE-001`, missing exact initial/reloaded semantic
+Title comparisons; no production corruption is alleged. First formal Step
+repair 1's first property attempt completed 1 suite/2 tests with 1 PASS/1 FAIL
+(SBT1/wrapper1, serial lock released): BRP1 failed before Business at the first
+newline/NUL revision-16 raw-store/decoded-title mismatch; BRP2 passed. The same
+consumed repair's decoded-View correction is now focused-validated.
+`phase96-p96-08-step-title-property-002` passed 1 suite/2 tests and
+`phase96-p96-08-step-title-accumulator-001` passed the same 40 suites/332 tests.
+Both had zero failed/aborted/canceled/ignored/pending, SBT0/wrapper0 and released
+serial lock; parent typed result readers accepted both results. Fresh independent
+focused M2 closure and exact Step acceptance/commit remain pending. Earlier B
+passes remain evidence of the prior assertions;
+P96-09..11 remain OPEN. Phase 96 stays in-progress, with zero full Phase
 reviews and no final validation, release or aggregate acceptance claim.
 See the [acceptance entry](../journal/2026/10/2026-10-16-phase-96-display-list-lifecycle-integration.md#p96-07-step-acceptance-2026-10-16).
 
@@ -500,14 +575,84 @@ See the [acceptance entry](../journal/2026/10/2026-10-16-phase-96-display-list-l
 
 Stage Status:
 
-- Current status: OPEN
+- Current status: CLOSED
 - Owner: CNCF Operation/Display boundary owners
 - Update rule: Advance only from descriptor separation and direct Operation/reload proof; the checklist below is the closure basis.
 
-- [ ] Descriptive action bindings reference existing admitted CNCF Operation identities/input metadata and remain distinct from standard Display Mutation, arbitrary URLs and executable Cozy callbacks.
-- [ ] One reference Business Operation executes through the ordinary CNCF Operation/REST authorization/input boundary, never through a DisplayService proxy or generic action tunnel.
-- [ ] Successful direct invocation followed by explicit DisplayService reload yields the corresponding fresh Display state; a successful Business response alone is not treated as refreshed Display.
-- [ ] Boundary specifications verify that displayed actions grant no capability and add no push/subscription, Service Bus refresh or second Operation protocol.
+All four outcomes below are accepted through the complete Step review plus
+independent focused closure in ledger revision 37. The canonical
+[acceptance record](../journal/2026/10/2026-10-16-phase-96-business-operation-descriptor.md#p96-08-step-acceptance-2026-10-16)
+maps each original criterion to its accepted evidence. This is Step acceptance,
+not Phase/consumer release or proof of a completed Git operation.
+
+### Historical P96-08 authoring and validation checkpoints
+
+P96-08A's [descriptor specification](../spec/display-business-operation-descriptor.md),
+[decided design](../design/display-business-operation-descriptor.md), code and
+BA1–BA7 executable scenarios/laws are independently accepted through
+`phase96-p96-08a-protected-review-001@1`, retaining the original 23-suite/168-test
+PASS. The optional ordinary `display.describeBusiness` Operation is metadata
+only. P96-08B's BR1–BR7/BRP1–BRP2/BRH1–BRH3/BRPG1–BRPG3 specifications are
+authored for ordinary direct Business, canonical stage-only mutation and
+explicit fresh Detail. Their development provenance is
+`cncf.development.display-business` / `canonical-review-<token>` / `fixture-1`,
+not an ESS2 `workflowState` mapping. Representative001 failed Test compilation;
+representative002 compiled and ran BR1–BR7/BRPG1–BRPG3 with 2 passes and 8
+failures. Representative003 completed with 9 passes and 1 failure: legitimate
+owner POST returned 400 for missing `resourceId` before Business execution.
+That positive is not a Business success, and preceding production negatives
+are not yet accepted proof. Prior repairs prepared declared schema before
+baseline, added existing typed Aggregate UserPermission authorization, recorded
+actual accepted provider PrincipalIds and observed native/full-save attempts.
+The current repair uses a standard UrlForm body for exact supplied ordinary
+Business POST selectors and omits them from query, preserving supplied missing,
+duplicate and invalid values. GET/non-Business query behavior, framework/test/
+forged query facts and the actual session header remain unchanged.
+Representative004 subsequently passed 10/10 tests in two suites, resolving
+the form-carrier cause. Accumulator001 completed 40 suites/332 tests: 331
+passed, one BRP1 failure, zero aborted/canceled/ignored/pending. A generated
+trim-empty Title failed before mutation with `DSP96_ROLE_INVALID`, not at
+permission or persistence; unchanged `Display.scala` requires nonblank Title.
+Unit 4 (`VAL-P96-08B-LAWFUL-TITLE-DOMAIN-004`) already authors a fixed `T`
+prefix retaining the exact raw Unicode/control payload through every shrink,
+including empty payload. The original newline/NUL payload at revision 16 uses
+the same complete commit/reload oracle across all six target/representation
+combinations. Exact independent pre-state/reloaded-title and complete state
+oracles, at least 100 successes per law and zero discards remain required.
+This source repair passed `phase96-p96-08b-business-review-property-001`
+(1 suite/2 tests) and `phase96-p96-08b-business-review-accumulator-002`
+(the same 40 suites/332 tests). Both completed with all tests passing, zero
+failed/aborted/canceled/ignored/pending, SBT0/wrapper0 and released serial lock;
+parent typed result readers accepted the results for the prior assertions.
+Independent whole-Step review `phase96-p96-08-step-review-001@1` returned
+FINDINGS for `CPB-P96-08-TITLE-CORRESPONDENCE-001`: missing comparison of initial
+logical, initial Display and reloaded Display semantic Title to the independently
+supplied `sample.title`. No production corruption is alleged. First formal
+Step repair 1's `phase96-p96-08-step-title-property-001` completed 1 suite/2
+tests with 1 PASS/1 FAIL, SBT1/wrapper1 and serial lock released. BRP1 failed
+before Business at the first newline/NUL revision-16 initial assertion; BRP2
+passed. The parent-prescribed observation was raw DataStore
+`utf16:0054000a0000`, not the decoded semantic View. This test observation-layer
+error does not demonstrate production corruption. The same consumed repair's
+correction is now focused-validated: use already captured
+`before.resident.views.selected.record` against independent `sample.title`.
+Initial Display and the already fetched reload JSON retain their exact
+comparisons without another read. Earlier B passes remain evidence of the prior
+assertions. `phase96-p96-08-step-title-property-002` passed 1 suite/2 tests and
+`phase96-p96-08-step-title-accumulator-001` passed the same 40 suites/332 tests.
+Both had zero failed/aborted/canceled/ignored/pending, SBT0/wrapper0 and released
+serial lock; parent typed result readers accepted both results. Fresh independent
+focused M2 closure remains pending before exact Step acceptance/commit. All four unchanged criteria below
+remain unchecked. The ledger retains all 54 criterion texts, 37 checked/17
+pending outcomes and zero full Phase reviews. No whole-Step
+commit, Phase acceptance or closure is claimed.
+
+### Accepted P96-08 criteria
+
+- [x] Descriptive action bindings reference existing admitted CNCF Operation identities/input metadata and remain distinct from standard Display Mutation, arbitrary URLs and executable Cozy callbacks.
+- [x] One reference Business Operation executes through the ordinary CNCF Operation/REST authorization/input boundary, never through a DisplayService proxy or generic action tunnel.
+- [x] Successful direct invocation followed by explicit DisplayService reload yields the corresponding fresh Display state; a successful Business response alone is not treated as refreshed Display.
+- [x] Boundary specifications verify that displayed actions grant no capability and add no push/subscription, Service Bus refresh or second Operation protocol.
 
 ## P96-09: Editing Studio reference fixture
 

@@ -331,6 +331,7 @@ private[cncf] object DisplayMutationServiceFixture {
     private var _validations = 0
     private var _commands = 0
     private var _authorizations = Vector.empty[(UnitOfWorkAuthorization, UnitOfWork)]
+    private var _authenticated_principals = Vector.empty[PrincipalId]
     private var _after_ack = false
     private var _projection_failed = false
     private var _id_calls = Vector.empty[(EntityCollectionId, String)]
@@ -347,6 +348,8 @@ private[cncf] object DisplayMutationServiceFixture {
     def validations: Int = _validations
     def commands: Int = _commands
     def authorizations: Vector[(UnitOfWorkAuthorization, UnitOfWork)] = _authorizations
+    def authenticatedPrincipals: Vector[PrincipalId] = _authenticated_principals
+    def authenticatedPrincipal(principalId: PrincipalId): Unit = { _authenticated_principals :+= principalId }
     def afterAck: Boolean = _after_ack
     def idCalls: Vector[(EntityCollectionId, String)] = _id_calls
     def queries: Vector[(Query[?], ExecutionContext)] = _queries
@@ -375,6 +378,7 @@ private[cncf] object DisplayMutationServiceFixture {
     def reset(): Unit = {
       _events = Vector.empty; _conversions = Vector.empty; _validations = 0; _commands = 0
       _authorizations = Vector.empty; _after_ack = false; _projection_failed = false
+      _authenticated_principals = Vector.empty
       _id_calls = Vector.empty
       _queries = Vector.empty
     }
@@ -448,7 +452,9 @@ private[cncf] object DisplayMutationServiceFixture {
     private var _searches = Vector.empty[(DataStore.CollectionId, QueryDirective)]
     private var _counts = Vector.empty[(DataStore.CollectionId, QueryDirective)]
     private var _updates = Vector.empty[EntityVersionedMutationPlan]
+    private var _native_updates = Vector.empty[EntityCompareAndSetMutationPlan]
     def updates: Vector[EntityVersionedMutationPlan] = _updates
+    def nativeUpdates: Vector[EntityCompareAndSetMutationPlan] = _native_updates
     def searches: Vector[(DataStore.CollectionId, QueryDirective)] = _searches
     def counts: Vector[(DataStore.CollectionId, QueryDirective)] = _counts
     override def totalCountCapability(collection: DataStore.CollectionId): TotalCountCapability = underlying match {
@@ -478,6 +484,7 @@ private[cncf] object DisplayMutationServiceFixture {
     def reset(armed: Boolean = true): Unit = {
       _creates = Vector.empty; _deletes = Vector.empty; _created = Vector.empty; _deleted = Vector.empty
       _writes = 0; _lifecycle = Vector.empty; _armed = armed; _searches = Vector.empty; _counts = Vector.empty; _updates = Vector.empty
+      _native_updates = Vector.empty
     }
     def isAccept(cid: DataStore.CollectionId): Boolean = underlying.isAccept(cid)
     override def entityMutationProviderCapabilities: EntityMutationProviderCapabilities = {
@@ -519,8 +526,10 @@ private[cncf] object DisplayMutationServiceFixture {
     }
     override def mutateEntityDirect(plan: EntityDirectMutationPlan)(using ctx: ExecutionContext): Consequence[EntityMutationProviderResult] =
       _delegate.mutateEntityDirect(plan)
-    override def compareAndSetEntity(plan: EntityCompareAndSetMutationPlan)(using ctx: ExecutionContext): Consequence[EntityMutationProviderResult] =
+    override def compareAndSetEntity(plan: EntityCompareAndSetMutationPlan)(using ctx: ExecutionContext): Consequence[EntityMutationProviderResult] = {
+      _native_updates :+= plan
       _delegate.compareAndSetEntity(plan)
+    }
     def mutateVersionedEntity(plan: EntityVersionedMutationPlan)(using ctx: ExecutionContext): Consequence[EntityVersionedMutationResult] = {
       _updates :+= plan
       _delegate.mutateVersionedEntity(plan)
@@ -555,9 +564,17 @@ private[cncf] object DisplayMutationServiceFixture {
   }
 
   final class NormalComponent(val token: String, val target: Target, val representation: EntityRevisionRepresentation,
-    val log: Log, registration: Registration = Registration.Normal, val lifecycleSetup: Option[LifecycleSetup] = None) extends Component()
+    val log: Log, registration: Registration = Registration.Normal, val lifecycleSetup: Option[LifecycleSetup] = None,
+    val businessSetup: Option[DisplayBusinessReviewFixture.Setup] = None) extends Component()
       with GeneratedLogicalUiMetadataProvider with DisplayBindingProvider with DisplayServiceBindingProvider
-      with DisplayMutationServiceBindingProvider with SpiProviderComponent {
+      with DisplayMutationServiceBindingProvider with SpiProviderComponent with DisplayBusinessOperationBindingProvider {
+    require(businessSetup.isEmpty || (lifecycleSetup.isEmpty && registration == Registration.Normal),
+      "Business fixture setup requires the ordinary non-lifecycle registration")
+    override def authenticationProviders: Vector[AuthenticationProvider] =
+      if (businessSetup.exists(_.production)) Vector(DisplayBusinessReviewFixture.authenticationProvider(log)) else Vector.empty
+    def displayBusinessOperationBindings(component: Component): Vector[DisplayBusinessOperation.Binding] =
+      if (businessSetup.nonEmpty) Vector(DisplayBusinessOperation.Binding(screenId,
+        DisplayBusinessOperation.ActionScope.Screen, "request-review", "business", "requestReview")) else Vector.empty
     val rootName: String = token
     val aliasName: String = token + "alias"
     val collectionId: EntityCollectionId = EntityCollectionId("sys", "sys", token)
@@ -584,7 +601,10 @@ private[cncf] object DisplayMutationServiceFixture {
         inputType = "Root", outputType = "Root", inputValueKind = "record", access = Some(CmlOperationAccess("authenticated_only")))) ++
       (if (lifecycleSetup.nonEmpty) Vector("create", "delete", "createRoot").map(name =>
         CmlOperationDefinition(name = name, kind = "command", inputType = "Root", outputType = "Root",
-          inputValueKind = "record", access = Some(CmlOperationAccess("authenticated_only")))) else Vector.empty)
+          inputValueKind = "record", access = Some(CmlOperationAccess("authenticated_only")))) else Vector.empty) ++
+      (if (businessSetup.nonEmpty) Vector(CmlOperationDefinition(name = "requestReview", kind = "command",
+        inputType = "Root", outputType = "Root", inputValueKind = "record",
+        access = Some(CmlOperationAccess("authenticated_only")))) else Vector.empty)
     private val _aggregates = new AggregateCollection(new ContextualAggregateBuilder[Root] {
       def build_with_context(id: EntityId)(using ctx: ExecutionContext): Consequence[Root] = {
         log.record("aggregate", ctx)
@@ -671,12 +691,13 @@ private[cncf] object DisplayMutationServiceFixture {
         .map(value => value.entity.copy(record = value.entity.record.upsertSingle(representation.storageFieldName, value.revision.value)))
     }
     def generatedLogicalUiDefinitions: Vector[GeneratedLogicalUiAbi.Definition] = DisplayMutationServiceDomain.definitions.flatMap { definition =>
-      val selected = definition.copy(provenance = definition.provenance.copy(sourceId = "typed-normal-component-" + token))
+      val original = definition.copy(provenance = definition.provenance.copy(sourceId = "typed-normal-component-" + token))
+      val selected = if (businessSetup.nonEmpty) DisplayBusinessReviewFixture.definition(original, token) else original
       Vector(selected) ++ (if (lifecycleSetup.exists(_.mixed)) Vector(selected.copy(screenId = "legacy-detail")) else Vector.empty) ++
         (if (lifecycleSetup.exists(_.withList)) Vector(DisplayMutationServiceListFixture.listDefinition(selected)) else Vector.empty)
     }
     def displayBindings(component: Component): Vector[DisplayRuntime.Binding] = {
-      val row = DisplayMutationServiceDomain.row { root =>
+      val originalrow = DisplayMutationServiceDomain.row { root =>
         log.reload match {
           case Reload.RowFailure => projectionFailure
           case Reload.RowNull => null
@@ -685,6 +706,9 @@ private[cncf] object DisplayMutationServiceFixture {
           case _ => EntityRevisionBinding(representation).revision(root.record).map(DisplayModel.Resource(root.id, _))
         }
       }
+      val row = businessSetup.map(setup => originalrow.copy(actions = Vector(
+        DisplayProjection.ActionBinding[Root]("business:request-review", _ => Consequence.success(setup.availability)))))
+        .getOrElse(originalrow)
       val selected = if (registration == Registration.UnregisteredBrowser) new Browser[Root] {
         def find(id: EntityId): Consequence[Root] = projectionFailure
         def query(query: Query[?]): Consequence[Vector[Root]] = projectionFailure
@@ -1239,11 +1263,14 @@ private[cncf] object DisplayMutationServiceFixture {
 
   def open(target: Target = Target.Entity, representation: EntityRevisionRepresentation = EntityRevisionRepresentation.Embedded,
     database: Option[PostgresqlPersistenceFixture.Database] = None, registration: Registration = Registration.Normal,
-    backend: String = "memory", sharedSession: Option[Session] = None, lifecycle: Option[LifecycleSetup] = None): Session = {
+    backend: String = "memory", sharedSession: Option[Session] = None, lifecycle: Option[LifecycleSetup] = None,
+    businessSetup: Option[DisplayBusinessReviewFixture.Setup] = None): Session = {
+    require(businessSetup.isEmpty || (lifecycle.isEmpty && sharedSession.isEmpty && registration == Registration.Normal),
+      "Business fixture setup is disjoint from lifecycle, custom registration and shared sessions")
     val token = "normalupdate" + _sequence.incrementAndGet()
     val log = new Log
     val selectedid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("normal", "selected", EntityCollectionId("sys", "sys", token), entropy = "same_selected")
-    val ingressspace = lifecycle.map(setup => new ObservedSpace(log,
+    val ingressspace = lifecycle.orElse(businessSetup.map(_ => LifecycleSetup())).map(setup => new ObservedSpace(log,
       () => throw new IllegalStateException("Lifecycle observer uses the actual provider execution context"),
       DataStore.inMemorySearchable(), selectedid, Some(setup)))
     val directory = if (backend == "sqlite" && database.isEmpty && sharedSession.isEmpty) {
@@ -1259,17 +1286,22 @@ private[cncf] object DisplayMutationServiceFixture {
           "textus.datastore.kind" -> "sqlite", "textus.datastore.sqlite.path" -> sqlitepath.get.toString))
       } else ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
     }
-    val configuration = ResolvedConfiguration(Configuration(baseconfiguration.configuration.values ++ Map(
+    val production = businessSetup.exists(_.production)
+    val executionconfiguration = if (production) Map(
+      RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue(OperationMode.Production.name),
+      org.goldenport.cncf.subsystem.SubsystemUserMode.CONFIGURATION_KEY -> ConfigurationValue.StringValue("multi-user")) else Map(
       "textus.operation-mode" -> ConfigurationValue.StringValue("test"),
       "textus.execution.profile" -> ConfigurationValue.StringValue("controlled"),
       "textus.execution.key" -> ConfigurationValue.StringValue(token),
       "textus.execution.random.seed" -> ConfigurationValue.StringValue(token),
       "textus.execution.time.mode" -> ConfigurationValue.StringValue("manual"),
-      "textus.execution.time.start-at" -> ConfigurationValue.StringValue(fixedInstant.toString))), baseconfiguration.trace)
+      "textus.execution.time.start-at" -> ConfigurationValue.StringValue(fixedInstant.toString))
+    val configuration = ResolvedConfiguration(Configuration(baseconfiguration.configuration.values ++ executionconfiguration), baseconfiguration.trace)
+    val operationmode = if (production) OperationMode.Production else OperationMode.Test
     val subsystem = try sharedSession.map(_.subsystem).getOrElse {
       val config = RuntimeConfig.default.copy(
-        executionProfile = success(ExecutionProfileResolver.resolve(configuration, OperationMode.Test)),
-        operationMode = OperationMode.Test,
+        executionProfile = success(ExecutionProfileResolver.resolve(configuration, operationmode)),
+        operationMode = operationmode,
         dataStoreSpace = ingressspace.getOrElse(DataStoreSpace.default()),
         entityStoreSpace = new EntityStoreSpace().addEntityStore(EntityStore.standard()))
       val global = GlobalRuntimeContext.create(token, config, configuration, observability, AliasResolver.empty)
@@ -1283,11 +1315,13 @@ private[cncf] object DisplayMutationServiceFixture {
         throw error
     }
     try {
-      val component = new NormalComponent(token, target, representation, log, registration, lifecycle)
+      val component = new NormalComponent(token, target, representation, log, registration, lifecycle, businessSetup)
       initialize(component, subsystem)
       success(new ComponentFactory().bootstrapC(component))
       component.withMcpReadyServices(Set("display"))
+      if (production) DisplayBusinessReviewFixture.installDescriptor(subsystem, component)
       subsystem.add(Vector(component))
+      if (production) RuntimeBindingAdmissionFixture.admit(subsystem)
       given ExecutionContext = ExecutionContext.create()
       val resolution = SpiResolver.resolveAssembly(subsystem.components.toVector, Vector.empty).TAKE
       subsystem.withComponentApiResolver(resolution.componentApiResolver)
@@ -1300,7 +1334,11 @@ private[cncf] object DisplayMutationServiceFixture {
         database.map(value => () => value.source().getConnection()).orElse(sqlitepath.map(path =>
           () => java.sql.DriverManager.getConnection("jdbc:sqlite:" + path.toString))))
       if (lifecycle.nonEmpty) { result.prepareLifecycleSchema(); result.prepareLifecycle(false) }
-      else result.seed()
+      else {
+        if (businessSetup.nonEmpty) result.prepareLifecycleSchema()
+        result.seed()
+      }
+      if (businessSetup.nonEmpty) ingressspace.foreach(_.observing(true))
       result
     } catch {
       case scala.util.control.NonFatal(error) =>
@@ -1328,7 +1366,8 @@ private[cncf] object DisplayMutationServiceFixture {
       }
     }
     logicalui.DisplayServiceReadFixture.initialize(component, subsystem, "NormalUpdate" + component.token,
-      Protocol(handler = ProtocolHandler.default), Some(factory))
+      if (component.businessSetup.nonEmpty) DisplayBusinessReviewFixture.protocol(component)
+        else Protocol(handler = ProtocolHandler.default), Some(factory))
     ()
   }
 

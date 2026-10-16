@@ -16,14 +16,16 @@ import org.simplemodeling.model.datatype.EntityId
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct. 15, 2026
+ *  version Oct. 15, 2026
+ * @version Oct. 16, 2026
  */
 /** Complete admitted bindings used only by ordinary component Operations. */
 final class DisplayService private[DisplayService] (
   private val _component_id: ComponentId,
   private val _runtime: DisplayRuntime.Registry,
   private val _entries: Vector[DisplayService.Entry],
-  private val _mutations: Option[DisplayMutationRuntimeEntry.Registry]
+  private val _mutations: Option[DisplayMutationRuntimeEntry.Registry],
+  private val _business: Option[DisplayBusinessOperation.Registry]
 ) {
   import DisplayService.*
 
@@ -31,7 +33,8 @@ final class DisplayService private[DisplayService] (
     name = "display",
     operations = OperationDefinitionGroup(NonEmptyVector.of[OperationDefinition](
       new BoundOperation("query"), new BoundOperation("read")
-    ).concat(_mutations.toVector.flatMap(registry => DisplayMutationIngress.operations(_component_id, registry))))
+    ).concat(_mutations.toVector.flatMap(registry => DisplayMutationIngress.operations(_component_id, registry)))
+      .concat(_business.toVector.flatMap(registry => DisplayBusinessOperationIngress.operations(_component_id, registry))))
   )
 
   private final class BoundOperation(opname: String) extends OperationDefinition {
@@ -118,6 +121,14 @@ object DisplayService {
     definitions: GeneratedLogicalUiAbi.AdmittedDefinitions,
     runtime: DisplayRuntime.Registry, bindings: Vector[ResourceBinding],
     mutations: Option[DisplayMutationRuntimeEntry.Registry]): Consequence[DisplayService] = {
+    _bind_c(componentid, definitions, runtime, bindings, mutations, None)
+  }
+
+  private[cncf] def _bind_c(componentid: ComponentId,
+    definitions: GeneratedLogicalUiAbi.AdmittedDefinitions,
+    runtime: DisplayRuntime.Registry, bindings: Vector[ResourceBinding],
+    mutations: Option[DisplayMutationRuntimeEntry.Registry],
+    business: Option[DisplayBusinessOperation.Registry]): Consequence[DisplayService] = {
     val problem = if (componentid == null) _error("ELEMENT_INVALID", "componentId")
       else if (definitions == null) _error("ELEMENT_INVALID", "definitions")
       else if (runtime == null) _error("ELEMENT_INVALID", "runtime")
@@ -164,7 +175,7 @@ object DisplayService {
             case None => _failure("SCREEN_MISSING", "bindings")
           }
         }
-      }.map(entries => new DisplayService(componentid, runtime, entries, mutations))
+      }.map(entries => new DisplayService(componentid, runtime, entries, mutations, business))
     }
   }
 

@@ -4,10 +4,12 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.display.{DisplayBindingProvider, DisplayRuntime, DisplayService, DisplayServiceBindingProvider, GeneratedLogicalUiAbi, GeneratedLogicalUiMetadataProvider}
 import scala.util.control.NonFatal
 import org.goldenport.cncf.display.{DisplayMutation, DisplayMutationRuntime, DisplayMutationServiceBindingProvider}
+import org.goldenport.cncf.display.{DisplayBusinessOperation, DisplayBusinessOperationBindingProvider}
 
 /*
  * @since   Oct.  3, 2026
- * @version Oct. 15, 2026
+ *  version Oct. 15, 2026
+ * @version Oct. 16, 2026
  */
 private[component] trait ComponentFactoryDisplayPart { self: ComponentFactory =>
   private[component] def _prepare_display_service_c(
@@ -31,17 +33,39 @@ private[component] trait ComponentFactoryDisplayPart { self: ComponentFactory =>
         }
         bindings.flatMap { value =>
           for {
-            original <- DisplayService._bind_c(component.componentId, admitted, runtime.orNull, value)
+            _ <- DisplayService._bind_c(component.componentId, admitted, runtime.orNull, value)
             registrations <- _mutation_bindings_c(component)
-            service <- registrations match {
-              case None => Consequence.success(original)
+            mutations <- registrations match {
+              case None => Consequence.success(None)
               case Some(selected) => DisplayMutationRuntime._bind_c(component, admitted, runtime.orNull, value, selected)
-                .flatMap(registry => DisplayService._bind_c(component.componentId, admitted, runtime.orNull, value, Some(registry)))
+                .map(Some(_))
             }
+            businessbindings <- _business_bindings_c(component)
+            business <- businessbindings match {
+              case None => Consequence.success(None)
+              case Some(selected) => DisplayBusinessOperation._bind_c(component, admitted, value, selected).map(Some(_))
+            }
+            service <- DisplayService._bind_c(component.componentId, admitted, runtime.orNull, value, mutations, business)
           } yield service
         }.flatMap(component._prepare_display_registration_c).map(Some(_))
       case _ => Consequence.success(None)
     }
+  }
+
+  private def _business_bindings_c(component: Component): Consequence[Option[Vector[DisplayBusinessOperation.Binding]]] = {
+    try {
+      val provider = component match {
+        case selected: DisplayBusinessOperationBindingProvider => Some(selected)
+        case _ => component.factory.collect { case selected: DisplayBusinessOperationBindingProvider => selected }
+      }
+      provider match {
+        case None => Consequence.success(None)
+        case Some(selected) => Option(selected.displayBusinessOperationBindings(component)) match {
+          case Some(value) => Consequence.success(Some(value))
+          case None => DisplayBusinessOperation._input_invalid_c("PROVIDER_INVALID", "businessProvider")
+        }
+      }
+    } catch { case NonFatal(_) => DisplayBusinessOperation._input_invalid_c("PROVIDER_INVALID", "businessProvider") }
   }
 
   private def _mutation_bindings_c(component: Component): Consequence[Option[Vector[DisplayMutationRuntime.Binding]]] = {
