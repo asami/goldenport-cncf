@@ -14,7 +14,25 @@ server_reference_phase=KnowledgeHubProject/nict-editing-studio Phase 2
 abstract_ui_dependency=asami/cozy Phase 74 semantic authority; Cozy Phase 76 producer ABI
 strategy=textus-knowledge-workbench/docs/strategy/knowledge-application-integration.md
 
-## Current P96-08 acceptance — 2026-10-16
+## Current P96-09 Step acceptance — 2026-10-17
+
+P96-09A's [reference contract](../spec/display-editing-studio-reference.md),
+[design](../design/display-editing-studio-reference.md) and
+[sample/provenance record](../journal/2026/10/2026-10-17-phase-96-editing-studio-reference.md)
+have 13 executable scenarios: REF-E1..E8, REF-P1/P2 and mandatory REF-PG1..PG3.
+Focused validation passed: the representative passed 10/10 tests in two suites,
+and the accumulator passed 345/345 tests in 43 suites, including REF-PG1..PG3
+with real PostgreSQL 17.11, fsync=on and synchronous_commit=on. Both completed
+with SBT0/wrapper0, released serial locks and zero failed, aborted, canceled,
+ignored or pending tests. Independent whole-Step review
+`phase96-p96-09-step-review-001@1`, admitted in review ledger revision 38,
+accepts all four original P96-09 criteria with no Current Boundary Blocker.
+P96-09 is CLOSED on that acceptance; its local Step commit is the next operation.
+All 54 criterion texts remain unchanged, with 45 checked/9 pending. P08 history
+is retained and P96-10/P96-11 remain OPEN. Existing fixture-size Hygiene remains
+separate. This is no Phase, consumer or production application acceptance.
+
+## Historical P96-08 acceptance — 2026-10-16
 
 P96-08 is independently accepted on all four original criteria. The complete
 Step review `phase96-p96-08-step-review-001@1` and independent focused

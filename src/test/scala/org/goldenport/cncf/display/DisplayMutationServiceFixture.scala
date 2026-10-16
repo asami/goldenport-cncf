@@ -47,7 +47,7 @@ import org.typelevel.ci.CIString
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 17, 2026
  */
 /** Real ordinary component assembly; no fixture-owned resource map or result writer. */
 private[cncf] object DisplayMutationServiceFixture {
@@ -565,10 +565,16 @@ private[cncf] object DisplayMutationServiceFixture {
 
   final class NormalComponent(val token: String, val target: Target, val representation: EntityRevisionRepresentation,
     val log: Log, registration: Registration = Registration.Normal, val lifecycleSetup: Option[LifecycleSetup] = None,
-    val businessSetup: Option[DisplayBusinessReviewFixture.Setup] = None) extends Component()
+    val businessSetup: Option[DisplayBusinessReviewFixture.Setup] = None,
+    val referenceProfile: Option[DisplayEditingStudioReferenceFixture.Profile] = None) extends Component()
       with GeneratedLogicalUiMetadataProvider with DisplayBindingProvider with DisplayServiceBindingProvider
       with DisplayMutationServiceBindingProvider with SpiProviderComponent with DisplayBusinessOperationBindingProvider {
-    require(businessSetup.isEmpty || (lifecycleSetup.isEmpty && registration == Registration.Normal),
+    require(referenceProfile.forall(profile => registration == Registration.Normal &&
+      lifecycleSetup.contains(DisplayEditingStudioReferenceFixture.lifecycle(profile)) &&
+      businessSetup.contains(DisplayBusinessReviewFixture.Setup())),
+      "Reference profile requires its exact development lifecycle and Business composition")
+    require(businessSetup.isEmpty || (registration == Registration.Normal &&
+      (lifecycleSetup.isEmpty || referenceProfile.nonEmpty)),
       "Business fixture setup requires the ordinary non-lifecycle registration")
     override def authenticationProviders: Vector[AuthenticationProvider] =
       if (businessSetup.exists(_.production)) Vector(DisplayBusinessReviewFixture.authenticationProvider(log)) else Vector.empty
@@ -692,7 +698,9 @@ private[cncf] object DisplayMutationServiceFixture {
     }
     def generatedLogicalUiDefinitions: Vector[GeneratedLogicalUiAbi.Definition] = DisplayMutationServiceDomain.definitions.flatMap { definition =>
       val original = definition.copy(provenance = definition.provenance.copy(sourceId = "typed-normal-component-" + token))
-      val selected = if (businessSetup.nonEmpty) DisplayBusinessReviewFixture.definition(original, token) else original
+      val business = if (businessSetup.nonEmpty) DisplayBusinessReviewFixture.definition(original, token) else original
+      val selected = referenceProfile.map(profile => business.copy(
+        provenance = DisplayEditingStudioReferenceFixture.provenance(profile))).getOrElse(business)
       Vector(selected) ++ (if (lifecycleSetup.exists(_.mixed)) Vector(selected.copy(screenId = "legacy-detail")) else Vector.empty) ++
         (if (lifecycleSetup.exists(_.withList)) Vector(DisplayMutationServiceListFixture.listDefinition(selected)) else Vector.empty)
     }
@@ -716,7 +724,8 @@ private[cncf] object DisplayMutationServiceFixture {
       Vector(DisplayRuntime.detail(screenId, "ess.reference", selected, row)) ++
         (if (lifecycleSetup.exists(_.mixed)) Vector(DisplayRuntime.detail("legacy-detail", "ess.reference", selected, row)) else Vector.empty) ++
         (if (lifecycleSetup.exists(_.withList)) Vector(DisplayRuntime.list(DisplayMutationServiceListFixture.listScreenId,
-          "ess.reference", selected, row, Vector.empty)) else Vector.empty)
+          "ess.reference", selected, if (referenceProfile.nonEmpty) row.copy(actions = Vector.empty) else row,
+          Vector.empty)) else Vector.empty)
     }
     def displayServiceBindings(component: Component): Vector[DisplayService.ResourceBinding] = Vector(DisplayService.ResourceBinding(resourceType, screenId)) ++
       (if (lifecycleSetup.exists(_.mixed)) Vector(DisplayService.ResourceBinding(resourceType, "legacy-detail")) else Vector.empty) ++
@@ -1264,8 +1273,14 @@ private[cncf] object DisplayMutationServiceFixture {
   def open(target: Target = Target.Entity, representation: EntityRevisionRepresentation = EntityRevisionRepresentation.Embedded,
     database: Option[PostgresqlPersistenceFixture.Database] = None, registration: Registration = Registration.Normal,
     backend: String = "memory", sharedSession: Option[Session] = None, lifecycle: Option[LifecycleSetup] = None,
-    businessSetup: Option[DisplayBusinessReviewFixture.Setup] = None): Session = {
-    require(businessSetup.isEmpty || (lifecycle.isEmpty && sharedSession.isEmpty && registration == Registration.Normal),
+    businessSetup: Option[DisplayBusinessReviewFixture.Setup] = None,
+    referenceProfile: Option[DisplayEditingStudioReferenceFixture.Profile] = None): Session = {
+    require(referenceProfile.forall(profile => sharedSession.isEmpty && registration == Registration.Normal &&
+      lifecycle.contains(DisplayEditingStudioReferenceFixture.lifecycle(profile)) &&
+      businessSetup.contains(DisplayBusinessReviewFixture.Setup())),
+      "Reference profile requires its exact development lifecycle and Business composition without a shared session")
+    require(businessSetup.isEmpty || (sharedSession.isEmpty && registration == Registration.Normal &&
+      (lifecycle.isEmpty || referenceProfile.nonEmpty)),
       "Business fixture setup is disjoint from lifecycle, custom registration and shared sessions")
     val token = "normalupdate" + _sequence.incrementAndGet()
     val log = new Log
@@ -1315,7 +1330,7 @@ private[cncf] object DisplayMutationServiceFixture {
         throw error
     }
     try {
-      val component = new NormalComponent(token, target, representation, log, registration, lifecycle, businessSetup)
+      val component = new NormalComponent(token, target, representation, log, registration, lifecycle, businessSetup, referenceProfile)
       initialize(component, subsystem)
       success(new ComponentFactory().bootstrapC(component))
       component.withMcpReadyServices(Set("display"))
