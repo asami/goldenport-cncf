@@ -178,6 +178,45 @@ must carry the same values as `--runtime`, `--cncf-version`,
 `--cncf-runtime-descriptor`, `--cncf-runtime-descriptor-sha256`, and
 `--generation-source-identity`; it must not consult ambient version sources.
 
+The Information execution-directory contract (R9) admits only an explicit
+`TEXTUS_COZY_CNCF_SOURCE_ROOT` directory through the build-load setting
+`cncfCozyDevelopmentDirectory`. An unset selector returns `None` without new
+development-directory checks and preserves the existing invocation vectors.
+The directory selects execution location only: the build remains the authority
+for Cozy `0.3.3-SNAPSHOT` and the effective CNCF version `0.5.3-SNAPSHOT`.
+Neither coordinate may be derived from or overridden by directory selection.
+Blank or relative selections, canonicalization errors, missing `build.sbt` or
+`src/main/scala/cozy/Cozy.scala`, canonical self/ancestor overlap, ordinary
+source nesting, and lexical consumer paths that escape through symlinks must
+fail descriptively before generation, without fallback. Disjoint canonical
+sources are admitted. The sole nested exception is a canonical direct
+`<consumer>/.codex-workflow/checkouts/<name>` child whose leaf matches ASCII
+`[A-Za-z0-9_][A-Za-z0-9_.-]*` and whose normalized absolute lexical parent
+matches that checkout parent. The checkout namespace must never be canonicalized
+into a symlink escape or another nested location; canonical overlap through
+aliases remains rejected.
+
+Generation and authoritative provenance validation use the same prefix:
+`cozy --runtime <pinned-generator>` followed, only when selected, by
+`--runtime-dev-dir <canonical-directory>` before the existing operation.
+The directory is one argv element, including when it contains spaces. All
+target, descriptor, digest, source and output arguments remain unchanged.
+The selected launcher consumes an already prepared Cozy export; this admission
+does not bootstrap or export a runtime, start nested SBT, publish artifacts,
+reconstruct runtime integrity, or provide fallback. Direct V1 provenance and
+its digests remain Cozy-owned and use the same authoritative validator.
+
+Executable coverage for R9 is
+`src/test/scala/org/goldenport/cncf/phase51/build/CncfCozyDevelopmentRuntimeSpec.scala`:
+E12 preserves unset/default commands; E13 binds both selected routes; E14 rejects
+invalid spellings; E15 requires source markers; E16 rejects overlap; E17 admits
+the direct checkout child; E18 rejects deep or invalid-name children; E19 rejects
+leaf symlink escape; E20 rejects checkout namespace relocation; E21 rejects
+alias overlap and mismatched lexical parents; and E22 checks at least fifty
+legal name/path cases, including disjoint paths with spaces, against canonical
+argv and unchanged logical inputs. Non-normative architectural context is in
+`docs/design/generation-compatibility-contract.md`.
+
 The resolution and command plan are deterministic for cold, repeated, and
 concurrent evaluations. Cold and repeated generation of unchanged CML with the
 same explicit inputs must emit the same generated Scala file set and content.

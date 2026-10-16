@@ -116,8 +116,24 @@ before launching Cozy. The descriptor task is an explicit dependency of input
 resolution. A pure cross-compiled build contract normalizes these inputs,
 rejects blank coordinates, absent files, or a source outside the project, and
 captures the descriptor digest, stable project-relative source identity, and
-pre-launch source digest. No environment, catalog, generated output, or
-filesystem fallback participates in this CNCF build path.
+pre-launch source digest. Environment, catalog, generated output and filesystem
+fallbacks cannot supply or override either coordinate or any logical generation
+input. The explicit `TEXTUS_COZY_CNCF_SOURCE_ROOT` directory is a separate
+execution-location selection governed by R9 in
+`docs/spec/generation-compatibility-contract.md`; it does not participate in
+coordinate resolution. `cncfCozyDevelopmentDirectory` admits it during build
+load with absolute/canonical source-marker and overlap checks, retaining the
+narrow matching lexical/canonical direct checkout-child exception and rejecting
+symlink escape. Unset mode preserves the prior route.
+
+The shared Information generation function carries that canonical directory to
+both generation and Cozy-owned provenance validation. Its shared command prefix
+places `--runtime-dev-dir` after the pinned `--runtime` and before either
+operation, preserving the exact Cozy `0.3.3-SNAPSHOT` / CNCF `0.5.3-SNAPSHOT`
+build authority and every descriptor/source/digest/output argument. The launcher
+consumes the selected checkout's prepared Cozy export. This boundary adds no
+fallback, runtime bootstrap/export, nested SBT or publication responsibility,
+and keeps direct V1 schema/digest production and validation with Cozy.
 
 Cold, repeated, and concurrent evaluations resolve the same invocation inputs.
 CV-04 makes descriptor identity an immutable part of that invocation. The
