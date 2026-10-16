@@ -21,7 +21,7 @@ import org.scalatest.matchers.should.Matchers
  * The numeric oracle belongs to the scenario; no payment helper computes it.
  *
  * @since   Oct. 3, 2026
- * @version Oct. 3, 2026
+ * @version Oct. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] object JobDurableLifetimeRecoveryFixtures extends Matchers {
@@ -255,6 +255,11 @@ private[job] object JobDurableLifetimeRecoveryFixtures extends Matchers {
     val jobacks = new AtomicInteger
     var losejoback = false
     var contexts = Vector.empty[ExecutionContext]
+    override def load[T](id: EntityId)(using tc: EntityPersistent[T], ctx: ExecutionContext)
+        : Consequence[Option[T]] = {
+      contexts :+= ctx
+      super.load(id)
+    }
     override def loadDetached[T](id: EntityId)(using tc: EntityPersistent[T], ctx: ExecutionContext)
         : Consequence[Option[EntityRevisionCarrier[T]]] = {
       loads.incrementAndGet()
