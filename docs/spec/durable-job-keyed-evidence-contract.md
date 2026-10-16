@@ -29,6 +29,27 @@ remain unchanged. These fields are internal values, never serialized record
 fields. No JobRecord, JobTask, ExecutionContext, TaskOutcome, raw body, result,
 payload, provider, resolver, credential, clock or timer enters a request.
 
+## Canonical terminal publication intent
+
+The [terminal publication contract](durable-job-operation-response-publication-contract.md)
+defines the closed private `DurableJobResultPublication` intent appended to the
+evidence pair, default Supplied. No raw response, live Job/Task/context or provider
+enters any of the six original requests. Source addressing, one exact fetch and
+immutable task models remain unchanged. Null intent and OwnedOperationResponse
+at a nonterminal boundary refuse before native admission/checkpoint. Supplied
+continues the original effect path, including intentional Succeeded(Absent).
+
+Owned terminal intent requires genuine successful live candidate, independent
+Succeeded(Absent) seed, original native binding access and signed authorization.
+Original native/recovered projection and signed roundtrip precede publication.
+The bridge publishes the actual success response through its configured B2
+capability once and replaces only result before original checkpoint/acknowledgement.
+No independent non-result source fact is inferred, replaced or fetched again.
+The [publication design](../design/durable-job-operation-response-publication.md)
+defines ordering; its [journal](../journal/2026/10/2026-10-04-phase-69.7-job-result-publication.md)
+owns execution evidence. Raw/queryVisible/management compatibility remains
+unchanged; trusted caller read authority remains a separate required responsibility.
+
 ## R3 Optional source subtype and legacy compatibility
 
 DurableJobKeyedEvidenceSource extends the original Function1 source type and

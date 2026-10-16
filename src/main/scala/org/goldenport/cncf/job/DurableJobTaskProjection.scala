@@ -5,7 +5,7 @@ package org.goldenport.cncf.job
  * distinguishes a normal original's recovery aggregate from its actual companion.
  *
  * @since   Oct. 2, 2026
- * @version Oct. 2, 2026
+ * @version Oct. 6, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] object DurableJobTaskProjection {
@@ -216,6 +216,8 @@ private[job] object DurableJobTaskProjection {
       _compensation(model).flatMap(value =>
         Either.cond(value.nonEmpty, value, "companion requires complete compensation evidence"))
     } else if (model.compensatesTaskId.nonEmpty) {
+      _compensation(model)
+    } else if (model.relation.contains("continuation")) {
       _compensation(model)
     } else {
       val normal = model.relation.exists(value => value == "root" || value == "child")

@@ -11,9 +11,11 @@ values. The factory first calls `ComponentKnowledgeManifest.createC`; that
 existing factory is the sole binding authority.
 
 For every admitted manifest entry, exactly one supplied resource with the same
-logical identity shall exist. Its manifest digest, safe provenance,
-availability, integrity, and authorization must already satisfy
-`ComponentKnowledgeManifest.createC`. Composition shall retain the original
+logical identity shall exist. The authored manifest document digest and its
+matching digest must satisfy the existing manifest format and same-entry
+consistency rules. Safe source provenance, availability, integrity, and
+authorization must satisfy `ComponentKnowledgeManifest.createC`; no
+resource-artifact SHA binding is required. Composition shall retain the original
 `ResolvedComponentResource` beside the entry, preserving logical identity,
 full resolver provenance, availability, integrity, authorization, and every
 authority/disclosure flag exactly as supplied. Duplicate, absent, ambiguous,

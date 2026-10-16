@@ -49,7 +49,7 @@ import cats.~>
  *  version May. 31, 2026
  *  version Jul. 31, 2026
  *  version Aug. 12, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -825,6 +825,21 @@ object ExecutionContext {
       ))
     case _ =>
       ctx
+  }
+
+  /** Attach opaque invocation routing inside an already executing Operation.
+    * Keep its actual UoW, response lineage, actor and authentication attributes.
+    * This is not authentication, a resource owner or a new execution context.
+    */
+  def withRoutingSessionIdentity(ctx: ExecutionContext,
+    sessionIdentity: String): Consequence[ExecutionContext] = ctx match {
+    case value: Instance =>
+      val session = value.security.session.getOrElse(SessionContext()).copy(sessionId = Some(sessionIdentity))
+      val security = value.security.copy(session = Some(session))
+      org.goldenport.cncf.security.SecurityAuthenticationProvenance.inherit(value.security, security)
+      Consequence.success(value.copy(cncfCore = value.cncfCore.copy(
+        security = security)))
+    case _ => Consequence.configurationInvalid("Invocation context cannot carry session routing")
   }
 
   def withAggregateInternalRead(

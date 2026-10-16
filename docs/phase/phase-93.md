@@ -54,3 +54,24 @@ Planned evolution includes replacing/generalizing the boolean persistence option
 - Use WAL/busy-timeout defaults appropriate for local concurrent access.
 - PostgreSQL may be physically shared across Subsystems but must preserve subsystemId/logical journal partitioning.
 - Keep Journal query/API semantics independent of the physical provider layout.
+
+## Textus EAI Event integration requirements — 2026-10-03
+
+Add EAI as an Event/correlation consumer alongside the `sm-workflow` development
+monitoring scenario. See the
+[Textus EAI requirement intake](../journal/2026/10/2026-10-03-textus-eai-workflow-requirements.md).
+This is a future Service Bus adoption case; EAI's first fixed harness does not
+require Phase 93, a network transport or authoritative journal deployment.
+
+### EAI-93: Event and Workflow correlation
+
+Stage Status:
+- Current status: OPEN
+- Owner: CNCF EventBus/EventEngine owner; EAI Event admission and association owner
+- Update rule: Close this consumer boundary with declared routing and authoritative correlation evidence, without changing EAI admission or Workflow progression ownership.
+
+- [ ] Preserve source/event, delivery attempt, pinned Binding, start invocation, Job/Workflow and Continuation correlation as distinct facts; expose authoritative lifecycle facts through the normal journal/query boundary where journaling is selected.
+- [ ] Keep EAI schema/source/Binding admission and sequential duplicate/conflict decisions application-owned. A journal delivery or replay does not by itself authorize another Workflow start.
+- [ ] Route typed completion through the declared authenticated/scoped Operation and native admission; a bus event or worker prose must not bypass result/evidence checks or directly select the next Workflow state.
+- [ ] Distinguish transport delivery, journal persistence, managed Job completion and Workflow business outcome. Preserve commit-before-delivery for authoritative journaling and report incomplete/unknown outcomes explicitly.
+- [ ] Verify scope, redaction and read-only correlation lookup; retain the existing exclusion of automatic recovery and distributed exactly-once claims.

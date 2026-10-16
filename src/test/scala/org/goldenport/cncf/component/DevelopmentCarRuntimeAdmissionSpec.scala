@@ -2,7 +2,6 @@ package org.goldenport.cncf.component
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
-import java.security.MessageDigest
 import java.util.Comparator
 import scala.jdk.CollectionConverters._
 
@@ -242,7 +241,7 @@ final class DevelopmentCarRuntimeAdmissionSpec
       }
     }
 
-    "E11 reject a digest-valid v1 development directory" must _e11_metadata {
+    "E11 reject a v1 development directory" must _e11_metadata {
       "preserve structured recovery without a packaged fallback" in {
         _with_temp_dir { root =>
           Given("Spec: docs/spec/generation-compatibility-contract.md; Rules: R2,R3; Example: E11; a prepared v1 development directory")
@@ -346,7 +345,7 @@ final class DevelopmentCarRuntimeAdmissionSpec
 
     "E15 reject schema-v2 static descriptor evidence" in {
       _with_temp_dir { root =>
-        Given("a digest-valid schema-v2 development descriptor")
+        Given("a prepared schema-v2 development descriptor")
         _prepare_schema2(root)
         Files.writeString(root.resolve("target/scala-3.3.8/classes/sample.class"), "compiled", StandardCharsets.UTF_8)
         _write_manifest(root)
@@ -364,6 +363,62 @@ final class DevelopmentCarRuntimeAdmissionSpec
     }
 
     "resolve canonical prepared static descriptors" which {
+    "E20 reject whitespace-only or NUL-bearing classpath inputs without integrity controls" in {
+      _with_prepared_manifest { root =>
+        Given("a current path-only manifest and its readable declared classpath file")
+        val classpath = root.resolve(DevelopmentCarRuntimeAdmission.RUNTIME_CLASSPATH_IDENTITY)
+        val entry = root.resolve("target/scala-3.3.8/classes").toString
+        Vector(" \n\t ", entry + "\u0000", "\u0000" + entry).foreach { malformed =>
+          When("the classpath contains no usable entries or a NUL-bearing otherwise existing path")
+          Files.writeString(classpath, malformed, StandardCharsets.UTF_8)
+          val result = DevelopmentCarRuntimeAdmission.validate(root)
+          Then("admission returns structured invalid-input recovery without any hash comparison")
+          result.isSuccess shouldBe false
+          result.display should include("runtime-classpath.txt")
+          result.display should include("development-side runtime evidence error")
+        }
+      }
+    }
+
+    "E17 admit current readable path-only producer evidence without integrity claims" in {
+      _with_prepared_manifest { root =>
+        Given("a current path-only development manifest and its declared runtime files")
+        val classpath = root.resolve(DevelopmentCarRuntimeAdmission.RUNTIME_CLASSPATH_IDENTITY)
+        When("the current classpath text changes presentation without changing its valid entries")
+        Files.writeString(classpath, "\n" + Files.readString(classpath) + "\n", StandardCharsets.UTF_8)
+        val result = DevelopmentCarRuntimeAdmission.validate(root)
+        Then("current inputs are admitted without a byte or logical-identity seal")
+        result shouldBe Consequence.success(())
+      }
+    }
+
+    "E18 admit a current independently consistent descriptor without a saved-byte comparison" in {
+      _with_prepared_manifest { root =>
+        Given("a declared canonical descriptor whose identity and ABI agree with the manifest")
+        val descriptor = root.resolve(DevelopmentCarRuntimeAdmission.COMPONENT_DESCRIPTOR_IDENTITY)
+        When("non-authority descriptive metadata is added without preparing another manifest")
+        Files.writeString(descriptor, Files.readString(descriptor).replace("{\"schemaVersion\":3,",
+          "{\"displayName\":\"Current Sample\",\"schemaVersion\":3,"), StandardCharsets.UTF_8)
+        val result = DevelopmentCarRuntimeAdmission.validate(root)
+        Then("canonical identity checks pass using the current readable descriptor")
+        result shouldBe Consequence.success(())
+      }
+    }
+
+    "E19 exclude unrelated generated files from development runtime admission" in {
+      _with_prepared_manifest { root =>
+        Given("a prepared canonical runtime and an unrelated generated-file location")
+        val unrelated = root.resolve("target/unrelated-generated/Unrelated.scala")
+        Files.createDirectories(unrelated.getParent)
+        When("an undeclared unrelated file contains malformed text for every declared JSON input")
+        Files.writeString(unrelated, "not a descriptor, ABI, manifest or classpath", StandardCharsets.UTF_8)
+        val result = DevelopmentCarRuntimeAdmission.validate(root)
+        Then("admission observes only declared evidence and classpath entries, not a recursive file inventory")
+        result shouldBe Consequence.success(())
+        Files.exists(unrelated) shouldBe true
+      }
+    }
+
     "E16 resolve prepared canonical static descriptor evidence" in {
       _with_prepared_manifest { root =>
         Given("a canonical prepared development descriptor")
@@ -427,34 +482,15 @@ final class DevelopmentCarRuntimeAdmissionSpec
       DevelopmentCarRuntimeAdmission.RUNTIME_CLASSPATH_IDENTITY,
       descriptoridentity,
       DevelopmentCarRuntimeAdmission.ABI_MANIFEST_IDENTITY
-    ).map { identity =>
-      val file = root.resolve(identity)
-      val logical =
-        if (identity == DevelopmentCarRuntimeAdmission.RUNTIME_CLASSPATH_IDENTITY)
-          s"project:${root.relativize(root.resolve("target/scala-3.3.8/classes")).toString.replace('\\', '/')}"
-        else
-          ""
-      (identity, _sha256(file), logical)
-    }
-    val entries = evidence.map { case (path, digest, logical) =>
-      val suffix = if (logical.nonEmpty) s"\"logicalSha256\":\"${_sha256(logical.getBytes(StandardCharsets.UTF_8))}\", " else ""
-      s"{${suffix}\"path\":\"$path\",\"sha256\":\"$digest\"}"
-    }.mkString("[", ",", "]")
-    val digest = _sha256(evidence.map { case (path, value, logical) =>
-      s"$path\t$value\t${if (logical.nonEmpty) _sha256(logical.getBytes(StandardCharsets.UTF_8)) else ""}"
-    }.mkString("\n").getBytes(StandardCharsets.UTF_8))
+    )
+    val entries = evidence.map(path => s"{\"path\":\"$path\"}").mkString("[", ",", "]")
     val manifest = root.resolve("target/cncf.d/car-runtime-manifest.json")
     Files.writeString(
       manifest,
-      s"""{"schemaVersion":"$schema","sourceKind":"${DevelopmentCarRuntimeAdmission.SOURCE_KIND}","car":{"name":"$manifestname","version":"0.0.1-SNAPSHOT","component":"$manifestcomponent"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$digest"}}""",
+      s"""{"schemaVersion":"$schema","sourceKind":"${DevelopmentCarRuntimeAdmission.SOURCE_KIND}","car":{"name":"$manifestname","version":"0.0.1-SNAPSHOT","component":"$manifestcomponent"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries}""",
       StandardCharsets.UTF_8
     )
   }
-
-  private def _sha256(path: Path): String = _sha256(Files.readAllBytes(path))
-
-  private def _sha256(bytes: Array[Byte]): String =
-    MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
 
   private val _canonical_component_id = ComponentId("org.example.Sample")
   private val _canonical_artifact_name =

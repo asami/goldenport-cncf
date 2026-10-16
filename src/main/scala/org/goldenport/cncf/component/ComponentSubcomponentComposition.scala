@@ -1,7 +1,6 @@
 package org.goldenport.cncf.component
 
 import java.net.URI
-import java.util.Base64
 import scala.util.control.NonFatal
 import io.circe.{Json, JsonObject}
 import io.circe.jawn.JawnParser
@@ -14,7 +13,7 @@ import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
  * runtime, deployment, activation, operation, MCP, or disclosure capability.
  *
  * @since   Aug. 20, 2026
- * @version Aug. 20, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentSubcomponentComposition(
@@ -61,8 +60,6 @@ final case class ComponentSubcomponentCar(
 
 final case class ComponentSubcomponentArtifact(
   coordinate: String,
-  sha256: String,
-  signature: String,
   repository: String,
   physicalPath: String,
   extensions: Map[String, Json] = Map.empty
@@ -137,7 +134,6 @@ object ComponentSubcomponentCompositionCodec {
   private val _authorization_states = Set("not-granted", "granted")
   private val _integrity_states = Set("verified", "unverified")
   private val _availability_states = Set("available", "unavailable")
-  private val _sha256_pattern = "[0-9a-f]{64}".r
   private val _artifact_coordinate_pattern = "[A-Za-z0-9][A-Za-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._-]*:[A-Za-z0-9][A-Za-z0-9._-]*".r
   private val _source_pattern = "[A-Za-z][A-Za-z0-9+._-]*:[A-Za-z0-9][A-Za-z0-9+._/:=-]*".r
   private val _role_pattern = "[A-Za-z][A-Za-z0-9._-]*".r
@@ -279,17 +275,13 @@ object ComponentSubcomponentCompositionCodec {
     for {
       obj <- _object(json, context)
       coordinate <- _artifact_coordinate(_string(obj, "coordinate", context), s"$context.coordinate")
-      sha256 <- _sha256(_string(obj, "sha256", context), s"$context.sha256")
-      signature <- _signature(_string(obj, "signature", context), s"$context.signature")
       repository <- _repository(_string(obj, "repository", context), s"$context.repository")
       physicalpath <- _safe_path(_string(obj, "physicalPath", context), s"$context.physicalPath")
     } yield ComponentSubcomponentArtifact(
       coordinate = coordinate,
-      sha256 = sha256,
-      signature = signature,
       repository = repository,
       physicalPath = physicalpath,
-      extensions = _extensions(obj, Set("coordinate", "sha256", "signature", "repository", "physicalPath"))
+      extensions = _extensions(obj, Set("coordinate", "repository", "physicalPath"))
     )
 
   private def _provenance(json: Json, context: String): Either[String, ComponentSubcomponentProvenance] =
@@ -454,21 +446,6 @@ object ComponentSubcomponentCompositionCodec {
       Either.cond(_artifact_coordinate_pattern.matches(text), text, s"$context must be a three-part artifact coordinate")
     }
 
-  private def _sha256(value: Either[String, String], context: String): Either[String, String] =
-    value.flatMap { text =>
-      Either.cond(_sha256_pattern.matches(text), text, s"$context must be a lowercase 64-character SHA-256 digest")
-    }
-
-  private def _signature(value: Either[String, String], context: String): Either[String, String] =
-    value.flatMap { text =>
-      try {
-        val decoded = Base64.getDecoder.decode(text)
-        Either.cond(decoded.nonEmpty, text, s"$context must be non-empty Base64 signature material")
-      } catch {
-        case NonFatal(_) => Left(s"$context must be Base64 signature material")
-      }
-    }
-
   private def _repository(value: Either[String, String], context: String): Either[String, String] =
     value.flatMap { text =>
       try {
@@ -595,8 +572,6 @@ object ComponentSubcomponentCompositionCodec {
     _json_object(
       Vector(
         "coordinate" -> Json.fromString(artifact.coordinate),
-        "sha256" -> Json.fromString(artifact.sha256),
-        "signature" -> Json.fromString(artifact.signature),
         "repository" -> Json.fromString(artifact.repository),
         "physicalPath" -> Json.fromString(artifact.physicalPath)
       ),

@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 21, 2026
- * @version Sep. 29, 2026
+ * @version Oct. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkflowInstancePersistenceSpec
@@ -76,12 +76,17 @@ final class WorkflowInstancePersistenceSpec
       "derive only the contiguous next record from its expected revision and sequence" in {
         Given("admitted bindings and a range of explicit active progression references")
         val binding = _take(WorkflowInstancePersistence.bindDefinitionC(_definition()))
-        val property = Prop.forAll(Gen.alphaNumStr.suchThat(_.nonEmpty)) { suffix =>
+        val property = Prop.forAll(Gen.alphaNumStr.suchThat(_.nonEmpty), Gen.choose(2, 16)) { (suffix, count) =>
           val initial = _initial_record(binding, suffix)
-          val appended = initial.appendC(initialRevision, _active_entry(suffix))
+          val appended = (1 to count).foldLeft(Consequence.success(initial): Consequence[InstanceRecord]) { (current, ordinal) =>
+            current.flatMap { record =>
+              record.appendC(record.revision, _active_entry(suffix).copy(
+                sequence = HistorySequence(ordinal.toLong), revision = InstanceRevision(ordinal.toLong)))
+            }
+          }
           appended.toOption.exists { record =>
-            record.revision == InstanceRevision(1L) &&
-              record.history.map(_.sequence) == Vector(HistorySequence(1L)) &&
+            record.revision == InstanceRevision(count.toLong) &&
+              record.history.map(_.sequence) == (1 to count).map(value => HistorySequence(value.toLong)).toVector &&
               record.lifecycle == Lifecycle.Active &&
               record.currentProgression == Some(ProgressionReference(s"progress-$suffix"))
           }
@@ -104,6 +109,7 @@ final class WorkflowInstancePersistenceSpec
         Given("a valid initial record plus stale, illegal, and incomplete persistence inputs")
         val binding = _take(WorkflowInstancePersistence.bindDefinitionC(_definition()))
         val initial = _initial_record(binding)
+        When("public append and record validation consume stale, illegal and incomplete caller values")
         val stale = initial.appendC(InstanceRevision(1L), _active_entry("stale"))
         val illegal = initial.copy(
           lifecycle = Lifecycle.Active,
@@ -122,7 +128,6 @@ final class WorkflowInstancePersistenceSpec
           ))
         ).validateC
 
-        When("the pure validation helpers admit each boundary")
         val diagnostics = Vector(stale, illegal, incomplete).map(_diagnostic)
 
         Then("each rejected fact has a deterministic closed diagnostic code")
@@ -131,6 +136,31 @@ final class WorkflowInstancePersistenceSpec
           DiagnosticCode.IllegalLifecycleProgression,
           DiagnosticCode.IncompleteSuspensionBoundary
         )
+      }
+
+      "reject malformed public current, adjacent null fields, terminal replay and revision overflow" in {
+        Given("a valid initial record, its active successor and caller-owned boundary variants")
+        val binding = _take(WorkflowInstancePersistence.bindDefinitionC(_definition()))
+        val initial = _initial_record(binding)
+        val active = _take(initial.appendC(initialRevision, _active_entry("boundary")))
+        val entry = _active_entry("boundary").copy(sequence = HistorySequence(2L), revision = InstanceRevision(2L))
+        val terminalentry = entry.copy(lifecycle = Lifecycle.Completed, currentProgression = None)
+        val terminal = _take(active.appendC(active.revision, terminalentry))
+        val invalidentries = Vector(null, entry.copy(sequence = null), entry.copy(revision = null),
+          entry.copy(currentProgression = null), entry.copy(derivedCompositeOccurrence = null),
+          entry.copy(committedPredecessor = null), entry.copy(suspension = null), entry.copy(causation = null))
+        When("public append consumes malformed current history and each malformed adjacent entry")
+        val results = Vector(
+          active.copy(history = Vector(null)).appendC(active.revision, entry),
+          active.appendC(null, entry), active.appendC(initialRevision, entry),
+          active.copy(revision = InstanceRevision(Long.MaxValue)).appendC(InstanceRevision(Long.MaxValue), entry),
+          terminal.appendC(terminal.revision, entry.copy(sequence = HistorySequence(3L), revision = InstanceRevision(3L)))) ++
+          invalidentries.map(value => active.appendC(active.revision, value))
+        Then("every invalid public fact returns a typed persistence failure without mutating the retained history")
+        results.foreach(result => _diagnostic(result).code should not be null)
+        results.forall(_.toOption.isEmpty) shouldBe true
+        active.history shouldBe Vector(_active_entry("boundary"))
+        terminal.history shouldBe active.history :+ terminalentry
       }
     }
 
@@ -177,43 +207,17 @@ final class WorkflowInstancePersistenceSpec
       }
     }
 
-    "E6 retain an admitted definition behind immutable binding facts" must _e6 {
-      "translate generated admission failures and reject reflected fact divergence" in {
-        Given("an admitted generated definition and a generated definition with a forged revision")
+    "E6 retain admitted executable definitions" must _e6 {
+      "translate an unsupported execution revision at admission, without reflected tamper proofs" in {
+        Given("an admitted generated definition and an unsupported runtime revision")
         val definition = _definition()
-        val tamperedDefinition = definition.copy(
-          workflow = definition.workflow.copy(revision = WorkflowRevision("forged-revision"))
-        )
-        val binding = _take(WorkflowInstancePersistence.bindDefinitionC(definition))
-
-        When("generated admission and a reflected private binding construction are attempted")
-        val admission = _diagnostic(WorkflowInstancePersistence.bindDefinitionC(tamperedDefinition))
-        val constructor = classOf[DefinitionBinding].getDeclaredConstructors match {
-          case Array(value) => value
-          case values => fail(s"expected one DefinitionBinding constructor but got ${values.length}")
-        }
-        constructor.setAccessible(true)
-        val forged = constructor.newInstance(
-          WorkflowDefinitionIdentity("forged-workflow"),
-          binding.workflowRevision,
-          binding.sourceCorrelation,
-          binding.producerAbiIdentity,
-          binding.workflowAbiIdentity,
-          binding.bootstrapAbiIdentity,
-          binding.producerRevision,
-          binding.fixtureSha256,
-          definition,
-          None,
-          None
-        ).asInstanceOf[DefinitionBinding]
-        val forgedDiagnostic = _diagnostic(forged.validateC)
-        val forgedRecordDiagnostic = _diagnostic(_initial_record(forged).validateC)
-
-        Then("the persistence boundary preserves the generated diagnostic and rejects divergent public facts")
+        val incompatible = definition.copy(
+          workflow = definition.workflow.copy(revision = WorkflowRevision("unsupported-revision")))
+        When("the runtime definition is admitted")
+        val admission = _diagnostic(WorkflowInstancePersistence.bindDefinitionC(incompatible))
+        Then("actual incompatibility preserves its generated diagnostic")
         admission.code shouldBe DiagnosticCode.GeneratedAbiAdmissionRejected
         admission.data("generated-code") shouldBe GeneratedWorkflowAbi.DiagnosticCode.UnsupportedWorkflowRevision.value
-        forgedDiagnostic.code shouldBe DiagnosticCode.InvalidDefinitionIdentity
-        forgedRecordDiagnostic.code shouldBe DiagnosticCode.InvalidDefinitionIdentity
       }
     }
 
@@ -253,7 +257,7 @@ final class WorkflowInstancePersistenceSpec
         val unsupported = WorkflowInstanceAtomicTransitionV1.admitSuspensionC(
           intent.copy(schemaVersion = "unsupported")
         )
-        val noSuspension = WorkflowInstanceAtomicTransitionV1.admitSuspensionC(
+        val nosuspension = WorkflowInstanceAtomicTransitionV1.admitSuspensionC(
           intent.copy(entry = _active_entry("one"))
         )
         val foreign = WorkflowInstanceAtomicTransitionV1.admitSuspensionC(
@@ -270,17 +274,17 @@ final class WorkflowInstancePersistenceSpec
         )
 
         Then("each invalid intent fails before it can be staged")
-        Vector(unsupported, noSuspension, foreign, claimed, stale).forall(_.isFaillure) shouldBe true
+        Vector(unsupported, nosuspension, foreign, claimed, stale).forall(_.isFaillure) shouldBe true
 
         When("the current split-commit UnitOfWork is asked to stage the same suspension")
-        val ordinaryUnitOfWork = new org.goldenport.cncf.unitofwork.UnitOfWork(
+        val ordinaryunitofwork = new org.goldenport.cncf.unitofwork.UnitOfWork(
           org.goldenport.cncf.context.ExecutionContext.create()
         )
-        val staged = ordinaryUnitOfWork.stageAtomicSuspensionC(intent)
+        val staged = ordinaryunitofwork.stageAtomicSuspensionC(intent)
 
         Then("it fails closed before staging any event or publishing a Continuation")
         staged.isFaillure shouldBe true
-        ordinaryUnitOfWork.pendingEvents shouldBe empty
+        ordinaryunitofwork.pendingEvents shouldBe empty
       }
     }
 
@@ -313,46 +317,57 @@ final class WorkflowInstancePersistenceSpec
           Consequence.notImplemented("resume guard fixture is read-only")
       }
       val continuation = _continuation_record("continuation-one").continuation
-      val continuationStore = new ContinuationRuntimePersistence.InMemory
-      val runtime = new PersistentContinuationRuntime(continuationStore)
-      val startUnitOfWork = new org.goldenport.cncf.unitofwork.UnitOfWork(
+      val continuationstore = new ContinuationRuntimePersistence.InMemory
+      val runtime = new PersistentContinuationRuntime(continuationstore)
+      val startunitofwork = new org.goldenport.cncf.unitofwork.UnitOfWork(
         org.goldenport.cncf.context.ExecutionContext.create()
       )
-      runtime.stageSuspensionC(startUnitOfWork, continuation) shouldBe Consequence.unit
-      startUnitOfWork.commit() shouldBe Consequence.unit
-      val claim = _take(new PersistentContinuationRuntime(continuationStore).claimC(continuation.continuationId))
+      runtime.stageSuspensionC(startunitofwork, continuation) shouldBe Consequence.unit
+      startunitofwork.commit() shouldBe Consequence.unit
+      val claim = _take(new PersistentContinuationRuntime(continuationstore).claimC(continuation.continuationId))
       val component = org.goldenport.cncf.component.ComponentId("org.goldenport.cncf.test.WorkflowInstancePersistenceSpec")
       val handle = _take(WorkflowHandle.fromRecordC(component, suspended))
-      val recovered = new PersistentContinuationRuntime(continuationStore)
-      val issuedStore = new IssuedWorkOrderPersistence.InMemory[String]
-      val completionOperation = StateMachineOperationIdentity("WorkflowService", "submitReview")
+      val recovered = new PersistentContinuationRuntime(continuationstore)
+      val issuedstore = new IssuedWorkOrderPersistence.InMemory[String]
+      val completionoperation = StateMachineOperationIdentity("WorkflowService", "submitReview")
       val requirement = ExecutionRequirement(
         Vector(CapabilityRequirement("review")), RiskLevel("standard"), ReasoningLevel.Deep, true
       )
       val presentation = MinimalPresentation("Review change", "Waiting for a reviewer")
-      val failingStore = new IssuedWorkOrderPersistence[String] {
+      val failingstore = new IssuedWorkOrderPersistence[String] {
         def putIfAbsentC(issued: WorkflowInteraction[String, Nothing]): Consequence[WorkflowInteraction[String, Nothing]] =
           Consequence.stateConflict("planned WorkOrder write failure")
         def loadC(identity: org.goldenport.cncf.workflow.ContinuationIdentity): Consequence[Option[WorkflowInteraction[String, Nothing]]] =
           Consequence.success(None)
       }
       When("WorkOrder persistence rejects the first issuance")
-      issueRecoveredWorkOrderC(handle, continuation.continuationId, None, completionOperation,
-        requirement, presentation, recovered, failingStore) shouldBe a[Consequence.Failure[_]]
+      issueRecoveredWorkOrderC(handle, continuation.continuationId, None, completionoperation,
+        requirement, presentation, recovered, failingstore) shouldBe a[Consequence.Failure[_]]
       Then("the claim remains recoverable")
       recovered.recoverClaimC(continuation.continuationId) shouldBe Consequence.success(claim)
-      When("a WorkOrder is issued and then retried with identical or conflicting presentation")
+      Given("Spec: docs/spec/workflow-completion-applicability.md; Rule: R4; Example: E7; a durable recovered claim and original issued meaning")
+      When("a WorkOrder is issued and then retried with different presentation for the same actual target")
       val issued = _take(issueRecoveredWorkOrderC(
-        handle, continuation.continuationId, None, completionOperation,
-        requirement, presentation, recovered, issuedStore
+        handle, continuation.continuationId, None, completionoperation,
+        requirement, presentation, recovered, issuedstore
       ))
-      Then("only the identical issue can be replayed")
-      issueRecoveredWorkOrderC(handle, continuation.continuationId, None, completionOperation,
-        requirement, presentation, recovered, issuedStore) shouldBe Consequence.success(issued)
-      issueRecoveredWorkOrderC(handle, continuation.continuationId, None, completionOperation,
-        requirement, presentation.copy(title = "Different review"), recovered, issuedStore) shouldBe
-        a[Consequence.Failure[_]]
-      val jsonRoot = java.nio.file.Files.createTempDirectory(
+      When("the same actual target retries its saved issue")
+      val retry = issueRecoveredWorkOrderC(handle, continuation.continuationId, None, completionoperation,
+        requirement, presentation, recovered, issuedstore)
+      Then("retry selects the original saved issue without opening or consuming its claim")
+      retry shouldBe Consequence.success(issued)
+      When("the same actual target retries with a different presentation")
+      val changedpresentation = issueRecoveredWorkOrderC(handle, continuation.continuationId, None, completionoperation,
+        requirement, presentation.copy(title = "Different review"), recovered, issuedstore)
+      Then("the original saved issue is selected despite the descriptive change")
+      changedpresentation shouldBe Consequence.success(issued)
+      When("the saved issue is offered with a foreign completion Operation")
+      val foreigncompletion = issueRecoveredWorkOrderC(handle, continuation.continuationId, None,
+        completionoperation.copy(operation = "foreignCompletion"), requirement, presentation, recovered, issuedstore)
+      Then("the foreign completion is refused")
+      foreigncompletion shouldBe a[Consequence.Failure[_]]
+      Given("a local JSON adapter for the saved WorkOrder meaning")
+      val jsonroot = java.nio.file.Files.createTempDirectory(
         java.nio.file.Files.createDirectories(java.nio.file.Paths.get("target")), "issued-workorder-"
       )
       val codec = new WorkflowResultJsonV1.PayloadCodec[String] {
@@ -361,16 +376,25 @@ final class WorkflowInstancePersistenceSpec
         def decode(value: io.circe.Json): Either[String, String] =
           value.asString.toRight("expected review context string")
       }
-      val jsonStore = new IssuedWorkOrderPersistence.LocalJson[String](jsonRoot, codec)
-      jsonStore.putIfAbsentC(issued) shouldBe Consequence.success(issued)
+      val jsonstore = new IssuedWorkOrderPersistence.LocalJson[String](jsonroot, codec)
+      When("the original issue is saved through the local JSON adapter")
+      val firstwrite = jsonstore.putIfAbsentC(issued)
+      Then("the original issue is retained")
+      firstwrite shouldBe Consequence.success(issued)
       When("the local WorkOrder adapter is reopened")
-      val reopenedJsonStore = new IssuedWorkOrderPersistence.LocalJson[String](jsonRoot, codec)
-      Then("the issued identity survives reopening and a conflicting issue is rejected")
-      reopenedJsonStore.loadC(continuation.continuationId) shouldBe Consequence.success(Some(issued))
-      reopenedJsonStore.putIfAbsentC(issued) shouldBe Consequence.success(issued)
-      issueRecoveredWorkOrderC(handle, continuation.continuationId, None, completionOperation,
-        requirement, presentation.copy(title = "Different review"), recovered, reopenedJsonStore) shouldBe
-        a[Consequence.Failure[_]]
+      val reopenedjsonstore = new IssuedWorkOrderPersistence.LocalJson[String](jsonroot, codec)
+      Then("saved meaning survives physical JSON-store reopening without a presentation certificate")
+      reopenedjsonstore.loadC(continuation.continuationId) shouldBe Consequence.success(Some(issued))
+      When("the reopened adapter receives the original issue again")
+      val repeatedwrite = reopenedjsonstore.putIfAbsentC(issued)
+      Then("the retained issue remains the original saved meaning")
+      repeatedwrite shouldBe Consequence.success(issued)
+      When("issuance is retried through the reopened adapter with a descriptive change")
+      val reopenedretry = issueRecoveredWorkOrderC(handle, continuation.continuationId, None, completionoperation,
+        requirement, presentation.copy(title = "Different review"), recovered, reopenedjsonstore)
+      Then("the saved original issue is selected without consuming the claim")
+      reopenedretry shouldBe Consequence.success(issued)
+      recovered.recoverClaimC(continuation.continuationId) shouldBe Consequence.success(claim)
       val submitted = ContinuationResult(
         handle, continuation.runId, continuation.continuationId,
         continuation.expectedRevision, continuation.context.snapshot,
@@ -403,14 +427,17 @@ final class WorkflowInstancePersistenceSpec
       resumePersistedWorkOrderC(component, submitted, new IssuedWorkOrderPersistence.InMemory[String], recovered,
         instances, _same_store_configuration, fresh) shouldBe a[Consequence.Failure[_]]
       opened shouldBe 0
-      resumePersistedWorkOrderC(component, submitted, reopenedJsonStore, recovered, instances, _same_store_configuration, fresh) shouldBe
+      resumePersistedWorkOrderC(component, submitted, reopenedjsonstore, recovered, instances, _same_store_configuration, fresh) shouldBe
         Consequence.success(ContinuationRuntime.Resume(continuation, StateMachineOperationResult(
           StateMachineResultTypeReference("review.result.v1"), ContextReference("review-result", "1")
         )))
       Then("resume opens one fresh UnitOfWork and cannot complete the same claim twice")
       opened shouldBe 1
-      resumePersistedWorkOrderC(component, submitted, issuedStore, new PersistentContinuationRuntime(continuationStore),
-        instances, _same_store_configuration, fresh) shouldBe a[Consequence.Failure[_]]
+      When("the completed claim receives the same saved result again")
+      val replay = resumePersistedWorkOrderC(component, submitted, issuedstore, new PersistentContinuationRuntime(continuationstore),
+        instances, _same_store_configuration, fresh)
+      Then("replay refuses without opening another UnitOfWork")
+      replay shouldBe a[Consequence.Failure[_]]
       opened shouldBe 1
     }
 
@@ -423,21 +450,21 @@ final class WorkflowInstancePersistenceSpec
         classOf[WorkflowInstancePersistenceSpec].getResourceAsStream(
           "/workflow/candidate-admission-producer-abi.json"), "UTF-8"
       )
-      val sourceArtifact = try _take(CandidateAdmissionProducerAbi.parseC(source.mkString)) finally source.close()
-      val artifact = sourceArtifact
-      val mismatchedArtifact = sourceArtifact.copy(models = sourceArtifact.models.map(producer =>
+      val sourceartifact = try _take(CandidateAdmissionProducerAbi.parseC(source.mkString)) finally source.close()
+      val artifact = sourceartifact
+      val mismatchedartifact = sourceartifact.copy(models = sourceartifact.models.map(producer =>
         producer.copy(model = producer.model.copy(workflow = producer.model.workflow.map(_.copy(
           identity = CandidateAdmissionProducerAbi.WorkflowIdentity("WorkflowProducer"),
           version = CandidateAdmissionProducerAbi.WorkflowVersion("workflow-producer-v1")
         ))))
       ))
-      val workflowSource = scala.io.Source.fromInputStream(
+      val workflowsource = scala.io.Source.fromInputStream(
         classOf[WorkflowInstancePersistenceSpec].getResourceAsStream(
           "/workflow/candidate-admission-workflow-abi.json"), "UTF-8"
       )
-      val workflowJson = try workflowSource.mkString.stripSuffix("\n") finally workflowSource.close()
+      val workflowjson = try workflowsource.mkString.stripSuffix("\n") finally workflowsource.close()
       val candidate = _take(CandidateWorkflowAbi.parseC(
-        workflowJson, sourceArtifact, "modeler/candidate-admission-workflow.cml"))
+        workflowjson, sourceartifact, "modeler/candidate-admission-workflow.cml"))
       val binding = _take(WorkflowInstancePersistence.bindCandidateDefinitionC(candidate))
       val initial = _initial_record(binding)
       val boundary = SuspensionBoundary(
@@ -453,7 +480,7 @@ final class WorkflowInstancePersistenceSpec
         def load(configuration: Configuration, identity: InstanceIdentity): Consequence[Option[InstanceRecord]] =
           Consequence.success(stored.filter(_.identity == identity))
         def append(configuration: Configuration, identity: InstanceIdentity,
-          expectedRevision: InstanceRevision, entry: HistoryEntry): Consequence[InstanceRecord] =
+          expectedRevision: InstanceRevision, entry: HistoryEntry): Consequence[InstanceRecord] = {
           stored match {
             case Some(current) if current.identity == identity =>
               current.appendC(expectedRevision, entry).map { next =>
@@ -462,6 +489,7 @@ final class WorkflowInstancePersistenceSpec
               }
             case _ => Consequence.stateConflict("Judgment instance is unavailable")
           }
+        }
       }
       val required = StateMachineRequiredOperation(
         StateMachineRequiredOperationIdentity("capture-payment-capability"), "judge-payment",
@@ -478,11 +506,11 @@ final class WorkflowInstancePersistenceSpec
         StateMachineRevision("1"), required,
         ContextBundle("payment", Vector.empty, Vector.empty, ContextSnapshot("workflow-v1"))
       )
-      val continuationRoot = java.nio.file.Files.createTempDirectory(
+      val continuationroot = java.nio.file.Files.createTempDirectory(
         java.nio.file.Files.createDirectories(java.nio.file.Paths.get("target")), "candidate-continuation-"
       )
-      val continuationStore = new ContinuationRuntimePersistence.LocalJson(continuationRoot)
-      val runtime = new PersistentContinuationRuntime(continuationStore)
+      val continuationstore = new ContinuationRuntimePersistence.LocalJson(continuationroot)
+      val runtime = new PersistentContinuationRuntime(continuationstore)
       val provider = new StateMachineProgramProvider {
         val identity = ProviderIdentity("payment-judgment-provider")
         def program(request: ProviderExecutionRequest): ExecUowM[ActionExecution] = {
@@ -497,57 +525,61 @@ final class WorkflowInstancePersistenceSpec
       val resolver = _take(StateMachineProviderResolver.create(
         Vector(StateMachineProviderBinding(required.identity, provider.identity)), Vector(provider)
       ))
-      val componentRuntime = new Component() {}
-      componentRuntime.withStateMachineProviderResolver(resolver)
+      val componentruntime = new Component() {}
+      componentruntime.withStateMachineProviderResolver(resolver)
       val root = ExecutionContext.create()
       val context = root.withScope(Component.Context(
-        "payment-judgment", root.scope, componentRuntime, ComponentOrigin.Embed
+        "payment-judgment", root.scope, componentruntime, ComponentOrigin.Embed
       ))
-      val initialUnitOfWork = new UnitOfWork(context)
+      val initialunitofwork = new UnitOfWork(context)
       val action = new StateMachineRequiredOperationAction[String, String]((_, _) =>
         ProviderExecutionRequest(continuation.runId, required, None, continuation.context)
       )
       val plan = ExecutionPlan[String, String](Vector.empty, Vector(action), Vector.empty)
       When("the Required SPI Action is interpreted and its WorkflowInstance boundary is appended before publication")
-      continuationStore.loadC(continuation.continuationId) shouldBe Consequence.success(None)
+      continuationstore.loadC(continuation.continuationId) shouldBe Consequence.success(None)
       ExecutionPlanExecutor.executeCommittingAfterC(
-        plan, "AwaitPayment", "requestJudgment", initialUnitOfWork, runtime,
+        plan, "AwaitPayment", "requestJudgment", initialunitofwork, runtime,
         published => {
           published shouldBe continuation
-          continuationStore.loadC(continuation.continuationId) shouldBe Consequence.success(None)
+          continuationstore.loadC(continuation.continuationId) shouldBe Consequence.success(None)
           instances.append(_same_store_configuration, initial.identity, initialRevision,
             _active_entry("one").copy(suspension = Some(boundary))).map(_ => ())
         }
       ) shouldBe Consequence.success(Some(continuation))
-      Then("the committed suspension can be claimed through a reopened Continuation store")
+      Then("the committed suspension is retained")
       stored shouldBe Some(suspended)
-      val claim = _take(new PersistentContinuationRuntime(
-        new ContinuationRuntimePersistence.LocalJson(continuationRoot)
-      ).claimC(continuation.continuationId))
+      When("the reopened Continuation store claims the committed suspension")
+      val claimed = new PersistentContinuationRuntime(
+        new ContinuationRuntimePersistence.LocalJson(continuationroot)
+      ).claimC(continuation.continuationId)
+      Then("the reopened store supplies the actual recovered claim")
+      val claim = _take(claimed)
+      Given("the actual recovered claim and its WorkflowInstance Handle")
       val component = ComponentId("org.goldenport.cncf.test.JudgmentWorkOrder")
       val handle = _take(WorkflowHandle.fromRecordC(component, suspended))
-      val issuedRoot = java.nio.file.Files.createTempDirectory(
+      val issuedroot = java.nio.file.Files.createTempDirectory(
         java.nio.file.Files.createDirectories(java.nio.file.Paths.get("target")), "candidate-workorder-"
       )
-      val issuedCodec = new WorkflowResultJsonV1.PayloadCodec[String] {
+      val issuedcodec = new WorkflowResultJsonV1.PayloadCodec[String] {
         val typeIdentity = "payment.context.v1"
         def encode(value: String): io.circe.Json = io.circe.Json.fromString(value)
         def decode(value: io.circe.Json): Either[String, String] =
           value.asString.toRight("expected payment context string")
       }
-      val issuedWriter = new IssuedWorkOrderPersistence.LocalJson[String](issuedRoot, issuedCodec)
+      val issuedwriter = new IssuedWorkOrderPersistence.LocalJson[String](issuedroot, issuedcodec)
       When("the recovered claim issues a WorkOrder through local persistence")
       val issued = _take(issueRecoveredWorkOrderC(
         handle, claim.continuation.continuationId, None,
         StateMachineOperationIdentity("OrderService", "submitPaymentReview"),
         ExecutionRequirement(Vector.empty, RiskLevel("standard"), ReasoningLevel.Standard, true),
         MinimalPresentation("Review payment", "Waiting for judgment"),
-        new PersistentContinuationRuntime(new ContinuationRuntimePersistence.LocalJson(continuationRoot)),
-        issuedWriter
+        new PersistentContinuationRuntime(new ContinuationRuntimePersistence.LocalJson(continuationroot)),
+        issuedwriter
       ))
-      val issuedStore = new IssuedWorkOrderPersistence.LocalJson[String](issuedRoot, issuedCodec)
+      val issuedstore = new IssuedWorkOrderPersistence.LocalJson[String](issuedroot, issuedcodec)
       Then("the issued WorkOrder is available through a reopened local adapter")
-      issuedStore.loadC(continuation.continuationId) shouldBe Consequence.success(Some(issued))
+      issuedstore.loadC(continuation.continuationId) shouldBe Consequence.success(Some(issued))
       val result = JudgmentResult(
         JudgmentActionIdentity("judge-payment"), AlternativeIdentity("approve"),
         Rationale("decision-rationale"), Evidence("payment-evidence"),
@@ -557,13 +589,13 @@ final class WorkflowInstancePersistenceSpec
         CandidateAdmissionProducerAbi.acceptedTypedJudgmentResultSchemaVersion,
         result, TypeIdentity("PaymentResult"), ContextReference("payment-result", "1")
       )
-      val resumedRuntime = new PersistentContinuationRuntime(
-        new ContinuationRuntimePersistence.LocalJson(continuationRoot)
+      val resumedruntime = new PersistentContinuationRuntime(
+        new ContinuationRuntimePersistence.LocalJson(continuationroot)
       )
-      val adapterComponent = new Component() with ContinuationRuntimeSource {
-        override def continuationRuntimeOption: Option[ContinuationRuntime] = Some(resumedRuntime)
+      val adaptercomponent = new Component() with ContinuationRuntimeSource {
+        override def continuationRuntimeOption: Option[ContinuationRuntime] = Some(resumedruntime)
       }
-      adapterComponent.initialize(ComponentInit(
+      adaptercomponent.initialize(ComponentInit(
         subsystem = TestComponentFactory.emptySubsystem("candidate_judgment_adapter"),
         core = Component.Core.create(
           component.name, component, ComponentInstanceId.default(component), Protocol.empty
@@ -571,8 +603,8 @@ final class WorkflowInstancePersistenceSpec
         origin = ComponentOrigin.Builtin
       ))
       val factory = new ComponentFactory
-      val bootstrapped = _take(factory.bootstrapC(adapterComponent))
-      bootstrapped.continuationRuntime shouldBe resumedRuntime
+      val bootstrapped = _take(factory.bootstrapC(adaptercomponent))
+      bootstrapped.continuationRuntime shouldBe resumedruntime
       var adapted = 0
       val adapter = new ContinuationSpiAdapter[String, TypedJudgmentResultV1, TypedJudgmentResultV1] {
         def admitC(
@@ -592,7 +624,7 @@ final class WorkflowInstancePersistenceSpec
           }
         }
       }
-      val bound = _take(factory.bindContinuationSpiAdapterC(bootstrapped, issuedStore, adapter))
+      val bound = _take(factory.bindContinuationSpiAdapterC(bootstrapped, issuedstore, adapter))
       When("the injected external adapter admits a typed Judgment submission")
       val submitted = _take(bound.admitC(continuation.continuationId, typed))
       Then("the adapter is invoked exactly once")
@@ -603,7 +635,7 @@ final class WorkflowInstancePersistenceSpec
       val routes = Vector(CandidateAdmissionRouter.Route(
         JudgmentActionIdentity("judge-payment"), AlternativeIdentity("approve"), target
       ))
-      val closingAction = new ResolvedAction[InstanceRecord, ContinuationResult[TypedJudgmentResultV1]] {
+      val closingaction = new ResolvedAction[InstanceRecord, ContinuationResult[TypedJudgmentResultV1]] {
         def program(
           state: InstanceRecord,
           event: ContinuationResult[TypedJudgmentResultV1]
@@ -614,31 +646,41 @@ final class WorkflowInstancePersistenceSpec
             ))
           )
       }
-      val closingSelector = _take(CandidateAdmissionClosingProgram.bindC(
-        artifact, routes, issuedStore,
-        Vector(CandidateAdmissionClosingProgram.Binding(target, closingAction))
+      val closingselector = _take(CandidateAdmissionClosingProgram.bindC(
+        artifact, routes, issuedstore,
+        Vector(CandidateAdmissionClosingProgram.Binding(target, closingaction))
       ))
       When("the admitted Judgment result is offered to the StateMachine closing selector")
-      val selectedClosing = _take(closingSelector.selectC(submitted, suspended))
+      val selectedclosing = _take(closingselector.selectC(submitted, suspended))
       Then("the declared route selects a typed closing program and next WorkflowInstance record")
-      selectedClosing.nextInstance shouldBe Some(_take(CandidateWorkflowProgression.nextC(
+      selectedclosing.nextInstance shouldBe Some(_take(CandidateWorkflowProgression.nextC(
         suspended, submitted, target
       )))
-      new org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter(
+      When("the selected closing program is interpreted in an active UnitOfWork")
+      val interpreted = new org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter(
         new UnitOfWork(ExecutionContext.create())
-      ).evaluateInActiveUnitOfWorkC(selectedClosing.program) shouldBe Consequence.success(
+      ).evaluateInActiveUnitOfWorkC(selectedclosing.program)
+      Then("interpretation returns the declared completed result")
+      interpreted shouldBe Consequence.success(
         ActionExecution.Completed(StateMachineOperationResult(
           StateMachineResultTypeReference("PaymentResult"), submitted.resultReference
         ))
       )
-      closingSelector.selectC(submitted.copy(result = TypedValue("PaymentResult", typed.copy(
+      When("the closing selector receives an unknown alternative")
+      val unknownclosing = closingselector.selectC(submitted.copy(result = TypedValue("PaymentResult", typed.copy(
         result = result.copy(selectedAlternative = AlternativeIdentity("unknown"))
-      ))), suspended) shouldBe a[Consequence.Failure[_]]
-      val missingClosing = _take(CandidateAdmissionClosingProgram.bindC(
-        artifact, routes, issuedStore,
-        Vector(CandidateAdmissionClosingProgram.Binding(CmlStateMachineTransitionTarget.Final, closingAction))
+      ))), suspended)
+      Then("the unknown alternative is refused")
+      unknownclosing shouldBe a[Consequence.Failure[_]]
+      Given("a selector without the declared closing target")
+      val missingclosing = _take(CandidateAdmissionClosingProgram.bindC(
+        artifact, routes, issuedstore,
+        Vector(CandidateAdmissionClosingProgram.Binding(CmlStateMachineTransitionTarget.Final, closingaction))
       ))
-      missingClosing.selectC(submitted, suspended) shouldBe a[Consequence.Failure[_]]
+      When("the actual submission is offered to the selector without its target")
+      val missingselection = missingclosing.selectC(submitted, suspended)
+      Then("the missing closing selection is refused")
+      missingselection shouldBe a[Consequence.Failure[_]]
       var opened = 0
       val fresh = () => {
         opened += 1
@@ -646,8 +688,8 @@ final class WorkflowInstancePersistenceSpec
       }
 
       When("a foreign fixture, unknown alternative, or undeclared target is submitted")
-      CandidateAdmissionRouter.resumeAndAdvancePersistedSubmittedC(component, mismatchedArtifact, submitted,
-        routes, issuedStore, resumedRuntime, instances, _same_store_configuration, fresh) shouldBe
+      CandidateAdmissionRouter.resumeAndAdvancePersistedSubmittedC(component, mismatchedartifact, submitted,
+        routes, issuedstore, resumedruntime, instances, _same_store_configuration, fresh) shouldBe
         a[Consequence.Failure[_]]
       opened shouldBe 0
 
@@ -655,54 +697,58 @@ final class WorkflowInstancePersistenceSpec
         result = TypedValue("PaymentResult", typed.copy(result = result.copy(
           selectedAlternative = AlternativeIdentity("unknown")
         )))
-      ), routes, issuedStore, resumedRuntime, instances, _same_store_configuration, fresh) shouldBe
+      ), routes, issuedstore, resumedruntime, instances, _same_store_configuration, fresh) shouldBe
         a[Consequence.Failure[_]]
       opened shouldBe 0
-      resumedRuntime.recoverClaimC(continuation.continuationId) shouldBe Consequence.success(claim)
+      resumedruntime.recoverClaimC(continuation.continuationId) shouldBe Consequence.success(claim)
 
-      val undeclaredTarget = CmlStateMachineTransitionTarget.State(CmlStateMachineStateIdentity(
+      val undeclaredtarget = CmlStateMachineTransitionTarget.State(CmlStateMachineStateIdentity(
         CmlStateMachineIdentity("OrderProgress"), CmlStateMachineStatePath(Vector("Undeclared"))
       ))
       CandidateAdmissionRouter.resumeAndAdvancePersistedSubmittedC(component, artifact, submitted,
-        routes.map(_.copy(target = undeclaredTarget)), issuedStore, resumedRuntime,
+        routes.map(_.copy(target = undeclaredtarget)), issuedstore, resumedruntime,
         instances, _same_store_configuration, fresh) shouldBe a[Consequence.Failure[_]]
       Then("each invalid submission leaves the suspended record and claim intact")
       opened shouldBe 0
       stored shouldBe Some(suspended)
-      resumedRuntime.recoverClaimC(continuation.continuationId) shouldBe Consequence.success(claim)
+      resumedruntime.recoverClaimC(continuation.continuationId) shouldBe Consequence.success(claim)
 
-      val expectedNext = _take(CandidateWorkflowProgression.nextC(suspended, submitted, target))
+      val expectednext = _take(CandidateWorkflowProgression.nextC(suspended, submitted, target))
       When("the declared route resumes the Judgment Action in a fresh UnitOfWork")
       CandidateAdmissionRouter.resumeAndAdvancePersistedSubmittedC(component, artifact, submitted, routes,
-        issuedStore, resumedRuntime, instances, _same_store_configuration, fresh) shouldBe
+        issuedstore, resumedruntime, instances, _same_store_configuration, fresh) shouldBe
         Consequence.success(CandidateAdmissionRouter.AdvancedResume(
           ContinuationRuntime.Resume(continuation, StateMachineOperationResult(
             StateMachineResultTypeReference("PaymentResult"), typed.payload
-          )), target, expectedNext
+          )), target, expectednext
         ))
       Then("the next revision is persisted once and duplicate external execution is rejected")
       opened shouldBe 1
-      stored shouldBe Some(expectedNext)
+      stored shouldBe Some(expectednext)
       instances.load(_same_store_configuration, suspended.identity) shouldBe
-        Consequence.success(Some(expectedNext))
-      expectedNext.suspension shouldBe None
-      expectedNext.revision shouldBe InstanceRevision(2L)
-      expectedNext.currentProgression shouldBe Some(ProgressionReference(
+        Consequence.success(Some(expectednext))
+      expectednext.suspension shouldBe None
+      expectednext.revision shouldBe InstanceRevision(2L)
+      expectednext.currentProgression shouldBe Some(ProgressionReference(
         "{\"schemaVersion\":\"cncf.candidate-workflow-progression.v1\",\"machine\":\"OrderProgress\",\"path\":[\"Complete\"]}"
       ))
-      CandidateAdmissionRouter.resumeAndAdvancePersistedSubmittedC(component, artifact, submitted, routes,
-        issuedStore, new PersistentContinuationRuntime(
-          new ContinuationRuntimePersistence.LocalJson(continuationRoot)
+      When("native replay is offered and the completed issue is separately translated as retained data")
+      val replay = CandidateAdmissionRouter.resumeAndAdvancePersistedSubmittedC(component, artifact, submitted, routes,
+        issuedstore, new PersistentContinuationRuntime(
+          new ContinuationRuntimePersistence.LocalJson(continuationroot)
         ), instances,
-        _same_store_configuration, fresh) shouldBe a[Consequence.Failure[_]]
-      bound.admitC(continuation.continuationId, typed) shouldBe a[Consequence.Failure[_]]
-      adapted shouldBe 1
+        _same_store_configuration, fresh)
+      val translated = bound.admitC(continuation.continuationId, typed)
+      val completedstatus = new ContinuationRuntimePersistence.LocalJson(continuationroot)
+        .loadC(continuation.continuationId).toOption.flatten.map(_.status)
+      Then("conversion returns the original meaning without a new transaction, while actual native replay is refused")
+      replay shouldBe a[Consequence.Failure[_]]
+      translated shouldBe Consequence.success(submitted)
+      adapted shouldBe 2
       opened shouldBe 1
-      stored shouldBe Some(expectedNext)
-      issuedStore.loadC(continuation.continuationId) shouldBe Consequence.success(Some(issued))
-      new ContinuationRuntimePersistence.LocalJson(continuationRoot)
-        .loadC(continuation.continuationId).toOption.flatten.map(_.status) shouldBe
-        Some(ContinuationRuntimePersistence.Status.Completed)
+      stored shouldBe Some(expectednext)
+      issuedstore.loadC(continuation.continuationId) shouldBe Consequence.success(Some(issued))
+      completedstatus shouldBe Some(ContinuationRuntimePersistence.Status.Completed)
     }
   }
 
@@ -872,7 +918,7 @@ final class WorkflowInstancePersistenceSpec
   private def _take[A](result: Consequence[A]): A =
     result.getOrElse(fail(result.display))
 
-  private def _diagnostic[A](result: Consequence[A]): Diagnostic =
+  private def _diagnostic[A](result: Consequence[A]): Diagnostic = {
     result match {
       case Consequence.Failure(conclusion) =>
         conclusion.getException match {
@@ -882,4 +928,5 @@ final class WorkflowInstancePersistenceSpec
       case other =>
         fail(s"expected workflow instance persistence failure but got $other")
     }
+  }
 }

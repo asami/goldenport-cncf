@@ -13,7 +13,7 @@ import scala.concurrent.{Await, ExecutionContext => ScalaExecutionContext, Futur
 
 /*
  * @since   Jul. 28, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 16, 2026
  */
 final class Phase51Cv03BuildIntegrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private implicit val _execution_context: ScalaExecutionContext = ScalaExecutionContext.global
@@ -314,8 +314,9 @@ final class Phase51Cv03BuildIntegrationSpec extends AnyWordSpec with Matchers wi
   }
 
   private def _with_temp_dir[A](prefix: String)(body: Path => A): A = {
-    val work = Files.createDirectories(Path.of("target/phase51-cv03-build-integration-spec/work"))
-    val directory = Files.createTempDirectory(work, prefix)
+    val workroot = Path.of("target/phase51-cv03-build-integration-spec/work").toAbsolutePath.normalize()
+    Files.createDirectories(workroot)
+    val directory = Files.createTempDirectory(workroot, prefix)
     try body(directory)
     finally {
       val stream = Files.walk(directory)

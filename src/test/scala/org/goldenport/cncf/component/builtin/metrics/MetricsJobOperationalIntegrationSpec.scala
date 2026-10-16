@@ -25,9 +25,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 3, 2026
- * @version Oct. 3, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class MetricsJobOperationalIntegrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "E11 MC1 canonical runtime metrics Actions" must _scenario("E11", "R1,R4,R6") {
     "consume the actual subsystem JobEngine and preserve the original metrics scopes" in {

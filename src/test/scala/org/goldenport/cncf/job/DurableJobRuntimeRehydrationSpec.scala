@@ -21,9 +21,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * startup recovery has canonically admitted and classified one durable record.
  *
  * @since   Sep.  9, 2026
- * @version Oct.  3, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class DurableJobRuntimeRehydrationSpec
     extends AnyWordSpec
     with Matchers

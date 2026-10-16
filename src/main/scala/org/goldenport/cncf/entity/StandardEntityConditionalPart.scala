@@ -49,7 +49,7 @@ import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Sep. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 private[entity] trait StandardEntityConditionalPart extends EntityStore { self: StandardEntityStore =>
@@ -270,6 +270,8 @@ private[entity] trait StandardEntityConditionalPart extends EntityStore { self: 
     effects: Vector[EntityVersionedSideEffect]
   ): Vector[EntityVersionedSideEffect] =
     effects.map {
+      case create: EntityVersionedSideEffect.Create =>
+        create.copy(record = _conditional_storage_record(create.record))
       case save: EntityVersionedSideEffect.Save =>
         save.copy(record = _conditional_storage_record(save.record))
       case delete: EntityVersionedSideEffect.Delete =>

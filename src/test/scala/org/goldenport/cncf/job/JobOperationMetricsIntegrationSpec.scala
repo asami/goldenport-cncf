@@ -15,9 +15,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 3, 2026
- * @version Oct. 3, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobOperationMetricsIntegrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "E4 PN1 native overload accounting" must _scenario("E4", "R1,R3,R4") {
     "count two public submissions once and preserve actual Nil results and facts" in {

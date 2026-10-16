@@ -9,9 +9,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 3, 2026
- * @version Oct. 3, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class DurableJobStoreOperationalMetricsSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import DurableJobOperationalMetricsFixtures.*
 

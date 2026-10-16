@@ -13,9 +13,11 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May.  4, 2026
- * @version May. 11, 2026
+ *  version May. 11, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobRetryStateTransitionSpec
   extends AnyWordSpec
   with Matchers

@@ -22,8 +22,8 @@ unsupported coordinates, unproven or incompatible pairs, source contradiction,
 and development/release lifecycle admission. CV-03 owns resolving and wiring
 explicit inputs at the actual generation invocation, including rejecting absent
 or contradictory invocation sources. CV-04 owns runtime descriptor
-path/schema/runtime/exact-target and predefined Result validation. CV-05 owns
-current generation metadata and output-path inventory validation.
+path/target/schema and catalog validation. CV-05 owns metadata and required
+source/output identity and access validation.
 
 CV-06A adds a CAR package-gate authority boundary. The unmerged
 `project.yaml` metadata owns `build.cozyVersion`, the unique CNCF compile
@@ -51,120 +51,136 @@ range. Publication evaluates the decision before repository writes and
 projects catalog runtime metadata from the accepted contract. Only packaging
 adds resolved-JAR identity evidence.
 
-CV-06C1 packages an existing
-`target/cozy/generation-provenance.json` as the top-level CAR entry
-`generation-provenance.json`. Cozy reruns its authoritative source-readability,
-declared-input, and project-relative generated-artifact inventory validation and
-requires the recorded CNCF target and Cozy generator to match the accepted CAR
-project contract before writing the archive. The packaged bytes remain
-build-time metadata. Cozy owns parsing and validating the current generation
-metadata and its path inventory before packaging.
-Non-generated and legacy CAR sources may omit them. The generic
-`src/main/car` path cannot provide this reserved entry.
+CV-06C1 validates known exact versions, source identity/readability and actual
+generated Scala paths for selected `target/cozy/generation-provenance.json`,
+then packages that actual path directly as top-level `generation-provenance.json`.
+Direct v1 and aggregate v2 are supported. Metadata remains build-time data;
+nongenerated/legacy CAR sources may omit it, and generic `src/main/car` cannot
+provide the reserved entry. No unchanged-transit snapshot is required.
 
-sbt-cozy installs generated Scala into the owning project's managed-source
-target and delegates final evidence rebinding back to Cozy. Cozy validates the
-isolated delegated manifest/output, excludes the disposable delegate work tree
-while computing final project-relative artifact evidence, and atomically
-publishes the rebound manifest. sbt-cozy removes delegate work only after this
-bridge action succeeds. Incremental generation checks the final manifest
-alongside model metadata. Because `cozy.generation-provenance.v1` carries one
-CML source identity, multiple delegated manifests fail without arbitrary
-selection.
+sbt-cozy installs managed Scala and asks Cozy to validate the selected delegated
+v1 pairs and write the final v2 source/path aggregate. Disposable delegate work
+is excluded from installed output. Versions, canonical identities, actual access,
+unique claims and complete path union remain required. Delegate work is removed
+after bridge success, and incremental generation uses the final metadata.
 
-CV-06C2 separately owns runtime activation. CNCF must admit the CAR from its
-runtime range, ABI, and archive-integrity evidence without loading Cozy or
-using generation compatibility as a runtime dependency.
+CV-06C2 separately owns runtime activation. CNCF admits the CAR from its
+canonical coordinate, supported ABI and runtime range without loading Cozy or
+using generation compatibility/provenance as a runtime dependency.
 
-Cozy materializes that CNCF-owned evidence as the top-level
-`car-runtime-manifest.json` document with schema
-`cncf.car-runtime-manifest.v1`. The document records the CAR
-name/version/component coordinate, the accepted
-`packaging.car.runtime.cncf` minimum, optional maximum, excluded and tested
-versions, and a sorted SHA-256 inventory of every other regular archive entry.
-The manifest cannot originate from `src/main/car`; Cozy derives it only after
-the final archive staging tree, including placeholder files, is complete.
+Cozy writes top-level `car-runtime-manifest.json` with unchanged schema
+`cncf.car-runtime-manifest.v1` after staging the selected package. It records
+the canonical CAR artifact name/version/component and accepted CNCF minimum,
+optional maximum, excluded and tested versions. The reserved runtime manifest
+cannot originate from `src/main/car`.
 
-For a packaged `.car`, CNCF validates the manifest coordinate and supported
-schema, admits its own executing version against minimum/maximum/excluded,
-requires a supported `cozy.car.abi-manifest.v1` sidecar whose CAR coordinate
-and exported component match the descriptor, and verifies the exact file set
-and every digest before exposing the extracted component to discovery or
-classloading. `tested` remains evidence of verified versions rather than an
-allowlist; versions inside the declared range remain admissible unless
-excluded. The CAR-style directory path remains a development override and does
-not claim packaged-archive integrity. Generation provenance is just another
-opaque integrity-protected entry: CNCF does not parse it or link Cozy classes.
+For a packaged or expanded canonical CAR, CNCF validates the supported runtime
+schema and descriptor/release coordinate, admits its executing version against
+minimum/maximum/excluded, and requires ABI format `cozy.car.abi-manifest.v2`,
+matching canonical component namespace/id/version, ABI version `1` and an
+export of the component before discovery or classloading. Tested versions are
+nonempty evidence rather than an allowlist. Existing extraction owns actual
+main JAR and ZIP containment/duplicate rules. Required JSON regular-file, read,
+format and semantic failures remain meaningful. Provenance is opaque to CNCF;
+Cozy validates required packaged provenance and selected project inputs before
+repository writes and publishes the current selected archive directly.
 
-Development-directory activation is a separate runtime admission route. Cozy
-and sbt-cozy prepare `target/cncf.d/runtime-classpath.txt` together with
+Development-directory activation remains a separate runtime admission route.
+Cozy and sbt-cozy prepare `target/cncf.d/runtime-classpath.txt` with
 `target/cncf.d/car-runtime-manifest.json`, using schema
-`cncf.car-development-runtime-manifest.v1` and source kind
-`development-directory`. The development manifest records the CAR coordinate,
-runtime range, component/ABI evidence, and digests of stable evidence files.
-It deliberately excludes mutable compiled class bytes and is not accepted as
-packaged-CAR archive evidence. CNCF validates this pair before any component
-classloading; explicit development selection fails closed with
-`sbt cozyPrepareRuntime` recovery guidance and never substitutes a packaged
-CAR.
+`cncf.car-development-runtime-manifest.v2` and source kind
+`development-directory`. The manifest records canonical CAR coordinate and
+runtime range and selects descriptor, ABI and classpath evidence paths.
+Selected files and classpath entries must be present, nonempty where required
+and readable. Current canonical descriptor/ABI semantics are checked directly;
+compiled classes and unrelated generated files are not recursively inventoried.
+CNCF admits this pair before classloading, identifies failed evidence paths with
+cncf-launcher preparation guidance, and never substitutes a packaged CAR.
 
-## Current CNCF Information Invocation
+For CNCF-owned CML generation, `build.sbt` remains the invocation authority. It
+resolves exact Cozy/CNCF coordinates, the explicit runtime-descriptor task
+output, project and CML source. The cross-compiled build contract normalizes
+paths and retains required inputs and source containment. Its five-field value
+contains exact Cozy/CNCF versions, runtimeDescriptor, source and sourceIdentity.
+The generation command passes selected descriptor path and target; metadata
+validation consumes actual source/output paths, versions and source identity.
+Normal model generation, required nonempty sorted Scala output and process/I/O
+failures remain; no source drift comparison or protection-only snapshot task
+is required.
 
-For CNCF-owned CML generation, `build.sbt` is the invocation authority. It
-resolves the pinned Cozy generator coordinate, the root project's effective
-`version.value` as the CNCF compile target, the runtime descriptor produced by
-`generateCncfRuntimeDescriptor`, and the project-owned Information CML source
-before launching Cozy. The descriptor task is an explicit dependency of input
-resolution. The cross-compiled build helper retains five fields: generator
-version, target version, descriptor path, source path, and normalized
-project-relative source identity. It rejects blank coordinates, absent files,
-and sources outside the project. Versions remain explicit; environment,
-catalog, generated output, and filesystem discovery do not supply them.
+One Cozy descriptor read supplies `ValidatedDescriptor(path, targetVersion,
+config)` for schema/runtime/exact-target/Result validation and semantic catalog
+consumers. Both validation APIs take path, targetVersion and source.
+`--cncf-runtime-descriptor` selects this contract; exact target/path are required,
+while version-only commands remain outside it. Missing, unreadable, malformed
+and contradictory target/path sources remain typed deterministic failures.
+Descriptor SHA API/CLI/settings and pin checks are removed without replacement.
 
-Cold, repeated, and concurrent command evaluations use the same selected paths
-and versions. A later content edit is read through the current selected CML
-path, while a removed source fails command preparation. This path-based
-contract does not capture descriptor/CML bytes or use content-derived control
-tokens. CV-04 delegates descriptor preflight to Cozy's current
-`requireValidDescriptor(path, targetVersion, source)` contract. Cozy validates
-readability, root schema `1`, runtime `cncf`, exact target version, and the
-predefined Result schema before emission. CLI/bridge structured diagnostics
-retain code, source, expected, actual, message, and corrective action. Project,
-bridge, and request descriptor/target contradictions fail explicitly; global
-`~/.cozy` operation defaults do not participate.
+For delegated generation, sbt-cozy uses `Compile / dependencyClasspath`, reads
+fixed `META-INF/cncf/runtime.yaml` from each distinct JAR or dependency class
+directory, and writes the exact selected resource bytes. The public extraction
+APIs take `classpath: Seq[File]` and return `Option[File]` or required `File`.
+Missing required descriptors, multiple distinct owners (including equal-byte
+owners) and ordinary resource/output I/O failures remain failures. Only the
+selected dependency entries participate; there is no ambient filesystem scan.
+The bridge carries `runtime.cncf.descriptor` and exact target versions, without
+a descriptor SHA setting or option.
 
-The runtime descriptor's ComponentStyle carrier is transport for the actual
-packaged JSON catalog. Its `cncf.component-style-catalog-carrier.v1` shape has
-exactly `schemaVersion`, `resource`, `encoding`, and `bytes`; the resource is
-`META-INF/cncf/component-style-catalog.json` and the encoding is `base64`.
-The resource specification decodes that carrier and compares the original
-packaged payload. It does not establish a content-derived identity or revision.
+The optional ComponentStyle carrier keeps
+`cncf.component-style-catalog-carrier.v1` with exactly `schemaVersion`,
+`resource`, `encoding`, and `bytes`. The resource is
+`META-INF/cncf/component-style-catalog.json`; base64 bytes encode the actual
+packaged JSON catalog. The strict reader retains schema/resource/encoding,
+payload/JSON shape, API/kind/provider, canonical ASCII identity and signed-Int
+major, closed empty parameters, bundle closure/cycle/conflict and qualification
+checks. The producer and reader remove descriptor/payload SHA together without
+schema migration, a legacy adapter or replacement protection.
 
-CV-05 stores generation metadata at
-`target/cozy/generation-provenance.json`, outside generated Scala. Schema
-`cozy.generation-provenance.v1` records the exact CNCF target, executing Cozy
-version, compiled simple-modeler backend version, selected
-`simplemodeling-model` version, normalized project-relative CML identity, and
-sorted generated Scala paths. Machine-local absolute paths, timestamps, and
-output-root names do not define metadata identities.
+Current Cozy generation metadata at `target/cozy/generation-provenance.json`
+is the nonhash v1 projection of exact CNCF/Cozy/backend/model versions, canonical
+project-relative CML identity and sorted nonempty generated Scala paths. The v2
+aggregate additionally records its sorted unique source/path union. Neither
+schema emits descriptor/source/output/aggregate/evidence digests. Known fields,
+exact versions, canonical paths, actual readable source and output inventory
+remain validated; arbitrary historical extras are ignored and not re-emitted.
+Generation and CML metadata read the actual selected source path. Direct final
+metadata writing follows initial stage validation and provides no atomic,
+rollback or prior-output protection promise after I/O starts.
 
-Cozy owns schema/declared-input validation, source readability, and the current
-output-path inventory. The normal CNCF task retains Cozy `0.3.3-SNAPSHOT`,
-passes the selected descriptor and source identity to generation, and then
-executes `generation-provenance-validate` with that source path, output root,
-exact target/generator, and source identity. Both process failures remain
-fatal. CNCF selects a non-empty sorted Scala result and accepts it only after
-the authoritative Cozy validator succeeds. Source/resource task dependencies
-remain the ordinary build prerequisites. No descriptor/source/output/evidence
-hash, source drift guard, provenance snapshot comparison, or separate
-cold/repeated verification task participates.
+The actual metadata CLI uses the selected model path, output root, exact target,
+generator and source identity, plus optional model version. It derives the
+compiled backend/default model versions and validates known inputs, source
+access and output paths. It consumes no descriptor path or digest. CNCF's build
+passes the current source/output paths, exact versions and source identity to
+this validator after ordinary Information model generation and required
+nonempty sorted Scala output selection. The selected build inputs contain only
+cozyGeneratorVersion, cncfTargetVersion, runtimeDescriptor, source and
+sourceIdentity. No pre-launch source-byte comparison or dedicated generated
+Scala/provenance SHA snapshot task or test hook remains. Pure invocation/value
+determinism and nonhash metadata reproducibility retain their meanings.
+S42 production Information generation/current metadata validation passed in the
+actual two-suite/eight-test run with 34 generated Scala paths. S43 primary
+producer/reader is implemented-focused-validated-unreviewed after actual
+Cozy/CNCF focused validation and native canonical repository discovery. E715-03 residual
+fixtures, E715-04 composition, E715-05 provider and warning dispositions remain
+OPEN, without exceptions or Step/Phase acceptance.
 
-Source identities are explicitly selected, non-empty, and project-relative;
-absolute, parent-escaping, and Windows drive-prefixed identities are rejected.
-The bridge derives an identity only from its explicit owning project directory.
-Missing or unreadable current source/output and invalid expected inputs remain
-typed Cozy diagnostics. Generation consumes the selected source path and
-records current metadata according to the producer's stage validation.
+
+**Current S45 purpose classification (2026-10-09): parent-classified-unreviewed.**
+`E715-01-resource-consumer-subordinate` is retained caller-authored knowledge
+content under the original purpose-based policy and R715-11 genuine-content
+boundary; removing its resource-content fields is not selected Cozy
+artifact-protection work. This current interpretation supersedes the dated
+S43/S44 OPEN removal-prerequisite hypothesis, preserved below as history.
+E715-01 independent connected acceptance, whole E715-03 assurance, E715-04/05
+product removals, prior warnings and original Step/full-Phase review, commits
+and distinct release remain OPEN. See the dated S45 classification below.
+
+
+## Current CNCF Information Invocation Additions
+
+The normal build pins Cozy `0.3.3-SNAPSHOT`. A later CML content edit is read
+through the selected path; a removed source fails command preparation.
 
 ### Explicit normal generator selection
 
@@ -211,7 +227,7 @@ and responsibilities are unchanged.
 ## Downstream Validation Boundary
 
 Closure validation follows the same ownership boundaries as production.
-CNCF's build executes ordinary actual Information generation and current
+CNCF's build runs ordinary production Information generation and current
 metadata validation. Cozy verifies
 exact-pair admission, descriptor identity, package metadata, provenance,
 runtime-manifest construction, review evidence, and publication. sbt-cozy
@@ -230,3 +246,296 @@ upgraded or admitted as compatible. Its owning project must create a new
 artifact with current package evidence. Downstream validation may distinguish
 that independently owned migration from the current CAR under test, but it
 must record the rejection rather than bypassing the runtime admission gate.
+
+## 2026-10-09 S41 initial implementation handoff (historical)
+
+**P715-02-S41-DESCRIPTOR-HANDOFF** is implemented-unvalidated-unreviewed under
+the [frozen S41 Implementation Manifest](/Users/asami/src/dev2025/cozy/.codex-workflow/phases/PHASE-71.5/p715-02-s41-implementation-manifest.json).
+The parent owns actual focused validation, independent review and acceptance.
+The prior S40 source-connected failure remains recorded with zero Textus
+suites/tests; planned normal Cozy/plugin/CNCF SNAPSHOT publishLocal prerequisites
+lead to Textus's unchanged default binary dependencies and establish no
+source-bound integration success. E715-01 connected validation/review,
+E715-03..05 and source/output/snapshot removal remain OPEN. Dated decisions and
+validation remain history; this handoff closes no Step or Phase.
+
+## 2026-10-09 S42 initial information generation handoff (historical)
+
+**P715-02-S42-INFORMATION-GENERATION-DIRECT / R715-09 / E715-02 generation**
+is **implemented-unvalidated-unreviewed** under the
+[frozen S42 Implementation Manifest](/Users/asami/src/dev2025/cozy/.codex-workflow/phases/PHASE-71.5/p715-02-s42-implementation-manifest.json).
+The five selected inputs and real generation/metadata validation remain; source
+SHA/drift and the dedicated output/provenance snapshot model/task/test hook are
+removed. Existing CV03 retains five cases and normalization PBT; CV05 retains
+three cases, including current invocation and outside-project rejection.
+Parent-selected production generation and both existing suites have not run
+for S42. Independent review and Step/Phase acceptance remain OPEN. S41 and
+prior refusal/validation history retain their attribution; remaining archive/
+runtime E715-03, composition E715-04 and provider E715-05 remain OPEN.
+
+## 2026-10-09 S43 approved CNCF runtime initial implementation handoff (historical)
+
+The CNCF portion of **P715-02-S43-CAR-RUNTIME-DIRECT / R715-09 / E715-03**
+is **implemented-unvalidated-unreviewed** under the
+[frozen five-path remainder Implementation Manifest](/Users/asami/src/dev2025/cozy/.codex-workflow/phases/PHASE-71.5/p715-02-s43-approved-cncF-remainder-implementation-manifest.json).
+The actual owning human explicitly approved removal of CNCF CAR SHA inventory,
+full-file-set comparison and digest comparison for these five files while
+retaining coordinates, runtime range, ABI, required files, safe paths and I/O
+validation. The [informed approval](/Users/asami/src/dev2025/cozy/.codex-workflow/phases/PHASE-71.5/p715-02-s43-informed-cncF-human-approval.json)
+supplied the recovery condition for one renewed scoped permission submission.
+The [prior platform denial](/Users/asami/src/dev2025/cozy/.codex-workflow/phases/PHASE-71.5/p715-02-s43-cncF-platform-denial.json)
+and raw rejected request/response remain history; Textus-specific approval was
+not presented as CNCF approval. This submission applied the exact five edits.
+
+The primary reader now consumes unchanged v1 schema/car/runtime range and
+canonical ABI metadata without archive SHA inventory/file-set/digest checks.
+Existing extraction owns required main JAR, actual ZIP safe-path/duplicate and
+I/O behavior. CNCF never evaluates Cozy provenance or loads Cozy. The existing
+admission suite retains ten cases and range PBT after deleting its single
+protection-only tamper case. The common fixture retains public write and actual
+ZIP construction, canonical descriptor/ABI behavior and caller-supplied runtime
+manifest handling. No new suite, case or replacement inventory was introduced.
+
+Cozy's [actual accepted two-suite/28-test result](/Users/asami/src/dev2025/cozy/.codex-workflow/phases/PHASE-71.5/p715-02-s43-validation-1-result.json)
+remains dated own-root native package/publication/provenance evidence. CNCF's
+parent-selected existing admission suite and native repository canonical packed/
+expanded discovery case have not run for S43. Parent owns actual validation and
+independent review; no connected validation, Step or Phase acceptance is claimed.
+
+Whole E715-03 remains **OPEN**: ComponentRepositoryCarSpec
+`_write_packaged_runtime_evidence` / `_write_runtime_classpath` and
+ComponentInitializationBootstrapSpec's development writer still emit protection
+fixtures. CozyCarRuntimeManifestSpec `_consumer_contract` carrier resource
+metadata remains original E715-01 work. Composition E715-04, provider E715-05,
+warning disposition, independent Step/full-Phase review, exact local commits
+and distinct release remain **OPEN**. Dated S40/S41/S42 initial records remain
+history. S41 actual 21 suites/181 tests and S42 actual two suites/eight tests
+with production generation/current metadata for 34 Scala paths retain their
+attribution. Original Goal/authority/binding/bases/epoch/ledger 5 and repair
+14/streak 0 remain unchanged. S36 native/movie/hearing/end-card/EOF evidence is
+reused; full/broader validation remains deferred-not-run to PHASE-71.7.
+
+## S43 approved primary runtime actual focused validation — 2026-10-09
+
+The primary producer/reader portion of **P715-02-S43-CAR-RUNTIME-DIRECT /
+R715-09 / E715-03** is **implemented-focused-validated-unreviewed**. This
+parent-admitted actual result supplements the preserved dated denied, partial
+and unvalidated handoffs. The exact informed CNCF approval enabled the single
+renewed scoped five-file implementation; the earlier raw request/refusal remains
+history and Textus-specific approval was not substituted for CNCF approval.
+
+The [accepted Cozy result](/Users/asami/src/dev2025/cozy/.codex-workflow/phases/PHASE-71.5/p715-02-s43-validation-1-result.json) records invocation
+`a7703154-ac40-456c-bf5f-ef7d473fa578`, executor session **78070**,
+`CozyCarRuntimeManifestSpec` **17 tests** and `CozyArchivePackagerCv06Spec`
+**11 tests**: **2 suites / 28 passed tests**. The [accepted CNCF result](/Users/asami/src/dev2025/cozy/.codex-workflow/phases/PHASE-71.5/p715-02-s43-validation-2-result.json)
+records invocation `dec6e72e-acc1-4cee-b0b6-d0fa0ab41db4`, executor session
+**51720** with terminal tool exit **0**, `CarRuntimeAdmissionSpec` **10 tests**
+and the actual existing `ComponentRepositoryCarSpec` canonical packed/expanded
+repository case **1 test**: **2 suites / 11 passed tests**. That selected native
+case actually ran through discovery, factory loading and materialization for
+packed and expanded CARs. Both invocations ended with **SBT 0 / wrapper 0 /
+serial lock released**. Combined evidence is **4 completed suites / 39 distinct
+passed tests**, with failed, aborted, canceled, ignored and pending counts all
+**zero**, and no warnings or errors in either invocation.
+
+These are two own-root focused validations, including existing native Cozy
+package/publication/provenance behavior and the actual CNCF repository case.
+They do not establish broad end-to-end or full integration validation. The
+primary contract retains unchanged v1 schema/car/runtime range, canonical ABI
+format v2/export/ABI version1, actual required files/main JAR, ZIP safe paths/
+duplicates and JSON/I/O failures. Cozy required packaged provenance and selected
+project inputs retain their meanings; CNCF never parses provenance or loads Cozy.
+No new case, suite, inventory certificate or replacement protection was added.
+
+Whole **E715-03 remains OPEN** for original repository/bootstrap fixture
+emissions: `ComponentRepositoryCarSpec` `_write_packaged_runtime_evidence` /
+`_write_runtime_classpath` and `ComponentInitializationBootstrapSpec`'s
+development writer. Original E715-01 carrier resource metadata in
+`CozyCarRuntimeManifestSpec` `_consumer_contract`, E715-04 composition, E715-05
+provider and prior unsuppressed plugin/task/cycle/logging/deprecation warning
+classification/repair remain **OPEN**. Original independent whole-Step/full-Phase
+reviews, acceptance, exact local commits and distinct release remain **OPEN**.
+
+S40 denials/source-bound failure, S41 actual 21 suites/181 tests and S42 actual
+two suites/eight tests with production generation/current metadata for 34 Scala
+paths retain their attribution. Original Goal/authority/binding/bases/epoch,
+review ledger **5**, repair **14 / streak 0**, pending M2 cycles
+**6/7/8/10/11/13**, all seven Stage Status/Owner/Update triples and closure
+checkboxes retain their state. S36 unchanged native/movie/smooth hearing/end-card/
+EOF evidence is reused. Repository-full SBT and broader integration remain
+**deferred-not-run to PHASE-71.7**. This documentation editor ran no tests,
+self-review, source edit, Git mutation or workflow transition. No Step, Phase
+or all-removal acceptance is claimed.
+
+## S44 runtime fixture paths implementation handoff — 2026-10-09
+
+The existing repository/bootstrap fixture portion of
+**P715-02-S44-RUNTIME-FIXTURE-PATHS / R715-09 / E715-03** is
+**implemented-unvalidated-unreviewed** under the
+[frozen S44 Implementation Manifest](/Users/asami/src/dev2025/cozy/.codex-workflow/phases/PHASE-71.5/p715-02-s44-implementation-manifest.json).
+This finite immediate-caller cleanup follows the already-admitted production
+reader contracts under the original Phase invocation and the actual direction
+「外部ライブラリも修正して」. S43's informed CNCF five-file production approval,
+successful implementation, original scoped refusal and raw audit remain history;
+that exact five-file permission is not extended to additional production checks.
+S44 changes private test-fixture output and documentation only; no production
+source, security check, public API, ABI or schema is changed.
+
+`ComponentRepositoryCarSpec` `_write_runtime_classpath` and
+`ComponentInitializationBootstrapSpec` `_write_parameter_repository_fixture`
+emit unchanged v2/sourceKind/canonical CAR/runtime metadata with exactly this
+ordered path-only development evidence:
+
+```json
+[{"path":"target/cncf.d/runtime-classpath.txt"},{"path":"target/cncf.d/component-descriptor.json"},{"path":"src/main/car/abi-manifest.json"}]
+```
+
+`ComponentRepositoryCarSpec` `_write_packaged_runtime_evidence` retains v1
+canonical CAR coordinate/runtime metadata and actual canonical ABI, without
+the obsolete recursive full-file inventory and integrity entries. Per-entry
+SHA/logical SHA, aggregate evidence SHA/integrity, solely-used digest helpers,
+their import and logical-classpath digest local are removed from these fixtures.
+The two Scala version headers record Oct. 9 and retain prior history. Actual
+classpath, descriptor copies, artifact alias/release, ABI exports, JAR/ZIP
+construction, factory loading, repository materialization and temporary
+repository lifecycle remain. The existing **80 repository / 18 bootstrap**
+scenarios, Given/When/Then boundaries and assertions are unchanged, including
+canonical packed/expanded discovery and independent E715-05 ABI-hash assertions.
+
+The parent-selected complete `ComponentRepositoryCarSpec` and
+`ComponentInitializationBootstrapSpec` focused invocation has **not run for
+S44**. Parent owns diff verification, actual validation and independent review.
+S43's actual own-root Cozy 28 / CNCF 11 results (four suites / 39 distinct
+passed tests, zero failures/aborts/canceled/ignored/pending, terminal SBT 0 /
+wrapper 0 / released locks) retain their attribution; they are not S44 results.
+Whole **E715-03 remains OPEN** pending selected fixture validation and original
+independent assurance. No Step, Phase or all-removal acceptance is claimed.
+
+### E715-01-resource-consumer-subordinate — OPEN
+
+The original producer fixture is
+`/Users/asami/src/dev2025/cozy/src/test/scala/cozy/archive/CozyCarRuntimeManifestSpec.scala::_consumer_contract`.
+Its required fields remain `resources[].sha256`, `resources[].integrity` and
+`resources[].provenance.matchingDigest`. The concrete consumer model is
+`/Users/asami/src/dev2025/cloud-native-component-framework/src/main/scala/org/goldenport/cncf/knowledge/ComponentKnowledgeManifestConsumerContract.scala`;
+its codec is
+`/Users/asami/src/dev2025/cloud-native-component-framework/src/main/scala/org/goldenport/cncf/knowledge/ComponentKnowledgeManifestConsumerContractCodec.scala`.
+The codec `_resource` requires sha256/integrity, `_provenance` requires
+matchingDigest, and the model fields are nonoptional. Actual Textus projection
+and serialization callers are
+`/Users/asami/src/dev2026/textus-cbd-support/src/main/scala/org/simplemodeling/textus/cbdsupport/runtime/ComponentKnowledgeProjection.scala`
+and
+`/Users/asami/src/dev2026/textus-cbd-support/src/main/scala/org/simplemodeling/textus/cbdsupport/impl/ComponentFactory.scala`.
+This concrete existing fixture invokes that shared consumer shape. Cozy carrier
+resource fields cannot be removed alone or reported compatible. Parent must
+freeze a coordinated consumer-model/codec/indexed-production-caller and existing
+specification unit under the same finite E715-01 authority. This remains a
+**current original Phase obligation**, not Hygiene or a deferred Development
+Candidate; S44 does not implement that dependency edge.
+
+Whole E715-01, E715-03, E715-04 composition, E715-05 provider, prior unsuppressed
+plugin/task/cycle/logging/deprecation warning disposition, original independent
+whole-Step/full-Phase review, acceptance, exact local commits and distinct
+release remain **OPEN**. All Stage Status/Owner/Update triples and closure
+checkboxes retain their state. Original Goal/authority/binding/bases/epoch,
+review ledger **5**, repair **14 / streak 0**, pending M2 cycles
+**6/7/8/10/11/13**, S40 denials/source-bound failure, S41's 21 suites/181 tests,
+S42's two suites/eight tests and production metadata for 34 Scala paths remain
+unchanged history. S36 native/movie/smooth-hearing/end-card/EOF evidence is
+reused. Repository-full SBT and broader integration remain
+**deferred-not-run to PHASE-71.7**. This editor ran no tests, self-review, Git
+mutation, publication, runtime replay or workflow transition.
+
+## S44 runtime fixture actual focused validation — 2026-10-09
+
+The fixture portion of **P715-02-S44-RUNTIME-FIXTURE-PATHS / R715-09 /
+E715-03** is **implemented-focused-validated-unreviewed**. The
+[parent-admitted actual result](/Users/asami/src/dev2025/cozy/.codex-workflow/phases/PHASE-71.5/p715-02-s44-validation-result.json)
+records serial invocation `acfa106f-ca4d-4199-be63-f69c9e8036d4`, actual executor
+session **24224**, and the complete existing `ComponentRepositoryCarSpec`
+and `ComponentInitializationBootstrapSpec`: **2 completed suites / 98 passed
+tests**. Failed, aborted, canceled, ignored and pending counts are all **zero**;
+no warnings or errors were observed. Terminal evidence is **SBT 0 / wrapper 0 /
+serial lock released**. The actual existing canonical packed/expanded repository
+discovery, factory loading and materialization, and development descriptor/typed
+parameter bootstrap scenarios passed. This is own-root affected-suite evidence.
+
+The dated S44 implemented-unvalidated-unreviewed handoff remains initial
+history. S43's prior four-suite/39-test evidence retains separate attribution;
+it is not summed with this run as 137 distinct tests. Current fixture output
+retains the three ordered development paths and canonical packaged v1
+coordinate/runtime/ABI metadata, actual classpath/descriptor/JAR/ZIP/lifecycle,
+and all 80 repository / 18 bootstrap scenarios and assertions.
+
+Whole **E715-03 remains OPEN** until complete original assurance. The exact
+**E715-01-resource-consumer-subordinate** producer/model/codec/Textus caller
+edge recorded above remains **OPEN**: required `resources[].sha256`,
+`resources[].integrity` and `resources[].provenance.matchingDigest` cannot be
+removed from the Cozy fixture alone. E715-04 composition, E715-05 provider,
+prior warning disposition, original complete Step/full-Phase independent
+reviews, exact local commits and distinct release remain **OPEN**. No Step,
+Phase or all-removal acceptance is claimed.
+
+All seven Stage Status/Owner/Update triples, closure checkboxes, original
+Goal/authority/base/binding/epoch, review ledger **5**, repair **14 / streak 0**,
+pending M2 cycles **6/7/8/10/11/13**, refusals and earlier histories retain their
+state. S36 unchanged actual native movie/hearing/end-card/EOF evidence is reused;
+repository-full SBT and broader integration remain **deferred-not-run to
+PHASE-71.7**. This documentation editor ran no tests, self-review, Git mutation,
+publication, runtime replay or workflow transition.
+
+## S45 authored knowledge payload purpose classification — 2026-10-09
+
+**P715-02-S45-KNOWLEDGE-PAYLOAD-PURPOSE** is **parent-classified-unreviewed**
+under the [frozen S45 revision-2 Implementation Manifest](/Users/asami/src/dev2025/cozy/.codex-workflow/phases/PHASE-71.5/p715-02-s45-implementation-manifest-r2.json).
+The actual original Phase invocation and direction 「外部ライブラリも修正して」
+authorize this six-document correction. S43's exact informed five-file removal
+approval and refusal remain history and supply no expanded removal permission.
+
+The inspected Cozy boundary is
+`src/main/scala/cozy/archive/CozyComponentKnowledgeCarrier.scala`:
+`fromProject` selects regular-file/readable JSON and `_require_consumer_contract`
+checks root schema/component/release; `copyTo` transports the caller-authored
+JSON; `requireDeclaredArchiveCarrier` checks the exact three-field declaration
+and required entry presence. Cozy generates only that declaration. These
+operations do not compute, emit or compare resource SHA, integrity or
+matchingDigest fields. In `src/test/scala/cozy/archive/CozyCarRuntimeManifestSpec.scala`,
+`_consumer_contract` has one call in the existing development/package carrier
+projection scenario. It supplies authored content and tests selected JSON/copy
+transport; it does not invoke the CNCF consumer codec or its resource validation.
+
+The resource fields `resources[].sha256`, `resources[].integrity` and
+`resources[].provenance.matchingDigest` belong to the existing CNCF knowledge
+resource-domain model/codec `knowledge/ComponentKnowledgeManifestConsumerContract.scala`
+and `knowledge/ComponentKnowledgeManifestConsumerContractCodec.scala`. Their
+meaning links caller-supplied knowledge evidence to independently resolved
+resources; `ComponentKnowledgeManifest`, `PortableModelResourceContext`,
+`ComponentKnowledgeHelpContract`, `ComponentAdminDocumentationNavigationProjection`
+and `ComponentAdminSurfaceSecurity` retain existing model/directive/catalog
+references and Help/Admin domain state. This is genuine caller-authored knowledge
+content under the original artifact-protection-removal purpose/caller rule and
+R715-11 retained content. Required parser fields alone do not establish that
+classification. No new protection or protection exception is introduced.
+
+The current `E715-01-resource-consumer-subordinate` disposition is
+**retained-authored-knowledge-content-classification-pending-independent-review**.
+Its S43/S44 OPEN removal-prerequisite interpretation is explicitly superseded;
+those dated hypotheses and actual source/refusal/test facts remain unaltered.
+Selected product removal is not required for this authored payload. This does
+not establish external consumer success or acceptance, change a schema, rename
+the issue into Hygiene/Development Candidate, or waive original assurance.
+
+E715-01 independent connected acceptance, whole E715-03, E715-04 composition,
+E715-05 provider, prior warning disposition, original complete Step/full-Phase
+independent reviews, pending M2 **6/7/8/10/11/13**, exact local commits and
+distinct release remain **OPEN**. Original R715-01..15/E715-01..05, full Goal,
+authority/base/binding/epoch, ledger **5**, repair **14 / streak 0**, all seven
+Stage Status/Owner/Update triples and closure checkboxes retain their state.
+S44's two-suite/98-test and S43's four-suite/39-test results keep separate
+attribution. S40's actual source-bound failure and S41's default-binary success
+retain their distinct scopes. S36 unchanged movie/hearing/end-card/EOF evidence
+is reused; full/broader validation remains **deferred-not-run to PHASE-71.7**.
+Original independent whole-Step/full-Phase review must assess this purpose
+classification before acceptance. This editor changed no payload, source,
+fixture, schema, API, scenario, assertion, status checkbox or control and ran no
+tests, self-review, Git mutation, runtime, publication or workflow transition.

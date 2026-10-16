@@ -10,7 +10,7 @@ import org.goldenport.cncf.knowledge.{ComponentKnowledgeHelpContract, ComponentK
  * it does not scan, generate, read, resolve, cache, or authorize resources.
  *
  * @since   Aug. 28, 2026
- * @version Aug. 28, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] final case class ComponentAdminDocumentationNavigationSelection(
@@ -157,9 +157,7 @@ private[cncf] object ComponentAdminDocumentationNavigationProjection {
         resource.provenance.artifactCoordinate != entry.provenance.artifactCoordinate ||
         resource.provenance.logicalSource != entry.provenance.logicalSource ||
         resource.provenance.resolutionStep != entry.provenance.resolutionStep ||
-        resource.provenance.externalDeploymentRequired != entry.provenance.externalDeploymentRequired ||
-        resource.provenance.sha256 != entry.sha256 ||
-        resource.provenance.sha256 != entry.provenance.matchingDigest
+        resource.provenance.externalDeploymentRequired != entry.provenance.externalDeploymentRequired
     ) {
       Left(s"Component Admin documentation resource ${entry.logicalPath} must retain exact Phase 58 provenance")
     } else if (

@@ -2,7 +2,6 @@ package org.goldenport.cncf.component.repository
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
-import java.security.MessageDigest
 import java.util.Comparator
 import java.util.jar.JarFile
 import java.util.zip.{ZipEntry, ZipOutputStream}
@@ -39,7 +38,7 @@ import org.goldenport.configuration.ConfigurationTrace
  *  version May. 25, 2026
  *  version Jul. 31, 2026
  *  version Aug. 27, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -3046,30 +3045,20 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       s"""{"format":"cozy.car.abi-manifest.v2","component":{"namespace":"${effectiveid.namespace.value()}","id":"${effectiveid.localId.value()}","version":"$version"},"abi":{"version":1,"exports":{"components":[{"namespace":"${effectiveid.namespace.value()}","id":"${effectiveid.localId.value()}"}]},"dependencies":[]}}""",
       StandardCharsets.UTF_8
     )
-    val classpathidentity = s"project:${componentdir.relativize(classdir).toString.replace('\\', '/')}"
     val evidence = Vector(
-      ("target/cncf.d/runtime-classpath.txt", _sha256(file), Some(_sha256(classpathidentity.getBytes(StandardCharsets.UTF_8)))),
-      (descriptoridentity, _sha256(componentdir.resolve(descriptoridentity)), None),
-      ("src/main/car/abi-manifest.json", _sha256(cardir.resolve("abi-manifest.json")), None)
+      "target/cncf.d/runtime-classpath.txt",
+      descriptoridentity,
+      "src/main/car/abi-manifest.json"
     )
-    val entries = evidence.map { case (path, digest, logical) =>
-      val logicalfield = logical.map(value => s""""logicalSha256":"$value",""").getOrElse("")
-      s"""{$logicalfield"path":"$path","sha256":"$digest"}"""
+    val entries = evidence.map { path =>
+      s"""{"path":"$path"}"""
     }.mkString("[", ",", "]")
-    val evidencedigest = _sha256(evidence.map { case (path, digest, logical) =>
-      s"$path\t$digest\t${logical.getOrElse("")}"
-    }.mkString("\n").getBytes(StandardCharsets.UTF_8))
     Files.writeString(
       file.getParent.resolve("car-runtime-manifest.json"),
-      s"""{"schemaVersion":"$manifestschema","sourceKind":"development-directory","car":{"name":"$effectivecarname","version":"$version","component":"${effectiveid.localId.value()}"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries,"integrity":{"algorithm":"SHA-256","evidenceSha256":"$evidencedigest"}}""",
+      s"""{"schemaVersion":"$manifestschema","sourceKind":"development-directory","car":{"name":"$effectivecarname","version":"$version","component":"${effectiveid.localId.value()}"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","excluded":[],"tested":["${CncfVersion.current}"]}},"evidence":$entries}""",
       StandardCharsets.UTF_8
     )
   }
-
-  private def _sha256(path: Path): String = _sha256(Files.readAllBytes(path))
-
-  private def _sha256(bytes: Array[Byte]): String =
-    MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
 
   private def _canonical_component_id(component: String): String = {
     val local = component.split("[^A-Za-z0-9]+").toVector.filter(_.nonEmpty).map(_.capitalize).mkString
@@ -3146,21 +3135,9 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       s"""{"format":"cozy.car.abi-manifest.v2","component":{"namespace":"${id.namespace.value()}","id":"${id.localId.value()}","version":"$release"},"abi":{"version":1,"exports":{"components":[{"namespace":"${id.namespace.value()}","id":"${id.localId.value()}"}]},"dependencies":[]}}""",
       StandardCharsets.UTF_8
     )
-    val entries = Using.resource(Files.walk(root)) { stream =>
-      stream.iterator().asScala
-        .filter(path => Files.isRegularFile(path))
-        .map(path => root.relativize(path).toString.replace('\\', '/'))
-        .filter(_ != "car-runtime-manifest.json")
-        .toVector
-        .sorted
-        .map { relative =>
-          s"""{"path":"$relative","sha256":"${_sha256(root.resolve(relative))}"}"""
-        }
-        .mkString("[", ",", "]")
-    }
     Files.writeString(
       root.resolve("car-runtime-manifest.json"),
-      s"""{"schemaVersion":"cncf.car-runtime-manifest.v1","car":{"name":"$artifactname","version":"$release","component":"${id.name}"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","maximum":null,"excluded":[],"tested":["${CncfVersion.current}"]}},"integrity":{"algorithm":"SHA-256","entries":$entries}}""",
+      s"""{"schemaVersion":"cncf.car-runtime-manifest.v1","car":{"name":"$artifactname","version":"$release","component":"${id.name}"},"runtime":{"cncf":{"minimum":"${CncfVersion.current}","maximum":null,"excluded":[],"tested":["${CncfVersion.current}"]}}}""",
       StandardCharsets.UTF_8
     )
   }

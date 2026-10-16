@@ -73,7 +73,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 28, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererAuthorizationSpec extends AnyWordSpec with Matchers with GivenWhenThen with StaticFormAppRendererSpecFixtures {
@@ -1946,5 +1946,87 @@ final class StaticFormAppRendererAuthorizationSpec extends AnyWordSpec with Matc
     }
 
     }
+  }
+
+  private def _install_sessions(
+    subsystem: Subsystem,
+    sessions: Vector[AuthComponent.SessionSummary]
+  ): Unit = {
+    val knownsessions = sessions
+    val provider = new AuthenticationProvider {
+      override val name: String = "audit-viewer-authentication"
+
+      private def _result(summary: AuthComponent.SessionSummary): AuthenticationResult =
+        AuthenticationResult(
+          principalId = summary.principalId.map(PrincipalId.apply).getOrElse(PrincipalId("anonymous")),
+          attributes = summary.attributes,
+          capabilities = SecurityContext.Privilege.fromName(summary.securityLevel)
+            .map(_.capabilities)
+            .getOrElse(Set.empty[Capability]) ++ summary.capabilities.map(Capability.apply).toSet,
+          level = SecurityLevel(summary.securityLevel),
+          subjectKind = SubjectKind.User,
+          session = Some(SessionContext(sessionId = summary.sessionId))
+        )
+
+      override def authenticate(request: AuthenticationRequest)(using ExecutionContext): Consequence[Option[AuthenticationResult]] =
+        request.sessionId match {
+          case Some(sessionid) =>
+            knownsessions.find(_.sessionId.contains(sessionid))
+              .map(summary => Consequence.success(Some(_result(summary))))
+              .getOrElse(Consequence.success(None))
+          case None =>
+            Consequence.success(None)
+        }
+
+      override def currentSession(request: AuthenticationRequest)(using ExecutionContext): Consequence[Option[AuthenticationResult]] =
+        authenticate(request)
+    }
+    val componentid = ComponentId("org.goldenport.cncf.test.AuditViewerAuthentication")
+    val component = new Component {
+      override def authenticationProviders: Vector[AuthenticationProvider] = Vector(provider)
+    }
+    val initialized = component.initialize(ComponentInit(
+      subsystem,
+      Component.Core.create(
+        componentid.name,
+        componentid,
+        ComponentInstanceId.default(componentid),
+        org.goldenport.protocol.Protocol.empty,
+        jobEngine = subsystem.jobEngine
+      ),
+      ComponentOrigin.Builtin
+    )).withArtifactMetadata(Component.ArtifactMetadata(
+      sourceType = "spec",
+      name = "audit-viewer-authentication",
+      version = "0.0.0",
+      component = Some("audit-viewer-authentication")
+    ))
+    subsystem.add(Vector(initialized))
+    val descriptor = subsystem.descriptor.getOrElse(GenericSubsystemDescriptor(
+      path = java.nio.file.Path.of("<memory>"),
+      subsystemName = subsystem.name
+    ))
+    val existingauthentication = descriptor.security
+      .flatMap(_.authentication)
+      .getOrElse(GenericSubsystemAuthenticationBinding())
+    val providerbinding = GenericSubsystemAuthenticationProviderBinding(
+      name = "audit-viewer-authentication",
+      component = "audit-viewer-authentication",
+      enabled = Some(true)
+    )
+    val providers =
+      if (existingauthentication.providers.exists(binding =>
+        binding.name == providerbinding.name && binding.component == providerbinding.component
+      )) existingauthentication.providers
+      else existingauthentication.providers :+ providerbinding
+    val authentication = existingauthentication.copy(
+      convention = Some("disabled"),
+      fallbackPrivilege = Some("disabled"),
+      providers = providers
+    )
+    val security = descriptor.security
+      .getOrElse(GenericSubsystemSecurityBinding())
+      .copy(authentication = Some(authentication))
+    subsystem.withDescriptor(descriptor.copy(security = Some(security)))
   }
 }

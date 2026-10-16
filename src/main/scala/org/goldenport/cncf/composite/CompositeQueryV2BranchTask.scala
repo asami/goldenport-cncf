@@ -9,7 +9,7 @@ import org.goldenport.protocol.operation.OperationResponse
 
 /*
  * @since   Sep. 29, 2026
- * @version Sep. 29, 2026
+ * @version Oct.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 private[composite] final case class CompositeQueryV2TaskResult(
@@ -28,15 +28,21 @@ private[composite] final class CompositeQueryV2BranchTask(
   protocol: CompositeQueryV2Protocol,
   invocation: CompositeQueryV2Invocation,
   onTerminal: CompositeQueryV2TaskResult => Unit,
-  onBodyExit: String => Unit
+  onBodyExit: String => Unit,
+  persistentDiagnostics: Boolean = false
 ) extends JobTask {
   val actionId: ActionId = ActionId.generate()
   private var _staged = Option.empty[CompositeQueryV2TaskResult]
   private var _cancelled = false
 
-  override def taskKind: String = "composite-query-v2"
-  override def targetKind: Option[String] = Some("query")
-  override def componentName: Option[String] = None
+  // The persistent identity names this framework-owned diagnostic wrapper.
+  // Its canonical task settlement is separate from the target Query UnitOfWork.
+  override def taskKind: String = if (persistentDiagnostics) "operation" else "composite-query-v2"
+  override def targetKind: Option[String] = if (persistentDiagnostics) Some("operation") else Some("query")
+  override def relation: Option[String] = if (persistentDiagnostics) Some("root") else None
+  override def transactionRole: Option[String] = if (persistentDiagnostics) Some("own") else None
+  override def transactionScope: Option[String] = if (persistentDiagnostics) Some("per-task") else None
+  override def componentName: Option[String] = if (persistentDiagnostics) Some("composite-query-v2") else None
   override def serviceName: Option[String] = None
   override def operationName: Option[String] = Some("composite-query-v2")
   override def requestSummary: Option[String] = Some("composite-query-v2")
@@ -50,11 +56,11 @@ private[composite] final class CompositeQueryV2BranchTask(
   def run(context: ExecutionContext): TaskOutcome = {
     val started = System.nanoTime()
     val result = try {
-      if (_is_cancelled(context))
+      if (_is_cancelled(context)) {
         CompositeQueryV2TaskResult(branch.branchId, targetId, None, Some(CompositeQueryV2FailureCode.Cancelled), true, started, System.nanoTime())
-      else if (context.jobContext.cancellationScope.isEmpty)
+      } else if (context.jobContext.cancellationScope.isEmpty) {
         CompositeQueryV2TaskResult(branch.branchId, targetId, None, Some(CompositeQueryV2FailureCode.ContextUnavailable), false, started, System.nanoTime())
-      else {
+      } else {
         try {
           protocol.invoke(invocation, branch, context) match {
             case Consequence.Success(reply) =>
@@ -101,10 +107,13 @@ private[composite] final class CompositeQueryV2BranchTask(
       }
     }
     val result =
-      if (cancelled) staged.copy(response = None, failure = Some(CompositeQueryV2FailureCode.Cancelled), cancelled = true)
-      else outcome match {
-        case _: TaskFailed if staged.failure.isEmpty => staged.copy(response = None, failure = Some(CompositeQueryV2FailureCode.InternalFailure))
-        case _ => staged
+      if (cancelled) {
+        staged.copy(response = None, failure = Some(CompositeQueryV2FailureCode.Cancelled), cancelled = true)
+      } else {
+        outcome match {
+          case _: TaskFailed if staged.failure.isEmpty => staged.copy(response = None, failure = Some(CompositeQueryV2FailureCode.InternalFailure))
+          case _ => staged
+        }
       }
     onTerminal(result)
   }

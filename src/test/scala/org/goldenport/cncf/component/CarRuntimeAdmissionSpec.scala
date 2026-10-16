@@ -2,7 +2,6 @@ package org.goldenport.cncf.component
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
-import java.security.MessageDigest
 import java.util.Comparator
 import java.util.zip.{ZipEntry, ZipFile, ZipOutputStream}
 import scala.jdk.CollectionConverters._
@@ -23,7 +22,8 @@ import org.goldenport.cncf.workarea.WorkAreaSpace
 
 /*
  * @since   Jul. 28, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Oct.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CarRuntimeAdmissionSpec
@@ -32,9 +32,9 @@ final class CarRuntimeAdmissionSpec
     with GivenWhenThen {
   "Packaged CAR runtime admission" should {
     "admit compatible independent runtime evidence" which {
-      "activates compatible runtime, ABI, and integrity evidence without Cozy" in {
+      "activates compatible runtime and ABI evidence without Cozy" in {
         _with_temp_dir { root =>
-          Given("a packaged CAR with compatible CNCF range, ABI export, opaque provenance, and exact digests")
+          Given("a packaged CAR with compatible CNCF range, ABI export, and opaque provenance")
           val content = root.resolve("content")
           _prepare_root(
             content,
@@ -280,42 +280,9 @@ final class CarRuntimeAdmissionSpec
         }
       }
 
-      "rejects archive tampering independently of generation provenance semantics" in {
-        _with_temp_dir { root =>
-          Given("a CAR whose component bytes change after the runtime manifest is generated")
-          val content = root.resolve("content")
-          _prepare_root(
-            content,
-            abicomponent = "Sample"
-          )
-          _write_runtime_manifest(
-            content,
-            minimum = _compatible_minimum,
-            excluded = Vector.empty
-          )
-          Files.writeString(
-            content.resolve("component/main.jar"),
-            "tampered",
-            StandardCharsets.UTF_8
-          )
-          val archive = _zip(content, root.resolve("tampered.car"))
-          val workarea = WorkAreaSpace.create(RuntimeConfig.default)
-
-          When("CNCF verifies the packaged file set")
-          val rejected = CarExtractor.withExtracted(archive, workarea) { _ =>
-            Consequence.success(())
-          }
-
-          Then("the digest mismatch rejects the CAR before classloading")
-          _failure_message(rejected) should include(
-            "CAR integrity digest mismatch: component/main.jar"
-          )
-        }
-      }
-
       "rejects ABI evidence that does not export the packaged component" in {
         _with_temp_dir { root =>
-          Given("a digest-valid CAR whose ABI sidecar exports another component")
+          Given("a CAR whose ABI sidecar exports another component")
           val content = root.resolve("content")
           _prepare_root(
             content,
@@ -343,7 +310,7 @@ final class CarRuntimeAdmissionSpec
 
       "rejects runtime evidence whose artifact name differs from the canonical descriptor projection" in {
         _with_temp_dir { root =>
-          Given("a digest-valid CAR with canonical descriptor and ABI evidence but a different runtime car.name")
+          Given("a CAR with canonical descriptor and ABI evidence but a different runtime car.name")
           val content = root.resolve("content")
           _prepare_root(
             content,
@@ -425,12 +392,6 @@ final class CarRuntimeAdmissionSpec
     excluded: Vector[String],
     artifactname: String = _artifactname
   ): Unit = {
-    val entries = _regular_files(root)
-      .filterNot(_._1 == CarRuntimeAdmission.MANIFEST_FILE)
-      .map { case (relative, path) =>
-        s"""{"path":${_json_string(relative)},"sha256":${_json_string(_sha256(path))}}"""
-      }
-      .mkString("[", ",", "]")
     val excludedjson = excluded.map(_json_string).mkString("[", ",", "]")
     Files.writeString(
       root.resolve(CarRuntimeAdmission.MANIFEST_FILE),
@@ -448,10 +409,6 @@ final class CarRuntimeAdmissionSpec
          |      "excluded": ${excludedjson},
          |      "tested": [${_json_string(CncfVersion.current)}]
          |    }
-         |  },
-         |  "integrity": {
-         |    "algorithm": "SHA-256",
-         |    "entries": ${entries}
          |  }
          |}
          |""".stripMargin,
@@ -505,10 +462,6 @@ final class CarRuntimeAdmissionSpec
       case Consequence.Failure(conclusion) => conclusion.display
       case Consequence.Success(_) => fail("expected CAR runtime admission failure")
     }
-
-  private def _sha256(path: Path): String =
-    MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path)).
-      map(byte => f"${byte & 0xff}%02x").mkString
 
   private def _json_string(value: String): String =
     "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""

@@ -29,6 +29,7 @@ private[cncf] object UnitOfWorkOperationClassifier {
         UnitOfWorkEffectClass.External
 
       case UnitOfWorkOp.DataStoreLoad(_) |
+          UnitOfWorkOp.StageWorkflowClosingLocalIntent(_) |
           UnitOfWorkOp.StateMachineProviderExecute(_) |
           UnitOfWorkOp.StateMachineProvidedApiExecute(_) |
           UnitOfWorkOp.DataStoreSave(_, _) |

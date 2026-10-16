@@ -30,12 +30,14 @@ provenance evidence as distinct information. This boundary neither introduces
 another resolver nor turns a resource lookup into activation, operation, MCP
 access, disclosure, or deployment authority.
 
-## Content Protection Boundary
+## Content Authorization Boundary
 
-Resource content is exposed only through the authorization, integrity, and
-path-safety boundary. A composition membership, role, inventory entry, or
-availability result does not grant content authority. Restricted content is
-represented without disclosing its protected material.
+Resource content is exposed through explicit role/repository authorization,
+parent/release membership, availability, coordinate/repository agreement, and
+archive path safety. Supplied integrity state is independent descriptive
+metadata. A composition membership, role, inventory entry, or availability
+result does not grant content authority. Restricted content is represented
+without disclosing its protected material.
 
 ## Runtime Policy Boundary
 
@@ -46,10 +48,11 @@ contract.
 
 ## Lifecycle Boundary
 
-Verified resource artifacts are immutable release evidence. Sharing, cache
-ownership, resolution flights, refresh, invalidation, unload, shutdown, and
-waiter outcomes remain lifecycle responsibilities with truthful concurrent
-outcomes and bounded, non-sensitive observability.
+Resource objects retain operational lifecycle ownership. Sharing, cache
+ownership, resolution flights, refresh, invalidation, release, unload,
+shutdown, and waiter outcomes remain lifecycle responsibilities with truthful
+concurrent outcomes and bounded, non-sensitive observability. The lifecycle
+key retains Component/release identity, role, and source kind.
 
 ## Consumer Boundary
 

@@ -9,9 +9,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan.  7, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 class JobObservabilityNoEffectSpec
   extends AnyWordSpec
   with Matchers

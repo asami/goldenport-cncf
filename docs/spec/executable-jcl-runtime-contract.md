@@ -189,15 +189,17 @@ independently of JCL local continuations.
 
 ## Slice D immutable JobDefinition snapshot
 
-Submitting an active JobDefinition by reference resolves one management record
-and captures its definition ID, key, version, revision, hash, source, format,
-and normalized profile in the existing Job snapshot. The one submitted Job
+Submitting an active JobDefinition by reference resolves one stored typed Entity
+and captures its opaque saved definition ID, key, source, format, and normalized
+profile in the existing Job snapshot. EntityStore owns the revision used for its
+internal conditional save; there is no domain version, revision, or hash in the
+definition or submitted snapshot. The one submitted Job
 executes the captured source plan and retains its original task and
 continuation records.
 
 Updating that same active definition through
-`job_control.job.update_job_definition` creates the next current revision and,
-when the source changes, the next version and hash. A subsequent management
+`job_control.job.update_job_definition` replaces the current source under the
+same stored identity and ordinary EntityStore lifecycle. A subsequent management
 read exposes the new source, but the already submitted Job remains succeeded
 with its original snapshot, task count, task lineage, and execution trace; it
 does not execute nodes introduced by the update. Future submissions may use the
@@ -213,23 +215,18 @@ mechanism.
 
 ## JobDefinition direct-ID compatibility bridge
 
-This bridge is local to `JobDefinitionEntity`. Canonical key equality is
-trimmed-string equality. New records use a versioned, lossless direct ID label:
-`v1_<utf16-length-in-hex>_<each-UTF-16-unit-in-four-hex-digits>`. Thus `a-b`
-and `a_b` have distinct new IDs while retaining their original normalized keys.
+The current [lightweight lifecycle contract](job-definition-lifecycle-contract.md)
+owns this boundary. Canonical key equality is trimmed-string equality. The key
+remains a key; creation persists one typed Entity with an opaque saved ID.
+Store-scoped exact-key search finds that Entity, and `loadDetached` uses its
+actual stored ID. Updates retain that identity. There is no key encoding,
+key-derived ID, digest, companion integrity field, or correspondence table.
+Distinct keys such as `a-b` and `a_b` remain distinct. EntityStore revision is
+an internal conditional-save token, not a second JobDefinition domain control.
 
-Reads first try the versioned direct ID, then use a store-scoped exact persisted
-normalized-key search as a read-only legacy fallback. A complete historic
-three-argument `EntityId` cannot be reconstructed from a key because it contains
-non-reconstructible timestamp and entropy. At each cache hit, new-ID load, and
-legacy-key result, the persisted normalized key must equal the requested normalized
-key. A mismatching candidate is never returned. Creation rejects an exact existing
-key through either compatible lookup, but admits distinct collision pairs such as
-`a-b` and `a_b`; no migration or duplicate repair is performed.
-
-This does not redesign `EntityId`, `UniversalId`, ID-generation context,
-EntityStore indexing, or the public ID contract. A general persisted-identity
-redesign remains an explicit deferred boundary for later work.
+The earlier Phase 69.3 key-encoded direct-ID description is superseded by this
+canonical lightweight lifecycle. No general EntityId/UniversalId redesign,
+identity migration, or restored governance system is introduced here.
 
 ## Out of scope
 
@@ -241,3 +238,140 @@ workflow, transport, or public protocol sources are outside Slice D.
 
 Global EntityId/UniversalId redesign, store-wide key indexing, and identity
 migration are outside this executable-JCL contract.
+
+## JM69-10C9 native metadata and process companion
+
+status=selected_validation_complete
+manifest=PHASE-69.7-JM69-10C9-implementation01@3
+validation_status=REP006-and-ACC001-passed
+review_status=original-wholeStep-protected-M2-pending
+acceptance_status=not-accepted
+
+The [JX1..JX9 process companion](job-cross-process-acceptance-contract.md#jcl-native-process-companion)
+and [seven-scenario executable specification](../../src/test/scala/org/goldenport/cncf/job/JobJclCrossProcessAcceptanceSpec.scala)
+extend the existing runtime contract with genuine public finite-flow execution
+and independently fresh native readers. A JCL-private prepared-task decorator
+uses site-selected defaults: root submission is Root, finite flow is Child,
+and same-Job continuation is Continuation. A nonempty delegate relation remains
+authoritative. Missing transaction role/scope use Own/PerTask. All original
+action/target/operation/parameters/persistence/compensation metadata, run,
+canonical outcome, admission failure, and prepared context remain delegated;
+`OperationEvaluationActionTask` remains the actual callback owner and
+`JclEventAwareTask` remains outside the decorator.
+
+The first actual task has no parent and Root/reference None. Each later finite
+task has its immediately preceding actual task ID as both parent and Child
+reference. Same-Job continuation retains its actual source-task parent. The
+engine's explicit compensation relation/parent override remains authoritative.
+TaskStart/Outcome checkpoints assert the genuine accumulated prefix, and the
+terminal record has all N distinct tasks in declaration order. The C9-local
+evidence transformation calls the unchanged addressed shared pair and copies
+only descriptor kind to Action; it does not rewrite models or relax projection.
+
+For a stored definition, the writer publicly creates/gets active A, submits its
+reference, completes A, then publicly updates the same ID to B and retires it.
+The fresh reader loads the real engine-created JobEntity submitted source A and
+the current typed JobDefinition B/Retired under the native lease. Separately it
+authenticates the original signed definition metadata and cross-matches saved
+ID/key/format. That signed envelope contains no source A and does not
+authenticate the JCL body. Its fixed legacy metadata fields are not lightweight
+definition controls. No new hash, source Blob, schema, seeded JobEntity, or
+writer-content authority is introduced. Fresh durable public query/management
+surfaces remain body-free and preserve foreign-caller refusal/concealment.
+
+The [Oct6 journal](../journal/2026/10/2026-10-06-phase-69.7-job-jcl-cross-process.md)
+retains C9-SIGNED-DEFINITION-SOURCE-01 and C9-FINITE-FLOW-ROOT-PARENT-02 plus the
+Manifest3 decisions. At initial authoring selected6REP/129ACC were planned,
+with no C9 validation result; the current selected results below supersede that status. Actual event/continuation process acceptance is C10 and remains OPEN;
+whole-JM69-10 independent M2/commit, actual CBD provider/Entity/completed full
+Review/fresh recovery, remaining security/started-work decision, aggregate full
+validation, sole original full Phase review, and local release remain OPEN.
+
+## Current C9 selected validation — 2026-10-06
+
+Initial `authored_validation_pending` / `planned-not-run` remains authoring
+history and is superseded by `status=selected_validation_complete` and
+`validation_status=REP006-and-ACC001-passed`. Current
+`review_status=original-wholeStep-protected-M2-pending` and
+`acceptance_status=not-accepted` remain unchanged.
+
+Actual [REP006 representative result](../../.codex-workflow/phases/PHASE-69.7/JM69-10C9-representative06-result.json) completed6 suites/60 tests,
+60 succeeded, aborted0/failed0/canceled0/ignored0/pending0/compilerwarnings0.
+Actual [ACC001 accumulator result](../../.codex-workflow/phases/PHASE-69.7/JM69-10C9-accumulator01-result.json) completed129 suites/1057 tests,
+1057 succeeded, aborted0/failed0/canceled0/ignored0/compilerwarnings0, plus
+only the original `SqliteDataStoreSpec` pending1. Both typed readers, SBT and
+wrappers exited0; both execution permissions were consumed and actual
+`lock=released` was verified by the parent. These are selected-validation
+results, with no full-repository, whole-Step or full-Phase acceptance inferred.
+
+JX6 retains four typed pre-execution refusals and complete unchanged native
+baselines/effects. The original malformed-YAML refusal retains `ParserException`,
+the `expected the node content` diagnostic and exact `Taxonomy(System,Corrupted)`
+(System-Corrupted). Draft/Retired exact messages and the unsupported exact-key
+message retain `argumentInvalid`. This records existing branch-specific public
+consequences; it introduces no parser/taxonomy policy and weakens no negative
+assertion. Source A/current B, separate signed metadata, JX1..JX9, privacy,
+no-reader-replay, cleanup and the ordinary seeded min24 property remain unchanged.
+
+Stage remains IN_PROGRESS; JM69-09 DONE, JM69-10 OPEN and Phase69.7 IN_PROGRESS.
+All original wider acceptance obligations above remain open, including actual
+C10 processes, security/positive started-work decision, actual CBD full Review
+and independent fresh recovery, compatibility/guidance promotion, protected
+whole-JM10 M2/local acceptance commit, predecessor reciprocal deferred-full,
+aggregate full CNCF/downstream validation, sole epoch1 full Phase review and
+final local release. Original history, allowances, counters and HYG records
+remain; selected validation neither resets them nor records review acceptance.
+
+## JM69-10C10 event and continuation process companion
+
+status=authored_validation_pending
+manifest=PHASE-69.7-JM69-10C10-implementation01@1
+validation_status=planned-not-run
+review_status=original-wholeStep-protected-M2-pending
+acceptance_status=not-accepted
+
+The [EC1..EC9 companion](job-cross-process-acceptance-contract.md#jcl-event-and-continuation-native-process-companion)
+and [nine-scenario executable specification](../../src/test/scala/org/goldenport/cncf/job/JobJclEventCrossProcessAcceptanceSpec.scala)
+author actual sequential JVM consumers of the existing Slice C bridge. Real
+public inline JobControl Action submission executes root/source commands,
+publishes through native EventBus and runs matching local handlers. One static
+observer is registered by fixture setup; JCL subscriptions remain unchanged.
+Root emission keeps the root scalar; flow emission keeps the source scalar.
+Handlers inherit the root parameter map with their own overrides.
+
+Independent Action/Root/Child/Continuation and Own/PerTask selectors validate
+actual native models before genuine keyed pairs. Root has no parent; the flow
+Child references root; each Continuation references the actual emitting source,
+never the previous handler. Progressive boundary vectors preserve the source
+Running/Pending during nested handlers. For T=base+N, terminal revision4+2*T
+and all T Committed descriptors match exact live order. Dynamic native tickets
+yield paid2*T/(32+64*T+32*N+notes)/(1+N)/(1+N), notes3 for root or4 for flow,
+remaining0, exact normal IDs and no claims/cancel claim.
+
+Command attempts/UoW termination, post-commit effects and source wrapper
+outcome are separate. SourceFailure retains its original argumentInvalid with
+no emission. DispatchFailure retains typed event.dispatch and its previous
+observer cause after store append; HandlerFailure stops at its first failing
+continuation. A wrapper failure does not erase successful delegate commits.
+These failures deliberately use Ephemeral Jobs and prove empty durable Job
+storage rather than inventing a signed failed recovery contract.
+
+Original ReceptionDomainEvent and actual writer EventRecords prove exact
+emission/lineage/context/time/order and persistent option. The existing
+Subsystem EventStore is in-memory: each fresh reader's selected eventcount is0,
+including after persistent writer events. There is no EventStore durability,
+replay, global deduplication or external delivery claim. Persistent readers
+restore exact signed terminal/payment facts and actual native inline JobEntity
+debug metadata, preserving UnavailableAfterRestart and foreign concealment,
+unchanged native rows and zero execution/source/pair/port/Blob/publication/
+SQL/Entity-write effects.
+
+All nine leaves and ordinary seed69710102L/min24 generated invocations retain
+adjacent GWT, actual sequential processes, bounded receipts and full resource
+closure. The [journal](../journal/2026/10/2026-10-06-phase-69.7-job-jcl-event-cross-process.md)
+records selected8REP/130ACC as planned-not-run. Original C9 evidence, histories,
+allowances and the three [stable Hygiene follow-ups](../journal/2026/10/2026-10-01-phase-69.7-hygiene-follow-up.md)
+remain. Stage C10 IN_PROGRESS, JM69-09 DONE, JM69-10 OPEN and Phase69.7
+IN_PROGRESS; original whole-Step M2, remaining security/started-work/CBD,
+compatibility/promotion, aggregate/full-Phase validation/review and release are
+still OPEN. No production runtime contract is changed by this authoring.

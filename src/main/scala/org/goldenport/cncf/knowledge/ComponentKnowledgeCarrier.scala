@@ -8,27 +8,25 @@ import org.goldenport.Consequence
  * location other than its one canonical CAR logical path.
  *
  * @since   Aug. 26, 2026
- * @version Aug. 26, 2026
+ * @version Oct.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentKnowledgeCarrier(
   carrierSchema: String,
   consumerContractSchema: String,
-  logicalPath: String,
-  sha256: String
+  logicalPath: String
 )
 
 object ComponentKnowledgeCarrier {
   val SCHEMA = "cncf.component-knowledge-carrier.v1"
   val LOGICAL_PATH = "component-knowledge.json"
 
-  def createC(sha256: String): Consequence[ComponentKnowledgeCarrier] =
+  def createC(): Consequence[ComponentKnowledgeCarrier] =
     validateC(
       ComponentKnowledgeCarrier(
         SCHEMA,
         ComponentKnowledgeManifestConsumerContract.SCHEMA,
-        LOGICAL_PATH,
-        sha256
+        LOGICAL_PATH
       )
     )
 
@@ -51,11 +49,6 @@ object ComponentKnowledgeCarrier {
         value.logicalPath == LOGICAL_PATH,
         (),
         s"Component knowledge carrier logical path must be exactly '$LOGICAL_PATH'"
-      )
-      _ <- Either.cond(
-        value.sha256.matches("[0-9a-f]{64}"),
-        (),
-        "Component knowledge carrier SHA-256 must be lowercase hexadecimal"
       )
     } yield value
 }

@@ -14,9 +14,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 3, 2026
- * @version Oct. 3, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobOperationMetricsSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "E1 PM1 closed completed-result matrix" must _scenario("E1", "R1,R2,R4,R5") {
     "retain identical results and expose exactly eleven independent cells" in {

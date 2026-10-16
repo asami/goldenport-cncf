@@ -1,5 +1,23 @@
 # Durable Job Runtime Owner Design
 
+## Current-caller result read composition
+
+The [query contract](../spec/durable-job-operation-response-query-contract.md)
+and [design](durable-job-operation-response-query.md) define the separate
+consumer on this original owner. Trusted private inputs append an optional
+current-caller resolver after the migration flag; malformed container/element
+refuses startup and explicit None remains compatible. Exact registered owned
+operation-response terminals require original overview authorization followed by
+raw current-caller tenant/subject/scopes inside the existing real binding lease.
+Brief owner Ready/engine/identity selection ends before any callback or provider.
+The owner explicitly uses the current caller with its one original B2 reader;
+already admitted work can finish through logical close with final native checks.
+Subsystem drain waits and the original SystemNode owns physical finalization.
+Only a detached model result escapes. Closed projections, raw/getResult and
+original management remain body-free, with no response cache or authority fallback.
+The [query journal](../journal/2026/10/2026-10-04-phase-69.7-job-result-query.md)
+owns authoring/execution evidence; actual CBD completion remains separate.
+
 status=authoring_test_pending
 phase=69.7
 step=JM69-09

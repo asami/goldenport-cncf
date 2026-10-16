@@ -69,6 +69,76 @@ final case class RuntimeConfig(
 }
 
 object RuntimeConfig {
+  /** Parsed runtime settings, without owning any storage resources. */
+  private[cncf] final case class Settings(
+    logBackend: LogBackend,
+    logLevel: LogLevel,
+    serverEmulatorBaseUrl: String,
+    httpDriver: HttpDriver,
+    mode: RunMode,
+    operationMode: OperationMode,
+    webOperationDispatcher: String,
+    webOperationDispatcherRestBaseUrl: Option[String],
+    webDevelopAnonymousAdmin: Boolean,
+    webDemoAssistEnabled: Boolean,
+    webProductionAdminEnabled: Boolean,
+    webProductionAdminSystemRoles: Vector[String],
+    webProductionAdminComponentRoles: Vector[String],
+    webProductionAdminJobsRoles: Vector[String],
+    debugAuthConfig: DebugAuthConfig,
+    commandExecutionMode: Option[CommandExecutionMode],
+    executionHistoryConfig: ObservabilityEngine.ExecutionHistoryConfig,
+    diagnosticPayloadExternalizationConfig: DiagnosticPayloadExternalizationConfig,
+    openTelemetryExportConfig: OpenTelemetryExportConfig,
+    staticFormAppRendererConfig: StaticFormAppRendererConfig,
+    blobStoreConfig: BlobStoreConfig,
+    idNamespace: IdGenerationContext.IdNamespace,
+    executionProfile: ResolvedExecutionProfile,
+    resourceUrlPolicy: ResourceUrlPolicy,
+    textusUrnResourcePolicy: TextusUrnResourcePolicy,
+    urnResourceProviders: Vector[UrnResourceProvider],
+    resourceTreePolicy: ResourceTreePolicy,
+    mcpClientPolicyPath: Option[Path],
+    operationToolPolicyPath: Option[Path]
+  ) {
+    private[config] def withStores(
+      dataStoreSpace: DataStoreSpace,
+      entityStoreSpace: EntityStoreSpace
+    ): RuntimeConfig = RuntimeConfig(
+      logBackend = logBackend,
+      logLevel = logLevel,
+      serverEmulatorBaseUrl = serverEmulatorBaseUrl,
+      httpDriver = httpDriver,
+      dataStoreSpace = dataStoreSpace,
+      entityStoreSpace = entityStoreSpace,
+      mode = mode,
+      operationMode = operationMode,
+      webOperationDispatcher = webOperationDispatcher,
+      webOperationDispatcherRestBaseUrl = webOperationDispatcherRestBaseUrl,
+      webDevelopAnonymousAdmin = webDevelopAnonymousAdmin,
+      webDemoAssistEnabled = webDemoAssistEnabled,
+      webProductionAdminEnabled = webProductionAdminEnabled,
+      webProductionAdminSystemRoles = webProductionAdminSystemRoles,
+      webProductionAdminComponentRoles = webProductionAdminComponentRoles,
+      webProductionAdminJobsRoles = webProductionAdminJobsRoles,
+      debugAuthConfig = debugAuthConfig,
+      commandExecutionMode = commandExecutionMode,
+      executionHistoryConfig = executionHistoryConfig,
+      diagnosticPayloadExternalizationConfig = diagnosticPayloadExternalizationConfig,
+      openTelemetryExportConfig = openTelemetryExportConfig,
+      staticFormAppRendererConfig = staticFormAppRendererConfig,
+      blobStoreConfig = blobStoreConfig,
+      idNamespace = idNamespace,
+      executionProfile = executionProfile,
+      resourceUrlPolicy = resourceUrlPolicy,
+      textusUrnResourcePolicy = textusUrnResourcePolicy,
+      urnResourceProviders = urnResourceProviders,
+      resourceTreePolicy = resourceTreePolicy,
+      mcpClientPolicyPath = mcpClientPolicyPath,
+      operationToolPolicyPath = operationToolPolicyPath
+    )
+  }
+
   final case class DebugAuthConfig(
     enabled: Boolean = false,
     seedAccountEnabled: Boolean = false,
@@ -413,6 +483,27 @@ object RuntimeConfig {
     modeoverride: Option[RunMode],
     profileoverride: Option[ResolvedExecutionProfile]
   ): RuntimeConfig = {
+    // Validate settings before acquiring caller-owned physical stores.
+    val settings = _settings(configuration, modeoverride, profileoverride)
+    val config = settings.withStores(
+      DataStoreSpace.create(configuration),
+      EntityStoreSpace.create(configuration)
+    )
+    ObservabilityEngine.updateExecutionHistoryConfig(settings.executionHistoryConfig)
+    config
+  }
+
+  private[cncf] def settingsFrom(
+    configuration: ResolvedConfiguration,
+    modeOverride: Option[RunMode] = None
+  ): Settings =
+    _settings(configuration, modeOverride, None)
+
+  private def _settings(
+    configuration: ResolvedConfiguration,
+    modeoverride: Option[RunMode],
+    profileoverride: Option[ResolvedExecutionProfile]
+  ): Settings = {
     val baseurl =
       _get_string(configuration, serverEmulatorBaseUrlKey)
         .getOrElse(defaultServerEmulatorBaseUrl)
@@ -462,8 +553,6 @@ object RuntimeConfig {
         case None => RuntimeDefaults.defaultLogLevel(mode)
       }
     }
-    val datastorespace = DataStoreSpace.create(configuration)
-    val entitystorespace = EntityStoreSpace.create(configuration)
     val executionhistoryconfig = _execution_history_config(configuration)
     val diagnosticpayloadexternalizationconfig =
       _diagnostic_payload_externalization_config(configuration, operationmode)
@@ -521,14 +610,11 @@ object RuntimeConfig {
           case roles => roles
         }
     val debugauthconfig = _debug_auth_config(configuration)
-    ObservabilityEngine.updateExecutionHistoryConfig(executionhistoryconfig)
-    val config = RuntimeConfig(
+    val config = Settings(
       logbackend,
       loglevel,
       serverEmulatorBaseUrl = baseurl,
       httpDriver = httpdriver,
-      dataStoreSpace = datastorespace,
-      entityStoreSpace = entitystorespace,
       mode = mode,
       operationMode = operationmode,
       webOperationDispatcher = weboperationdispatcher,
@@ -585,7 +671,7 @@ object RuntimeConfig {
       .flatMap(OperationMode.from)
       .getOrElse(defaultOperationMode)
 
-  private def _validate(config: RuntimeConfig): Unit = {
+  private def _validate(config: Settings): Unit = {
     config.diagnosticPayloadExternalizationConfig.validationError.foreach { message =>
       throw new IllegalArgumentException(message)
     }

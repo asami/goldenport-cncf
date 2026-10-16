@@ -15,6 +15,46 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
+- [Phase 106](phase-106.md) / [checklist](phase-106-checklist.md) is PLANNED:
+  generic Review Evidence/Admission integration driven by sm-workflow Phase 6,
+  with Cozy 81 and cbd-support 15. Reuse Phase 90 CAM; add only actual missing
+  connections and verify the bounded consumer route. No STEP/PHASE/FINAL ABI,
+  unchanged-content proof or reopening of Phase 105 hygiene scope.
+
+- [Phase 105](phase-105.md) is CLOSED: Workflow validation hygiene, no feature
+  additions. Public interfaces, non-public managed `completeC`, native CAS and
+  persisted layouts are preserved. The connected Step, sole Phase full review
+  and bounded host-spec repair are accepted; final full test4348/4348 passed.
+  The explicitly selected CNCF0.5.3-SNAPSHOT artifact passed the existing
+  consumer E12 eight-case integration check. [Checklist](phase-105-checklist.md)
+  and Phase handoff record the tested cutoff, four nonblocking Hygiene items
+  and separate sm-workflow obligations. No consumer Phase completion, main
+  merge, push, publication or deployment is claimed.
+
+- [Phase 103](phase-103.md) plans the shared Validation/Test Metadata ABI and
+  operation discovery, driven by sm-workflow Phase 5. textus-cbd-support static
+  analysis/KPI is a separate Mac mini consumer; its completion does not block
+  the producer/runtime slice. [Checklist](phase-103-checklist.md).
+
+
+- Closed Job Management phase: [Phase 69.7](phase-69.7.md) /
+  [checklist](phase-69.7-checklist.md), closed on 2026-10-07 in local release
+  `f394034fff40a20cd635f196de7d61a3a9e4f5af`. The CNCF Job Management
+  sequence is closed. Aggregate CNCF validation completed 604 suites and
+  4594 successful tests with zero failures/aborts; inherited canceled, ignored
+  and pending examples remain explicitly recorded in the
+  [closure evidence](../journal/2026/10/2026-10-06-phase-69.7-cncf-job-closure-boundary.md#current-phase-release-and-closure--2026-10-07).
+  CBD is excluded/HANDED_OFF_UNVALIDATED under the human scope amendment;
+  its canonical owner retains the unfinished work. No successor Phase is started
+  by this navigation update.
+- [Phase 97](phase-97.md) / [checklist](phase-97-checklist.md) is the
+  GitHub-authoritative AI Audit and Interaction Evidence plan, status planned.
+- [Phase 100](phase-100.md) / [checklist](phase-100-checklist.md) allocates
+  DataStore logical-type declarations, storage mappings and existing-data
+  recovery, driven by workbench. It is planned, not started; the OR mapper
+  restores declared application types while DataStore handles physical values.
+  JSON-looking text is not a type declaration. The phase includes
+  consumer migration and recovery rehearsal without changing active Phase scope.
 - [Phase 95](phase-95.md) plans a UI-facing View Model and Aggregate command
   contract over existing CNCF `ViewSpace`/`AggregateSpace`, with REST first and
   gRPC deferred. It does not block the Editing Studio Flutter application's
@@ -32,7 +72,7 @@ Current baseline:
   [Phase 89](phase-89.md) admits it into CNCF. Both require a stable first
   `sm-workflow` vertical slice plus a concrete consumer requirement; neither
   blocks Phase 64, Phase 77, or `sm-workflow` Phase 1.
-- Latest closed phase: [Phase 90](phase-90.md) - generic Candidate-Admission
+- [Phase 90](phase-90.md) is closed - generic Candidate-Admission
   runtime support with loose evidence persistence and an explicit sm-workflow
   consumer handoff. Its final source/spec tree passed the full suite on
   2026-09-25; real sm-workflow CML generation remains consumer-owned.
@@ -88,14 +128,20 @@ Current baseline:
   cursor and exact management reads, guarded controls, the compatible
   `listJobs` facade, and the generated `job_control` projection. Phase 69.3
   is closed: `JM69-05` establishes executable JCL runtime semantics. Phase
-  69.4 is the active lightweight direct JobDefinition lifecycle work. Phase 62
-  and Phase 69.5 through Phase 69.7 remain planned and not started:
+  69.4 is closed for the lightweight direct JobDefinition lifecycle; Phase 69.5
+  is closed for CompositeQuery v2; Phase 69.6 is closed for user/operator Job
+  experience; and Phase 69.7 is closed for security, retention, operations and
+  retained native cross-process/consumer acceptance. Phase 69.7's accepted full
+  CNCF test task discharges the aggregate obligation transferred by Phases
+  69.4–69.6; their historical full executions remain deferred-not-run.
+  Phase 62 remains planned and not started. Closed Job Management ledgers:
   - `phase-69.md` / `phase-69-checklist.md`
   - `phase-69.1.md` / `phase-69.1-checklist.md`
+  - `phase-69.4.md` / `phase-69.4-checklist.md`
   - `phase-69.5.md` / `phase-69.5-checklist.md`
   - `phase-69.6.md` / `phase-69.6-checklist.md`
   - `phase-69.7.md` / `phase-69.7-checklist.md`
-- Latest closed checklist: `phase-69.2-checklist.md`.
+- Latest closed checklist: `phase-69.7-checklist.md`.
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -161,11 +207,15 @@ Current baseline:
   - `phase-69.1.md`
   - `phase-69.2.md`
   - `phase-69.3.md`
+  - `phase-69.4.md`
+  - `phase-69.5.md`
+  - `phase-69.6.md`
+  - `phase-69.7.md`
   - `phase-70.md`
   - `phase-70.1.md`
-- Phase 69.4 is the active lightweight direct JobDefinition lifecycle work.
-  Its direct lifecycle contract is consumed by Phase 69.5; Phase 69.5 through
-  Phase 69.7 remain planned and not started.
+- Phases 69.4–69.7 are closed. Their direct lifecycle, CompositeQuery v2 and
+  Job experience handoffs are consumed by the accepted Phase 69.7 closure.
+  CBD's excluded, unfinished acceptance stays with its canonical owner.
 
 ## Entity ID Contract Recovery
 
@@ -348,13 +398,12 @@ Accurate work management directly impacts both development speed and quality.
 
 This dated navigation inventory lists every phase/checklist Markdown file
 present on 2026-09-28 and copies its top-level status literally. A missing
-status is reported rather than inferred. The older `Current baseline` and
-closed-phase lists above are historical snapshots where they differ from
-these ledgers. For example, the Phase 69.4 active pointer above predates its
-closed ledger. Each phase and checklist remains the authority for its own
-acceptance, successor, and resume evidence. The Phase 69.5 and Phase 69.6 rows were
-synchronized with their closed ledgers on 2026-09-29; the other rows retain their
-dated inventory status. This inventory changes no acceptance authority.
+status is reported rather than inferred. Each phase and checklist remains the
+authority for its own acceptance, successor, and resume evidence; any differing
+dated navigation snapshot is historical. The Phase 69.5 and Phase 69.6 rows were
+synchronized with their closed ledgers on 2026-09-29; the Phase 69.7 rows were
+synchronized with their committed closed ledgers on 2026-10-07. The other rows
+retain their dated inventory status. This inventory changes no acceptance authority.
 
 | Ledger | Declared status |
 | --- | --- |
@@ -606,8 +655,8 @@ dated inventory status. This inventory changes no acceptance authority.
 | [phase-69.5](phase-69.5.md) | status=closed |
 | [phase-69.6-checklist](phase-69.6-checklist.md) | status=closed |
 | [phase-69.6](phase-69.6.md) | status=closed |
-| [phase-69.7-checklist](phase-69.7-checklist.md) | status=planned |
-| [phase-69.7](phase-69.7.md) | status=planned |
+| [phase-69.7-checklist](phase-69.7-checklist.md) | status=closed |
+| [phase-69.7](phase-69.7.md) | status=closed |
 | [phase-69](phase-69.md) | status=closed |
 | [phase-70-checklist](phase-70-checklist.md) | status=closed |
 | [phase-70.1-checklist](phase-70.1-checklist.md) | status=closed |
@@ -663,3 +712,22 @@ dated inventory status. This inventory changes no acceptance authority.
 | [phase-93](phase-93.md) | No top-level status declared |
 | [phase-94-checklist](phase-94-checklist.md) | status=planned |
 | [phase-94](phase-94.md) | status=planned |
+| [phase-103](phase-103.md) | status=planned |
+| [phase-103-checklist](phase-103-checklist.md) | status=planned |
+| [phase-105](phase-105.md) | status=closed |
+| [phase-105-checklist](phase-105-checklist.md) | status=closed |
+
+## Textus EAI Requirement Intake — 2026-10-03
+
+The [consumer requirements and AC allocation](../journal/2026/10/2026-10-03-textus-eai-workflow-requirements.md)
+are retained in the [unnumbered post-88 follow-up](workflow-consumer-integration-follow-up.md)
+(application/provider assessment), [Phase 87](phase-87.md) (Workflow/Job observation),
+[Phase 93](phase-93.md) (Event correlation), and [Phase 94](phase-94.md)
+(later transaction migration). `sm-workflow` remains the development driver.
+The user reports Phase 88 is executing on Air; its initial local EAI addition
+has been withdrawn. Receive the actual result and stable sm-workflow handoff,
+then assess only residual gaps. This planning intake starts no Phase, assigns no
+new Phase number and adds no requirement that every later integration close
+before EAI's minimum slice can consume a usable upstream handoff. Later status
+synchronizations are identified in the dated inventory notes above; each linked
+Phase owns its live status and evidence.

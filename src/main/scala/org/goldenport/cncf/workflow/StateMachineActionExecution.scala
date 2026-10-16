@@ -11,7 +11,7 @@ import org.goldenport.cncf.unitofwork.ExecUowM
  * outside this initial execution slice.
  *
  * @since   Sep. 22, 2026
- * @version Sep. 22, 2026
+ * @version Oct.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class StateMachineOperationIdentity(service: String, operation: String) {
@@ -105,7 +105,8 @@ final case class ProviderExecutionRequest(
   runId: StateMachineRunIdentity,
   requiredOperation: StateMachineRequiredOperation,
   input: Option[StateMachineOperationInput],
-  context: ContextBundle
+  context: ContextBundle,
+  executionRequirement: Option[WorkflowProtocolV1.ExecutionRequirement] = None
 )
 
 /** A Provider selects one closed ActionExecution outcome for each request. */

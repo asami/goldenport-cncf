@@ -155,6 +155,7 @@ private[cncf] object JobDurableRuntimeFixtures {
     val entity = new JobDurableLifetimeRecoveryFixtures.ObservedEntityStore
     val blob = new LocalBlobStore(root.resolve("blobs"))
     var selectedBlob: BlobStore = blob
+    var selectedCallerAccessResolver: Option[DurableJobCallerAccessResolver] = None
     var storagePolicy = DurableJobStorageResourcePolicy.default
     var blobPolicy = DurableJobOwnedBlobResourcePolicy.default
     var lifetimePolicy = DurableJobLifetimeQuotaPolicy.default
@@ -170,7 +171,8 @@ private[cncf] object JobDurableRuntimeFixtures {
         context.entityStoreSpace.addEntityStore(entity)
         JobDurableLifetimeRecoveryFixtures.installJobEntity(entity, context)
         val value = DurableJobRuntimeInputs(entity, selectedBlob, selectedEvidence, startup, selectedPort, retention,
-          context, storagePolicy, blobPolicy, lifetimePolicy)
+          context, storagePolicy, blobPolicy, lifetimePolicy,
+          callerAccessResolver = selectedCallerAccessResolver)
         inputs = Some(value)
         value
       }

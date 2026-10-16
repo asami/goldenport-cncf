@@ -11,9 +11,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 1, 2026
- * @version Oct. 1, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 class JobResourceBudgetSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Q1 finite policy and atomic admission" should afterWord(
     "in spec:job-operations-contract, example:Q1, rules:R1,R2, phase:69.7"

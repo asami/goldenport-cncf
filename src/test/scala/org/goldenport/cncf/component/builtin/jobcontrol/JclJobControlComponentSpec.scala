@@ -35,9 +35,10 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *  version May.  7, 2026
  *  version Aug. 13, 2026
  *  version Sep. 28, 2026
- * @version Oct.  4, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JclJobControlComponentSpec
   extends AnyWordSpec
   with Matchers

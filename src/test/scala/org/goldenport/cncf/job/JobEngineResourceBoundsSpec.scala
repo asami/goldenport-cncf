@@ -18,9 +18,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 1, 2026
- * @version Oct. 3, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 class JobEngineResourceBoundsSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "E1 admission before effects" should afterWord(
     "in spec:job-operations-contract, example:E1, rules:R1,R2,R3, phase:69.7"

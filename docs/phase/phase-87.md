@@ -72,6 +72,26 @@ sm-workflow should be usable as a representative external consumer:
 - Duplicating Phase 69.6 Job management functionality.
 - Adding a second Workflow persistence, history, or observability model solely for the UI.
 
+## Textus EAI observability requirements — 2026-10-03
+
+Keep `sm-workflow` as the first representative consumer. Add EAI as a generic
+Workflow/Job projection case using the
+[Textus EAI requirement intake](../journal/2026/10/2026-10-03-textus-eai-workflow-requirements.md).
+The Web Console is a later observation surface; it is not a prerequisite for
+EAI's non-network minimum contract fixture.
+
+### EAI-87: Workflow and Job observation
+
+Stage Status:
+- Current status: OPEN
+- Owner: CNCF Workflow Management projection owner; EAI association owner
+- Update rule: Close only with canonical runtime facts and consumer-owned correlation supplied through an explicit mapping. Checklist below is the closure basis.
+
+- [ ] Project EAI's source/event, pinned Binding, start invocation, related Jobs, WorkflowHandle, current WorkOrder and confirmed result when supplied by the authoritative consumer/runtime mapping; keep absent or ambiguous mapping explicit.
+- [ ] Show a completed start Job alongside a suspended Workflow without presenting Job success as business completion; retain Workflow instances without a Job association.
+- [ ] Preserve PendingStart, KnownStarted, Unconfirmed and Unavailable observations where supplied by the consumer. Read-only inspection must not start or resume work, infer non-execution from missing data, or reconstruct a shadow Workflow/receipt registry.
+- [ ] Reuse normal authorization and redaction. Do not expose private claim tokens or treat source/event correlation as permission to inspect another consumer's work.
+
 ## Planning references
 
 - [Phase 69.6](phase-69.6.md)

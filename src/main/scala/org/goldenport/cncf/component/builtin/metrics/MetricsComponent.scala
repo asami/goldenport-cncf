@@ -7,7 +7,7 @@ import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, C
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.metrics.{ComponentMetricsRegistry, EntityAccessMetricsRegistry, RuntimeMetricPoint}
-import org.goldenport.cncf.observability.OpenTelemetryExporter
+import org.goldenport.cncf.observability.{OpenTelemetryExportConfig, OpenTelemetryExporter}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.handler.ProtocolHandler
@@ -19,7 +19,7 @@ import org.goldenport.schema.DataType
 /*
  * @since   Mar. 29, 2026
  *  version Apr. 10, 2026
- * @version Oct.  3, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class MetricsComponent() extends Component {
@@ -63,11 +63,11 @@ object MetricsComponent {
         services = spec.ServiceDefinitionGroup(services = Vector(service)),
         handler = ProtocolHandler.default
       )
-      val runtimeconfig = RuntimeConfig.from(params.subsystem.configuration)
+      val runtimeconfig = RuntimeConfig.settingsFrom(params.subsystem.configuration)
       comp.withPort(Component.Port.of(new DefaultMetricsService(
         params.subsystem.entityAccessMetrics,
         params.subsystem.componentMetrics,
-        runtimeconfig,
+        runtimeconfig.openTelemetryExportConfig,
         () => params.subsystem.runtimeOperationSecurityPolicyC,
         () => params.subsystem.jobEngine.operationalMetrics.getOrElse(Vector.empty)
       )))
@@ -79,10 +79,25 @@ object MetricsComponent {
   private[cncf] final class DefaultMetricsService(
     registry: EntityAccessMetricsRegistry,
     componentmetrics: ComponentMetricsRegistry,
-    runtimeconfig: RuntimeConfig,
+    exportconfig: OpenTelemetryExportConfig,
     operationmodesupplier: () => Consequence[org.goldenport.cncf.config.RuntimeOperationSecurityPolicy],
     jobsupplier: () => Vector[RuntimeMetricPoint] = () => Vector.empty
   ) extends MetricsService {
+    def this(
+      registry: EntityAccessMetricsRegistry,
+      componentmetrics: ComponentMetricsRegistry,
+      runtimeconfig: RuntimeConfig,
+      operationmodesupplier: () => Consequence[org.goldenport.cncf.config.RuntimeOperationSecurityPolicy]
+    ) = this(registry, componentmetrics, runtimeconfig.openTelemetryExportConfig, operationmodesupplier)
+
+    def this(
+      registry: EntityAccessMetricsRegistry,
+      componentmetrics: ComponentMetricsRegistry,
+      runtimeconfig: RuntimeConfig,
+      operationmodesupplier: () => Consequence[org.goldenport.cncf.config.RuntimeOperationSecurityPolicy],
+      jobsupplier: () => Vector[RuntimeMetricPoint]
+    ) = this(registry, componentmetrics, runtimeconfig.openTelemetryExportConfig, operationmodesupplier, jobsupplier)
+
     def loadEntityAccessMetrics(): Consequence[Record] =
       Consequence.success(registry.toRecord)
 
@@ -91,7 +106,7 @@ object MetricsComponent {
       val snapshot = original.copy(points = original.points ++ jobsupplier())
       val operationmode = MetricsComponent.operationMode(operationmodesupplier())
       val exportresult = OpenTelemetryExporter(
-        runtimeconfig.openTelemetryExportConfig.forOperationMode(operationmode),
+        exportconfig.forOperationMode(operationmode),
         operationmode
       ).exportMetrics(snapshot)
       Consequence.success(snapshot.toRecord ++ Record.dataAuto(

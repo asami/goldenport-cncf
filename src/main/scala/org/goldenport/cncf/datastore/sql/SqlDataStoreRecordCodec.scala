@@ -6,19 +6,16 @@ import io.circe.parser.parse
 import org.goldenport.convert.StringEncodable
 import org.goldenport.text.Presentable
 import org.goldenport.record.{Record, RecordKeyNaming, RecordPresentable}
-import org.goldenport.record.io.RecordDecoder
 import org.goldenport.cncf.datastore.DataStore.CollectionId
 import org.goldenport.cncf.entity.SimpleEntityStorageShapePolicy
 import org.simplemodeling.model.datatype.EntityCollectionId
 
 /*
  * @since   Oct.  1, 2026
- * @version Oct.  2, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 private[sql] final class SqlDataStoreRecordCodec(config: SqlDataStore.Config) {
-  private val _record_decoder = new RecordDecoder()
-
   def recordColumns(
     record: Record
   ): Vector[(String, Any)] =
@@ -98,9 +95,9 @@ private[sql] final class SqlDataStoreRecordCodec(config: SqlDataStore.Config) {
       case s: String =>
         val trimmed = s.trim
         if (trimmed.startsWith("{") && trimmed.endsWith("}"))
-          _record_decoder.json(trimmed).toOption.getOrElse(s)
+          parse(trimmed).toOption.map(json => _json_to_value(json, number => number.toBigDecimal.getOrElse(BigDecimal(number.toDouble)))).getOrElse(s)
         else if (trimmed.startsWith("[") && trimmed.endsWith("]"))
-          parse(trimmed).toOption.map(_json_to_value).getOrElse(s)
+          parse(trimmed).toOption.map(json => _json_to_value(json, number => number.toLong.getOrElse(number.toDouble))).getOrElse(s)
         else
           s
       case other =>
@@ -109,15 +106,16 @@ private[sql] final class SqlDataStoreRecordCodec(config: SqlDataStore.Config) {
   }
 
   private def _json_to_value(
-    json: Json
+    json: Json,
+    numberdecoder: io.circe.JsonNumber => Any
   ): Any =
     json.fold(
       jsonNull = null,
       jsonBoolean = identity,
-      jsonNumber = n => n.toLong.getOrElse(n.toDouble),
+      jsonNumber = numberdecoder,
       jsonString = identity,
-      jsonArray = _.map(_json_to_value).toVector,
-      jsonObject = obj => Record.dataAuto(obj.toVector.map { case (k, v) => k -> _json_to_value(v) }*)
+      jsonArray = _.map(value => _json_to_value(value, numberdecoder)).toVector,
+      jsonObject = obj => Record.createFull(obj.toVector.map { case (k, v) => k -> _json_to_value(v, numberdecoder) })
     )
 
   def recordFromResultSet(collection: CollectionId, resultSet: ResultSet): Record = {
@@ -140,7 +138,7 @@ private[sql] final class SqlDataStoreRecordCodec(config: SqlDataStore.Config) {
           _decode_column_value(rawvalue)
       name -> value
     }
-    Record.create(values)
+    Record.createFull(values.filterNot { case (_, value) => java.util.Objects.isNull(value) })
   }
 
   def columnName(name: String): String =

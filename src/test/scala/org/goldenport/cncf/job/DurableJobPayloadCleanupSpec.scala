@@ -18,9 +18,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * Native physical disposal, complete immutable ownership preflight and retry.
  *
  * @since   Oct.  1, 2026
- * @version Oct.  1, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class DurableJobPayloadCleanupSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import BlobRepository.given
   import DurableJobCleanupFacet.*

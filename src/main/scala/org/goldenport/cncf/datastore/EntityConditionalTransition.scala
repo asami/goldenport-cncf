@@ -11,7 +11,7 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 25, 2026
+ * @version Sep. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class DataStoreComponentOwner private (
@@ -338,6 +338,14 @@ object DataStoreConditionalSuccessor {
     revisionField: String,
     expectedRevision: EntityRevision
   ) extends DataStoreConditionalSuccessor
+
+  /** A second existing record guarded and updated in the same commit. */
+  final case class Update(root: DataStoreConditionalRoot) extends DataStoreConditionalSuccessor {
+    def componentOwner: DataStoreComponentOwner = if (root == null) null else root.componentOwner
+    def collection: DataStore.CollectionId = if (root == null) null else root.collection
+    def entryId: DataStore.EntryId = if (root == null) null else root.entryId
+    def revisionField: String = if (root == null) null else root.revisionField
+  }
 }
 
 final case class DataStoreConditionalCorrelation(
@@ -391,6 +399,11 @@ trait EntityConditionalTransitionDataStore { self: DataStore =>
   ): Consequence[DataStoreConditionalTransitionResult]
 }
 
+/** Opt-in capability for one commit updating two independently guarded records.
+  * This does not imply general UnitOfWork participation.
+  */
+trait EntityConditionalUpdateDataStore extends EntityConditionalTransitionDataStore { self: DataStore => }
+
 object DataStoreConditionalTransitionFailure {
   val POLICY = "entity.conditional-transition.provider"
 
@@ -440,6 +453,7 @@ object DataStoreConditionalTransitionFailure {
     "unsupported-capability",
     "successor-collision",
     "bound-successor-revision-conflict",
+    "updated-successor-state-conflict",
     "provider-failure",
     "datastore-failure",
     "transaction-failure",
@@ -484,6 +498,9 @@ object DataStoreConditionalTransitionCheckpoint {
 }
 
 private[datastore] object EntityConditionalTransitionSupport {
+  def validateSideRecord(record: Record): Consequence[Unit] =
+    _validate_record("sideEffect.record", record, allowsetnull = false)
+
   val MAX_EXPECTED_FIELDS = 32
   val MAX_SIDE_EFFECTS = 64
   val MAX_FIELD_LENGTH = 128
@@ -716,6 +733,8 @@ private[datastore] object EntityConditionalTransitionSupport {
               } yield ()
           case bind: DataStoreConditionalSuccessor.Bind =>
             _validate_revision(bind.expectedRevision)
+          case update: DataStoreConditionalSuccessor.Update =>
+            validateRoot(update.root).map(_ => ())
         }
       } yield ()
 
@@ -796,6 +815,14 @@ private[datastore] object EntityConditionalTransitionSupport {
         )
       else
         effects.zipWithIndex.foldLeft(Consequence.unit) {
+          case (result, (EntityVersionedSideEffect.Create(_, _, record), index)) =>
+            result.flatMap(_ =>
+              _validate_record(
+                s"sideEffects[$index].record",
+                record,
+                allowsetnull = false
+              )
+            )
           case (result, (EntityVersionedSideEffect.Save(_, _, record), index)) =>
             result.flatMap(_ =>
               _validate_record(

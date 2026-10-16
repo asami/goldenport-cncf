@@ -1,9 +1,9 @@
 package org.goldenport.cncf.phase51.build
 
-import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.scalacheck.{Gen, Prop, Test}
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
@@ -11,7 +11,7 @@ import java.util.Comparator
 
 /*
  * @since   Jul. 28, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 16, 2026
  */
 final class Phase51Cv05BuildProvenanceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Phase 51 CV-05 CNCF build provenance" should {
@@ -167,8 +167,9 @@ final class Phase51Cv05BuildProvenanceSpec extends AnyWordSpec with Matchers wit
   }
 
   private def _with_temp_dir[A](prefix: String)(body: Path => A): A = {
-    val work = Files.createDirectories(Path.of("target/phase51-cv05-build-provenance-spec/work"))
-    val directory = Files.createTempDirectory(work, prefix)
+    val workroot = Path.of("target/phase51-cv05-build-provenance-spec/work").toAbsolutePath.normalize()
+    Files.createDirectories(workroot)
+    val directory = Files.createTempDirectory(workroot, prefix)
     try body(directory)
     finally {
       val stream = Files.walk(directory)
