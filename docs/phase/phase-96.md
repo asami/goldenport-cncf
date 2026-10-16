@@ -99,9 +99,14 @@ separately accepted pure ABI/model proof. P96-03 is CLOSED with all seven
 unchanged obligations checked; P96-04 is CLOSED at local Step commit `625d533`,
 P96-05 is independently accepted on all four unchanged criteria and CLOSED at
 local Step commit `4898201d5679408d6e44510024a6feaea442a66c`. The current checklist entry
-is P96-07, with 33 checked/21 pending outcomes across 54 unchanged criteria;
-P96-06 is independently accepted and a CLOSED candidate, with its local Step
-commit PREPARED/PENDING; P96-07 through P96-11 remain OPEN. The
+is P96-08, with 37 checked/17 pending outcomes across 54 unchanged criteria;
+P96-06 is independently accepted and CLOSED at local Step commit
+`1356e41cdee41dd40bc2212c1ef0297ab8875206`. P96-07 is independently accepted
+and CLOSED on all four criteria in ledger revision 34; its exact local Step
+commit remains in preparation. P96-08 through P96-11 remain OPEN, without
+successor implementation or Phase closure. The
+[P96-06 post-commit chronology](../journal/2026/10/2026-10-05-phase-96-display-mutation.md#p96-06-post-commit-status-reconciliation-2026-10-16)
+reconciles the earlier acceptance-time pending status. The
 [P96-05 acceptance entry](../journal/2026/10/2026-10-05-phase-96-display-read-service.md#p96-05-step-acceptance)
 records current 14/14 focused evidence, the retained 266/266 baseline and
 independent whole-Step/focused review closure in ledger revision 28. A/B1/B2 focused
@@ -135,17 +140,22 @@ Current `phase96-p96-06b-validation-subject-001@4` passed 5/5 representative tes
 and 98/98 accumulator tests with SBT/wrapper exit 0 and serial lock released.
 Original whole-Step review `phase96-p96-06-step-review-001@1` plus independent
 `phase96-p96-06-descriptor-focused-review-001@1` PASS, admitted in ledger revision
-31, support all five unchanged criteria. P96-06 is a CLOSED candidate and the
-local Step commit remains PREPARED/PENDING. Historical A subject4 8/8 plus 57/57,
+31, support all five unchanged criteria. P96-06 is CLOSED at local Step commit
+`1356e41cdee41dd40bc2212c1ef0297ab8875206`, recorded in the
+[post-commit chronology](../journal/2026/10/2026-10-05-phase-96-display-mutation.md#p96-06-post-commit-status-reconciliation-2026-10-16).
+Historical A subject4 8/8 plus 57/57,
 B subject3 8/8 plus 97/97 and failed/unexecuted records remain distinct; A alone
 was not Step acceptance. Completed repairs 6/nonconverging 0/accepted are retained.
-P96-07 owns canonical
-atomic writes, strict deletion, positive create/delete lifecycle, ordinary
-route/descriptor exposure and the actual selected contextual source/reload pair;
-pure preparation and ReloadedDisplay candidates do not prove those effects.
-Existing read-v1 remains unchanged. The Phase retains 33 checked/21 pending
-criteria, current_entry=P96-07, zero full Phase reviews and pending final
-validation/release/closure. P96-07..11 and separate Cozy/app gates remain pending.
+P96-07 now has independent whole-Step and focused repair acceptance for
+canonical atomic writes, strict deletion, positive create/delete lifecycle,
+ordinary route exposure and the actual selected contextual source/reload pair;
+pure preparation and ReloadedDisplay candidates were not substituted for
+those effects. The [P96-07 acceptance entry](../journal/2026/10/2026-10-16-phase-96-display-list-lifecycle-integration.md#p96-07-step-acceptance-2026-10-16)
+records all four criteria and required PG1–PG12 correspondence. Existing
+read-v1 remains unchanged. The Phase has 37 checked/17 pending criteria,
+current_entry=P96-08, zero full Phase reviews and pending final
+validation/release/closure. The P96-07 local Step commit, P96-08..11 and
+separate Cozy/app gates remain distinct remaining work.
 
 P96-04A-WIRE implements the [strict read protocol](../spec/display-model-protocol.md)
 and its [design](../design/display-model-protocol.md). The
@@ -369,6 +379,50 @@ Phase 96 also establishes the component-scoped `DisplayService` as the UI-facing
 - deterministic protocol codec/representation;
 - diagnostics for unsupported/incompatible projection or protocol versions; and
 - focused fixture/proof suitable for later textus-flutter-core consumption.
+
+### PostgreSQL-required persistence handoff
+
+PostgreSQL is the required primary practical Knowledge Store for this
+CNCF / KnowledgeHub integration line, as recorded in the
+[architecture decision](../design/postgresql-primary-knowledge-store.md) and
+[current adoption history](../journal/2026/10/2026-10-14-postgresql-primary-knowledge-store.md).
+The [native persistence contract PG1–PG12](../spec/postgresql-phase-96-persistence.md)
+requires real positive PostgreSQL create/update/delete, revision/conflict,
+root/body atomicity, rollback/ACK and authoritative readback through normal
+ComponentDataStore and SystemNode-managed selection before the current P96-07
+mutation/reference handoff can be accepted. Registered Entity AND Aggregate,
+ordinary routes and selected contextual committed reload remain mandatory.
+
+MySQL may coexist; SQLite and memory regression obligations remain required.
+JSONB, text/recursive-query/aggregation and later pgvector/hybrid search justify
+the primary-store decision, while broader Knowledge features remain later
+scope. RDF retains its semantic and external-Knowledge-Graph responsibilities.
+This decision changes no global datastore default or production migration.
+
+Earlier C4C readiness snapshot (2026-10-16, before whole-Step acceptance):
+C4C focused representative and expanded
+accumulator validation, including native PostgreSQL evidence, and fresh
+independent whole-twelve-path auxiliary assurance have completed with no current
+auxiliary boundary blocker. The
+[C4C management chronology](../journal/2026/10/2026-10-16-phase-96-display-list-lifecycle-integration.md#c4c-current-readiness-and-candidate-reconciliation-2026-10-16)
+supersedes the earlier draft-only/pending readiness checkpoint while preserving
+its history. That snapshot established focused evidence availability, not
+whole-P96-07 acceptance, and retained four OPEN criteria and 33 checked/21
+pending outcomes at current_entry=P96-07.
+
+Current P96-07 acceptance (2026-10-16): complete protected whole-Step review
+and independent focused PASS after one bounded test repair support all four
+criteria and PG1–PG12. Parent admission in ledger revision 34 resolved all
+three conformance blockers. Current 4-suite/21-test success supplements
+earlier 39-suite/529-test and 138-suite/2127-test validation, including native
+PostgreSQL and retained backend regression; five historical pending cases in
+the wider accumulator remain distinct. All 54 criterion texts are preserved,
+with 37 checked/17 pending outcomes and current_entry=P96-08. The local
+P96-07 Step commit is being prepared; no completed commit is claimed here.
+PLAN epoch 1, zero full Phase reviews and original authority, Goal binding,
+base and review/repair history remain. P96-08..11, separate Cozy/server/app
+acceptance and the original aggregate, full-Phase review, final validation
+and release gates remain pending.
 
 ## Projection rules
 

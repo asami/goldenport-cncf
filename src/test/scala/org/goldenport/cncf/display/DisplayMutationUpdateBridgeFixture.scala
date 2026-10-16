@@ -21,7 +21,7 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Oct.  6, 2026
- * @version Oct.  6, 2026
+ * @version Oct. 14, 2026
  */
 /** Development-only canonical Entity fixture; capture-detail supplies preparation metadata only. */
 private[cncf] object DisplayMutationUpdateBridgeFixture {
@@ -222,9 +222,10 @@ private[cncf] object DisplayMutationUpdateBridgeFixture {
     new Fixture(titleValue, descriptionValue, denyAuthorization, rejectTransition)
 
   /** Counts actual provider entry points and delegates all state to the real searchable provider. */
-  final class RecordingProvider extends SearchableDataStore with EntityVersionedMutationDataStore {
+  final class RecordingProvider extends SearchableDataStore with EntityVersionedMutationDataStore with EntityCreateDataStore {
     private val _delegate = DataStore.inMemorySearchable()
     private val _versioned = _delegate.asInstanceOf[EntityVersionedMutationDataStore]
+    private val _create = _delegate.asInstanceOf[EntityCreateDataStore]
     private var _attempts = 0
     private var _mutations = 0
     private var _loads = 0
@@ -256,6 +257,13 @@ private[cncf] object DisplayMutationUpdateBridgeFixture {
     def commit(tx: org.goldenport.cncf.unitofwork.TransactionContext): Unit = _delegate.commit(tx)
     def abort(tx: org.goldenport.cncf.unitofwork.TransactionContext): Unit = _delegate.abort(tx)
     override def entityMutationProviderCapabilities: EntityMutationProviderCapabilities = _versioned.entityMutationProviderCapabilities
+    override def createEntity(plan: EntityCreatePlan)(using ctx: ExecutionContext): Consequence[EntityCreateResult] = {
+      _attempts += 1
+      _create.createEntity(plan).map { result =>
+        _mutations += 1
+        result
+      }
+    }
     override def mutateEntityDirect(plan: EntityDirectMutationPlan)(using ctx: ExecutionContext): Consequence[EntityMutationProviderResult] = {
       _attempts += 1
       _versioned.mutateEntityDirect(plan).map(_observe)

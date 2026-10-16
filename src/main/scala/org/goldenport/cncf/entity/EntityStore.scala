@@ -58,7 +58,7 @@ import org.simplemodeling.model.value.NominalScalar
  *  version Jul. 26, 2026
  *  version Aug.  5, 2026
  *  version Sep. 28, 2026
- * @version Oct.  6, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -151,6 +151,45 @@ abstract class EntityStore {
     ctx: ExecutionContext
   ): Consequence[Option[EntityRevisionCarrier[T]]] =
     _unsupported_detached_revision[Option[EntityRevisionCarrier[T]]]
+
+  private[cncf] def _save_snapshot_outcome_c[T](
+    entity: T,
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntitySnapshot[T]]] =
+    _unsupported_versioned_outcome
+
+  private[cncf] def _save_detached_outcome_c[T](
+    entity: T,
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntityRevisionCarrier[T]]] =
+    _unsupported_versioned_outcome
+
+  private[cncf] def _update_record_snapshot_outcome_c[P](
+    id: EntityId,
+    patch: P,
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy
+  )(using tc: EntityPersistentUpdate[P], ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntityRecordSnapshot]] =
+    _unsupported_versioned_outcome
+
+  private[cncf] def _update_record_detached_outcome_c[P](
+    id: EntityId,
+    patch: P,
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy
+  )(using tc: EntityPersistentUpdate[P], ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntityRevisionCarrier[Record]]] =
+    _unsupported_versioned_outcome
+
+  private def _unsupported_versioned_outcome[A]: Consequence[A] =
+    Consequence.operationInvalid(
+      "entity-versioned-mutation",
+      Vector(
+        org.goldenport.observation.Descriptor.Facet.Reason("unsupported-capability"),
+        org.goldenport.observation.Descriptor.Facet.Capability("entitystore.versioned-mutation-outcome")
+      )
+    )
 
   private[cncf] def save[T](
     entity: T
@@ -381,6 +420,34 @@ abstract class EntityStore {
 
 object EntityStore {
   final val PROP_ID = "id"
+
+  private[cncf] def _admit_versioned_outcome_c(
+    id: EntityId,
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy
+  ): Consequence[Unit] =
+    if (id == null)
+      Consequence.argumentMissing("id")
+    else if (id.collection == null)
+      Consequence.argumentMissing("id.collection")
+    else if (expectedrevision == null)
+      Consequence.argumentMissing("expectedRevision")
+    else if (expectedrevision.exists(_ == null))
+      Consequence.argumentInvalid("expectedRevision", "nonnull revision", "null revision")
+    else if (executionpolicy == null)
+      Consequence.argumentMissing("executionPolicy")
+    else if (executionpolicy.concurrencyPolicy == null)
+      Consequence.argumentMissing("executionPolicy.concurrencyPolicy")
+    else if (executionpolicy.writePolicy == null)
+      Consequence.argumentMissing("executionPolicy.writePolicy")
+    else if (executionpolicy.preconditionPolicy == null)
+      Consequence.argumentMissing("executionPolicy.preconditionPolicy")
+    else if (executionpolicy.observedRevision == null)
+      Consequence.argumentMissing("executionPolicy.observedRevision")
+    else if (executionpolicy.observedRevision.exists(_ == null))
+      Consequence.argumentInvalid("executionPolicy.observedRevision", "nonnull revision", "null revision")
+    else
+      Consequence.unit
 
   private[cncf] def _admit_observed_delete(
     id: EntityId,

@@ -72,7 +72,8 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
  *  version Aug. 15, 2026
- * @version Sep.  8, 2026
+ *  version Sep.  8, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -2039,6 +2040,9 @@ final class Subsystem(
         name == "capabilities"
     }
 
+  private[cncf] def _http_operation(request: HttpRequest): Option[OperationDefinition] =
+    _resolve_route(request).map(_._3)
+
   private def _resolve_route(
     req: HttpRequest
   ): Option[(Component, ServiceDefinition, OperationDefinition)] = {
@@ -2182,7 +2186,10 @@ final class Subsystem(
           .findByInput(classOf[HttpRequest]),
         "HTTP ingress not configured"
       )
-      request0 <- ingress.encode(operation, req)
+      request0 <- operation match {
+        case selected: org.goldenport.cncf.display.DisplayMutationHttpOperation => selected._encode_http_request_c(req)
+        case _ => ingress.encode(operation, req)
+      }
       request1 = _with_framework_properties(request0, req)
       request = request1.component match {
         case Some(_) => request1

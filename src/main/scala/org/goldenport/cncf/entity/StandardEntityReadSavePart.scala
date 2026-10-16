@@ -49,11 +49,47 @@ import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 private[entity] trait StandardEntityReadSavePart extends EntityStore { self: StandardEntityStore =>
   import EntityStore.*
+
+  override private[cncf] def _save_snapshot_outcome_c[T](
+    entity: T,
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntitySnapshot[T]]] =
+    if (entity == null)
+      Consequence.argumentMissing("entity")
+    else if (tc == null)
+      Consequence.argumentMissing("persistent")
+    else
+      for {
+        id <- Consequence(tc.id(entity))
+        _ <- EntityStore._admit_versioned_outcome_c(id, expectedrevision, executionpolicy)
+        binding <- _required_revision_binding(id.collection, EntityRevisionRepresentation.Embedded)
+        result <- _save_managed_result(entity, binding, expectedrevision, executionpolicy, None)
+        outcome <- _typed_snapshot_outcome_c(id, result, binding, tc)
+      } yield outcome
+
+  override private[cncf] def _save_detached_outcome_c[T](
+    entity: T,
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntityRevisionCarrier[T]]] =
+    if (entity == null)
+      Consequence.argumentMissing("entity")
+    else if (tc == null)
+      Consequence.argumentMissing("persistent")
+    else
+      for {
+        id <- Consequence(tc.id(entity))
+        _ <- EntityStore._admit_versioned_outcome_c(id, expectedrevision, executionpolicy)
+        binding <- _required_revision_binding(id.collection, EntityRevisionRepresentation.Detached)
+        result <- _save_managed_result(entity, binding, expectedrevision, executionpolicy, None)
+        outcome <- _typed_detached_outcome_c(id, result, binding, tc)
+      } yield outcome
 
   def load[T](
     id: EntityId

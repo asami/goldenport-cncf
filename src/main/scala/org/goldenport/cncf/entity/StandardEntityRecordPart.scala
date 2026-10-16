@@ -49,7 +49,7 @@ import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 private[entity] trait StandardEntityRecordPart extends EntityStore { self: StandardEntityStore =>
@@ -125,12 +125,13 @@ private[entity] trait StandardEntityRecordPart extends EntityStore { self: Stand
           changedkeys.contains(field.key)
         )
       )
+    val retainedkeys = retained.keySet
     val domain =
       Record(
         SimpleEntityStorageShapePolicy
           .withoutManagedFields(existing)
           .fields
-          .filterNot(field => changedkeys.contains(field.key))
+          .filterNot(field => changedkeys.contains(field.key) || retainedkeys.contains(field.key))
       )
     Consequence.success(
       revisionbinding.withoutManagedRevision(
@@ -439,9 +440,12 @@ private[entity] trait StandardEntityRecordPart extends EntityStore { self: Stand
     _add_if_missing_("correlationId", ctx.observability.correlationId.map(_.value))
 
     val complement = Record.dataAuto(defaults.result()*)
+    val complementkeys = complement.keySet
     complement ++
-      SimpleEntityStorageShapePolicy.withoutManagedFields(
-        EntityConcurrencyMetadata.withoutManagedField(record)
+      Record(
+        SimpleEntityStorageShapePolicy.withoutManagedFields(
+          EntityConcurrencyMetadata.withoutManagedField(record)
+        ).fields.filterNot(field => complementkeys.contains(field.key))
       )
   }
 

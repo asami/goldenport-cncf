@@ -49,7 +49,7 @@ import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 private[entity] trait StandardEntityRevisionPart extends EntityStore { self: StandardEntityStore =>
@@ -251,34 +251,10 @@ private[entity] trait StandardEntityRevisionPart extends EntityStore { self: Sta
   ): Consequence[EntitySnapshot[T]] =
     result match {
       case EntityVersionedMutationResult.Applied(record) =>
-        ContentBodyStoragePolicy
-          .hydrate(id, record)
-          .flatMap { hydrated =>
-            persistent.admitStoreRecord(hydrated).flatMap { admitted =>
-              revisionbinding.snapshot(admitted)(
-                EntityPersistent._decode_admitted_store_record(
-                  persistent,
-                  id.collection,
-                  _
-                )
-              )
-            }
-          }
+        _typed_snapshot_projection_c(id, record, revisionbinding, persistent)
           .recoverWith(EntityConcurrencyMetadata.committedProjectionFailure)
       case EntityVersionedMutationResult.NoOp(record) =>
-        ContentBodyStoragePolicy
-          .hydrate(id, record)
-          .flatMap { hydrated =>
-            persistent.admitStoreRecord(hydrated).flatMap { admitted =>
-              revisionbinding.snapshot(admitted)(
-                EntityPersistent._decode_admitted_store_record(
-                  persistent,
-                  id.collection,
-                  _
-                )
-              )
-            }
-          }
+        _typed_snapshot_projection_c(id, record, revisionbinding, persistent)
       case EntityVersionedMutationResult.Stale(expected, actual) =>
         _stale_mutation(expected, actual)
     }
@@ -293,34 +269,10 @@ private[entity] trait StandardEntityRevisionPart extends EntityStore { self: Sta
   ): Consequence[EntityRevisionCarrier[T]] =
     result match {
       case EntityVersionedMutationResult.Applied(record) =>
-        ContentBodyStoragePolicy
-          .hydrate(id, record)
-          .flatMap { hydrated =>
-            persistent.admitStoreRecord(hydrated).flatMap { admitted =>
-              revisionbinding.detachedCarrier(admitted)(
-                EntityPersistent._decode_admitted_store_record(
-                  persistent,
-                  id.collection,
-                  _
-                )
-              )
-            }
-          }
+        _typed_detached_projection_c(id, record, revisionbinding, persistent)
           .recoverWith(EntityConcurrencyMetadata.committedProjectionFailure)
       case EntityVersionedMutationResult.NoOp(record) =>
-        ContentBodyStoragePolicy
-          .hydrate(id, record)
-          .flatMap { hydrated =>
-            persistent.admitStoreRecord(hydrated).flatMap { admitted =>
-              revisionbinding.detachedCarrier(admitted)(
-                EntityPersistent._decode_admitted_store_record(
-                  persistent,
-                  id.collection,
-                  _
-                )
-              )
-            }
-          }
+        _typed_detached_projection_c(id, record, revisionbinding, persistent)
       case EntityVersionedMutationResult.Stale(expected, actual) =>
         _stale_mutation(expected, actual)
     }
@@ -334,14 +286,10 @@ private[entity] trait StandardEntityRevisionPart extends EntityStore { self: Sta
   ): Consequence[EntityRecordSnapshot] =
     result match {
       case EntityVersionedMutationResult.Applied(record) =>
-        ContentBodyStoragePolicy
-          .hydrate(id, record)
-          .flatMap(revisionbinding.recordSnapshot)
+        _record_snapshot_projection_c(id, record, revisionbinding)
           .recoverWith(EntityConcurrencyMetadata.committedProjectionFailure)
       case EntityVersionedMutationResult.NoOp(record) =>
-        ContentBodyStoragePolicy
-          .hydrate(id, record)
-          .flatMap(revisionbinding.recordSnapshot)
+        _record_snapshot_projection_c(id, record, revisionbinding)
       case EntityVersionedMutationResult.Stale(expected, actual) =>
         _stale_mutation(expected, actual)
     }
@@ -386,16 +334,88 @@ private[entity] trait StandardEntityRevisionPart extends EntityStore { self: Sta
   ): Consequence[EntityRevisionCarrier[Record]] =
     result match {
       case EntityVersionedMutationResult.Applied(record) =>
-        ContentBodyStoragePolicy
-          .hydrate(id, record)
-          .flatMap(revisionbinding.detachedRecordCarrier)
+        _record_detached_projection_c(id, record, revisionbinding)
           .recoverWith(EntityConcurrencyMetadata.committedProjectionFailure)
       case EntityVersionedMutationResult.NoOp(record) =>
-        ContentBodyStoragePolicy
-          .hydrate(id, record)
-          .flatMap(revisionbinding.detachedRecordCarrier)
+        _record_detached_projection_c(id, record, revisionbinding)
       case EntityVersionedMutationResult.Stale(expected, actual) =>
         _stale_mutation(expected, actual)
+    }
+
+  private def _typed_snapshot_projection_c[T](id: EntityId, record: Record,
+    revisionbinding: EntityRevisionBinding, persistent: EntityPersistent[T]
+  )(using ctx: ExecutionContext): Consequence[EntitySnapshot[T]] =
+    ContentBodyStoragePolicy.hydrate(id, record).flatMap { hydrated =>
+      persistent.admitStoreRecord(hydrated).flatMap { admitted =>
+        revisionbinding.snapshot(admitted)(
+          EntityPersistent._decode_admitted_store_record(persistent, id.collection, _))
+      }
+    }
+
+  private def _typed_detached_projection_c[T](id: EntityId, record: Record,
+    revisionbinding: EntityRevisionBinding, persistent: EntityPersistent[T]
+  )(using ctx: ExecutionContext): Consequence[EntityRevisionCarrier[T]] =
+    ContentBodyStoragePolicy.hydrate(id, record).flatMap { hydrated =>
+      persistent.admitStoreRecord(hydrated).flatMap { admitted =>
+        revisionbinding.detachedCarrier(admitted)(
+          EntityPersistent._decode_admitted_store_record(persistent, id.collection, _))
+      }
+    }
+
+  private def _record_snapshot_projection_c(id: EntityId, record: Record,
+    revisionbinding: EntityRevisionBinding
+  )(using ctx: ExecutionContext): Consequence[EntityRecordSnapshot] =
+    ContentBodyStoragePolicy.hydrate(id, record).flatMap(revisionbinding.recordSnapshot)
+
+  private def _record_detached_projection_c(id: EntityId, record: Record,
+    revisionbinding: EntityRevisionBinding
+  )(using ctx: ExecutionContext): Consequence[EntityRevisionCarrier[Record]] =
+    ContentBodyStoragePolicy.hydrate(id, record).flatMap(revisionbinding.detachedRecordCarrier)
+
+  private[entity] def _typed_snapshot_outcome_c[T](id: EntityId,
+    result: EntityVersionedMutationResult, revisionbinding: EntityRevisionBinding,
+    persistent: EntityPersistent[T]
+  )(using ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntitySnapshot[T]]] =
+    EntityVersionedMutationOutcome._from_provider_c(id, result, revisionbinding) { (record, revision) =>
+      _typed_snapshot_projection_c(id, record, revisionbinding, persistent).flatMap { snapshot =>
+        if (snapshot != null && snapshot.entity != null && snapshot.revision == revision &&
+            persistent.id(snapshot.entity) == id) Consequence.success(snapshot)
+        else EntityVersionedMutationOutcome._projection_invalid
+      }
+    }
+
+  private[entity] def _typed_detached_outcome_c[T](id: EntityId,
+    result: EntityVersionedMutationResult, revisionbinding: EntityRevisionBinding,
+    persistent: EntityPersistent[T]
+  )(using ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntityRevisionCarrier[T]]] =
+    EntityVersionedMutationOutcome._from_provider_c(id, result, revisionbinding) { (record, revision) =>
+      _typed_detached_projection_c(id, record, revisionbinding, persistent).flatMap { carrier =>
+        if (carrier != null && carrier.entity != null && carrier.revision == revision &&
+            persistent.id(carrier.entity) == id) Consequence.success(carrier)
+        else EntityVersionedMutationOutcome._projection_invalid
+      }
+    }
+
+  private[entity] def _record_snapshot_outcome_c(id: EntityId,
+    result: EntityVersionedMutationResult, revisionbinding: EntityRevisionBinding
+  )(using ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntityRecordSnapshot]] =
+    EntityVersionedMutationOutcome._from_provider_c(id, result, revisionbinding) { (record, revision) =>
+      _record_snapshot_projection_c(id, record, revisionbinding).flatMap { snapshot =>
+        if (snapshot != null && snapshot.record != null && snapshot.revision == revision &&
+            EntityVersionedMutationOutcome._identity_matches(id, snapshot.record)) Consequence.success(snapshot)
+        else EntityVersionedMutationOutcome._projection_invalid
+      }
+    }
+
+  private[entity] def _record_detached_outcome_c(id: EntityId,
+    result: EntityVersionedMutationResult, revisionbinding: EntityRevisionBinding
+  )(using ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntityRevisionCarrier[Record]]] =
+    EntityVersionedMutationOutcome._from_provider_c(id, result, revisionbinding) { (record, revision) =>
+      _record_detached_projection_c(id, record, revisionbinding).flatMap { carrier =>
+        if (carrier != null && carrier.entity != null && carrier.revision == revision &&
+            EntityVersionedMutationOutcome._identity_matches(id, carrier.entity)) Consequence.success(carrier)
+        else EntityVersionedMutationOutcome._projection_invalid
+      }
     }
 
   private[entity] def _managed_record(

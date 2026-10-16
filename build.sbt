@@ -424,6 +424,7 @@ lazy val root = project
       // SQL
       "com.zaxxer" % "HikariCP" % "5.1.0",
       "org.xerial" % "sqlite-jdbc" % "3.45.2.0",
+      "org.postgresql" % "postgresql" % "42.7.14",
 
       // Actor system (Akka-compatible, Scala 3 supported)
       "org.apache.pekko" %% "pekko-actor"  % "1.0.2",
@@ -450,7 +451,8 @@ lazy val root = project
       "org.scalatest" %% "scalatest" % "3.2.18" % Test,
       "org.scalacheck" %% "scalacheck" % "1.17.1" % Test,
       "com.mysql" % "mysql-connector-j" % "8.4.0" % Test,
-      "org.testcontainers" % "testcontainers-mysql" % "2.0.5" % Test
+      "org.testcontainers" % "testcontainers-mysql" % "2.0.5" % Test,
+      "org.testcontainers" % "testcontainers-postgresql" % "2.0.5" % Test
     ),
 
     publishTo := {

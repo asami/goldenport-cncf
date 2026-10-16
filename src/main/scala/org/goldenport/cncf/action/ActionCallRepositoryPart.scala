@@ -3,6 +3,7 @@ package org.goldenport.cncf.action
 import java.nio.file.Path
 import java.nio.charset.Charset
 import java.time.{Clock, Duration, Instant, ZonedDateTime}
+import scala.util.control.NonFatal
 import cats.free.Free
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
@@ -61,16 +62,21 @@ import org.goldenport.cncf.datastore.{
 }
 import org.goldenport.cncf.entity.{
   EntityConcurrencyPolicy,
+  EntityConcurrencyMetadata,
   EntityConditionalTransition,
   EntityMutationExecutionPolicy,
   EntityConditionalTransitionResult,
   RevisionPreconditionPolicy,
   EntitySuccessorIntent
 }
+import org.goldenport.cncf.entity.EntityWritePolicy
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.EntityPersistentCreate
 import org.goldenport.cncf.entity.EntityPersistentUpdate
 import org.goldenport.cncf.entity.EntityRecordSnapshot
+import org.goldenport.cncf.entity.EntityCreateMutationOutcome
+import org.goldenport.cncf.entity.EntityDeleteMutationOutcome
+import org.goldenport.cncf.entity.EntityVersionedMutationCaptureOutcome
 import org.goldenport.cncf.entity.EntityRevisionCarrier
 import org.goldenport.cncf.entity.EntityRevisionRepresentation
 import org.goldenport.cncf.entity.EntitySnapshot
@@ -142,7 +148,7 @@ import org.goldenport.cncf.processexecution.{
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -1154,6 +1160,489 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
         }
       } yield aggregate
     }
+
+  protected final def aggregate_update_observed_snapshot_c[
+    A <: org.goldenport.record.RecordPresentable
+  ](
+    aggregateName: String,
+    targetId: EntityId,
+    commandName: String,
+    observedRevision: EntityRevision
+  )(command: A => Consequence[A]): Consequence[EntityRecordSnapshot] = {
+    if (aggregateName == null || commandName == null || targetId == null ||
+        observedRevision == null || command == null)
+      Consequence.argumentInvalid("Aggregate observed snapshot input must be nonnull")
+    else if (aggregateName.isEmpty || aggregateName != aggregateName.trim ||
+        commandName.isEmpty || commandName != commandName.trim)
+      Consequence.argumentInvalid("Aggregate and command names must be nonempty and exactly trimmed")
+    else
+      _aggregate_chokepoint[EntityRecordSnapshot](
+        operation = "update-observed-snapshot", aggregatename = aggregateName,
+        targetid = Some(targetId), commandname = Some(commandName)
+      ) { ctx =>
+        for {
+          _ <- _aggregate_phase(ctx, DslChokepointPhase.Authorization) {
+            _aggregate_authorize_update(aggregateName, targetId, commandName)
+          }
+          collection <- _aggregate_phase(ctx, DslChokepointPhase.Resolve) {
+            _aggregate_entity_collection_c(aggregateName, targetId)
+          }
+          representation <- collection.descriptor.revisionBinding match {
+            case Some(binding) if collection.descriptor.plan.concurrencyPolicy ==
+                EntityConcurrencyPolicy.Optimistic &&
+                (binding.representation == EntityRevisionRepresentation.Embedded ||
+                  binding.representation == EntityRevisionRepresentation.Detached) =>
+              Consequence.success(binding.representation)
+            case _ => Consequence.operationInvalid("aggregate-observed-snapshot",
+              "Optimistic concurrency and managed Embedded or Detached revision are required")
+          }
+          policy <- EntityMutationExecutionPolicy(
+            concurrencyPolicy = EntityConcurrencyPolicy.Optimistic,
+            writePolicy = EntityWritePolicy.WriteIfChanged,
+            preconditionPolicy = RevisionPreconditionPolicy.ObservedRequired,
+            observedRevision = Some(observedRevision)
+          ).validateC
+          root <- _aggregate_phase(ctx, DslChokepointPhase.Resolve) {
+            if (representation == EntityRevisionRepresentation.Embedded)
+              execution_context.entityStoreSpace.loadSnapshot(targetId,
+                collection.descriptor.persistent)(using execution_context)
+                .flatMap(value => Consequence.successOrEntityNotFound(value)(targetId))
+                .map(value => value.entity -> value.revision)
+            else
+              execution_context.entityStoreSpace.loadDetached(targetId,
+                collection.descriptor.persistent)(using execution_context)
+                .flatMap(value => Consequence.successOrEntityNotFound(value)(targetId))
+                .map(value => value.entity -> value.revision)
+          }
+          _ <- if (root._2 == observedRevision) Consequence.unit
+            else EntityConcurrencyMetadata.staleMutation(observedRevision, root._2)
+          aggregate <- _aggregate_phase(ctx, DslChokepointPhase.Resolve) {
+            component.flatMap(_.aggregateSpace.collectionOption[A](aggregateName)) match {
+              case Some(registered) => _aggregate_observed_boundary_c {
+                registered.resolve_with_context(targetId)(using execution_context)
+              }
+              case None => Consequence.argumentInvalid("Aggregate collection is not registered")
+            }
+          }
+          currentrecord <- _aggregate_observed_boundary_c {
+            _aggregate_exact_root_record_c(collection, aggregate.toRecord(), requireid = true)
+          }
+          rootrecord <- _aggregate_observed_boundary_c {
+            _aggregate_exact_root_record_c(collection,
+              collection.descriptor.persistent.toRecord(root._1), requireid = true)
+          }
+          _ <- {
+            val currentmap = SimpleEntityStorageShapePolicy.withoutManagedFields(currentrecord).asMap
+            if (currentrecord.getAs[EntityId]("id").contains(targetId) &&
+                SimpleEntityStorageShapePolicy.withoutManagedFields(rootrecord).asMap
+                  .forall { case (key, value) => currentmap.get(key).contains(value) })
+              Consequence.unit
+            else Consequence.operationConflict("aggregate-command", Vector(
+              Descriptor.Facet.Reason("aggregate-root-snapshot-mismatch"),
+              Descriptor.Facet.Policy("entity.optimistic-concurrency"),
+              Descriptor.Facet.Actual(targetId.print)))
+          }
+          updatedrecord <- _aggregate_phase(ctx, DslChokepointPhase.Method) {
+            for {
+              updated <- _aggregate_observed_boundary_c(command(aggregate))
+              record <- _aggregate_observed_boundary_c {
+                _aggregate_exact_root_record_c(collection, updated.toRecord(), requireid = true)
+              }
+              _ <- if (record.getAs[EntityId]("id").contains(targetId)) Consequence.unit
+                else Consequence.argumentInvalid("Aggregate command must retain the exact target ID")
+            } yield record
+          }
+          snapshot <- _aggregate_phase(ctx, DslChokepointPhase.Persistence) {
+            val saved = if (representation == EntityRevisionRepresentation.Embedded)
+              collection.saveRecordVersioned(updatedrecord, Some(observedRevision), policy)(using execution_context)
+            else
+              collection.saveRecordDetached(updatedrecord, Some(observedRevision), policy)(using execution_context)
+                .map(value => EntityRecordSnapshot(value.entity, value.revision))
+            saved.map { value =>
+              if (value.revision != observedRevision)
+                component.foreach(_.viewSpace.invalidate(collection.descriptor.plan.entityName))
+              value
+            }.recoverWith { conclusion =>
+              if (ConclusionDiagnostics.classify(conclusion).reason.contains("committed-entity-projection-failure"))
+                component.foreach(_.viewSpace.invalidate(collection.descriptor.plan.entityName))
+              Consequence.Failure(conclusion)
+            }
+          }
+        } yield snapshot
+      }
+  }
+
+  private[cncf] final def _aggregate_update_observed_capture_c[
+    A <: org.goldenport.record.RecordPresentable
+  ](
+    aggregatename: String,
+    targetid: EntityId,
+    commandname: String,
+    observedrevision: EntityRevision
+  )(command: A => Consequence[A]): Consequence[EntityVersionedMutationCaptureOutcome[?]] = {
+    if (aggregatename == null || commandname == null || targetid == null ||
+        targetid.collection == null || observedrevision == null || command == null)
+      Consequence.argumentInvalid("Aggregate observed capture input must be nonnull")
+    else if (aggregatename.isEmpty || aggregatename != aggregatename.trim ||
+        commandname.isEmpty || commandname != commandname.trim)
+      Consequence.argumentInvalid("Aggregate and command names must be nonempty and exactly trimmed")
+    else {
+      val uow = execution_context.unitOfWork
+      _aggregate_capture_chokepoint_c[EntityVersionedMutationCaptureOutcome[?]](
+        operation = "update-observed-capture", aggregatename = aggregatename,
+        targetid = Some(targetid), commandname = Some(commandname)
+      ) { ctx =>
+        for {
+          authorization <- _aggregate_capture_phase_c(ctx, DslChokepointPhase.Authorization) {
+            for {
+              _ <- _aggregate_authorize_update(aggregatename, targetid, commandname)
+              authorization = AggregateAuthorization.Request(
+                aggregateName = aggregatename,
+                targetId = Some(targetid),
+                accessKind = s"command:$commandname",
+                access = _aggregate_declared_access,
+                sourceComponentName = component_name_option,
+                targetComponentName = component_name_option,
+                operationModel = _aggregate_operation_model,
+                relationRules = _aggregate_relation_rules,
+                naturalConditions = _aggregate_natural_conditions
+              ).toUnitOfWorkAuthorization
+              _ <- _aggregate_capture_evaluate_c(uow, UnitOfWorkOp.Authorize(authorization))
+            } yield authorization
+          }
+          collection <- _aggregate_capture_phase_c(ctx, DslChokepointPhase.Resolve) {
+            _aggregate_entity_collection_c(aggregatename, targetid)
+          }
+          representation <- collection.descriptor.revisionBinding match {
+            case Some(binding) if binding != null &&
+                collection.descriptor.plan.concurrencyPolicy == EntityConcurrencyPolicy.Optimistic &&
+                (binding.representation == EntityRevisionRepresentation.Embedded ||
+                  binding.representation == EntityRevisionRepresentation.Detached) =>
+              Consequence.success(binding.representation)
+            case _ => Consequence.operationInvalid("aggregate-observed-capture",
+              "Optimistic concurrency and managed Embedded or Detached revision are required")
+          }
+          policy <- EntityMutationExecutionPolicy(
+            concurrencyPolicy = EntityConcurrencyPolicy.Optimistic,
+            writePolicy = EntityWritePolicy.WriteIfChanged,
+            preconditionPolicy = RevisionPreconditionPolicy.ObservedRequired,
+            observedRevision = Some(observedrevision)
+          ).validateC
+          root <- _aggregate_capture_phase_c(ctx, DslChokepointPhase.Resolve) {
+            if (representation == EntityRevisionRepresentation.Embedded)
+              execution_context.entityStoreSpace.loadSnapshot(targetid,
+                collection.descriptor.persistent)(using execution_context)
+                .flatMap(value => Consequence.successOrEntityNotFound(value)(targetid))
+                .map(value => value.entity -> value.revision)
+            else
+              execution_context.entityStoreSpace.loadDetached(targetid,
+                collection.descriptor.persistent)(using execution_context)
+                .flatMap(value => Consequence.successOrEntityNotFound(value)(targetid))
+                .map(value => value.entity -> value.revision)
+          }
+          _ <- if (root._2 == observedrevision) Consequence.unit
+            else EntityConcurrencyMetadata.staleMutation(observedrevision, root._2)
+          aggregate <- _aggregate_capture_phase_c(ctx, DslChokepointPhase.Resolve) {
+            component.flatMap(_.aggregateSpace.collectionOption[A](aggregatename)) match {
+              case Some(registered) => _aggregate_capture_boundary_c {
+                registered.resolve_with_context(targetid)(using execution_context)
+              }
+              case None => Consequence.argumentInvalid("Aggregate collection is not registered")
+            }
+          }
+          currentrecord <- _aggregate_capture_boundary_c {
+            _aggregate_exact_root_record_c(collection, aggregate.toRecord(), requireid = true)
+          }
+          rootrecord <- _aggregate_capture_boundary_c {
+            _aggregate_exact_root_record_c(collection,
+              collection.descriptor.persistent.toRecord(root._1), requireid = true)
+          }
+          _ <- {
+            val currentmap = SimpleEntityStorageShapePolicy.withoutManagedFields(currentrecord).asMap
+            if (currentrecord.getAs[EntityId]("id").contains(targetid) &&
+                SimpleEntityStorageShapePolicy.withoutManagedFields(rootrecord).asMap
+                  .forall { case (key, value) => currentmap.get(key).contains(value) })
+              Consequence.unit
+            else Consequence.operationConflict("aggregate-command", Vector(
+              Descriptor.Facet.Reason("aggregate-root-snapshot-mismatch"),
+              Descriptor.Facet.Policy("entity.optimistic-concurrency"),
+              Descriptor.Facet.Actual(targetid.print)))
+          }
+          updatedrecord <- _aggregate_capture_phase_c(ctx, DslChokepointPhase.Method) {
+            for {
+              updated <- _aggregate_capture_boundary_c(command(aggregate))
+              record <- _aggregate_capture_boundary_c {
+                _aggregate_exact_root_record_c(collection, updated.toRecord(), requireid = true)
+              }
+              _ <- if (record.getAs[EntityId]("id").contains(targetid)) Consequence.unit
+                else Consequence.argumentInvalid("Aggregate command must retain the exact target ID")
+            } yield record
+          }
+          capture <- _aggregate_capture_phase_c(ctx, DslChokepointPhase.Persistence) {
+            for {
+              entity <- _aggregate_capture_boundary_c {
+                collection.descriptor.persistent.fromRecord(updatedrecord)
+              }
+              identity <- _aggregate_capture_boundary_c {
+                Consequence.success(collection.descriptor.persistent.id(entity))
+              }
+              _ <- if (identity == targetid) Consequence.unit
+                else Consequence.argumentInvalid("Aggregate persistent must retain the exact target ID")
+              captured <- if (representation == EntityRevisionRepresentation.Embedded)
+                _aggregate_capture_evaluate_c(uow, UnitOfWorkOp.EntityStoreSaveSnapshotOutcome(
+                  entity, Some(observedrevision), collection.descriptor.persistent, Some(authorization), policy))
+                  .map(value => value: EntityVersionedMutationCaptureOutcome[?])
+              else
+                _aggregate_capture_evaluate_c(uow, UnitOfWorkOp.EntityStoreSaveDetachedOutcome(
+                  entity, Some(observedrevision), collection.descriptor.persistent, Some(authorization), policy))
+                  .map(value => value: EntityVersionedMutationCaptureOutcome[?])
+            } yield captured
+          }
+        } yield capture
+      }
+    }
+  }
+
+  private[cncf] final def _aggregate_create_capture_c[C](
+    aggregatename: String,
+    commandname: String,
+    persistent: EntityPersistentCreate[C]
+  )(command: () => Consequence[C]): Consequence[EntityCreateMutationOutcome[C]] = {
+    if (aggregatename == null || commandname == null || persistent == null || command == null)
+      Consequence.argumentInvalid("Aggregate lifecycle create input must be nonnull")
+    else if (aggregatename.isEmpty || aggregatename != aggregatename.trim ||
+        commandname.isEmpty || commandname != commandname.trim)
+      Consequence.argumentInvalid("Aggregate and command names must be nonempty and exactly trimmed")
+    else {
+      val uow = execution_context.unitOfWork
+      _aggregate_capture_chokepoint_c[EntityCreateMutationOutcome[C]](
+        operation = "create-capture", aggregatename = aggregatename,
+        targetid = None, commandname = Some(commandname)
+      ) { ctx =>
+        for {
+          collection <- _aggregate_capture_phase_c(ctx, DslChokepointPhase.Resolve) {
+            _aggregate_lifecycle_collection_c(aggregatename)
+          }
+          _ <- _aggregate_lifecycle_representation_c(collection)
+          authorization <- _aggregate_capture_phase_c(ctx, DslChokepointPhase.Authorization) {
+            for {
+              _ <- _aggregate_authorize_create(aggregatename, commandname)
+              authorization = AggregateAuthorization.Request(
+                aggregateName = aggregatename, targetId = None, accessKind = s"create:$commandname",
+                access = _aggregate_declared_access,
+                sourceComponentName = component_name_option, targetComponentName = component_name_option,
+                operationModel = _aggregate_operation_model, relationRules = _aggregate_relation_rules,
+                naturalConditions = _aggregate_natural_conditions
+              ).toUnitOfWorkAuthorization
+              _ <- _aggregate_capture_evaluate_c(uow, UnitOfWorkOp.Authorize(authorization))
+            } yield authorization
+          }
+          entity <- _aggregate_capture_phase_c(ctx, DslChokepointPhase.Method) {
+            _aggregate_lifecycle_boundary_c(command())
+          }
+          _ <- _aggregate_lifecycle_boundary_c {
+            for {
+              selected <- _aggregate_lifecycle_boundary_c(Consequence.success(persistent.collection(entity)))
+              identity <- _aggregate_lifecycle_boundary_c(Consequence.success(persistent.id(entity)))
+              _ <- if (selected != collection.descriptor.collectionId)
+                Consequence.argumentInvalid("Aggregate create persistent must retain the exact root collection")
+              else if (identity.exists(id => id == null || id.collection == null || id.collection != selected))
+                Consequence.argumentInvalid("Aggregate create identity must belong to the exact root collection")
+              else Consequence.unit
+            } yield ()
+          }
+          captured <- _aggregate_capture_phase_c(ctx, DslChokepointPhase.Persistence) {
+            _aggregate_capture_evaluate_c(uow, UnitOfWorkOp.EntityStoreCreateOutcome(
+              entity, persistent, EntityCreateOptions.default, Some(authorization)))
+          }
+        } yield captured
+      }
+    }
+  }
+
+  private[cncf] final def _aggregate_delete_observed_capture_c[
+    A <: org.goldenport.record.RecordPresentable
+  ](
+    aggregatename: String,
+    targetid: EntityId,
+    observedrevision: EntityRevision
+  )(validate: A => Consequence[Unit]): Consequence[EntityDeleteMutationOutcome] = {
+    if (aggregatename == null || targetid == null || targetid.collection == null ||
+        observedrevision == null || validate == null)
+      Consequence.argumentInvalid("Aggregate lifecycle delete input must be nonnull")
+    else if (aggregatename.isEmpty || aggregatename != aggregatename.trim)
+      Consequence.argumentInvalid("Aggregate name must be nonempty and exactly trimmed")
+    else {
+      val uow = execution_context.unitOfWork
+      _aggregate_capture_chokepoint_c[EntityDeleteMutationOutcome](
+        operation = "delete-observed-capture", aggregatename = aggregatename,
+        targetid = Some(targetid), commandname = None
+      ) { ctx =>
+        for {
+          collection <- _aggregate_capture_phase_c(ctx, DslChokepointPhase.Resolve) {
+            _aggregate_lifecycle_collection_c(aggregatename).flatMap { collection =>
+              if (collection.descriptor.collectionId == targetid.collection) Consequence.success(collection)
+              else Consequence.argumentInvalid("Aggregate delete requires the exact root collection")
+            }
+          }
+          representation <- _aggregate_lifecycle_representation_c(collection)
+          _ <- EntityMutationExecutionPolicy(
+            concurrencyPolicy = EntityConcurrencyPolicy.Optimistic,
+            writePolicy = EntityWritePolicy.AlwaysWrite,
+            preconditionPolicy = RevisionPreconditionPolicy.ObservedRequired,
+            observedRevision = Some(observedrevision)
+          ).validateC
+          authorization <- _aggregate_capture_phase_c(ctx, DslChokepointPhase.Authorization) {
+            val request = AggregateAuthorization.Request(
+              aggregateName = aggregatename, targetId = Some(targetid), accessKind = "delete",
+              access = _aggregate_declared_access,
+              sourceComponentName = component_name_option, targetComponentName = component_name_option,
+              operationModel = _aggregate_operation_model, relationRules = _aggregate_relation_rules,
+              naturalConditions = _aggregate_natural_conditions
+            )
+            val authorization = request.toUnitOfWorkAuthorization
+            AggregateAuthorization.authorize(request, _aggregate_load_record(aggregatename))(using execution_context)
+              .flatMap(_ => _aggregate_capture_evaluate_c(uow, UnitOfWorkOp.Authorize(authorization)))
+              .map(_ => authorization)
+          }
+          root <- _aggregate_capture_phase_c(ctx, DslChokepointPhase.Resolve) {
+            if (representation == EntityRevisionRepresentation.Embedded)
+              execution_context.entityStoreSpace.loadSnapshot(targetid,
+                collection.descriptor.persistent)(using execution_context)
+                .flatMap(value => Consequence.successOrEntityNotFound(value)(targetid))
+                .map(value => value.entity -> value.revision)
+            else
+              execution_context.entityStoreSpace.loadDetached(targetid,
+                collection.descriptor.persistent)(using execution_context)
+                .flatMap(value => Consequence.successOrEntityNotFound(value)(targetid))
+                .map(value => value.entity -> value.revision)
+          }
+          _ <- if (root._2 == observedrevision) Consequence.unit
+            else EntityConcurrencyMetadata.staleMutation(observedrevision, root._2)
+          _ <- root._2.nextC
+          aggregate <- _aggregate_capture_phase_c(ctx, DslChokepointPhase.Resolve) {
+            component.flatMap(_.aggregateSpace.collectionOption[A](aggregatename)) match {
+              case Some(registered) => _aggregate_lifecycle_boundary_c {
+                registered.resolve_with_context(targetid)(using execution_context)
+              }
+              case None => Consequence.argumentInvalid("Aggregate collection is not registered")
+            }
+          }
+          currentrecord <- _aggregate_lifecycle_boundary_c {
+            _aggregate_exact_root_record_c(collection, aggregate.toRecord(), requireid = true)
+          }
+          rootrecord <- _aggregate_lifecycle_boundary_c {
+            _aggregate_exact_root_record_c(collection,
+              collection.descriptor.persistent.toRecord(root._1), requireid = true)
+          }
+          identity <- _aggregate_lifecycle_boundary_c {
+            Consequence.success(collection.descriptor.persistent.id(root._1))
+          }
+          _ <- {
+            val currentmap = SimpleEntityStorageShapePolicy.withoutManagedFields(currentrecord).asMap
+            if (identity == targetid && currentrecord.getAs[EntityId]("id").contains(targetid) &&
+                rootrecord.getAs[EntityId]("id").contains(targetid) &&
+                SimpleEntityStorageShapePolicy.withoutManagedFields(rootrecord).asMap
+                  .forall { case (key, value) => currentmap.get(key).contains(value) })
+              Consequence.unit
+            else Consequence.operationConflict("aggregate-command", Vector(
+              Descriptor.Facet.Reason("aggregate-root-snapshot-mismatch"),
+              Descriptor.Facet.Policy("entity.optimistic-concurrency"),
+              Descriptor.Facet.Actual(targetid.print)))
+          }
+          _ <- _aggregate_capture_phase_c(ctx, DslChokepointPhase.Method) {
+            _aggregate_lifecycle_boundary_c(validate(aggregate))
+          }
+          captured <- _aggregate_capture_phase_c(ctx, DslChokepointPhase.Persistence) {
+            _aggregate_capture_evaluate_c(uow, UnitOfWorkOp.EntityStoreDeleteObservedOutcome(
+              targetid, observedrevision, Some(authorization)))
+          }
+        } yield captured
+      }
+    }
+  }
+
+  private def _aggregate_lifecycle_collection_c(
+    aggregatename: String
+  ): Consequence[org.goldenport.cncf.entity.runtime.EntityCollection[Any]] =
+    component.flatMap(_.aggregateSpace.collectionOption[Any](aggregatename)) match {
+      case None => Consequence.argumentInvalid("Aggregate collection is not registered")
+      case Some(_) => _aggregate_declared_entity_collection_option_c(aggregatename).flatMap {
+        case Some(collection) => Consequence.success(collection)
+        case None => Consequence.argumentInvalid("Aggregate root entity collection is not registered")
+      }
+    }
+
+  private def _aggregate_lifecycle_representation_c(
+    collection: org.goldenport.cncf.entity.runtime.EntityCollection[Any]
+  ): Consequence[EntityRevisionRepresentation] =
+    collection.descriptor.revisionBinding match {
+      case Some(binding) if binding != null &&
+          collection.descriptor.plan.concurrencyPolicy == EntityConcurrencyPolicy.Optimistic &&
+          (binding.representation == EntityRevisionRepresentation.Embedded ||
+            binding.representation == EntityRevisionRepresentation.Detached) =>
+        Consequence.success(binding.representation)
+      case _ => Consequence.operationInvalid("aggregate-lifecycle-capture",
+        "Optimistic concurrency and managed Embedded or Detached revision are required")
+    }
+
+  private def _aggregate_lifecycle_boundary_c[A](body: => Consequence[A]): Consequence[A] = {
+    def _invalid_(): Consequence[A] = Consequence.operationInvalid(
+      "aggregate-lifecycle-capture", Cause.Kind.Inconsistency,
+      Vector(Descriptor.Facet.Reason("aggregate-lifecycle-callback-invalid")), None)
+    try body match {
+      case null => _invalid_()
+      case Consequence.Success(null) | Consequence.Failure(null) => _invalid_()
+      case value => value
+    } catch { case NonFatal(_) => _invalid_() }
+  }
+
+  private def _aggregate_capture_chokepoint_c[A](
+    operation: String,
+    aggregatename: String,
+    targetid: Option[EntityId],
+    commandname: Option[String]
+  )(body: DslChokepointContext => Consequence[A]): Consequence[A] = {
+    given ExecutionContext = execution_context
+    val ctx = DslChokepointContext(
+      domain = "aggregate", operation = operation, componentName = component_name_option,
+      resourceName = Some(aggregatename), targetId = targetid.map(_.toString), commandName = commandname)
+    DslChokepointRunner._run_preserving_c(ctx, None)(body(ctx))
+  }
+
+  private def _aggregate_capture_phase_c[A](
+    context: DslChokepointContext,
+    phase: DslChokepointPhase
+  )(body: => Consequence[A]): Consequence[A] = {
+    given ExecutionContext = execution_context
+    DslChokepointRunner._phase_preserving_c(context, phase, None)(body)
+  }
+
+  private def _aggregate_capture_evaluate_c[A](uow: UnitOfWork, operation: UnitOfWorkOp[A]): Consequence[A] =
+    new UnitOfWorkInterpreter(uow).evaluateInActiveUnitOfWorkC(
+      ConsequenceT.liftF(Free.liftF[UnitOfWorkOp, A](operation)))
+
+  private def _aggregate_capture_boundary_c[A](body: => Consequence[A]): Consequence[A] = {
+    def _invalid_(): Consequence[A] = Consequence.operationInvalid(
+      "aggregate-observed-capture", Cause.Kind.Inconsistency,
+      Vector(Descriptor.Facet.Reason("aggregate-callback-invalid")), None)
+    try body match {
+      case null => _invalid_()
+      case Consequence.Success(null) | Consequence.Failure(null) => _invalid_()
+      case value => value
+    } catch { case NonFatal(_) => _invalid_() }
+  }
+
+  private def _aggregate_observed_boundary_c[A](body: => Consequence[A]): Consequence[A] = {
+    def _invalid_(): Consequence[A] = Consequence.operationInvalid(
+      "aggregate-observed-snapshot", Cause.Kind.Inconsistency,
+      Vector(Descriptor.Facet.Reason("aggregate-callback-invalid")), None)
+    try body match {
+      case null => _invalid_()
+      case Consequence.Success(value) if value == null => _invalid_()
+      case value => value
+    } catch { case NonFatal(_) => _invalid_() }
+  }
 
   protected final def aggregate_command[A <: org.goldenport.record.RecordPresentable](
     aggregateName: String,

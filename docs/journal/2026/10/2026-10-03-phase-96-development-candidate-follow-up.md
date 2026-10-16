@@ -1,0 +1,3 @@
+<!-- cncf-phase-finding:DEV-P96-C4C-DUPLICATE-DIAGNOSTICS-001:begin -->
+DEV-P96-C4C-DUPLICATE-DIAGNOSTICS-001 OPEN: existing EntityVersionedMutationFailure.normalizeProvider annotates Duplicate with generic provider-failure and entity.versioned-mutation.provider facets. C4C correctly preserves and independently expects that complete current failure, so this does not block its boundary. Owner: CNCF canonical provider diagnostics; dependency: settled classification and any required upstream Observation/Taxonomy vocabulary. Resume only under an explicitly admitted diagnostics task. Prohibit Display-local reclassification, invented failure carriers, facet removal and production-derived expected failures.
+<!-- cncf-phase-finding:DEV-P96-C4C-DUPLICATE-DIAGNOSTICS-001:end -->

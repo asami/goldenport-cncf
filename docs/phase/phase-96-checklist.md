@@ -4,7 +4,7 @@ status=in-progress
 phase=[Phase 96](phase-96.md)
 development_branch=codex/phase-96-display-service
 execution_baseline=6cbe877c53c116639feb11fa80546e79c051804c
-current_entry=P96-07
+current_entry=P96-08
 development_plan=[Development plan proposal](../journal/2026/10/2026-10-03-phase-96-development-plan-proposal.md)
 
 ## Ledger boundary
@@ -24,11 +24,20 @@ static ABI admission and pure Display construction evidence. P96-03 is CLOSED
 on all seven criteria after independent whole-Step review and parent admission;
 P96-04 is CLOSED at accepted local Step commit `625d533` after focused 151/151 tests in
 18 suites, independent whole-Step PASS and parent admission. The ledger has
-33 checked and 21 pending outcomes with all 54 criterion texts unchanged;
-current_entry=P96-07. P96-05 is independently accepted and CLOSED at local
+37 checked and 17 pending outcomes with all 54 criterion texts unchanged;
+current_entry=P96-08. P96-05 is independently accepted and CLOSED at local
 Step commit `4898201d5679408d6e44510024a6feaea442a66c`; P96-06 is independently
-accepted and a CLOSED candidate, with its local Step commit PREPARED/PENDING,
-and P96-07 through P96-11 remain OPEN.
+accepted and CLOSED at local Step commit
+`1356e41cdee41dd40bc2212c1ef0297ab8875206`. P96-07 is independently accepted
+and CLOSED on all four criteria through whole-Step review and focused repair
+closure in ledger revision 34; its exact local Step commit is being prepared.
+P96-08 through P96-11 remain OPEN and are not started by this handoff. The
+[P96-07 acceptance entry](../journal/2026/10/2026-10-16-phase-96-display-list-lifecycle-integration.md#p96-07-step-acceptance-2026-10-16)
+records the criterion and PG1–PG12 correspondence, retained validation and
+single accepted Step repair. Stage acceptance is not a completed commit or
+Phase closure.
+The [P96-06 post-commit chronology](../journal/2026/10/2026-10-05-phase-96-display-mutation.md#p96-06-post-commit-status-reconciliation-2026-10-16)
+reconciles the earlier acceptance-time pending status.
 The [P96-06 acceptance entry](../journal/2026/10/2026-10-05-phase-96-display-mutation.md#p96-06-step-acceptance)
 records complete A+B acceptance of all five criteria through the original whole-Step
 review and independent descriptor-focused PASS in ledger revision 31. Current
@@ -405,10 +414,14 @@ Current `phase96-p96-06b-validation-subject-001@4` passed 5/5 tests in one suite
 and 98/98 in fourteen suites with SBT/wrapper exit 0 and serial lock released.
 Historical A readiness 8/8 plus 57/57 and B subject3 8/8 plus 97/97 retain their
 distinct subjects; A alone was not Step acceptance. Completed repairs
-6/nonconverging 0/accepted are retained. P96-06 is an independently accepted
-CLOSED candidate; its local Step commit is PREPARED/PENDING. P96-07 canonical
-write, strict deletion, ordinary route/descriptor exposure and actual contextual
-reload/positive lifecycle proof remain pending. Existing read-v1 is unchanged.
+6/nonconverging 0/accepted are retained. P96-06 is independently accepted and
+CLOSED at local Step commit `1356e41cdee41dd40bc2212c1ef0297ab8875206`; the
+[post-commit chronology](../journal/2026/10/2026-10-05-phase-96-display-mutation.md#p96-06-post-commit-status-reconciliation-2026-10-16)
+records the completed commit without changing the original Phase base. At
+P96-06 acceptance, P96-07 canonical write, strict deletion, ordinary route
+exposure and actual contextual reload/positive lifecycle proof remained
+pending; the separate P96-07 acceptance below now establishes those outcomes.
+Existing read-v1 is unchanged.
 
 - [x] Typed create/update/delete inputs/results identify admitted resource/projection definitions, explicit capability/availability, scoped editable fields, accepted values and constraints; Business Operations are excluded.
 - [x] Every editable field has an explicit registered converter and Entity/Aggregate update target; derived/combined/unbound fields have no inferred inverse mapping and metadata cannot weaken domain validation.
@@ -420,14 +433,68 @@ reload/positive lifecycle proof remain pending. Existing read-v1 is unchanged.
 
 Stage Status:
 
-- Current status: OPEN
+- Current status: CLOSED
 - Owner: CNCF Entity/Aggregate and Display service owners
 - Update rule: Advance only from canonical mutation delegation and executable lifecycle evidence; the checklist below is the closure basis.
 
-- [ ] The bridge deterministically resolves admitted field bindings into canonical Entity/Aggregate mutation input, reusing authorization, revision, domain validation, UnitOfWork/transaction and structured failure mechanisms without direct Display datastore writes.
-- [ ] Update-first specifications prove Detail/Edit/Save/refreshed Detail, current-revision no-op policy, stale-before-equality conflict and source revision correspondence under the admitted policy.
-- [ ] Positive create-to-Detail/List and delete-to-List paths are proven for a development fixture that admits them; ESS2-01's unsupported create/delete results alone do not satisfy these paths.
-- [ ] Authorization/validation/conflict/capability failures leave the resource unchanged, and a successful committed mutation followed by projection delay/failure preserves its committed outcome without replay.
+- [x] The bridge deterministically resolves admitted field bindings into canonical Entity/Aggregate mutation input, reusing authorization, revision, domain validation, UnitOfWork/transaction and structured failure mechanisms without direct Display datastore writes.
+- [x] Update-first specifications prove Detail/Edit/Save/refreshed Detail, current-revision no-op policy, stale-before-equality conflict and source revision correspondence under the admitted policy.
+- [x] Positive create-to-Detail/List and delete-to-List paths are proven for a development fixture that admits them; ESS2-01's unsupported create/delete results alone do not satisfy these paths.
+- [x] Authorization/validation/conflict/capability failures leave the resource unchanged, and a successful committed mutation followed by projection delay/failure preserves its committed outcome without replay.
+
+### Required native PostgreSQL evidence within P96-07
+
+The [PostgreSQL persistence specification](../spec/postgresql-phase-96-persistence.md)
+applies the [primary Knowledge Store decision](../design/postgresql-primary-knowledge-store.md)
+to these four existing criteria; the
+[adoption journal](../journal/2026/10/2026-10-14-postgresql-primary-knowledge-store.md)
+records provenance and current gaps. These are subordinate evidence
+obligations, not additional checklist criteria or an accepted Step.
+
+| Existing P96-07 criterion | Mandatory PostgreSQL correspondence |
+| --- | --- |
+| 1: canonical delegation | PG1/PG2/PG5–PG8/PG11/PG12: normal ComponentDataStore and SystemNode-managed selection, registered Entity AND Aggregate, ordinary routes, canonical authorization/domain/revision/transaction ownership. |
+| 2: update-first lifecycle | PG2/PG5/PG7/PG10/PG12: native changed/no-op/stale-before-equality update, body/revision correspondence and actual selected contextual committed Detail reload. |
+| 3: positive create/delete | PG3/PG4/PG6/PG8/PG9/PG11/PG12: real positive canonical create-to-Detail/List and physical/logical delete-to-List, independently durable root/body results and native duplicate/race/rollback evidence. |
+| 4: failure and committed outcome | PG4–PG12: complete selected/unrelated state preservation, rollback and explicit/escaped/null post-real-commit ACK distinctions, authorization/capability failures and actual committed-pending/projection-failure outcome without replay. |
+
+Real positive native PostgreSQL CUD, body/revision, concurrency, rollback and
+ACK evidence is required, together with normal Component/SystemNode lifecycle,
+registered Entity AND Aggregate and ordinary-route selected contextual
+`afterCommitResponseC` reload. PostgreSQL identity grammar, unsupported-only
+results, test-only JDBC or MySQL proxy evidence do not satisfy this gate.
+MySQL, SQLite and memory retain their required regression coverage.
+
+Earlier C4C readiness snapshot (2026-10-16, before whole-Step acceptance):
+all four original criteria were OPEN, with 33 checked/21 pending outcomes
+across the unchanged 54-criterion ledger. Focused C4C representative and expanded
+accumulator validation, including native PostgreSQL evidence, and fresh
+independent whole-twelve-path auxiliary assurance have completed with no current
+auxiliary boundary blocker. The
+[C4C management chronology](../journal/2026/10/2026-10-16-phase-96-display-list-lifecycle-integration.md#c4c-current-readiness-and-candidate-reconciliation-2026-10-16)
+supersedes the earlier unvalidated atomic-create draft/no-PostgreSQL-result
+checkpoint for current readiness only. Whole-P96-07 criterion/PG1–PG12
+correspondence and independent protected whole-Step acceptance remain required;
+all four checkboxes stayed OPEN at that auxiliary checkpoint. That snapshot
+retained current_entry=P96-07, PLAN epoch 1, zero full Phase reviews and the original
+authority, Goal binding, base and repair/review history. P96-08 through P96-11,
+separate Cozy/server/app acceptance and the original aggregate handoff, Step
+review, single full Phase review, final validation and release gates remain required.
+
+Current P96-07 acceptance (2026-10-16): independent protected whole-Step
+review `phase96-p96-07-step-review-001@1` covered all 181 owned paths and
+125 target programs, supporting the four criteria and PG1–PG12 while finding
+three bounded test-conformance blockers. Independent focused PASS
+`phase96-p96-07-step-focused-review-001@1` resolved all three after the exact
+four-test repair. Parent admission in ledger revision 34 accepts all four
+criteria. Current focused 4-suite/21-test success supplements earlier
+39-suite/529-test and 138-suite/2127-test evidence; the latter retains five
+historical pending cases. Step repair 1 is accepted, nonconverging 0.
+The exact local Step commit remains a separate preparation/execution gate.
+The ledger now has 37 checked/17 pending criteria and current_entry=P96-08;
+P96-08..11 remain OPEN. Phase 96 stays in-progress, with zero full Phase
+reviews and no final validation, release or aggregate acceptance claim.
+See the [acceptance entry](../journal/2026/10/2026-10-16-phase-96-display-list-lifecycle-integration.md#p96-07-step-acceptance-2026-10-16).
 
 ## P96-08: Business Operation Action descriptors
 

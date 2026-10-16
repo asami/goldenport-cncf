@@ -68,7 +68,8 @@ import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
  *  version Jun. 19, 2026
  *  version Aug. 14, 2026
  *  version Aug. 15, 2026
- * @version Sep. 29, 2026
+ *  version Sep. 29, 2026
+ * @version Oct. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -141,12 +142,15 @@ final class Http4sHttpServer(
       .guarantee(IO(Http4sHttpServer._clear_bound_base_url()))
   }
 
-  private[http] def routes(wsb: WebSocketBuilder2[IO]): HttpRoutes[IO] = HttpRoutes.of[IO] {
+  private[http] def routes(wsb: WebSocketBuilder2[IO]): HttpRoutes[IO] =
+    _routes(wsb, None)
+
+  private def _routes(wsb: WebSocketBuilder2[IO], originalmethod: Option[Method]): HttpRoutes[IO] = HttpRoutes.of[IO] {
       case req if req.method == Method.HEAD =>
         if (_is_head_excluded_request(req))
           IO.pure(_head_response(HResponse[IO](HStatus.NotFound)))
         else
-          routes(wsb).orNotFound.run(req.withMethod(Method.GET)).map(_head_response)
+          _routes(wsb, Some(req.method)).orNotFound.run(req.withMethod(Method.GET)).map(_head_response)
       case req if _is_root_request(req) =>
         IO.pure(_temporary_redirect(_redirect_target_with_query(req, "/web")))
       case GET -> Root / "mcp" =>
@@ -512,7 +516,7 @@ final class Http4sHttpServer(
           val started = System.nanoTime()
           for {
             raw <- _to_http_request(req, Some(_rest_execution_path(req)))
-            res <- _rest_mutation_request(req, raw) match {
+            res <- _rest_mutation_request_with_original_method(req, raw, originalmethod.getOrElse(req.method)) match {
               case Consequence.Success(core) =>
                 _to_http_execution_response(
                   engine.executeWithExecutionResponse(_canonicalize_presentation_component_request(core)),
@@ -5931,6 +5935,31 @@ final class Http4sHttpServer(
     req: org.http4s.Request[IO],
     request: HttpRequest
   ): Consequence[HttpRequest] =
+    _rest_mutation_request_with_original_method(req, request, req.method)
+
+  private def _rest_mutation_request_with_original_method(
+    req: org.http4s.Request[IO],
+    request: HttpRequest,
+    originalmethod: Method
+  ): Consequence[HttpRequest] =
+    engine.runtimeSubsystem._http_operation(request) match {
+      case Some(selected: org.goldenport.cncf.display.DisplayMutationHttpOperation) =>
+        val expected = selected._expected_http_method match {
+          case HttpRequest.GET => Method.GET
+          case HttpRequest.POST => Method.POST
+          case HttpRequest.PUT => Method.PUT
+          case HttpRequest.DELETE => Method.DELETE
+          case _ => Method.GET
+        }
+        if (originalmethod == expected) Consequence.success(request)
+        else org.goldenport.cncf.display.DisplayMutation.inputInvalidC("VALUE_INVALID", "request.method")
+      case _ => _ordinary_rest_mutation_request(req, request)
+    }
+
+  private def _ordinary_rest_mutation_request(
+    req: org.http4s.Request[IO],
+    request: HttpRequest
+  ): Consequence[HttpRequest] =
     if (
       req.method != Method.PUT ||
       !_is_entity_revision_rest_request(req)
@@ -7549,9 +7578,16 @@ final class Http4sHttpServer(
         header.mediaType.mainType.equalsIgnoreCase("application") &&
           header.mediaType.subType.equalsIgnoreCase("json")
       }
+      val rawmutation = engine.runtimeSubsystem._http_operation(HttpRequest.fromPath(
+        method = method, path = path, query = query, header = header, context = context)).exists {
+          case selected: org.goldenport.cncf.display.DisplayMutationHttpOperation => selected._raw_mutation_body
+          case _ => false
+        }
       val (bodyoption, formrecord) =
         if (bytes.isEmpty) {
           (None, Record.empty)
+        } else if (rawmutation) {
+          (Some(Bag.binary(bytes.toArray)), Record.empty)
         } else if (isformurlencoded) {
           val text = new String(bytes, java.nio.charset.StandardCharsets.UTF_8)
           (None, HttpRequest.parseQuery(text))

@@ -23,6 +23,7 @@ import org.goldenport.cncf.datastore.{
   EntityMutationProviderReadback,
   EntityMutationProviderResult,
   EntityMutationProviderCapabilities,
+  EntityMutationProviderFeature,
   EntityMutationReadbackRequirement,
   EntityVersionedMutationDataStore,
   EntityVersionedMutationPlan,
@@ -45,7 +46,8 @@ import org.simplemodeling.model.directive.Update
 /*
  * @since   Jul. 24, 2026
  *  version Jul. 26, 2026
- * @version Sep. 17, 2026
+ *  version Sep. 17, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkVersionedMutationSpec
@@ -543,7 +545,7 @@ final class UnitOfWorkVersionedMutationSpec
       }
 
       "fall back to guarded mutation when the provider lacks native capability" in {
-        Given("a None-concurrency Entity on a guarded-only provider")
+        Given("a None-concurrency Entity on a provider with guarded-only UPDATE and atomic CREATE")
         val datastore          = new RecordingGuardedDataStore
         val fixture            = _fixture(EntityConcurrencyPolicy.None, datastore)
         given ExecutionContext = fixture.context
@@ -1223,7 +1225,10 @@ final class UnitOfWorkVersionedMutationSpec
       extends RecordingNativeDataStore {
     override def entityMutationProviderCapabilities
         : EntityMutationProviderCapabilities =
-      EntityMutationProviderCapabilities.guardedBaseline
+      EntityMutationProviderCapabilities.guardedBaseline.copy(
+        features = EntityMutationProviderCapabilities.guardedBaseline.features +
+          EntityMutationProviderFeature.AtomicCreate
+      )
   }
 
   private def _raw_record(
