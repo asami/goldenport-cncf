@@ -170,6 +170,83 @@ tracing does not replace those boundaries. ActionCall CallTree request and
 response summaries are structural by default, so a rule-fired operation cannot
 reintroduce plan parameter values into the enclosing trace.
 
+
+## Domain Evidence and Hybrid Inference Direction
+
+The Rule architecture is also the natural decision boundary for domain
+evidence that originates outside the Rule Engine itself. The long-term model
+should distinguish the semantic kind of evidence from its provenance.
+
+Evidence is classified into Fact, Estimate, and Judgment. Fact is further
+classified as DefinedFact, StateFact, ObservedFact, DeclaredFact, and
+DerivedFact. Estimate includes StatisticalEstimate, Prediction, and Forecast.
+Judgment includes AIJudgment and HumanJudgment.
+
+These categories express different certainty semantics.
+
+- A DefinedFact is established by an applicable definition, regulation,
+  contract, catalog, configuration, or other authority.
+- A StateFact is a domain proposition projected from operational state, such
+  as Entity/Aggregate/DataStore-backed facts. A database row is not itself the
+  Fact; the Domain Model interprets stored data as a proposition.
+- An ObservedFact records an observation.
+- A DeclaredFact records a proposition asserted by a person or external party.
+- A DerivedFact is deterministically derived from other Facts by an explicit
+  calculation, symbolic rule, or knowledge inference. Traditional expert-system
+  reasoning therefore feeds its results back into the Fact space.
+- An Estimate represents quantified uncertainty produced by an analytical,
+  statistical, or predictive model. Its semantics should include the model,
+  applicable population/context, uncertainty/calibration information when
+  available, and evaluation time.
+- A Judgment represents an interpretive decision whose correctness is not
+  established merely by deterministic derivation or statistical uncertainty.
+  Generative-AI and human judgments belong here by default.
+
+Evidence kind and provenance are orthogonal. Provenance may identify Domain
+state, DataStore, contract, regulation, external system, sensor, Knowledge,
+BI/Analytics, AI, Human, or another source. Every Evidence value should retain
+enough provenance, scope, validity, and version information for the consumer to
+understand why it is admissible.
+
+This model allows the Rule architecture to combine traditional symbolic
+reasoning and generative-AI reasoning without pretending that they have the
+same certainty semantics. Symbolic and knowledge inference return Derived
+Facts to the Fact space. BI, statistical, and ML processing can provide
+Estimates. Generative AI normally provides AI Judgments. Human semantic
+decisions provide Human Judgments. Domain Rules consume the admissible
+combination and produce Domain Decisions.
+
+Symbolic inference remains deterministic and explainable at the CNCF
+compatibility boundary and may repeatedly derive new Facts to a bounded fixed
+point. Generative inference is not modeled as a stronger replacement for
+symbolic inference. It supplies semantic interpretation or judgment where
+deterministic inference is insufficient.
+
+A Rule may consume Facts, Estimates, and Judgments according to its declared
+evidence requirements. It should be possible for high-impact rules to require
+specific evidence kinds or Admission before accepting an AI Judgment. An AI
+model's self-reported confidence must not be treated as equivalent to a
+statistically calibrated probability. AI-Judgment reliability should instead
+be evaluated through external evidence such as AI Audit, Experiment, Admission
+outcomes, human correction, and downstream outcomes.
+
+The resulting architecture is intentionally hybrid:
+
+- symbolic/expert-system inference provides deterministic derivation;
+- BI/statistical/ML analysis provides quantified estimates and predictions;
+- Knowledge provides source material and may participate in deterministic
+  inference;
+- generative AI provides semantic inference and judgment;
+- Human judgment remains a first-class source where required;
+- Domain Rules combine admissible Evidence into a Domain Decision.
+
+The current Phase 32 Fact, WorkingMemory, RuleEngine, and InferenceEngine
+contracts remain the implemented deterministic foundation. This section
+records the architectural direction; it does not retroactively change the
+closed Phase 32 ABI. A later phase must reconcile this Evidence model with the
+existing Rule model, Candidate-Admission Evidence, JudgmentAction, AI Audit,
+Knowledge, and analytics integration before adding new public runtime types.
+
 ## Non-Goals
 
 - JESS compatibility, RETE optimization, Drools integration, and other
