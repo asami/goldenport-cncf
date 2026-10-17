@@ -1,8 +1,9 @@
 package org.goldenport.cncf.http
 
-import java.io.{ByteArrayOutputStream, InputStream}
-import java.net.{HttpURLConnection, URI, URL}
+import java.io.{ByteArrayOutputStream, InputStream, IOException, InterruptedIOException}
+import java.net.{HttpURLConnection, SocketTimeoutException, URI, URL}
 import java.nio.charset.{Charset, StandardCharsets}
+import scala.util.control.NonFatal
 import org.goldenport.bag.Bag
 import org.goldenport.datatype.{ContentType, MimeType}
 import org.goldenport.http.{HttpResponse, HttpStatus}
@@ -15,7 +16,8 @@ import org.slf4j.LoggerFactory
  *  version Feb.  7, 2026
  *  version Apr. 29, 2026
  *  version May. 30, 2026
- * @version Jul. 21, 2026
+ *  version Jul. 21, 2026
+ * @version Oct. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 trait HttpDriver {
@@ -31,15 +33,20 @@ final class UrlConnectionHttpDriver(
 ) extends HttpDriver {
   private val _default_connect_timeout_ms = 10000
   private val _default_read_timeout_ms = 10000
+  private lazy val _bounded_exchange = new BoundedHttpExchange
 
   def get(
     path: String,
     headers: Map[String, String] = Map.empty,
     properties: Vector[Property] = Vector.empty
   ): HttpResponse = {
-    val conn = _open_connection(_build_url(path), "GET", properties)
-    headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
-    _execute(conn, None, properties)
+    _bounded_policy(properties) match {
+      case Some(policy) => _execute_bounded(path, "GET", None, headers, properties, policy)
+      case None =>
+        val conn = _open_connection(_build_url(path), "GET", properties)
+        headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
+        _execute(conn, None, properties)
+    }
   }
 
   def post(
@@ -48,9 +55,13 @@ final class UrlConnectionHttpDriver(
     headers: Map[String, String],
     properties: Vector[Property] = Vector.empty
   ): HttpResponse = {
-    val conn = _open_connection(_build_url(path), "POST", properties)
-    headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
-    _execute(conn, body.map(Bag.text(_, StandardCharsets.UTF_8)), properties)
+    _bounded_policy(properties) match {
+      case Some(policy) => _execute_bounded(path, "POST", body, headers, properties, policy)
+      case None =>
+        val conn = _open_connection(_build_url(path), "POST", properties)
+        headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
+        _execute(conn, body.map(Bag.text(_, StandardCharsets.UTF_8)), properties)
+    }
   }
 
   override def postBag(
@@ -59,6 +70,7 @@ final class UrlConnectionHttpDriver(
     headers: Map[String, String],
     properties: Vector[Property] = Vector.empty
   ): HttpResponse = {
+    _reject_bounded_method(properties)
     val conn = _open_connection(_build_url(path), "POST", properties)
     headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
     _execute(conn, body, properties)
@@ -70,12 +82,81 @@ final class UrlConnectionHttpDriver(
     headers: Map[String, String],
     properties: Vector[Property] = Vector.empty
   ): HttpResponse = {
+    _reject_bounded_method(properties)
     val conn = _open_connection(_build_url(path), "PUT", properties)
     headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
     _execute(conn, body.map(Bag.text(_, StandardCharsets.UTF_8)), properties)
   }
 
   private val _log = LoggerFactory.getLogger(classOf[UrlConnectionHttpDriver])
+
+  private def _bounded_policy(properties: Vector[Property]): Option[BoundedHttpExchange.Policy] =
+    try {
+      _bounded_property(properties, "http.total-timeout-ms").map { value =>
+        val timeout = value.toIntOption.filter(_ > 0)
+          .getOrElse(throw new IOException("Invalid bounded HTTP policy"))
+        val maxbytes = _bounded_property(properties, "http.max-response-bytes")
+          .flatMap(_.toIntOption).filter(_ >= 0)
+          .getOrElse(throw new IOException("Invalid bounded HTTP policy"))
+        _bounded_property(properties, "http.follow-redirects").foreach { redirect =>
+          if (!redirect.toBooleanOption.contains(false))
+            throw new IOException("Invalid bounded HTTP policy")
+        }
+        BoundedHttpExchange.Policy(timeout, maxbytes)
+      }
+    } catch {
+      case NonFatal(_) => throw new IOException("Invalid bounded HTTP policy")
+    }
+
+  // Presence is significant here: an empty first match must never mean legacy.
+  private def _bounded_property(properties: Vector[Property], name: String): Option[String] =
+    properties.collectFirst {
+      case Property(key, value, _) if key.equalsIgnoreCase(name) => String.valueOf(value).trim
+    }
+
+  private def _reject_bounded_method(properties: Vector[Property]): Unit = {
+    if (_bounded_policy(properties).nonEmpty)
+      throw new IOException("Bounded HTTP method is unsupported")
+  }
+
+  private def _execute_bounded(
+    path: String,
+    method: String,
+    body: Option[String],
+    headers: Map[String, String],
+    properties: Vector[Property],
+    policy: BoundedHttpExchange.Policy
+  ): HttpResponse =
+    try {
+      val url = _build_url(path)
+      if (
+        _public_network_only(properties) &&
+        !Option(url.getHost).exists(PublicNetworkAdmission.admitHostC(_).isSuccess)
+      )
+        throw new IOException("HTTP target does not satisfy public-network policy")
+      val raw = _bounded_exchange.execute(url.toURI, method, body, headers, policy)
+      val contenttype = _content_type(raw.contenttype)
+      val status = _status(raw.status)
+      val response =
+        if (contenttype.mimeType.isText) {
+          val charset = contenttype.charset.getOrElse(StandardCharsets.UTF_8)
+          HttpResponse.Text(status, contenttype, Bag.text(new String(raw.bytes, charset), charset))
+        } else {
+          HttpResponse.Binary(status, contenttype, Bag.binary(raw.bytes))
+        }
+      response.withHeader(Record.create(raw.headers))
+    } catch {
+      case _: SocketTimeoutException =>
+        throw new SocketTimeoutException("Bounded HTTP exchange timed out")
+      case _: InterruptedIOException =>
+        Thread.currentThread().interrupt()
+        throw new InterruptedIOException("Bounded HTTP exchange interrupted")
+      case _: InterruptedException =>
+        Thread.currentThread().interrupt()
+        throw new InterruptedIOException("Bounded HTTP exchange interrupted")
+      case NonFatal(_) =>
+        throw new IOException("Bounded HTTP exchange failed")
+    }
 
   private def _open_connection(
     url: URL,

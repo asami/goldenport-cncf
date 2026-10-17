@@ -11,7 +11,7 @@ does not introduce a Job store, cache, lifecycle, retention clock, or result
 state. Existing Job management APIs, case-class arities, cursor wire values for
 the empty default policy, protocol names, and control outcomes remain valid.
 
-`mine`, `application`, and `operator` are the only scopes. An application is
+The original scopes are `mine`, `application`, and `operator`. An application is
 normalized with `NamingConventions` and rejects blank, separator, and traversal
 input. Scope never accepts a subject or recipient selector. Mine requires a
 non-anonymous session-first owner even when that caller has broad capabilities.
@@ -20,6 +20,36 @@ Application requires canonical broad read capability and stored
 `job_admin` or `content_admin`. A cursor combines the nonempty scoped visibility
 key with the management filter fingerprint; it consequently rejects a changed
 scope, application, caller, authorization set, snapshot, or malformed token.
+
+### Separately configured Audit read scope (CC4-S11)
+
+`audit` is an additional read-only scope with visibility key `audit` and no
+application selector. It observes only the existing subsystem's canonical Job
+engine. It requires an explicitly supplied `RuntimeOperationSecurityPolicy`,
+Production policy and execution context, enabled production administration,
+trusted provider authentication, at least system privilege, and a configured
+jobs role under `AdminAuthorizationPolicy.operationRule("admin.jobs.index", policy)`.
+The default jobs roles remain `system_admin,audit_viewer`; no capability is
+granted by this scope. Admission is repeated against the actual execution
+context for every list and exact read. Missing policy, non-Production mode,
+disabled admin, forged provenance, low privilege, and role mismatch deny access.
+
+Audit uses canonical bounded management summaries and details, filtering and
+pagination. Its cursors bind to Audit visibility, caller/authorization, filters
+and snapshot; they cannot be reused across scopes or subjects. Missing and
+denied details remain indistinguishable. Audit never queries result payloads,
+task pages or timeline pages. Its result is unavailable, controls are empty,
+diagnostics and every control attempt are denied before effect, even when the
+subject also has administrator capabilities. Detail refresh is manual only.
+
+Only the configured Web server supplies this policy. After resolving the actual
+request context, requested Operator Web list/detail routes use Audit when the
+subject lacks `job_admin` and `content_admin`; otherwise they retain Operator.
+Descriptor, authentication and admin-enabled ingress checks still apply.
+Audit links use `/web/system/admin/jobs` and its exact detail paths. The default
+protocol/REST service receives no policy: selecting `scope=audit` cannot grant
+authority, and inert polling URL metadata does not authorize a REST read.
+Mine, Application, Operator and their existing controls retain their contracts.
 
 ## Projection, results, diagnostics, and controls
 
@@ -111,6 +141,7 @@ pause.
 | UX69-06 | `JobExperienceProtocolSpec` descriptor/OpenAPI discovery |
 | UX69-07/08 | `JobExperienceWebSpec`, `JobExperienceHttpSpec` renderer, CSRF form, Web codec, and polling bounds |
 | UX69-09 | All named specs use `AnyWordSpec`, `GivenWhenThen`, and matchers with adjacent clauses |
+| CC4-S11 Audit read | `JobAuditReadSpec`, `JobExperienceHttpSpec` configured provider authority, bounded read-only projection, cursor isolation, and default REST denial |
 
 ## Frozen scenario ledger
 

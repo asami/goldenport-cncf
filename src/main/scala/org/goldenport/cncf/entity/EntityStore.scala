@@ -57,7 +57,8 @@ import org.simplemodeling.model.value.NominalScalar
  *  version May. 17, 2026
  *  version Jul. 26, 2026
  *  version Aug.  5, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -150,6 +151,45 @@ abstract class EntityStore {
     ctx: ExecutionContext
   ): Consequence[Option[EntityRevisionCarrier[T]]] =
     _unsupported_detached_revision[Option[EntityRevisionCarrier[T]]]
+
+  private[cncf] def _save_snapshot_outcome_c[T](
+    entity: T,
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntitySnapshot[T]]] =
+    _unsupported_versioned_outcome
+
+  private[cncf] def _save_detached_outcome_c[T](
+    entity: T,
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntityRevisionCarrier[T]]] =
+    _unsupported_versioned_outcome
+
+  private[cncf] def _update_record_snapshot_outcome_c[P](
+    id: EntityId,
+    patch: P,
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy
+  )(using tc: EntityPersistentUpdate[P], ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntityRecordSnapshot]] =
+    _unsupported_versioned_outcome
+
+  private[cncf] def _update_record_detached_outcome_c[P](
+    id: EntityId,
+    patch: P,
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy
+  )(using tc: EntityPersistentUpdate[P], ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntityRevisionCarrier[Record]]] =
+    _unsupported_versioned_outcome
+
+  private def _unsupported_versioned_outcome[A]: Consequence[A] =
+    Consequence.operationInvalid(
+      "entity-versioned-mutation",
+      Vector(
+        org.goldenport.observation.Descriptor.Facet.Reason("unsupported-capability"),
+        org.goldenport.observation.Descriptor.Facet.Capability("entitystore.versioned-mutation-outcome")
+      )
+    )
 
   private[cncf] def save[T](
     entity: T
@@ -312,6 +352,20 @@ abstract class EntityStore {
     id: EntityId
   )(using ctx: ExecutionContext): Consequence[Unit]
 
+  def deleteObserved(
+    id: EntityId,
+    expectedRevision: EntityRevision
+  )(using ctx: ExecutionContext): Consequence[EntityDeletionResult] =
+    EntityStore._admit_observed_delete(id, expectedRevision).flatMap { _ =>
+      Consequence.operationInvalid(
+        "entity-observed-delete",
+        Vector(
+          org.goldenport.observation.Descriptor.Facet.Reason("unsupported-capability"),
+          org.goldenport.observation.Descriptor.Facet.Capability("entitystore.observed-delete")
+        )
+      )
+    }
+
   def restore(
     id: EntityId
   )(using ctx: ExecutionContext): Consequence[Unit]
@@ -366,6 +420,67 @@ abstract class EntityStore {
 
 object EntityStore {
   final val PROP_ID = "id"
+
+  private[cncf] def _admit_versioned_outcome_c(
+    id: EntityId,
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy
+  ): Consequence[Unit] =
+    if (id == null)
+      Consequence.argumentMissing("id")
+    else if (id.collection == null)
+      Consequence.argumentMissing("id.collection")
+    else if (expectedrevision == null)
+      Consequence.argumentMissing("expectedRevision")
+    else if (expectedrevision.exists(_ == null))
+      Consequence.argumentInvalid("expectedRevision", "nonnull revision", "null revision")
+    else if (executionpolicy == null)
+      Consequence.argumentMissing("executionPolicy")
+    else if (executionpolicy.concurrencyPolicy == null)
+      Consequence.argumentMissing("executionPolicy.concurrencyPolicy")
+    else if (executionpolicy.writePolicy == null)
+      Consequence.argumentMissing("executionPolicy.writePolicy")
+    else if (executionpolicy.preconditionPolicy == null)
+      Consequence.argumentMissing("executionPolicy.preconditionPolicy")
+    else if (executionpolicy.observedRevision == null)
+      Consequence.argumentMissing("executionPolicy.observedRevision")
+    else if (executionpolicy.observedRevision.exists(_ == null))
+      Consequence.argumentInvalid("executionPolicy.observedRevision", "nonnull revision", "null revision")
+    else
+      Consequence.unit
+
+  private[cncf] def _admit_observed_delete(
+    id: EntityId,
+    expectedrevision: EntityRevision
+  ): Consequence[Unit] = {
+    def _label_(path: String, value: String): Consequence[Unit] =
+      if (value == null || value.trim.isEmpty)
+        Consequence.argumentMissing(path)
+      else if (value.exists(_.isControl))
+        Consequence.argumentInvalid(path, "identity without control characters", "invalid identity")
+      else
+        Consequence.unit
+    if (id == null)
+      Consequence.argumentMissing("id")
+    else if (id.collection == null)
+      Consequence.argumentMissing("id.collection")
+    else if (id.timestamp == null || id.timestamp.isEmpty || id.timestamp.exists(_ == null))
+      Consequence.argumentMissing("id.timestamp")
+    else if (id.entropy == null || id.entropy.isEmpty)
+      Consequence.argumentMissing("id.entropy")
+    else if (expectedrevision == null)
+      Consequence.argumentMissing("expectedRevision")
+    else
+      for {
+        _ <- _label_("id.major", id.major)
+        _ <- _label_("id.minor", id.minor)
+        _ <- _label_("id.collection.major", id.collection.major)
+        _ <- _label_("id.collection.minor", id.collection.minor)
+        _ <- _label_("id.collection.name", id.collection.name)
+        _ <- _label_("id.entropy", id.entropy.get)
+        _ <- EntityRevision.createC(expectedrevision.value)
+      } yield ()
+  }
 
   final case class ManagedRecordMutationResult(
     record: Record,

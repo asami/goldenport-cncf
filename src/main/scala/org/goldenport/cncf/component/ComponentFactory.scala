@@ -57,7 +57,7 @@ final class ComponentFactory(
   private[component] val _configuration: Option[ResolvedConfiguration] = None,
   workingsetclock: java.time.Clock = RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock,
   private[component] val _runtime_component_descriptors: Vector[ComponentDescriptor] = Vector.empty
-)  extends ComponentFactoryEntityPlanPart with ComponentFactoryDescriptorPart with ComponentFactoryWorkflowPart with ComponentFactoryStateMachinePart with ComponentFactoryEntityBootstrapPart with ComponentFactoryReflectionPart with ComponentFactoryCapabilityPart {
+)  extends ComponentFactoryEntityPlanPart with ComponentFactoryDescriptorPart with ComponentFactoryWorkflowPart with ComponentFactoryDisplayPart with ComponentFactoryStateMachinePart with ComponentFactoryEntityBootstrapPart with ComponentFactoryReflectionPart with ComponentFactoryCapabilityPart {
   private[component] val _working_set_clock = workingsetclock
 
   def discover(): Vector[Component] =

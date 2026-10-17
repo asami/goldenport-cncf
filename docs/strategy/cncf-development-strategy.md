@@ -5484,3 +5484,23 @@ by the regular `textus-cbd-support` repository and is not claimed passed.
 This closes the retained CNCF Phase 69 sequence and supersedes the earlier
 69.7 planned/not-started and aggregate-pending pointers. This navigation update
 starts no successor and makes no publication or remote-sync claim.
+## Phase 96 Closure — 2026-10-17
+
+[Phase 96](../phase/phase-96.md) and its
+[checklist](../phase/phase-96-checklist.md) close the separate semantic View,
+Logical UI definition and Display runtime/protocol contract, component-scoped
+DisplayService, canonical mutation/Business reload and optional Presentation
+Context. All 54 outcomes and thirteen original acceptance criteria are retained.
+Eleven ordinary delivery commits, the sole comprehensive Phase review, two
+converging focused closure reviews and actual final repository-full validation
+are recorded in the [acceptance journal](../journal/2026/10/2026-10-17-phase-96-final-acceptance.md).
+All seventeen mandatory native PostgreSQL suites passed in the final full run;
+SQL NULL omits Record attributes while preserving physical SQL NULL.
+
+The distinct local release binds `phase96-final-closure-20261017-001@1`. The accepted canonical journals
+retain 25 Hygiene records and one Development Candidate, with no unpersisted
+records. Main integration, push and public publication are not included.
+Editing Studio Phase 2 owns application semantics, app Phase 4 prototype feedback
+and app Phase 5 real-server aggregate/E2E acceptance. Those consumer boundaries
+are not accepted or started here. The older strategy snapshots above remain
+historical; no unrelated Phase status or successor plan is changed.

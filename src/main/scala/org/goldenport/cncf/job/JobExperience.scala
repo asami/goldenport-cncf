@@ -9,18 +9,20 @@ import org.goldenport.cncf.naming.NamingConventions
  * Safe user and operator vocabulary over the canonical Job management model.
  *
  * @since   Sep. 29, 2026
- * @version Sep. 29, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 enum JobExperienceScope {
   case Mine(application: Option[String])
   case Application(application: String)
   case Operator
+  case Audit
 
   def applicationOption: Option[String] = this match {
     case JobExperienceScope.Mine(value) => value
     case JobExperienceScope.Application(value) => Some(value)
     case JobExperienceScope.Operator => None
+    case JobExperienceScope.Audit => None
   }
 
   def visibilityKey: String = this match {
@@ -28,6 +30,7 @@ enum JobExperienceScope {
     case JobExperienceScope.Mine(Some(value)) => s"mine:$value"
     case JobExperienceScope.Application(value) => s"application:$value"
     case JobExperienceScope.Operator => "operator"
+    case JobExperienceScope.Audit => "audit"
   }
 }
 
@@ -50,7 +53,12 @@ object JobExperienceScope {
           Consequence.argumentInvalid("operator scope does not accept application")
         else
           Consequence.success(JobExperienceScope.Operator)
-      case _ => Consequence.argumentInvalid("scope must be mine, application, or operator")
+      case "audit" =>
+        if (application.nonEmpty)
+          Consequence.argumentInvalid("audit scope does not accept application")
+        else
+          Consequence.success(JobExperienceScope.Audit)
+      case _ => Consequence.argumentInvalid("scope must be mine, application, operator, or audit")
     }
 
   def normalizedApplication(value: String): Consequence[String] = _application(value)

@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 26, 2026
- * @version Jul. 26, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityMutationProviderContractSpec
@@ -391,7 +391,10 @@ final class EntityMutationProviderContractSpec
               EntityMutationProviderCapabilities.guardedBaseline.features ++
                 Set(
                   EntityMutationProviderFeature.DirectAlwaysWrite,
-                  EntityMutationProviderFeature.OptimisticCompareAndSet
+                  EntityMutationProviderFeature.OptimisticCompareAndSet,
+                  EntityMutationProviderFeature.OptimisticCompareAndDelete,
+                  EntityMutationProviderFeature.AuthoritativeDeleteResult,
+                  EntityMutationProviderFeature.AtomicCreate
                 )
           )
         )

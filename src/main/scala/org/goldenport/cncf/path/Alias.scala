@@ -13,7 +13,8 @@ import org.goldenport.configuration.{Configuration, ConfigurationValue}
 /*
  * @since   Jan. 19, 2026
  *  version Apr. 15, 2026
- * @version Aug. 19, 2026
+ *  version Aug. 19, 2026
+ * @version Oct.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class Alias(
@@ -305,7 +306,7 @@ object PathPreNormalizer {
     resolver: AliasResolver
   ): Vector[String] = {
     if (segments.isEmpty) return segments
-    val input = segments.mkString(".")
+    val input = segments.mkString("/")
     val rewritten = rewriteSelector(input, mode, resolver)
     val finalsegments = rewritten.split("\\.").map(_.trim).filter(_.nonEmpty).toVector
     if (finalsegments.length >= 3)

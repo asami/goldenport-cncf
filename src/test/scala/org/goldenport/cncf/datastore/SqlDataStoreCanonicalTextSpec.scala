@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  1, 2026
- * @version Oct.  2, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SqlDataStoreCanonicalTextSpec
@@ -130,6 +130,36 @@ final class SqlDataStoreCanonicalTextSpec
     }
 
     "authoritative native mutation readbacks" which {
+      "N9 preserve semantic Job and quota text through actual strict-create acknowledgement" in {
+        _modes.foreach { normalize =>
+          _collections.foreach { collection =>
+            Given("docs/spec/entity-create-atomic-provider.md CA9/CA11: a semantic builtin collection, its physical SQLite table and exact raw text under the selected naming mode")
+            _with_store(normalize) { (store, _) =>
+              given ExecutionContext = ExecutionContext.create()
+              val jobid = " [\"opaque Job 東京🙂\", 1] \n"
+              val fields = Vector("jsonText" -> "{\"ordinary\":1}") ++
+                (if (collection == _collections.head) Vector("jobId" -> jobid) else Vector.empty)
+
+              When("strict create inserts each row and returns the native authoritative result")
+              val acknowledged = _raw_texts.zipWithIndex.map { (raw, index) =>
+                _success(store.createEntity(EntityCreatePlan(collection, _entry(index), _record(raw, fields)))).record
+              }
+              val loaded = _raw_texts.indices.map(index => _loaded(store, collection, _entry(index)))
+
+              Then("acknowledgement and independent native reads retain exact semantic text while ordinary JSON still decodes")
+              acknowledged.zipWithIndex.foreach { (record, index) =>
+                record.fields shouldBe loaded(index).fields
+                record.getString("id") shouldBe Some(_entry(index).print)
+                _assert_text(record, "canonicalJson", _raw_texts(index))
+                _assert_revision(record, 1L)
+                record.getRecord("jsonText").flatMap(_.getInt("ordinary")) shouldBe Some(1)
+                if (collection == _collections.head) _assert_text(record, "jobId", jobid)
+              }
+            }
+          }
+        }
+      }
+
       "N4 preserve exact CAS text at revision two and leave it untouched after a stale revision one attempt" in {
         _modes.foreach { normalize =>
           _collections.foreach { collection =>

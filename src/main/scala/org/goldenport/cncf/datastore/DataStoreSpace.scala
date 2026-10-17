@@ -2,6 +2,7 @@ package org.goldenport.cncf.datastore
 
 import java.nio.file.{Files, Paths}
 import java.util.concurrent.atomic.AtomicLong
+import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.observation.Descriptor
 import org.goldenport.id.UniversalId
@@ -19,7 +20,8 @@ import org.goldenport.record.io.RecordEncoder
  * @since   Feb. 25, 2026
  *  version Apr. 15, 2026
  *  version May. 11, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class DataStoreSpace private (
@@ -191,8 +193,40 @@ class DataStoreSpace private (
     dataStore(cid).map {
       case provider: EntityVersionedMutationDataStore =>
         provider.entityMutationProviderCapabilities
+      case provider: EntityCreateDataStore =>
+        provider.entityMutationProviderCapabilities
       case _ =>
         EntityMutationProviderCapabilities.empty
+    }
+
+  def createEntity(plan: EntityCreatePlan)(using ctx: ExecutionContext): Consequence[EntityCreateResult] =
+    EntityCreateSupport.validate(plan).flatMap { _ =>
+      _with_calltree_c(
+        "space:datastore:entity-create",
+        _datastore_space_attributes("entity-create", plan.collection),
+        "space"
+      ) {
+        for {
+          datastore <- dataStore(plan.collection)
+          result <- datastore match {
+            case provider: EntityCreateDataStore => for {
+              _ <- EntityCreateSupport.requireCapabilities(provider.entityMutationProviderCapabilities, plan.sideEffects.nonEmpty)
+              _ <- _ensure_same_provider(datastore, plan.sideEffects)
+              response <- {
+                try {
+                  val outcome = provider.createEntity(plan)
+                  if (outcome == null) EntityCreateSupport.invalidResult[EntityCreateResult] else outcome
+                } catch {
+                  case NonFatal(_) => EntityVersionedMutationFailure.transactionIndeterminate(
+                    "Entity create provider escaped without publication acknowledgement")
+                }
+              }
+            } yield response
+            case _ => EntityNativeMutationSupport.unsupported("entity-create", EntityMutationProviderFeature.AtomicCreate)
+          }
+          admitted <- EntityCreateSupport.validateResult(plan, result)
+        } yield admitted
+      }
     }
 
   def selectEntityMutationPath(
@@ -279,6 +313,45 @@ class DataStoreSpace private (
             plan.readbackRequirement
           )
       } yield admitted
+    }
+
+  def compareAndDeleteEntity(
+    plan: EntityCompareAndDeletePlan
+  )(using ctx: ExecutionContext): Consequence[EntityCompareAndDeleteResult] =
+    EntityObservedDeleteSupport.validate(plan).flatMap { _ =>
+      _with_calltree_c(
+        "space:datastore:entity-compare-and-delete",
+        _datastore_space_attributes("entity-compare-and-delete", plan.collection),
+        "space"
+      ) {
+        for {
+          datastore <- dataStore(plan.collection)
+          result <- datastore match {
+            case provider: EntityVersionedMutationDataStore =>
+              for {
+                _ <- EntityObservedDeleteSupport.requireCapabilities(
+                  provider.entityMutationProviderCapabilities,
+                  plan.sideEffects.nonEmpty
+                )
+                _ <- _ensure_same_provider(datastore, plan.sideEffects)
+                response <- Consequence {
+                  provider.compareAndDeleteEntity(plan)
+                }.flatMap { outcome =>
+                  if (outcome == null)
+                    EntityObservedDeleteSupport.invalidResult[EntityCompareAndDeleteResult]
+                  else
+                    outcome
+                }.recoverWith(EntityVersionedMutationFailure.normalizeProvider)
+              } yield response
+            case _ =>
+              EntityNativeMutationSupport.unsupported(
+                "entity-compare-and-delete",
+                EntityMutationProviderFeature.OptimisticCompareAndDelete
+              )
+          }
+          admitted <- EntityObservedDeleteSupport.validateResult(plan, result)
+        } yield admitted
+      }
     }
 
   def mutateVersionedEntity(

@@ -31,7 +31,8 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Jan. 18, 2026
  *  version May.  2, 2026
  *  version Jun. 29, 2026
- * @version Aug. 15, 2026
+ *  version Aug. 15, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class CommandExecuteComponentSpec
@@ -758,7 +759,7 @@ class CommandExecuteComponentSpec
       Then("the client help is rendered")
       code shouldBe 0
       out.contains("CNCF Client Command Help") shouldBe true
-      out.contains("cncf client <args...>") shouldBe true
+      out.contains("cncf client <component.service.operation> <operation parameters> [--baseurl <URL>]") shouldBe true
       out.contains("cncf client org.goldenport.cncf.Admin.system.ping") shouldBe true
       out.contains("cncf client org.goldenport.cncf.Admin.deployment.securityMermaid") shouldBe true
       out.contains("cncf client org.goldenport.cncf.Admin.deployment.securityMarkdown") shouldBe true
@@ -775,7 +776,7 @@ class CommandExecuteComponentSpec
       Then("the client help is rendered")
       code shouldBe 0
       out.contains("CNCF Client Command Help") shouldBe true
-      out.contains("cncf client <args...>") shouldBe true
+      out.contains("cncf client <component.service.operation> <operation parameters> [--baseurl <URL>]") shouldBe true
     }
 
     "rewrite run command domain.entity.createPerson --help to command help selector" in {

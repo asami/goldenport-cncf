@@ -5,6 +5,7 @@ import org.goldenport.cncf.observability.{CallTreeContext, ObservabilityEngine}
 import org.goldenport.cncf.context.ScopeContext
 import org.goldenport.cncf.context.ScopeKind
 import java.util.Locale
+import java.time.Instant
 import org.goldenport.id.UniversalId
 
 /*
@@ -12,37 +13,46 @@ import org.goldenport.id.UniversalId
  *  version Dec. 31, 2025
  *  version Jan. 20, 2026
  *  version Mar. 11, 2026
- * @version Apr. 15, 2026
+ *  version Apr. 15, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class TraceId(
   subsystem: String,
-  entry: String
+  entry: String,
+  timestamp: Option[Instant] = None,
+  entropy: Option[String] = None
 ) extends UniversalId(
-  major = subsystem,
-  minor = entry,
-  kind  = "trace"
-)
+  subsystem, entry, "trace", timestamp, entropy
+) {
+  override def equals(other: Any): Boolean = super.equals(other)
+  override def hashCode(): Int = super.hashCode()
+}
 
 final case class SpanId(
   subsystem: String,
   scope: String,
-  spanKind: String
+  spanKind: String,
+  timestamp: Option[Instant] = None,
+  entropy: Option[String] = None
 ) extends UniversalId(
-  major   = subsystem,
-  minor   = scope,
-  kind    = "span",
-  subkind = spanKind
-)
+  subsystem, scope, "span", spanKind, timestamp, entropy
+) {
+  override def equals(other: Any): Boolean = super.equals(other)
+  override def hashCode(): Int = super.hashCode()
+}
 
 final case class CorrelationId(
   subsystem: String,
-  boundary: String
+  boundary: String,
+  timestamp: Option[Instant] = None,
+  entropy: Option[String] = None
 ) extends UniversalId(
-  major = subsystem,
-  minor = boundary,
-  kind  = "correlation"
-)
+  subsystem, boundary, "correlation", timestamp, entropy
+) {
+  override def equals(other: Any): Boolean = super.equals(other)
+  override def hashCode(): Int = super.hashCode()
+}
 
 final case class ObservabilityContext(
   traceId: TraceId,

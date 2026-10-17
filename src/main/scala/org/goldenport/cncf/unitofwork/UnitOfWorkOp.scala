@@ -41,7 +41,7 @@ import org.goldenport.cncf.workspace.{FileReadTextResult, FileTarget, FileWriteM
  *  version Apr. 29, 2026
  *  version May.  4, 2026
  *  version Jul. 26, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -198,6 +198,13 @@ object UnitOfWorkOp {
     authorization: Option[UnitOfWorkAuthorization] = None
   ) extends UnitOfWorkOp[CreateResult[T]]
 
+  private[cncf] final case class EntityStoreCreateOutcome[T](
+    entity: T,
+    tc: EntityPersistentCreate[T],
+    options: EntityCreateOptions = EntityCreateOptions.default,
+    authorization: Option[UnitOfWorkAuthorization] = None
+  ) extends UnitOfWorkOp[EntityCreateMutationOutcome[T]]
+
   final case class EntityStoreClaimOrLoad[C, P](
     entity: C,
     create: EntityPersistentCreate[C],
@@ -292,6 +299,22 @@ object UnitOfWorkOp {
     executionPolicy: EntityMutationExecutionPolicy =
       EntityMutationExecutionPolicy.default
   ) extends UnitOfWorkOp[EntityRevisionCarrier[T]]
+
+  private[cncf] final case class EntityStoreSaveSnapshotOutcome[T](
+    entity: T,
+    expectedrevision: Option[EntityRevision],
+    tc: EntityPersistent[T],
+    authorization: Option[UnitOfWorkAuthorization],
+    executionpolicy: EntityMutationExecutionPolicy
+  ) extends UnitOfWorkOp[EntityVersionedMutationCaptureOutcome[EntitySnapshot[T]]]
+
+  private[cncf] final case class EntityStoreSaveDetachedOutcome[T](
+    entity: T,
+    expectedrevision: Option[EntityRevision],
+    tc: EntityPersistent[T],
+    authorization: Option[UnitOfWorkAuthorization],
+    executionpolicy: EntityMutationExecutionPolicy
+  ) extends UnitOfWorkOp[EntityVersionedMutationCaptureOutcome[EntityRevisionCarrier[T]]]
 
   final case class EntityStoreSaveManaged[T](
     entity: T,
@@ -399,6 +422,24 @@ object UnitOfWorkOp {
       EntityMutationExecutionPolicy.default
   ) extends UnitOfWorkOp[EntityRevisionCarrier[Record]]
 
+  private[cncf] final case class EntityStoreUpdateRecordSnapshotOutcome[P](
+    id: EntityId,
+    patch: P,
+    expectedrevision: Option[EntityRevision],
+    tc: EntityPersistentUpdate[P],
+    authorization: Option[UnitOfWorkAuthorization],
+    executionpolicy: EntityMutationExecutionPolicy
+  ) extends UnitOfWorkOp[EntityVersionedMutationCaptureOutcome[EntityRecordSnapshot]]
+
+  private[cncf] final case class EntityStoreUpdateRecordDetachedOutcome[P](
+    id: EntityId,
+    patch: P,
+    expectedrevision: Option[EntityRevision],
+    tc: EntityPersistentUpdate[P],
+    authorization: Option[UnitOfWorkAuthorization],
+    executionpolicy: EntityMutationExecutionPolicy
+  ) extends UnitOfWorkOp[EntityVersionedMutationCaptureOutcome[EntityRevisionCarrier[Record]]]
+
   private[cncf] final case class EntityStoreConditionalTransition[R, P, S](
     request: EntityConditionalTransition[R, P, S],
     componentOwner: org.goldenport.cncf.datastore.DataStoreComponentOwner,
@@ -426,6 +467,18 @@ object UnitOfWorkOp {
     id: EntityId,
     authorization: Option[UnitOfWorkAuthorization] = None
   ) extends UnitOfWorkOp[Unit]
+
+  final case class EntityStoreDeleteObserved(
+    id: EntityId,
+    expectedRevision: EntityRevision,
+    authorization: Option[UnitOfWorkAuthorization] = None
+  ) extends UnitOfWorkOp[EntityDeletionResult]
+
+  private[cncf] final case class EntityStoreDeleteObservedOutcome(
+    id: EntityId,
+    expectedrevision: EntityRevision,
+    authorization: Option[UnitOfWorkAuthorization] = None
+  ) extends UnitOfWorkOp[EntityDeleteMutationOutcome]
 
   final case class EntityStoreRestore(
     id: EntityId,

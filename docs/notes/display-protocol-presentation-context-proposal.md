@@ -44,7 +44,7 @@ payloads require strict validation. Optional unknown carry-through requires a
 bounded explicit rule. Generic extensibility must not permit arbitrary runtime
 objects, free-form execution options or authority created by the client.
 
-Protocol, context-family, Cozy and UI-definition versions and resource revision
+Protocol, context-family, generated ABI, Phase 74 semantic-contract and UI-definition versions and resource revision
 have distinct meanings. Observed revision retains its existing transport
 contract. Presentation selection must not grant mutation or Business Operation
 capability; ordinary server authorization and Entity/Aggregate rules apply.
@@ -102,8 +102,8 @@ Coordination lives in the [TKW note](../../../../dev2026/textus-knowledge-workbe
 [Core](../../../../dev2026/textus-flutter-core/docs/notes/display-protocol-presentation-context.md)
 and [TFAF](../../../../dev2026/textus-flutter-application-framework/docs/notes/display-protocol-context-realization.md)
 retain their own dependency handoffs. App Phase 4 owns client prototype
-feasibility; Phase 5 owns real-server aggregate/E2E acceptance. Phase 96 remains
-planned with independent acceptance. Exact codec,
+feasibility; Phase 5 owns real-server aggregate/E2E acceptance. Phase 96 retains independent acceptance; current progress is recorded in its
+[checklist](../phase/phase-96-checklist.md). Exact codec,
 public APIs, context admission and continuation are open review decisions.
 
 ## Client prototype scope update — 2026-10-02

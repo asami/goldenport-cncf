@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 16, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class HttpExecutionAdmissionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -22,6 +22,25 @@ final class HttpExecutionAdmissionSpec extends AnyWordSpec with Matchers with Gi
   private val _other = ComponentId("org.example.OtherHttpOwner")
   private val _limits = HttpExecutionLimits(5000, 7000, 4096)
   private val _secret = "confidential-http-sentinel"
+  private val _controlled_names = Vector("http.total-timeout-ms", "http.connect-timeout-ms", "http.read-timeout-ms",
+    "http.connect-timeout-seconds", "http.read-timeout-seconds", "http.timeout-seconds",
+    "http.max-response-bytes", "http.follow-redirects")
+
+  private def _control_spelling(name: String): Gen[String] = {
+    val ascii = name.foldLeft(Gen.const("")) { (prefix, letter) =>
+      for { prior <- prefix; next <- Gen.oneOf(letter, letter.toUpper) } yield prior + next
+    }
+    for {
+      spelling <- ascii
+      index <- Gen.oneOf(name.indices.filter(index => name(index) == 'i' || name(index) == 's').toVector)
+      replacement <- if (name(index) == 'i') Gen.oneOf('\u0131', '\u0130') else Gen.const('\u017f')
+    } yield spelling.updated(index, replacement)
+  }
+
+  private def _control_spellings: Gen[Vector[String]] =
+    _controlled_names.foldLeft(Gen.const(Vector.empty[String])) { (prior, name) =>
+      for { names <- prior; spelling <- _control_spelling(name) } yield names :+ spelling
+    }
 
   private def _take[A](value: Consequence[A]): A =
     value.getOrElse(fail("HTTP fixture admission failed"))
@@ -161,6 +180,138 @@ final class HttpExecutionAdmissionSpec extends AnyWordSpec with Matchers with Gi
   }
 
   "Finite request controls" should {
+    "canonicalize generated Unicode-equivalent controls and cap every time and byte limit" in {
+      Given("host ceilings, generated finite values and Unicode-equivalent controls with mixed ASCII case")
+      val context = _context(Some(_admission()))
+      val first = Property("application.first", "keep-1", None)
+      val last = Property("http.total-timeout-ms.extra", "keep-2", None)
+      val values = for {
+        total <- Gen.choose(1, Int.MaxValue)
+        connect <- Gen.choose(1, 10000)
+        read <- Gen.choose(1, 10000)
+        connectseconds <- Gen.choose(1, 10)
+        readseconds <- Gen.choose(1, 10)
+        generic <- Gen.choose(1, 10)
+        bytes <- Gen.choose(0L, 8192L)
+        names <- _control_spellings
+      } yield (total, connect, read, connectseconds, readseconds, generic, bytes, names)
+      When("ordinary admission normalizes every generated bounded request")
+      val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(80), Prop.forAll(values) {
+        case (total, connect, read, connectseconds, readseconds, generic, bytes, names) =>
+          val texts = Vector(total.toString, connect.toString, read.toString, connectseconds.toString,
+            readseconds.toString, generic.toString, bytes.toString, "false")
+          val properties = Vector(first) ++ names.zip(texts).map { case (name, text) =>
+            Property(name, s" $text ", None)
+          } ++ Vector(last)
+          val expectedconnect = Vector(_limits.connectTimeoutMillis, connect, connectseconds * 1000, generic * 1000).min
+          val expectedread = Vector(_limits.readTimeoutMillis, read, readseconds * 1000, generic * 1000).min
+          _resolve(context, "/selected", properties = properties).toOption.exists { admitted =>
+            admitted.properties == Vector(first, last,
+              Property("http.total-timeout-ms", Vector(total, expectedconnect, expectedread).min.toString, None),
+              Property("http.connect-timeout-ms", expectedconnect.toString, None),
+              Property("http.read-timeout-ms", expectedread.toString, None),
+              Property("http.max-response-bytes", math.min(bytes, _limits.responseBytes).toString, None),
+              Property("http.follow-redirects", "false", None))
+          }
+      })
+      Then("equivalent keys become the exact ordered canonical minima while genuinely distinct properties retain their order")
+      checked.passed shouldBe true
+      checked.succeeded should be >= 80
+      checked.discarded shouldBe 0
+    }
+
+    "refuse generated malformed Unicode-equivalent controls with safe limits failures" in {
+      Given("Unicode-equivalent spellings of every control and values invalid for its numeric or redirect contract")
+      val context = _context(Some(_admission()))
+      val malformed = _controlled_names.map { name =>
+        if (name == "http.follow-redirects") Vector(_secret, "", "maybe")
+        else if (name == "http.max-response-bytes") Vector(_secret, "", "-1", "9223372036854775808")
+        else Vector(_secret, "", "0", "-1", "2147483648", "9223372036854775808")
+      }
+      When("ordinary admission interprets each generated malformed equivalent control")
+      val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(60), Prop.forAll(_control_spellings) { names =>
+        names.zip(malformed).forall { case (name, texts) =>
+          texts.forall { text =>
+            val outcome = _resolve(context, "/selected", properties = Vector(Property(name, text, None)))
+            _policy(outcome).contains("http.execution.limits") && !outcome.toString.contains(_secret)
+          }
+        }
+      })
+      Then("no equivalent key evades validation or exposes the caller's invalid value")
+      checked.passed shouldBe true
+      checked.discarded shouldBe 0
+    }
+
+    "refuse ASCII and generated Unicode-equivalent duplicates in either order" in {
+      Given("every canonical controlled name paired with a generated Unicode-equivalent spelling")
+      val context = _context(Some(_admission()))
+      When("ordinary admission receives each ASCII and Unicode pair in both orders")
+      val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(60), Prop.forAll(_control_spellings) { names =>
+        _controlled_names.zip(names).forall { case (canonical, equivalent) =>
+          val value = if (canonical == "http.follow-redirects") "false" else "100"
+          val pair = Vector(Property(canonical, value, None), Property(equivalent, _secret, None))
+          Vector(pair, pair.reverse).forall { properties =>
+            val outcome = _resolve(context, "/selected", properties = properties)
+            _policy(outcome).contains("http.execution.limits") && !outcome.toString.contains(_secret)
+          }
+        }
+      })
+      Then("total, byte and every other equivalent duplicate return the same safe limits policy")
+      checked.passed shouldBe true
+      checked.discarded shouldBe 0
+    }
+
+    "retain a stricter caller total and canonicalize mixed case and whitespace in property order" in {
+      Given("a total below both host ceilings, mixed-case controls and ordered unrelated properties")
+      val context = _context(Some(_admission()))
+      val first = Property("application.first", "keep-1", None)
+      val last = Property("application.last", "keep-2", None)
+      val properties = Vector(first, Property("HtTp.ToTaL-TiMeOuT-Ms", " 125 ", None),
+        Property("HTTP.CONNECT-TIMEOUT-MS", " 4500 ", None), last)
+      When("ordinary admission compiles the optional caller total")
+      val admitted = _take(_resolve(context, "/selected", properties = properties))
+      Then("unrelated properties precede a single canonical stricter total and the four existing controls")
+      admitted.properties shouldBe Vector(first, last,
+        Property("http.total-timeout-ms", "125", None),
+        Property("http.connect-timeout-ms", "4500", None),
+        Property("http.read-timeout-ms", "7000", None),
+        Property("http.max-response-bytes", "4096", None),
+        Property("http.follow-redirects", "false", None))
+    }
+
+    "reject invalid or duplicate total budgets safely after redirect refusal" in {
+      Given("malformed, empty, nonpositive, overflowing and case-folded duplicate total controls")
+      val context = _context(Some(_admission()))
+      val invalid = Vector(_secret, "", " ", "0", "-1", "2147483648", "9223372036854775808")
+        .map(text => Vector(Property("http.total-timeout-ms", text, None))) ++ Vector(
+          Vector(Property("http.total-timeout-ms", "100", None), Property("HTTP.TOTAL-TIMEOUT-MS", "200", None)),
+          Vector(Property("HTTP.TOTAL-TIMEOUT-MS", "100", None), Property("http.total-timeout-ms", _secret, None)))
+      When("each invalid total reaches ordinary admission with and without redirect opt-in")
+      val outcomes = invalid.map(properties => _resolve(context, "/selected", properties = properties))
+      val redirects = invalid.map(properties => _resolve(context, "/selected",
+        properties = properties :+ Property("http.follow-redirects", "true", None)))
+      Then("totals use fixed structured limits failures and redirect opt-in keeps precedence")
+      outcomes.foreach { outcome =>
+        _policy(outcome) shouldBe Some("http.execution.limits")
+        outcome.toString should not include _secret
+      }
+      redirects.foreach(outcome => _policy(outcome) shouldBe Some("http.execution.redirect"))
+    }
+
+    "emit exactly the legacy four controls when no caller total is present" in {
+      Given("host authority and an unrelated property without any total budget")
+      val context = _context(Some(_admission()))
+      val unrelated = Property("application.value", "keep", None)
+      When("ordinary admission resolves an otherwise uncontrolled request")
+      val admitted = _take(_resolve(context, "/selected", properties = Vector(unrelated)))
+      Then("no total is synthesized and existing control values and order remain exact")
+      admitted.properties shouldBe Vector(unrelated,
+        Property("http.connect-timeout-ms", "5000", None),
+        Property("http.read-timeout-ms", "7000", None),
+        Property("http.max-response-bytes", "4096", None),
+        Property("http.follow-redirects", "false", None))
+    }
+
     "combine distinct timeout aliases by minimum and preserve unrelated properties in order" in {
       Given("host limits and case-insensitive caller controls with both ms and second aliases")
       val context = _context(Some(_admission()))

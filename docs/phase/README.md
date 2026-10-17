@@ -55,6 +55,13 @@ Current baseline:
   restores declared application types while DataStore handles physical values.
   JSON-looking text is not a type declaration. The phase includes
   consumer migration and recovery rehearsal without changing active Phase scope.
+- [Phase 96](phase-96.md) and its [checklist](phase-96-checklist.md) are closed
+  for the target-neutral Display/Projection/DisplayService contract, under
+  `phase96-final-closure-20261017-001@1`. The [acceptance journal](../journal/2026/10/2026-10-17-phase-96-final-acceptance.md)
+  records actual full/native-PostgreSQL validation and the sole Phase review
+  plus focused closure. Editing Studio Phase 2 and app Phase 5 remain separate
+  consumer boundaries; no successor execution is selected here.
+
 - [Phase 95](phase-95.md) plans a UI-facing View Model and Aggregate command
   contract over existing CNCF `ViewSpace`/`AggregateSpace`, with REST first and
   gRPC deferred. It does not block the Editing Studio Flutter application's

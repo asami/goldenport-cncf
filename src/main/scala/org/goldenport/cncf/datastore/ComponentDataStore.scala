@@ -10,7 +10,8 @@ import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
 
 /*
  * @since   Jul.  6, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentDataStore {
@@ -198,6 +199,7 @@ object ComponentDataStore {
           case None => Consequence { throw new IllegalArgumentException(s"${prefixes.head}.path is required when datastore kind is local or sqlite") }
         }
       case Some("mysql") => _managed_jdbc_c(environment, prefixes, request, binding, lease, key, SqlDataStore.Mysql, Some("com.mysql.cj.jdbc.Driver"))
+      case Some("postgresql") => _managed_jdbc_c(environment, prefixes, request, binding, lease, key, SqlDataStore.Postgresql, Some("org.postgresql.Driver"))
       case Some("jdbc") => _managed_jdbc_c(environment, prefixes, request, binding, lease, key, _jdbc_dialect(environment, prefixes), None)
       case Some(_) => Consequence.success(None)
       case None =>
@@ -365,6 +367,8 @@ object ComponentDataStore {
         )))
       case Some("mysql") =>
         _jdbc(environment, prefixes, SqlDataStore.Mysql, Some("com.mysql.cj.jdbc.Driver"))
+      case Some("postgresql") =>
+        _jdbc(environment, prefixes, SqlDataStore.Postgresql, Some("org.postgresql.Driver"))
       case Some("jdbc") =>
         _jdbc(environment, prefixes, _jdbc_dialect(environment, prefixes), None)
       case Some(_) =>
@@ -418,7 +422,7 @@ object ComponentDataStore {
     environment: Environment,
     prefixes: Vector[String],
     dialect: SqlDataStore.DialectSelection,
-    defaultDriver: Option[String]
+    defaultdriver: Option[String]
   ): Option[DataStore] =
     _first(environment, prefixes.map(_ + ".jdbc.url")).map { url =>
       SqlDataStore.jdbc(
@@ -426,7 +430,7 @@ object ComponentDataStore {
         dialect = dialect,
         username = _first(environment, prefixes.map(_ + ".jdbc.user")),
         password = _first(environment, prefixes.map(_ + ".jdbc.password")),
-        driverClassName = _first(environment, prefixes.map(_ + ".jdbc.driver")).orElse(defaultDriver),
+        driverClassName = _first(environment, prefixes.map(_ + ".jdbc.driver")).orElse(defaultdriver),
         config = _sql_config(environment, prefixes)
       )
     }
@@ -437,6 +441,7 @@ object ComponentDataStore {
   ): SqlDataStore.DialectSelection =
     _first(environment, prefixes.map(_ + ".sql.dialect")).map(_.trim.toLowerCase(java.util.Locale.ROOT)) match {
       case Some("mysql" | "mariadb") => SqlDataStore.Mysql
+      case Some("postgresql") => SqlDataStore.Postgresql
       case _ => SqlDataStore.Auto
     }
 

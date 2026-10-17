@@ -20,7 +20,8 @@ import org.simplemodeling.model.datatype.EntityCollectionId
  * @since   Mar. 27, 2026
  *  version Mar. 28, 2026
  *  version Apr. 14, 2026
- * @version Aug.  4, 2026
+ *  version Aug.  4, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 object StartupImport {
@@ -47,6 +48,7 @@ object StartupImport {
   ): Consequence[Unit] = {
     val context = _bootstrap_execution_context(runtimeConfig)
     given ExecutionContext = context
+    given StartupImportReader = new StartupImportReader(runtimeConfig)
     for {
       _ <- _import_data(cwd, configuration.dataSource, runtimeConfig.dataStoreSpace)
       _ <- _import_entity(cwd, configuration.entitySource, runtimeConfig.entityStoreSpace, entityCollectionResolver)
@@ -57,7 +59,7 @@ object StartupImport {
     cwd: Path,
     configuredsource: Option[String],
     datastorespace: DataStoreSpace
-  )(using ctx: ExecutionContext): Consequence[Unit] =
+  )(using ctx: ExecutionContext, reader: StartupImportReader): Consequence[Unit] =
     _resolve_data_sources(cwd, configuredsource).flatMap { paths =>
       paths.foldLeft(Consequence.unit) { (z, path) =>
         z.flatMap(_ => _import_data_file(path, datastorespace))
@@ -69,7 +71,7 @@ object StartupImport {
     configuredsource: Option[String],
     entitystorespace: EntityStoreSpace,
     entitycollectionresolver: EntityCollectionResolver
-  )(using ctx: ExecutionContext): Consequence[Unit] =
+  )(using ctx: ExecutionContext, reader: StartupImportReader): Consequence[Unit] =
     _resolve_entity_sources(cwd, configuredsource).flatMap { paths =>
       paths.foldLeft(Consequence.unit) { (z, path) =>
         z.flatMap(_ => _import_entity_file(path, entitystorespace, entitycollectionresolver))
@@ -121,7 +123,7 @@ object StartupImport {
   private def _import_data_file(
     source: ImportSource,
     datastorespace: DataStoreSpace
-  )(using ctx: ExecutionContext): Consequence[Unit] =
+  )(using ctx: ExecutionContext, reader: StartupImportReader): Consequence[Unit] =
     source match {
       case ImportSource.Local(path) =>
         _load_data_seed(path).flatMap(seed => _store_data_seed(datastorespace, seed))
@@ -133,7 +135,7 @@ object StartupImport {
     source: ImportSource,
     entitystorespace: EntityStoreSpace,
     entitycollectionresolver: EntityCollectionResolver
-  )(using ctx: ExecutionContext): Consequence[Unit] =
+  )(using ctx: ExecutionContext, reader: StartupImportReader): Consequence[Unit] =
     source match {
       case ImportSource.Local(path) =>
         _load_entity_seed(path).flatMap(seed => _store_entity_seed(path, entitystorespace, entitycollectionresolver, seed))
@@ -165,12 +167,12 @@ object StartupImport {
 
   private def _load_data_seed(
     path: Path
-  ): Consequence[DataStoreSeed] =
+  )(using reader: StartupImportReader): Consequence[DataStoreSeed] =
     _read_text(path).flatMap(text => _decode_data_seed(path.toString, text))
 
   private def _load_entity_seed(
     path: Path
-  ): Consequence[Vector[EntityImportEntry]] =
+  )(using reader: StartupImportReader): Consequence[Vector[EntityImportEntry]] =
     _read_text(path).flatMap(text => _decode_entity_seed(path.toString, text))
 
   private def _resolve_paths(
@@ -249,39 +251,13 @@ object StartupImport {
 
   private def _read_text(
     path: Path
-  ): Consequence[String] =
-    try {
-      Using.resource(Files.newBufferedReader(path)) { reader =>
-        val sb = new StringBuilder
-        val buf = new Array[Char](8192)
-        var read = reader.read(buf)
-        while (read != -1) {
-          sb.appendAll(buf, 0, read)
-          read = reader.read(buf)
-        }
-        Consequence.success(sb.toString)
-      }
-    } catch {
-      case e: Throwable if scala.util.control.NonFatal(e) =>
-        Consequence.resourceInvalid(s"failed to load import text ${path}: ${e.getMessage}")
-    }
+  )(using reader: StartupImportReader): Consequence[String] =
+    reader.readFile(path)
 
   private def _load_text_from_url(
     url: String
-  )(using ctx: ExecutionContext): Consequence[String] = {
-    val uow = new UnitOfWork(ctx)
-    val response = uow.execute(UnitOfWorkOp.HttpGet(url))
-    if (response.code != 200) {
-      Consequence.resourceInvalid(s"startup import URL fetch failed: ${url} (HTTP ${response.code})")
-    } else {
-      response.getString match {
-        case Some(body) =>
-          Consequence.success(body)
-        case None =>
-          Consequence.resourceInvalid(s"startup import URL returned empty body: ${url}")
-      }
-    }
-  }
+  )(using reader: StartupImportReader): Consequence[String] =
+    reader.readUrl(url)
 
   private def _is_url(raw: String): Boolean =
     val s = raw.trim.toLowerCase

@@ -49,11 +49,47 @@ import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 private[entity] trait StandardEntityUpdatePart extends EntityStore { self: StandardEntityStore =>
   import EntityStore.*
+
+  override private[cncf] def _update_record_snapshot_outcome_c[P](
+    id: EntityId,
+    patch: P,
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy
+  )(using tc: EntityPersistentUpdate[P], ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntityRecordSnapshot]] =
+    if (patch == null)
+      Consequence.argumentMissing("patch")
+    else if (tc == null)
+      Consequence.argumentMissing("persistent")
+    else
+      for {
+        _ <- EntityStore._admit_versioned_outcome_c(id, expectedrevision, executionpolicy)
+        binding <- _required_revision_binding(id.collection, EntityRevisionRepresentation.Embedded)
+        result <- _update_by_id_managed_result(id, patch, binding, expectedrevision, executionpolicy, None)
+        outcome <- _record_snapshot_outcome_c(id, result, binding)
+      } yield outcome
+
+  override private[cncf] def _update_record_detached_outcome_c[P](
+    id: EntityId,
+    patch: P,
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy
+  )(using tc: EntityPersistentUpdate[P], ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntityRevisionCarrier[Record]]] =
+    if (patch == null)
+      Consequence.argumentMissing("patch")
+    else if (tc == null)
+      Consequence.argumentMissing("persistent")
+    else
+      for {
+        _ <- EntityStore._admit_versioned_outcome_c(id, expectedrevision, executionpolicy)
+        binding <- _required_revision_binding(id.collection, EntityRevisionRepresentation.Detached)
+        result <- _update_by_id_managed_result(id, patch, binding, expectedrevision, executionpolicy, None)
+        outcome <- _record_detached_outcome_c(id, result, binding)
+      } yield outcome
 
   private[cncf] def update[T](
     changes: T

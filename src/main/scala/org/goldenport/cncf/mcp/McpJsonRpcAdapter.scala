@@ -5,6 +5,7 @@ import io.circe.parser.parse
 import org.goldenport.Consequence
 import org.goldenport.protocol.{Argument, Property, Request}
 import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.cncf.display.DisplayMutationOperation
 
 /*
  * @since   Mar. 19, 2026
@@ -12,7 +13,8 @@ import org.goldenport.cncf.subsystem.Subsystem
  *  version Apr. 15, 2026
  *  version May. 20, 2026
  *  version Jul. 21, 2026
- * @version Aug. 19, 2026
+ *  version Aug. 19, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpJsonRpcAdapter(
@@ -224,23 +226,37 @@ final class McpJsonRpcAdapter(
         val component = parts.dropRight(2).mkString(".")
         val service = parts(parts.length - 2)
         val operation = parts.last
-        val args = arguments.toVector
-          .sortBy(_._1)
-          .map { case (k, v) =>
-            Argument(k, _json_argument_value(v))
-          }
-          .toList
-        val properties = _request_properties(args)
-        Right(
-          Request.of(
-            component = component,
-            service = service,
-            operation = operation,
-            arguments = Nil,
-            switches = Nil,
-            properties = properties :+ Property("textus.format", "json", None)
-          )
-        )
+        val actualoperations = subsystem.components.filter(value =>
+          value.isPrimaryParticipant && value.componentId.name == component
+        ).flatMap(_.protocol.services.services.filter(_.name == service)
+          .flatMap(_.operations.operations.toVector.filter(_.name == operation)))
+        actualoperations.toVector match {
+          case Vector(actual) =>
+            val ordered = arguments.toVector.sortBy(_._1)
+            val invalid = actual match {
+              case marked: DisplayMutationOperation => ordered.collectFirst {
+                case (key, value) if marked._string_input_names.contains(key) && value.asString.isEmpty => key
+              }
+              case _ => None
+            }
+            invalid match {
+              case Some(key) => Left(s"invalid params: $key must be a string")
+              case None =>
+                val args = ordered.map { case (key, value) =>
+                  Argument(key, _json_argument_value(value))
+                }.toList
+                val properties = _request_properties(args)
+                Right(Request.of(
+                  component = component,
+                  service = service,
+                  operation = operation,
+                  arguments = Nil,
+                  switches = Nil,
+                  properties = properties :+ Property("textus.format", "json", None)
+                ))
+            }
+          case _ => Left(s"invalid tool name: $name")
+        }
       case _ =>
         Left(s"invalid tool name: $name")
     }
@@ -303,8 +319,8 @@ private[mcp] object McpToolFailureProjection {
 
 /*
  * @since   Jul. 21, 2026
- *  version Jul. 21, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class McpJsonRpcOutcome {

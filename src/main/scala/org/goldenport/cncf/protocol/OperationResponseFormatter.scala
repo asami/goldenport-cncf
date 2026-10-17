@@ -9,6 +9,7 @@ import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.config.RuntimeDefaults
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.RuntimeContext
+import io.circe.{Json, Printer}
 
 /*
  * @since   Mar. 13, 2026
@@ -16,7 +17,8 @@ import org.goldenport.cncf.context.RuntimeContext
  *  version Apr. 30, 2026
  *  version May. 31, 2026
  *  version Jun. 29, 2026
- * @version Aug. 12, 2026
+ *  version Aug. 12, 2026
+ * @version Oct.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationResponseFormatter {
@@ -50,6 +52,9 @@ object OperationResponseFormatter {
     response match {
       case OperationResponse.Http(http) =>
         Response.Content(http.contentType, http.bag)
+      case OperationResponse.Json(json) if format == "json" &&
+          (shape == "envelope" || metadata.inlineCallTree.isDefined) =>
+        _json_envelope_response(request, json, metadata, executionResponse)
       case OperationResponse.RecordResponse(record) =>
         val data = _output_record(record)
         val payload =
@@ -72,6 +77,25 @@ object OperationResponseFormatter {
       case _ =>
         response.toResponse
     }
+  }
+
+  private def _json_envelope_response(
+    request: Request,
+    data: Json,
+    metadata: RuntimeContext.ExecutionMetadata,
+    executionresponse: Option[RuntimeContext.ExecutionResponseMetadata]
+  ): Response = {
+    val debug = metadata.inlineCallTree.map(calltree =>
+      Record.data("calltree" -> _debug_calltree_payload(calltree)))
+    val envelope = _response_envelope(request, null, metadata,
+      _execution_record(request, "json", executionresponse), debug, executionresponse)
+    val framework = io.circe.parser.parse(RecordEncoder.json(envelope)).toOption
+      .flatMap(_.asObject).getOrElse {
+        throw new IllegalStateException("Framework JSON response metadata could not be formatted.")
+      }
+    val payload = if (executionresponse.exists(_.responseKind == RuntimeContext.ExecutionResponseKind.AcceptedJob))
+      Json.Null else data
+    Response.Json(Printer.noSpaces.copy(escapeNonAscii = true).print(Json.fromJsonObject(framework.add("data", payload))))
   }
 
   private def _record_response(
@@ -125,7 +149,7 @@ object OperationResponseFormatter {
       .orElse(_configuration_string("cncf.output.format"))
       .map(_.trim.toLowerCase)
       .filter(_.nonEmpty)
-    fromrequest.orElse(fromconfig) match {
+    fromrequest.orElse(_http_suffix_format(request)).orElse(fromconfig) match {
       case Some(value) if _supported_formats.contains(value) =>
         value
       case Some(_) =>
@@ -134,6 +158,15 @@ object OperationResponseFormatter {
         RuntimeDefaults.defaultFormat(mode)
     }
   }
+
+  private def _http_suffix_format(request: Request): Option[String] =
+    request.source.collect { case Request.Source.Http(http) => http }
+      .flatMap(_.pathParts.lastOption)
+      .flatMap { segment =>
+        val dotindex = segment.lastIndexOf('.')
+        if (dotindex <= 0 || dotindex == segment.length - 1) None
+        else Some(segment.substring(dotindex + 1).toLowerCase(java.util.Locale.ROOT))
+      }.filter(_supported_formats.contains)
 
   private def _resolve_shape(
     request: Request
