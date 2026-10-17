@@ -1,10 +1,36 @@
 # Phase 103 Checklist — Validation/Test Metadata ABI and Discovery
 
-status=planned
+status=in-progress
 Phase: [103](phase-103.md)
 Contract input: [ABI proposal](../notes/validation-test-metadata-abi-proposal.md)
 
-All items are PLANNED. No implementation or validation evidence is claimed.
+Step P103-S1 declaration implementation and Executable Specifications passed
+focused validation and independent protected conformance review. Unchecked Phase items
+remain open acceptance obligations, including their undelivered discovery and
+consumer portions. Local Step commit evidence is recorded after Git completion.
+
+## Step P103-S1: declaration interpretation
+
+Stage Status:
+- Current status: ACCEPTED_FOR_STEP_COMMIT
+- Owner: CNCF Phase 103
+- Update rule: Parent updates evidence after focused validation and independent review.
+- Closure basis: The Step acceptance entries below and remaining Phase VM ledger.
+
+Source: [public ABI](../../src/main/scala/org/goldenport/cncf/validation/ValidationMetadataV1.scala),
+[interpreter](../../src/main/scala/org/goldenport/cncf/validation/ValidationMetadataResolution.scala),
+[Executable Specification](../../src/test/scala/org/goldenport/cncf/validation/ValidationMetadataV1Spec.scala).
+Contract: [spec](../spec/validation-test-metadata.md),
+[design](../design/validation-test-metadata.md).
+Progress: [journal](../journal/2026/10/2026-10-18-phase-103-validation-metadata.md).
+
+- [x] Focused declaration specifications and affected execution-contract regressions pass (33 tests, three suites, zero failures).
+- [x] Independent focused review accepts the connected Step change (protected conformance review, no findings).
+- [ ] Parent records Step acceptance and local commit evidence.
+
+No annotation/discovery/invocation support is delivered by S1. Stable scoped
+operation identity and revision provenance, completeness, real scenario discovery,
+CML mapping and actual consumer handoff remain S2/Phase obligations below.
 
 ## VM-01: Contract
 

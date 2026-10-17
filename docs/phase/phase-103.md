@@ -1,6 +1,6 @@
 # Phase 103: Validation/Test Metadata ABI and Discovery
 
-status=planned
+status=in-progress
 planned_at=2026-10-06
 driver=sm-workflow Phase 5
 consumer=sm-workflow, textus-cbd-support, Cozy/CML projection
@@ -14,7 +14,9 @@ operation-level discovery interface. Executable Specifications/test operations
 carry the declarations; consumers query the same normalized metadata without
 maintaining separate authoritative TestSuite membership files.
 
-Canonical input: [ABI proposal](../notes/validation-test-metadata-abi-proposal.md).
+Canonical declaration semantics: [V1 specification](../spec/validation-test-metadata.md)
+and [design](../design/validation-test-metadata.md).
+Planning input: [ABI proposal](../notes/validation-test-metadata-abi-proposal.md).
 Decision and planning history: [producer journal](../journal/2026/10/2026-10-06-validation-test-metadata-abi.md).
 Promote the proposal into the normal spec/design/Executable Specification layers
 as implementation starts; this Phase is the work plan, not a competing ABI spec.
@@ -42,9 +44,20 @@ as implementation starts; this Phase is the work plan, not a competing ABI spec.
 
 ## Work status
 
-All items are PLANNED; implementation and executable acceptance have not started.
-Next work: VM-01, followed by a connected ABI/discovery implementation and specs.
-No currently running phase or Goal is changed by creating this plan.
+Step P103-S1 passed focused validation and independent protected conformance
+review: 17 declaration scenarios and 16 existing execution-contract regressions
+passed across three suites, with no review findings. Its public declaration ABI,
+callable normalization, Executable Specifications and normative declaration docs
+are accepted for the local Step commit; commit evidence is recorded after Git
+completion. Full Phase validation and acceptance remain pending.
+The [implementation journal](../journal/2026/10/2026-10-18-phase-103-validation-metadata.md)
+records the current handoff. The checklist remains the completion ledger.
+
+S1 progresses VM-01 and the interpretation portion of VM-02/VM-03. It delivers
+no annotations, framework discovery, inventory or invocation. S2 still owns
+scoped executable identity/revision provenance, completeness, real scenario
+discovery and typed invocation, CML mapping and concrete runtime/static consumer
+handoffs. VM-01..04 remain Phase obligations; S1 does not close this Phase.
 
 ## Development items
 
