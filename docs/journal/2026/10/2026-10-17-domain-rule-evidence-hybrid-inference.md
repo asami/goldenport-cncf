@@ -112,6 +112,42 @@ This direction connects existing CNCF work:
 - future BI/Analytics boundary;
 - Component Knowledge and Domain Rule publication.
 
+
+## Provider and Persistence Boundary Decision
+
+The Rule Engine should not access PostgreSQL directly for ordinary Domain
+Facts. StateFact acquisition uses a semantic boundary:
+
+```text
+Rule Engine
+  -> Fact Provider SPI
+  -> Entity Space / EntityRealm
+  -> DataStore
+  -> PostgreSQL (or another store)
+```
+
+This keeps the Rule architecture independent from physical persistence and
+makes the Domain Model responsible for interpreting stored Entity/Aggregate
+state as propositions.
+
+Analytics is a deliberate exception: an Analytics Provider may query
+PostgreSQL set-oriented structures directly and return Measure/Estimate
+Evidence, because forcing large aggregate workloads through Entity Space would
+be unnecessary.
+
+SIE is used as a component/provider for semantic Evidence rather than being
+folded into Rule Engine core. Its RDF/Knowledge capability supplies
+DerivedFacts, while vector/semantic retrieval supplies EmbeddingSimilarity
+Measures and retrieved Evidence. The Rule architecture therefore depends on an
+SPI/CNCF Evidence contract, not on Fuseki, Chroma, SPARQL, or a concrete vector
+database.
+
+For a demo, the intended composition is PostgreSQL behind Entity/DataStore,
+SIE for RDF and vector semantics, a traditional symbolic engine such as Drools
+behind an inference provider, and Codex behind the judgment boundary. The
+precise SPI taxonomy remains to be reconciled with the existing Phase 32
+RuleEngine/InferenceEngine ABI.
+
 ## Documentation Action
 
 The architecture is recorded in:
