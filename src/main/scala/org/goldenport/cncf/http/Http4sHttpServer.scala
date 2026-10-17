@@ -68,7 +68,8 @@ import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
  *  version Jun. 19, 2026
  *  version Aug. 14, 2026
  *  version Aug. 15, 2026
- * @version Sep. 29, 2026
+ *  version Sep. 29, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -88,7 +89,7 @@ final class Http4sHttpServer(
   )
   private val _static_form_app_renderer =
     new StaticFormAppRenderer(_runtime_config.staticFormAppRendererConfig)
-  private val _job_experience_service = new JobExperienceService(engine.runtimeSubsystem.jobEngine)
+  private val _job_experience_service = new JobExperienceService(engine.runtimeSubsystem.jobEngine, Some(_operation_security_policy))
   private final case class WebTemplateComposition(
     html: String,
     appliedlayout: Boolean
@@ -1379,21 +1380,22 @@ final class Http4sHttpServer(
     _job_experience_execution(req) match {
       case Consequence.Success((ctx, locale)) =>
         given ExecutionContext = ctx
+        val readscope = _job_experience_read_scope(scope)
         val values = _query_values(req)
         JobExperienceQueryCodec.parse(
           None,
-          scope.applicationOption,
+          readscope.applicationOption,
           values.get("persistentOnly"),
           values.get("status"),
           values.get("origin"),
           values.get("limit"),
           values.get("cursor"),
-          Some(_job_experience_scope_name(scope))
+          Some(_job_experience_scope_name(readscope))
         ).flatMap(query => _job_experience_service.list(query, Some(locale))) match {
           case Consequence.Success(page) =>
-            _job_experience_private(_html(StaticFormAppRenderer.Page(JobExperienceWebRenderer.list(page, scope, _job_experience_filters(values))), app))
+            _job_experience_private(_html(StaticFormAppRenderer.Page(JobExperienceWebRenderer.list(page, readscope, _job_experience_filters(values))), app))
           case Consequence.Failure(_) =>
-            _job_experience_error(app, JobExperienceWebSupport.listPath(scope))
+            _job_experience_error(app, JobExperienceWebSupport.listPath(readscope))
         }
       case Consequence.Failure(_) =>
         _job_experience_error(app, JobExperienceWebSupport.listPath(scope))
@@ -1410,12 +1412,13 @@ final class Http4sHttpServer(
         _job_experience_execution(req) match {
           case Consequence.Success((ctx, locale)) =>
             given ExecutionContext = ctx
-            _job_experience_service.get(id, scope, Some(locale)) match {
+            val readscope = _job_experience_read_scope(scope)
+            _job_experience_service.get(id, readscope, Some(locale)) match {
               case Consequence.Success(view) =>
                 val csrf = _web_csrf_context(req)
-                _job_experience_private(_html(_with_csrf_cookie(StaticFormAppRenderer.Page(JobExperienceWebRenderer.detail(view, scope, csrf.token)), csrf), app))
+                _job_experience_private(_html(_with_csrf_cookie(StaticFormAppRenderer.Page(JobExperienceWebRenderer.detail(view, readscope, csrf.token)), csrf), app))
               case Consequence.Failure(_) =>
-                _job_experience_error(app, JobExperienceWebSupport.listPath(scope))
+                _job_experience_error(app, JobExperienceWebSupport.listPath(readscope))
             }
           case Consequence.Failure(_) =>
             _job_experience_error(app, JobExperienceWebSupport.listPath(scope))
@@ -1447,10 +1450,17 @@ final class Http4sHttpServer(
         _job_experience_private(_html_status(StaticFormAppRenderer.Page(JobExperienceWebRenderer.error("Notifications are unavailable.", JobExperienceWebSupport.listPath(JobExperienceScope.Mine(application)))), HStatus.NotFound))
     }
 
+  private def _job_experience_read_scope(scope: JobExperienceScope)(using ctx: ExecutionContext): JobExperienceScope =
+    if (scope == JobExperienceScope.Operator && !ctx.security.hasAnyCapability(Set("job_admin", "content_admin")))
+      JobExperienceScope.Audit
+    else
+      scope
+
   private def _job_experience_scope_name(scope: JobExperienceScope): String = scope match {
     case JobExperienceScope.Mine(_) => "mine"
     case JobExperienceScope.Application(_) => "application"
     case JobExperienceScope.Operator => "operator"
+    case JobExperienceScope.Audit => "audit"
   }
 
   private def _job_experience_error(

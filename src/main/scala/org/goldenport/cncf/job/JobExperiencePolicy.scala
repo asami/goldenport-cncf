@@ -1,23 +1,29 @@
 package org.goldenport.cncf.job
 
 import org.goldenport.Consequence
+import org.goldenport.cncf.config.{OperationMode, RuntimeOperationSecurityPolicy}
 import org.goldenport.cncf.context.{ExecutionContext, SubjectKind}
 import org.goldenport.cncf.naming.NamingConventions
+import org.goldenport.cncf.security.{AdminAuthorizationPolicy, OperationAuthorization}
 
 /*
  * Scope admission for the Job experience projection. It never changes Job state.
  *
  * @since   Sep. 29, 2026
- * @version Sep. 29, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobExperiencePolicy(
-  val scope: JobExperienceScope
+  val scope: JobExperienceScope,
+  operationSecurityPolicy: Option[RuntimeOperationSecurityPolicy]
 ) extends JobQueryPolicy {
+  def this(scope: JobExperienceScope) = this(scope, None)
+
   override val visibilityKey: String = scope.visibilityKey
 
   def authorizeScope(using ctx: ExecutionContext): Consequence[Unit] =
     scope match {
+      case JobExperienceScope.Audit => _authorize_audit
       case JobExperienceScope.Mine(_) if ctx.security.subjectKind == SubjectKind.Anonymous =>
         Consequence.operationIllegal("job.experience", "an authenticated subject is required")
       case JobExperienceScope.Application(_) if !_broad_reader =>
@@ -29,17 +35,29 @@ final class JobExperiencePolicy(
     }
 
   def authorizeRead(model: JobQueryReadModel)(using ctx: ExecutionContext): Consequence[Unit] =
-    JobQueryPolicy.default.authorizeRead(model).flatMap { _ =>
-      if (_admitted(model)) Consequence.unit
-      else Consequence.operationIllegal("job.experience", "job is not available in this scope")
+    scope match {
+      case JobExperienceScope.Audit => _authorize_audit
+      case _ =>
+        JobQueryPolicy.default.authorizeRead(model).flatMap { _ =>
+          if (_admitted(model)) Consequence.unit
+          else Consequence.operationIllegal("job.experience", "job is not available in this scope")
+        }
     }
 
   def canControl(detail: JobManagementDetail, command: JobControlCommand)(using ctx: ExecutionContext): Boolean =
-    detail.summary.origin == JobDataOrigin.Runtime &&
+    scope != JobExperienceScope.Audit && detail.summary.origin == JobDataOrigin.Runtime &&
       JobControlPolicy.default.authorize(detail.summary.jobId, JobControlRequest(command)).isSuccess
 
   def canDiagnose(using ctx: ExecutionContext): Boolean =
-    ctx.security.hasAnyCapability(Set("job_admin", "content_admin"))
+    scope != JobExperienceScope.Audit && ctx.security.hasAnyCapability(Set("job_admin", "content_admin"))
+
+  private def _authorize_audit(using ctx: ExecutionContext): Consequence[Unit] =
+    operationSecurityPolicy match {
+      case Some(policy) if policy.operationMode == OperationMode.Production && ctx.operationMode == OperationMode.Production =>
+        OperationAuthorization.authorize("admin.jobs.index", AdminAuthorizationPolicy.operationRule("admin.jobs.index", policy))
+      case _ =>
+        Consequence.securityPermissionDenied("Job audit reads require an explicitly configured Production policy and context")
+    }
 
   private def _admitted(model: JobQueryReadModel)(using ctx: ExecutionContext): Boolean =
     scope match {
@@ -51,6 +69,7 @@ final class JobExperiencePolicy(
         _broad_reader && JobExperiencePolicy.applicationVisible(model, application)
       case JobExperienceScope.Operator =>
         ctx.security.hasAnyCapability(Set("job_admin", "content_admin"))
+      case JobExperienceScope.Audit => _authorize_audit.isSuccess
     }
 
   private def _broad_reader(using ctx: ExecutionContext): Boolean =

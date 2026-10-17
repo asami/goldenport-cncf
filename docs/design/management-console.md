@@ -54,6 +54,14 @@ Initial admin privilege thresholds are:
   admin role.
 - `/web/system/admin/jobs`: `privilege >= system` plus a configured jobs role.
 
+Configured jobs read access is preserved by the
+[Job Audit Read Boundary](job-audit-read-boundary.md). After actual context
+resolution, system jobs Web reads lacking `job_admin`/`content_admin` use the
+dedicated Audit scope and the existing Production jobs rule. Audit supplies
+bounded summaries/details and manual refresh only, with no result payload,
+diagnostics or controls. Operator authority and default REST scope admission
+remain unchanged; Web role strings are never converted into capabilities.
+
 Production admin checks must use the session-derived `SecurityContext`.
 Protocol-level query/header stand-ins such as `role`, `principalId`, or
 `x-textus-role` remain useful for executable specs and development flows, but

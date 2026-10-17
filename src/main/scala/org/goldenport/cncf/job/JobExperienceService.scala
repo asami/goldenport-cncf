@@ -3,6 +3,7 @@ package org.goldenport.cncf.job
 import java.util.Locale
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.config.RuntimeOperationSecurityPolicy
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.openapi.OpenApiOperationProjection
@@ -13,12 +14,15 @@ import org.goldenport.record.Record
  * the engine only after exact scoped admission; it owns no Job state or cache.
  *
  * @since   Sep. 29, 2026
- * @version Oct.  4, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobExperienceService(
-  engine: JobEngine
+  engine: JobEngine,
+  operationSecurityPolicy: Option[RuntimeOperationSecurityPolicy]
 ) {
+  def this(engine: JobEngine) = this(engine, None)
+
   def operatorIntegrity(maxCandidates: Int = 100)
       (using ctx: ExecutionContext): Consequence[JobDurableIntegrityReport] =
     new JobExperiencePolicy(JobExperienceScope.Operator).authorizeScope.flatMap { _ =>
@@ -30,7 +34,7 @@ final class JobExperienceService(
     displayLocale: Option[Locale] = None
   )(using ctx: ExecutionContext): Consequence[JobExperiencePage] = {
     val result = {
-      val policy = new JobExperiencePolicy(query.scope)
+      val policy = new JobExperiencePolicy(query.scope, operationSecurityPolicy)
       policy.authorizeScope.flatMap { _ =>
         engine.queryPage(query.management, policy).map { page =>
           JobExperiencePage(
@@ -50,14 +54,17 @@ final class JobExperienceService(
     displayLocale: Option[Locale] = None
   )(using ctx: ExecutionContext): Consequence[JobExperienceView] = {
     val result = {
-      val policy = new JobExperiencePolicy(scope)
+      val policy = new JobExperiencePolicy(scope, operationSecurityPolicy)
       policy.authorizeScope match {
         case Consequence.Success(_) =>
           _detail(jobId, policy).flatMap { detail =>
-            engine.queryManagementResult(jobId, policy).flatMap {
-              case Some(result) => Consequence.success(_view(detail, result, policy, displayLocale.getOrElse(_locale)))
-              case None => _not_found(jobId)
-            }
+            if (scope == JobExperienceScope.Audit)
+              Consequence.success(_view(detail, None, policy, displayLocale.getOrElse(_locale)))
+            else
+              engine.queryManagementResult(jobId, policy).flatMap {
+                case Some(result) => Consequence.success(_view(detail, Some(result), policy, displayLocale.getOrElse(_locale)))
+                case None => _not_found(jobId)
+              }
           }
         case Consequence.Failure(_) =>
           _not_found(jobId)
@@ -73,7 +80,7 @@ final class JobExperienceService(
     limit: Int
   )(using ctx: ExecutionContext): Consequence[JobExperienceDiagnostics] = {
     val result = {
-      val policy = new JobExperiencePolicy(scope)
+      val policy = new JobExperiencePolicy(scope, operationSecurityPolicy)
       if (offset < 0 || limit < 1 || limit > JobManagementQuery.MaximumLimit)
         Consequence.argumentInvalid("diagnostics offset must be nonnegative and limit must be in 1..100")
       else if (!policy.canDiagnose)
@@ -100,7 +107,7 @@ final class JobExperienceService(
     command: JobControlCommand
   )(using ctx: ExecutionContext): Consequence[JobControlResponse] = {
     val result = {
-      val policy = new JobExperiencePolicy(scope)
+      val policy = new JobExperiencePolicy(scope, operationSecurityPolicy)
       policy.authorizeScope match {
         case Consequence.Success(_) =>
           _detail(jobId, policy).flatMap { detail =>
@@ -191,13 +198,13 @@ final class JobExperienceService(
 
   private def _view(
     detail: JobManagementDetail,
-    result: JobManagementResult,
+    result: Option[JobManagementResult],
     policy: JobExperiencePolicy,
     locale: Locale
   )(using ctx: ExecutionContext): JobExperienceView = {
     val summary = detail.summary
     val active = summary.status == JobStatus.Submitted || summary.status == JobStatus.Running
-    val controls = JobExperiencePolicy.controls(summary.status).filter(policy.canControl(detail, _))
+    val controls = result.toVector.flatMap(_ => JobExperiencePolicy.controls(summary.status).filter(policy.canControl(detail, _)))
     val progress =
       if (active) "indeterminate"
       else if (summary.status == JobStatus.Suspended) "paused"
@@ -207,12 +214,12 @@ final class JobExperienceService(
       JobExperienceStatus.from(summary.status),
       JobExperienceVocabulary.resolve(summary.status, locale),
       JobExperienceProgress(progress, detail.taskCount),
-      _result(summary.status, result),
+      result.map(_result(summary.status, _)).getOrElse(JobExperienceResult.Unavailable),
       controls,
-      active && (result match {
+      active && result.exists {
         case JobManagementResult.UnavailableAfterRestart(_) => false
         case _ => true
-      })
+      }
     )
   }
 

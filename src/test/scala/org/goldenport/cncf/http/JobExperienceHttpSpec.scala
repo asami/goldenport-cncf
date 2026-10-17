@@ -26,11 +26,123 @@ import org.typelevel.ci.CIString
  * cases go through routes rather than renderer or codec-only entry points.
  *
  * @since   Sep. 29, 2026
- * @version Sep. 29, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobExperienceHttpSpec extends AnyWordSpec with Matchers with GivenWhenThen with StaticFormAppRendererSpecFixtures {
   "Job experience Http4s routes" should {
+    "H9 preserve configured Production audit list and bounded detail through real provider-authenticated routes" in {
+      Given("an enabled Production server, a provider audit_viewer with system privilege, an Operator, and a foreign submitted Job")
+      val subsystem = _job_experience_fixture_subsystem(Configuration(Map(
+        RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production"),
+        RuntimeConfig.webProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
+      )))
+      _install_sessions(subsystem, Vector(
+        _session_summary("h9-auditor", "h9-auditor", Map("role" -> "audit_viewer", "privilege" -> "system")),
+        _session_summary("h9-operator", "h9-operator", Map("role" -> "system_admin", "privilege" -> "system")).copy(capabilities = Vector("job_admin"))
+      ))
+      val component = subsystem.findComponent(BuiltinComponentIdentity.JOB_CONTROL).getOrElse(fail("job_control is missing"))
+      val base = component.logic.executionContext()
+      val owner = ExecutionContext.withSecurityContext(base, base.security.copy(
+        principal = new Principal {
+          def id: PrincipalId = PrincipalId("h9-private-owner")
+          def attributes: Map[String, String] = Map.empty
+        },
+        session = Some(SessionContext(sessionId = Some("h9-private-session")))
+      ))
+      val id = subsystem.jobEngine.submit(List(_success_task("h9-private-result")), owner,
+        JobSubmitOption(runMode = JobRunMode.Sync, parameters = Map("secret" -> "h9-private-debug")))
+        .toOption.getOrElse(fail("audit fixture submission failed"))
+      val app = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem)).routes(null).orNotFound
+
+      When("Audit Web list/detail, explicit Audit REST detail and normal Operator detail use the same actual server")
+      val list = app.run(_with_session(_get_request("/web/system/admin/jobs?status=succeeded&limit=1"), "h9-auditor")).unsafeRunSync()
+      val detail = app.run(_with_session(_get_request(s"/web/system/admin/jobs/${id.value}"), "h9-auditor")).unsafeRunSync()
+      val rest = app.run(_with_session(_get_request(s"/rest/v1/job-control/job-experience/get-job-experience?id=${id.value}&scope=audit"), "h9-auditor")).unsafeRunSync()
+      val diagnostics = app.run(_with_session(_get_request(s"/rest/v1/job-control/job-experience/get-job-diagnostics?id=${id.value}&scope=audit"), "h9-auditor")).unsafeRunSync()
+      val operator = app.run(_with_session(_get_request(s"/web/system/admin/jobs/${id.value}"), "h9-operator")).unsafeRunSync()
+      val html = detail.as[String].unsafeRunSync()
+
+      Then("Audit sees only bounded Job facts and manual refresh, REST cannot self-grant Audit, and Operator retains result access")
+      list.status.code shouldBe 200
+      list.as[String].unsafeRunSync() should include (s"/web/system/admin/jobs/${id.value}")
+      detail.status.code shouldBe 200
+      html should include (id.value)
+      html should include ("Completed")
+      html should include ("data-poll-enabled=\"false\"")
+      html should include (">Refresh<")
+      html should not include ("<script>")
+      html should not include ("control_job_experience")
+      Vector("h9-private-result", "h9-private-owner", "h9-private-session", "h9-private-debug", "get_job_diagnostics")
+        .foreach(secret => html should not include (secret))
+      rest.status.code shouldBe 404
+      diagnostics.status.code should not be 200
+      operator.status.code shouldBe 200
+      operator.as[String].unsafeRunSync() should include ("h9-private-result")
+      Vector(list, detail, rest, diagnostics, operator).foreach(response => _cache(response) shouldBe Some("private, no-store"))
+    }
+
+    "H9 keep active Audit Jobs manual while normal Operators retain admitted controls and polling" in {
+      Given("an enabled Production server, provider auditor and Operator, and a real Job scheduled for a later start")
+      val subsystem = _job_experience_fixture_subsystem(Configuration(Map(
+        RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production"),
+        RuntimeConfig.webProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
+      )))
+      _install_sessions(subsystem, Vector(
+        _session_summary("h9-active-audit", "h9-active-audit", Map("role" -> "audit_viewer", "privilege" -> "system")),
+        _session_summary("h9-active-operator", "h9-active-operator", Map("role" -> "system_admin", "privilege" -> "system")).copy(capabilities = Vector("job_admin"))
+      ))
+      val component = subsystem.findComponent(BuiltinComponentIdentity.JOB_CONTROL).getOrElse(fail("job_control is missing"))
+      val owner = component.logic.executionContext()
+      val id = subsystem.jobEngine.submit(List(_success_task("h9-active-private")), owner,
+        JobSubmitOption(runMode = JobRunMode.Async, persistence = JobPersistencePolicy.Ephemeral,
+          scheduledStartAt = Some(owner.clock.instant().plusSeconds(300L))))
+        .toOption.getOrElse(fail("scheduled submission failed"))
+      val app = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem)).routes(null).orNotFound
+
+      When("Audit and Operator request the active canonical detail")
+      val audit = app.run(_with_session(_get_request(s"/web/system/admin/jobs/${id.value}"), "h9-active-audit")).unsafeRunSync()
+      val operator = app.run(_with_session(_get_request(s"/web/system/admin/jobs/${id.value}"), "h9-active-operator")).unsafeRunSync()
+
+      Then("Audit never polls or offers controls while the existing Operator projection keeps both")
+      audit.status.code shouldBe 200
+      audit.as[String].unsafeRunSync() should include ("data-poll-enabled=\"false\"")
+      audit.as[String].unsafeRunSync() should not include ("<script>")
+      audit.as[String].unsafeRunSync() should not include ("control_job_experience")
+      operator.status.code shouldBe 200
+      operator.as[String].unsafeRunSync() should include ("control_job_experience")
+      operator.as[String].unsafeRunSync() should include ("data-poll-enabled=\"true\"")
+    }
+
+    "H9 enforce configured audit roles admin enablement and actual privilege at Web ingress" in {
+      Given("independent Production servers with disabled admin, default jobs roles, or an explicit custom jobs role")
+      val cases = Vector(
+        (false, "audit_viewer", "audit_viewer", "system", 403),
+        (true, "audit_viewer", "user", "system", 403),
+        (true, "audit_viewer", "audit_viewer", "user", 403),
+        (true, "custom_auditor", "audit_viewer", "system", 403),
+        (true, "custom_auditor", "custom_auditor", "system", 200)
+      )
+      cases.foreach { case (enabled, configuredrole, actualrole, privilege, expected) =>
+        val subsystem = _job_experience_fixture_subsystem(Configuration(Map(
+          RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.webProductionAdminEnabledKey -> ConfigurationValue.StringValue(enabled.toString),
+          RuntimeConfig.webProductionAdminJobsRolesKey -> ConfigurationValue.StringValue(configuredrole)
+        )))
+        _install_job_session(subsystem, _session_summary("h9-config", "h9-config", Map("role" -> actualrole, "privilege" -> privilege)))
+        val app = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem)).routes(null).orNotFound
+
+        When("the real provider session requests the list, and an anonymous caller forges authority strings")
+        val response = app.run(_with_session(_get_request("/web/system/admin/jobs"), "h9-config")).unsafeRunSync()
+        val forged = app.run(_get_request("/web/system/admin/jobs?role=custom_auditor&privilege=system&scope=audit")).unsafeRunSync()
+
+        Then("only enabled configured provider authority reaches Audit, with all outcomes private")
+        response.status.code shouldBe expected
+        forged.status.code shouldBe 403
+        Vector(response, forged).foreach(value => _cache(value) shouldBe Some("private, no-store"))
+      }
+    }
+
     "H1 serve Mine Web and REST list requests through the live server" in {
       Given("an authenticated Mine subject and the admitted Http4s server")
       val subsystem = _job_experience_fixture_subsystem()

@@ -9,7 +9,7 @@ import org.goldenport.cncf.naming.NamingConventions
  * Canonical path and escaping support for the server-rendered Job experience.
  *
  * @since   Sep. 29, 2026
- * @version Sep. 29, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 object JobExperienceWebSupport {
@@ -20,14 +20,14 @@ object JobExperienceWebSupport {
     case JobExperienceScope.Mine(None) => s"/web/system/jobs/${pathSegment(jobId)}"
     case JobExperienceScope.Mine(Some(application)) => s"/web/${pathSegment(application)}/jobs/${pathSegment(jobId)}"
     case JobExperienceScope.Application(application) => s"/web/${pathSegment(application)}/admin/jobs/${pathSegment(jobId)}"
-    case JobExperienceScope.Operator => s"/web/system/admin/jobs/${pathSegment(jobId)}"
+    case JobExperienceScope.Operator | JobExperienceScope.Audit => s"/web/system/admin/jobs/${pathSegment(jobId)}"
   }
 
   def listPath(scope: JobExperienceScope): String = scope match {
     case JobExperienceScope.Mine(None) => "/web/system/jobs"
     case JobExperienceScope.Mine(Some(application)) => s"/web/${pathSegment(application)}/jobs"
     case JobExperienceScope.Application(application) => s"/web/${pathSegment(application)}/admin/jobs"
-    case JobExperienceScope.Operator => "/web/system/admin/jobs"
+    case JobExperienceScope.Operator | JobExperienceScope.Audit => "/web/system/admin/jobs"
   }
 
   def notificationPath(application: Option[String]): String =
