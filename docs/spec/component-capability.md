@@ -21,9 +21,9 @@ R14 defines canonical local package acquisition and public native discovery.
 R15 in the [Usage package contract](component-usage-capability-package.md#r15-acquisition-and-failures)
 defines the optional raw Usage transport alongside this unchanged Component contract.
 
-The reference implementation's Component Capability design provides historical,
-non-normative structural context; that design file is not part of this selected
-main-checkout port. The existing Phase 56
+The [Component Capability design](../design/component-capability.md)
+provides historical, non-normative structural context. It is now available
+through the matching main-branch integration. The existing Phase 56
 [Component Identity Specification](component-identity.md) remains the
 authority for Component identity.
 

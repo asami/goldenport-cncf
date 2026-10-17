@@ -1,7 +1,11 @@
 # CAR Capability Sandbox and Execution Boundary
 
 status=draft
-updated_at=2026-05-25
+updated_at=2026-10-15
+
+# 2026-10-15 clarification
+
+The original discussion below combined execution architecture and sandbox assurance. They are now intentionally separated into two coexisting normative design viewpoints: `docs/design/capability-oriented-execution-architecture.md` and `docs/design/safety-sandbox-architecture.md`. The latter names the in-JVM mechanism **Safety Sandbox** because accident prevention is primary; hostile CAR containment belongs to Docker/process isolation. Implementation is planned in CNCF Phase 110, with textus-cbd-support Phase 16 consuming the shared static classification.
 
 # Summary
 

@@ -686,8 +686,8 @@ retain their dated inventory status. This inventory changes no acceptance author
 | [phase-77.2-checklist](phase-77.2-checklist.md) | status=planned |
 | [phase-77.2](phase-77.2.md) | status=planned |
 | [phase-77](phase-77.md) | status=closed |
-| [phase-78-checklist](phase-78-checklist.md) | status=planned |
-| [phase-78](phase-78.md) | status=planned |
+| [phase-78-checklist](phase-78-checklist.md) | status=closed |
+| [phase-78](phase-78.md) | status=closed |
 | [phase-79](phase-79.md) | status=planned |
 | [phase-80-participant-invocation-addendum](phase-80-participant-invocation-addendum.md) | Status: planned / normative addendum to Phase 80 |
 | [phase-80-skill-workflow-support-addendum](phase-80-skill-workflow-support-addendum.md) | Status: planned / normative addendum to Phase 80 |

@@ -185,3 +185,48 @@ the ability to reacquire Active authority through an authorized switch-back.
 
 Only after deployment commit may the old instance be discarded/rebuilt as the
 new Standby according to policy.
+
+## Deployment Driver Examples
+
+The Deployment Driver boundary is infrastructure-neutral. The following are
+non-normative deployment examples and selection guidance.
+
+### Docker Compose
+
+Docker Compose is a simple initial choice for development, on-premises and
+small-to-medium enterprise systems. A single host can realize local-ha and
+exercise the complete Textus rotation/replacement semantics. Separate-host
+operation requires host-level coordination beyond one ordinary Compose project.
+
+### AWS ECS / Fargate
+
+For ordinary AWS-hosted enterprise systems, ECS is a natural Docker deployment
+driver and Fargate can remove most direct EC2 host management. AWS/ECS owns
+physical task placement, restart and host/container failure recovery; Textus
+still owns Subsystem ACTIVE/STANDBY authority, warm-up/readiness admission,
+read-only Standby policy, drain, CAR version and Deployment Transaction.
+
+Running two ECS tasks is therefore not by itself Textus Active/Standby. The
+runtime roles and mutation authority remain CNCF semantics.
+
+A host-failure-tolerant AWS deployment should place the Active and Standby
+runtime capacity so one underlying compute failure does not remove both. The
+exact ECS/Fargate placement mechanism is driver/deployment policy rather than
+application code.
+
+Stateful dependencies have independent failure boundaries. For example, an AWS
+deployment may use RDS PostgreSQL and, when the business requirement justifies
+it, an AWS-managed Multi-AZ database configuration. Textus must not claim
+system-wide host/site availability merely because its application containers
+are redundant.
+
+### Kubernetes / EKS
+
+Kubernetes/EKS remains an optional driver for environments that need or already
+standardize on Kubernetes scheduling, scaling and orchestration. Kubernetes
+Pods, Services and probes are physical primitives; they do not replace CNCF
+Subsystem role/admission semantics.
+
+A reasonable adoption path is therefore Compose for simple/local operation,
+ECS/Fargate for ordinary AWS managed-container operation, and Kubernetes/EKS
+when its additional orchestration capability is actually required.

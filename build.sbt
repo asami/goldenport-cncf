@@ -239,11 +239,19 @@ def runInformationCmlGeneration(
   baseDirectory: File,
   log: sbt.util.Logger
 ): Seq[File] = {
+  val generatorroot = CncfGenerationBuildContract.selectedGeneratorRoot(
+    sys.props.get("cncf.cozyGeneratorRoot"),
+    sys.env.get("CNCF_COZY_GENERATOR_ROOT")
+  ).fold(
+    errors => sys.error(errors.mkString("CNCF Cozy generator selection failed: ", " ", "")),
+    identity
+  )
   IO.delete(outputDirectory)
   IO.createDirectory(outputDirectory)
   val command = CncfGenerationBuildContract.command(
     inputs,
-    outputDirectory
+    outputDirectory,
+    generatorroot
   ).fold(
     errors => sys.error(errors.mkString("CNCF generation command preparation failed: ", " ", "")),
     identity
@@ -261,7 +269,7 @@ def runInformationCmlGeneration(
   if (files.isEmpty)
     sys.error(s"no CNCF Information CML sources generated from: ${inputs.source.getAbsolutePath}")
   val validationcommand =
-    CncfGenerationBuildContract.validationCommand(inputs, outputDirectory).fold(
+    CncfGenerationBuildContract.validationCommand(inputs, outputDirectory, generatorroot).fold(
       errors => sys.error(errors.mkString("CNCF generation provenance validation preparation failed: ", " ", "")),
       identity
     )
@@ -397,6 +405,7 @@ lazy val root = project
     version := "0.5.3-SNAPSHOT",
 
     scalaVersion := scala3Version,
+    Compile / exportJars := true,
 
     Test / unmanagedSources += baseDirectory.value / "project" / "CncfGenerationBuildContract.scala",
 

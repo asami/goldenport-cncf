@@ -177,6 +177,53 @@ product removals, prior warnings and original Step/full-Phase review, commits
 and distinct release remain OPEN. See the dated S45 classification below.
 
 
+## Current CNCF Information Invocation Additions
+
+The normal build pins Cozy `0.3.3-SNAPSHOT`. A later CML content edit is read
+through the selected path; a removed source fails command preparation.
+
+### Explicit normal generator selection
+
+`selectedGeneratorRoot(propertyValue, environmentValue)` is an ambient-free
+helper. `build.sbt` supplies `cncf.cozyGeneratorRoot` and
+`CNCF_COZY_GENERATOR_ROOT`. A present property wins over the environment,
+including an invalid or blank property. With neither present, `None` retains
+the exact artifact invocation. Selected values are trimmed and canonicalized,
+and must identify a directory with a regular `build.sbt`; failures identify
+that selected path and give deterministic recovery. They do not trigger a
+fallback or root search.
+
+`runInformationCmlGeneration` selects once before output deletion/creation and
+passes the same `Option[File]` to `command` and `validationCommand`. Each
+starts with `cozy --runtime <unchanged-exact-version>` and appends
+`--runtime-dev-dir <canonical-root>` only for `Some`. Their current generation
+and validation selectors retain their order and meaning. The supported
+launcher owns prepared classpath, version and readiness checks and direct Java
+execution. CNCF does not refresh that runtime, start nested SBT, silently
+select canonical main, or substitute another version.
+
+The behavioral contract is linked by
+[ComponentStyleRuntimeDescriptorProjectionSpec](../../src/test/scala/org/goldenport/cncf/component/ComponentStyleRuntimeDescriptorProjectionSpec.scala),
+[Phase51Cv03BuildIntegrationSpec](../../src/test/scala/org/goldenport/cncf/phase51/build/Phase51Cv03BuildIntegrationSpec.scala),
+and [Phase51Cv05BuildProvenanceSpec](../../src/test/scala/org/goldenport/cncf/phase51/build/Phase51Cv05BuildProvenanceSpec.scala).
+### Historical build-prerequisite handoff — 2026-10-14
+
+This alignment is a necessary CAP-78-05/CBD CAP-11-01 build prerequisite. It
+is not participant Step or Phase acceptance and does not replace the later
+actual dedicated Capability producer/native Directory/CAR/CBD consumer proof.
+Packaged/development runtime-manifest, ABI, and activation contracts retain
+separate responsibility and require their own synchronization before that proof.
+
+Current own Step acceptance — 2026-10-15: actual dedicated Cozy production,
+canonical CNCF public ComponentFactory native Directory/CAR discovery and
+source-free CBD consumption, focused validation and independent protected own
+Step conformance are now accepted in
+[CAP-78-05 acceptance](../phase/phase-78.md#cap-78-05-acceptance--2026-10-15).
+Behavior specifications alone do not establish whole-Phase closure. Separate
+Phase validation/review/release and packaged/development runtime-manifest, ABI
+and activation synchronization and proof gates remain owed; their contracts
+and responsibilities are unchanged.
+
 ## Downstream Validation Boundary
 
 Closure validation follows the same ownership boundaries as production.
