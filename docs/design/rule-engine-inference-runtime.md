@@ -250,6 +250,37 @@ The resulting architecture is intentionally hybrid:
 - Human judgment remains a first-class source where required;
 - Domain Rules combine admissible Evidence into a Domain Decision.
 
+
+### Evidence Provider Boundaries
+
+Domain Rule evaluation operates on CNCF-owned Evidence semantics and does not
+read physical stores or provider-specific engines directly.
+
+StateFact acquisition should normally follow the semantic domain path:
+Fact Provider SPI -> Entity Space/EntityRealm -> DataStore -> physical store
+such as PostgreSQL. The Entity/Domain model, not the SQL schema, determines the
+proposition exposed as a StateFact. This preserves DataStore substitution and
+prevents Rule definitions from depending on tables, rows, SQL, or repository
+handles.
+
+Collection-oriented analytics may use a separate Analytics Provider that reads
+PostgreSQL views, aggregates, materialized views, or another analytical store
+directly when set processing through Entity Space would be inefficient. Such a
+provider returns Measure or Estimate Evidence, never raw storage semantics.
+
+Knowledge and semantic retrieval should be consumed through an SIE-facing
+provider/SPI boundary. SIE remains responsible for its RDF DB and Vector DB
+implementation. RDF/knowledge inference can be normalized as DerivedFact;
+semantic/vector similarity as EmbeddingSimilarity Measure; and retrieval as
+references to retrieved Evidence plus associated Measures. Rule Engine core
+does not depend on Fuseki, Chroma, SPARQL, embedding indexes, or another
+provider implementation.
+
+Likewise, a traditional expert-system provider may supply deterministic
+DerivedFacts, while a generative-AI judgment provider such as Codex supplies
+AIJudgment. The exact future SPI decomposition must be reconciled with the
+existing RuleEngine and InferenceEngine contracts before ABI expansion.
+
 The current Phase 32 Fact, WorkingMemory, RuleEngine, and InferenceEngine
 contracts remain the implemented deterministic foundation. This section
 records the architectural direction; it does not retroactively change the
