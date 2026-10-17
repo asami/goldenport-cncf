@@ -6,7 +6,8 @@ import org.goldenport.protocol.{Argument, Property, Switch}
 /*
  * @since   Mar. 13, 2026
  *  version May.  6, 2026
- * @version Jul. 11, 2026
+ *  version Jul. 11, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedParameter(
@@ -84,7 +85,9 @@ final class ResolvedParameters private (
     }
 
   def usedEntries: Vector[ResolvedParameter] =
-    _used.values.toVector
+    _used.synchronized {
+      _used.values.toVector
+    }
 
   def usedText: Option[String] = {
     val entries = usedEntries
@@ -106,8 +109,10 @@ final class ResolvedParameters private (
   private def _mark_used(
     param: ResolvedParameter
   ): Unit =
-    if (!_used.contains(param.key)) {
-      _used.put(param.key, param)
+    _used.synchronized {
+      if (!_used.contains(param.key)) {
+        _used.put(param.key, param)
+      }
     }
 }
 
