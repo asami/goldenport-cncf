@@ -164,6 +164,81 @@ decision.
 - BI/Analytics can provide Estimates and Predictions; it may also discover
   candidates for later Domain Rule evolution.
 
+
+## Provider and Storage Boundary
+
+The Rule architecture consumes semantic Evidence and must not bind Domain Rules
+to a physical database or a concrete knowledge/vector engine.
+
+The default StateFact path is:
+
+```text
+Rule Engine
+    |
+Fact Provider SPI
+    |
+Entity Space / EntityRealm
+    |
+DataStore
+    |
+PostgreSQL
+```
+
+PostgreSQL is therefore an important implementation substrate but is not part
+of the Domain Rule contract. Entity/Aggregate state is interpreted by the
+Domain Model and projected through a Fact Provider into StateFacts. Rule code
+must not issue SQL or depend on table/row structure.
+
+A Fact Provider SPI also leaves room for DefinedFact, ObservedFact,
+DeclaredFact, and external Fact providers without coupling the Rule Engine to
+their storage mechanisms.
+
+Collection-oriented analytics is a deliberate exception to the Entity-first
+path. An Analytics Provider may operate directly over PostgreSQL views,
+materialized views, aggregates, or another analytical store when routing large
+sets through Entity Space would be artificial or inefficient. Its output is
+normalized as Measure or Estimate Evidence rather than exposed as database
+rows.
+
+Semantic evidence is supplied by SIE through an SPI/provider boundary rather
+than by embedding Fuseki, Chroma, SPARQL, or vector-store details in the Rule
+Engine. The current SIE RDF DB and Vector DB providers can map conceptually as:
+
+```text
+SIE RDF / Knowledge reasoning -> DerivedFact
+SIE semantic/vector similarity -> EmbeddingSimilarity Measure
+SIE retrieval                  -> retrieved Evidence + similarity Measures
+```
+
+The initial demo architecture can therefore use the following composition:
+
+```text
+                         Rule Engine
+                              |
+                     Evidence / Inference
+                              |
+       +----------------------+----------------------+
+       |                      |                      |
+ Fact Provider SPI      Inference Provider      Judgment Provider
+       |                      |                      |
+ Entity Space           +-----+-----+              Codex
+       |                |           |                |
+ DataStore           Symbolic      SIE           AIJudgment
+       |              engine       |
+ PostgreSQL          (e.g.         +-- RDF/Knowledge -> DerivedFact
+                     Drools)       `-- Vector       -> Measure
+       |
+ Analytics Provider
+       |
+ Measure / Estimate
+```
+
+The exact SPI split remains open until it is reconciled with the existing Phase
+32 RuleEngine/InferenceEngine sockets. The architectural invariant is more
+important than the provisional SPI names: physical stores and provider-specific
+engines remain behind component/provider boundaries, while Rule evaluation
+operates on CNCF-owned Evidence semantics.
+
 ## Domain Rule Direction
 
 Domain Rule should become a first-class Domain Model concept. It expresses
