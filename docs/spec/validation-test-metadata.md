@@ -287,17 +287,128 @@ Identity/revision and test-name text is exact nonempty trimmed control-free
 text of at most 512 characters; suite/package names follow Java binary/package
 grammar. No generic record replaces these fixed public models.
 
+## Exact typed operation binding
+
+[`ValidationOperationBindingV1.bindC(inventory, reference, workspaceId)`](../../src/main/scala/org/goldenport/cncf/validation/ValidationOperationBindingV1.scala)
+uses the existing public exact `ValidationDiscoveryV1.resolveC` and returns
+`Consequence[BoundOperation]`. The final `BoundOperation` has a private
+constructor and public `operation: ValidationDiscoveryV1.Operation` and
+`intent: UnitOfWorkOp.SbtExec`. Its operation is unchanged, including metadata,
+provenance, requirements and diagnostics. Its intent is
+`SbtExec(SbtTarget(workspaceId, Some(SbtScenarioSelection(class, name))), TestOnly)`.
+The logical typed workspace must be nonnull and admitted, and the framework
+selector must satisfy the [typed SBT literal selection contract](typed-sbt-execution.md).
+Unsupported literal rendering, null and malformed inputs fail structurally.
+
+Query-selected and supplemental exact references use this identical method.
+A supplemental HEAVY or valid unannotated operation keeps its original purposes,
+declaration origins and `ExecutionRequirement`. Absent, invalid and ambiguous
+references retain existing distinct discovery policies. Binding constructs
+intent only: it does not launch, resolve a runtime context or grant authority.
+
+The existing interpreter uses its actual current UnitOfWork context to obtain
+Manage for the identical workspace binding and an actual component TestOnly
+capability grant. The selected class must be in that current host allowlist;
+the definition narrows and never expands it. One final argv item requests the
+exact class/name. Compile/Test reject scenarios and `None` keeps class-only
+behavior. Generic tagged execution and caller request overrides remain denied;
+no host codec, request-construction site or interpreter change is introduced.
+
+A scenario result retains the exact target and requires the conservative
+ordinary successful report for one matching class and exactly one test.
+`ScenarioMismatch` rejects selected-class/count disagreement. Other malformed,
+truncated, wrong-suite and failed reports remain unverified. `Verified` retains
+its three existing fields. A suite-only receipt does not independently name the
+operation: the producer typed intent requests it. Parsing cannot authenticate
+forged logs. Declarations and bound operations contain no runtime evidence.
+Behavior is authored by
+[`ValidationOperationBindingV1Spec`](../../src/test/scala/org/goldenport/cncf/validation/ValidationOperationBindingV1Spec.scala),
+[`SbtScenarioExecutionDslSpec`](../../src/test/scala/org/goldenport/cncf/action/SbtScenarioExecutionDslSpec.scala)
+and the existing selected-report specification.
+
+## Normalized CML mapping
+
+[`ValidationCmlMappingV1`](../../src/main/scala/org/goldenport/cncf/validation/ValidationCmlMappingV1.scala)
+owns `Properties(abiVersion = 1, purposes = None, features = Set.empty,
+expectedDuration = None, durationClass = None, executionRequirement = None,
+requiredSemantics = Set.empty)`. Purposes and duration class use exact strings;
+all other field types reuse the declaration model, except duration which uses
+`DurationValue(amount: Long, unit: DurationUnit)`.
+
+`DurationUnit` is the closed enum `NANOSECONDS`, `MICROSECONDS`, `MILLISECONDS`,
+`SECONDS`, `MINUTES`, `HOURS`, `DAYS`. `declarationC(properties)` (also available
+on `Properties`) admits every field through the existing declaration validator
+and returns the same validated `Declaration`. No case folding, trimming or
+unknown-label fallback occurs. Explicit nulls and unsupported enum labels yield
+structured `validation.cml.<field>` failures; existing declaration compatibility
+and requirement failures retain their metadata policies.
+
+Positive duration conversion multiplies with `BigInt` before constructing
+`FiniteDuration`. Exact nanoseconds above `Long.MaxValue`, zero and negative
+amounts fail without overflow, saturation, rounding or constructor exceptions.
+`Long.MaxValue` nanoseconds is valid. This normalized boundary can therefore
+reject out-of-range amounts that cannot enter the direct Scala duration ABI.
+
+`resolveC(specification: Option[Properties], operation: Option[Properties])`
+maps both declarations, then calls the existing S1 resolver once. Absent/empty
+origins, explicit purpose replacement, feature union, independent duration/class
+overrides and existing requirement capability/reasoning/review composition have
+the identical semantics described above. No CML parser, syntax, generator or
+second merge/provider policy belongs to CNCF. Equivalence and property behavior
+are authored by
+[`ValidationCmlMappingV1Spec`](../../src/test/scala/org/goldenport/cncf/validation/ValidationCmlMappingV1Spec.scala).
+
+## Shared portable static-consumer example
+
+One packaged resource,
+[`META-INF/cncf/validation/v1/consumer-fixture.json`](../../src/main/resources/META-INF/cncf/validation/v1/consumer-fixture.json),
+is synthetic static-analysis input. It is not a suite registry, an actual
+discovered runtime inventory, execution authority or a normative inventory wire
+codec. The [shared guide](../fixtures/validation-test-metadata/README.md) maps
+its fields to public models and consumer responsibilities. The
+[`ValidationConsumerFixtureV1Spec`](../../src/test/scala/org/goldenport/cncf/validation/ValidationConsumerFixtureV1Spec.scala)
+parses that resource with a private typed example reader and observes public
+normalization/query/reference outcomes.
+
+Complete baseline/candidate snapshots explicitly share a comparable scope and
+population revision, with independent scope/artifact/source/operation revisions.
+Their three rows are a sole ADMISSION+FULL operation, a FOCUSED operation covering
+two features and a valid unannotated operation. Candidate removes only ADMISSION
+from the same logical operation, preserving its selector and other metadata;
+its source/artifact/changed-operation revisions advance. Complete comparable
+ADMISSION selection is 1 -> 0. PARTIAL/UNKNOWN variants retain diagnostic gaps;
+empty selections there cannot establish absence.
+
+The target feature population is explicit and revisioned, includes an uncovered
+feature, and stays separate from observed tags. Mappings carry their own and
+target revisions. Runtime evidence is empty. The example computes no KPI and
+asserts no runtime success. Consumers own comparability, application feature
+population/mappings, observations, findings and execution/progression policy.
+The static owner is cbd-support's
+[October 6 static-analysis workstream](https://github.com/asami/textus-cbd-support/blob/main/docs/journal/2026/10/2026-10-06-validation-test-metadata-static-analysis.md),
+not its closed native Job Phase 14. See the
+[consumer handoff](../notes/validation-test-metadata-consumer-handoff.md).
+
 ## Phase boundary
 
 P103-S1 is accepted at `ac443ed353cc682251e4d17bf4e64a1285955798`.
-P103-S2 authors annotations, actual discovery, typed selectors and pure queries;
-parent compilation, focused execution and independent review remain acceptance
-steps. The selector specification demonstrates in-process `Suite.run(Some(name),
+P103-S2 is accepted at `2ec6da1265d14430cf522443869a0b9b2647ea00` with annotations,
+actual discovery, typed selectors and pure queries. The selector specification
+demonstrates in-process `Suite.run(Some(name),
 Args(reporter))` and exactly one parameter-case success. That demonstrates the
 framework selector, without claiming CNCF typed process invocation.
-S3 retains the existing CNCF execution-path adapter, CML mapping, shared static
-fixtures and actual sm-workflow/cbd-support handoff. Full connected producer
-validation and [Phase 103](../phase/phase-103.md) acceptance remain open.
+S3 authors the existing CNCF execution-path adapter, CML mapping, shared static
+fixture and consumer handoff. Focused validation passed 79 tests across eight
+suites; separate real top-level literal parameter selection passed one test in
+one suite (total 80 tests across nine suites, zero failures or aborts,
+SBT/wrapper exit 0, shared lock released). Independent protected-focused S3
+Step review returned PASS with zero Current Boundary Blockers, Hygiene or
+Development Candidate findings and no evidence gaps. S3 is accepted pending
+its exact local Step commit. Actual sm-workflow source fixture/dependency
+refresh remains required separate S4 under explicit source admission after the
+producer is accepted. Full connected producer validation and
+[Phase 103](../phase/phase-103.md) acceptance remain open. Static-consumer
+application implementation remains outside producer acceptance.
 
 No pass/fail, actual runtime, Candidate state, hashes, executor arguments, KPI,
 suite registry or sm-workflow time-budget policy belongs to this ABI.

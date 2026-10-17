@@ -8,7 +8,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceExecutionAdmiss
 /*
  * @since   Jul. 17, 2026
  *  version Jul. 22, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ProcessCapabilityId private (value: String) {
@@ -529,6 +529,33 @@ final class ProcessProgramDefinition private (
 object ProcessProgramDefinition {
   private val _safe_identity_pattern = "[a-z][a-z0-9-]{0,63}".r
 
+  /** Derive only a narrower immutable TestOnly definition after actual grant lookup. */
+  private[processexecution] def narrowSbtScenarioC(
+    definition: ProcessProgramDefinition,
+    scenario: Option[SbtScenarioSelection]
+  ): Consequence[ProcessProgramDefinition] = scenario match {
+    case None => Consequence.success(definition)
+    case _ =>
+      for {
+        metadata <- definition._sbt_metadata.map(Consequence.success).getOrElse(
+          Consequence.argumentPolicyViolation("scenario", "sbt.execution.scenario", "tagged TestOnly definition", "invalid"))
+        _ <- SbtScenarioSelection.validateOptionC(scenario, metadata.operation)
+        selection <- scenario.map(Consequence.success).getOrElse(
+          Consequence.argumentPolicyViolation("scenario", "sbt.execution.scenario", "nonnull optional selection", "invalid"))
+        _ <- if (metadata.testClasses.contains(selection.suiteClassName)) Consequence.unit else
+          Consequence.argumentPolicyViolation("scenario", "sbt.execution.scenario-allowlist",
+            "exact class in current host TestOnly allowlist", "unapproved")
+        arguments = definition.fixedArguments.dropRight(1) :+
+          s"testOnly ${selection.suiteClassName} -- -t \"${selection.testName}\""
+      } yield new ProcessProgramDefinition(
+        definition.capability, definition.safeProgramIdentity, definition._executable_location,
+        arguments, ProcessArgumentPolicy(arguments), definition.maximumLimits, definition.allowedArtifacts,
+        definition.allowsWorkingDirectory, definition.allowedInputFiles, definition.allowedInputFilePaths,
+        definition.allowedResourceTrees, definition._environment,
+        Some(metadata.copy(testClasses = Vector(selection.suiteClassName), scenario = Some(selection))),
+        definition._git_metadata)
+  }
+
   private[processexecution] def fromGitRuntimeC(
     capability: ProcessCapabilityId,
     safeProgramIdentity: String,
@@ -700,7 +727,8 @@ final class ProcessExecutionAdmission private (
   private[cncf] def admitSbtForScopeC(
     scope: ScopeContext,
     binding: WorkspaceBinding,
-    operation: SbtOperation
+    operation: SbtOperation,
+    scenario: Option[SbtScenarioSelection] = None
   ): Consequence[ResolvedProcessExecution] =
     for {
       owner <- WorkspaceExecutionAdmission.componentIdC(scope)
@@ -711,7 +739,8 @@ final class ProcessExecutionAdmission private (
       )
       definition <- policy.sbtDefinitionC(binding, operation)
       grant <- admission._grant_c(definition.capability)
-      execution <- policy.resolveSbtC(definition, grant)
+      narrowed <- ProcessProgramDefinition.narrowSbtScenarioC(definition, scenario)
+      execution <- policy.resolveSbtC(narrowed, grant)
     } yield execution
 
   private[cncf] def admitForScopeC(

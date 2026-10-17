@@ -9,10 +9,10 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
-final case class SbtTarget(workspaceId: WorkspaceId)
+final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection] = None)
 
 enum SbtOperation {
   case Compile, Test, TestOnly
@@ -49,7 +49,8 @@ final case class SbtExecutionResult(
 private[cncf] final case class SbtProgramMetadata(
   binding: WorkspaceBinding,
   operation: SbtOperation,
-  testClasses: Vector[String] = Vector.empty
+  testClasses: Vector[String] = Vector.empty,
+  scenario: Option[SbtScenarioSelection] = None
 ) {
   def effect: ExternalEffect = ExternalEffect(ExternalEffectKind.Build, binding.workspaceId)
 }
@@ -118,8 +119,10 @@ private[cncf] object SbtExecutionAdmission {
     execution: ResolvedProcessExecution,
     result: ProcessExecutionResult
   ): SbtExecutionResult = {
+    val metadata = execution.definition._sbt_metadata
     val selection = if (operation == SbtOperation.TestOnly && result.termination == ProcessExecutionTermination.Exited(0))
-      Some(SbtTestSelectionDecoder.decode(execution.definition._sbt_metadata.map(_.testClasses).getOrElse(Vector.empty), result))
+      Some(SbtTestSelectionDecoder.decode(metadata.map(_.testClasses).getOrElse(Vector.empty), result,
+        metadata.flatMap(_.scenario)))
     else None
     SbtExecutionResult(target, operation, result, selection)
   }
@@ -140,6 +143,7 @@ private[cncf] object SbtExecutionAdmission {
     for {
       _ <- if (target != null && operation != null) Consequence.unit else
         Consequence.argumentPolicyViolation("sbt", "sbt.execution.intent", "typed target and operation", "invalid")
+      _ <- SbtScenarioSelection.validateOptionC(target.scenario, operation)
       workspace <- context.workspaceExecutionAdmissionOption.map(Consequence.success).getOrElse(
         Consequence.serviceUnavailable("Workspace Execution admission is not configured")
       )
@@ -147,7 +151,7 @@ private[cncf] object SbtExecutionAdmission {
       admission <- context.cncfCore.scope.processExecutionAdmissionOption.map(Consequence.success).getOrElse(
         Consequence.serviceUnavailable("Process Execution admission is not configured")
       )
-      execution <- admission.admitSbtForScopeC(context.cncfCore.scope, binding, operation)
+      execution <- admission.admitSbtForScopeC(context.cncfCore.scope, binding, operation, target.scenario)
     } yield execution
 
   /** Tagged executions have no WorkArea projections or caller-provided process input. */

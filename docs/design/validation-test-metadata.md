@@ -109,13 +109,87 @@ Supplemental exact resolution preserves metadata and existing execution facts.
 Consumers retain the inventory's completeness when interpreting an empty result;
 no observed-feature denominator or missing-coverage claim is generated here.
 
+## Exact operation intent and current authority
+
+`ValidationOperationBindingV1` owns a final privately constructed
+`BoundOperation`, with public original operation and typed SbtExec intent.
+It reuses the existing public exact resolver for both query-selected and
+supplemental references, admits a logical WorkspaceId and exact literal selector,
+and constructs intent only. It preserves metadata, provenance and existing
+execution requirements, including unannotated or out-of-query operations.
+It creates no executor, provider/reasoning policy or runtime evidence model.
+
+`SbtScenarioSelection` extends the existing target with a trailing defaulted
+option. Ordinary construction remains source compatible; extractor arity
+changes and precompiled SNAPSHOT compatibility is not claimed. Accepted class
+grammar is the existing host policy. Literal test names are exact trimmed,
+control-free and bounded to 512 characters; quotes, backslashes and semicolons
+are unsupported rather than escaped. Compile/Test reject scenario intent.
+
+The existing interpreter remains unchanged. At actual admission, the current
+context supplies identical binding, host definition and actual owner grant.
+Only then does `ProcessProgramDefinition` derive an immutable narrower tagged
+definition for a class already in the host allowlist. It retains binding,
+capability, safe identity, executable, environment, limits and projections.
+Only arguments/argument policy and private selection metadata narrow. The
+existing empty request site validates grant/finite limits, and generic tagged
+execution/caller overrides remain forbidden. The host codec remains class-only.
+
+The existing decoder gains a defaulted optional scenario without changing
+`Verified`. It requires agreement with one exact selected class and one test
+in a complete ordinary successful summary; selection/count mismatch becomes
+`ScenarioMismatch`. Other conservative report refusals remain. The result
+retains the exact scenario target. The suite-only report does not independently
+name the operation, and parsing cannot authenticate forged logs. Declared
+requirements are neither execution grants nor runtime evidence.
+
+## One normalized CML projection
+
+`ValidationCmlMappingV1.Properties` carries the declaration fields with exact
+purpose/duration-class strings and typed duration amount/unit. `declarationC`
+maps those fields and uses the existing declaration admission. Duration
+conversion uses BigInt unit multipliers, rejects nonpositive/overflowed nanos
+before constructing FiniteDuration, and accepts Long maximum nanos. Explicit
+nulls and unknown labels fail through structured policies. `resolveC` admits
+both optional property sets and invokes the existing S1 resolver once. Cozy
+retains syntax/parser/generator ownership; there is no duplicate merge logic.
+
+## Portable shared example and consumer boundaries
+
+The one packaged [synthetic resource](../../src/main/resources/META-INF/cncf/validation/v1/consumer-fixture.json)
+and [guide](../fixtures/validation-test-metadata/README.md) are common input for
+runtime/static consumer understanding. A private typed specification reader
+projects declaration sources through the public mapper and queries public
+inventory data. It never executes or discovers the synthetic class names and
+adds no normative JSON inventory codec or authoritative suite registry.
+
+Complete baseline/candidate scope and population revisions permit a sole
+ADMISSION removal to appear as 1 -> 0 while preserving the same operation and
+other metadata. PARTIAL/UNKNOWN variants retain gaps and cannot establish
+absence. The explicit target feature population includes an uncovered feature;
+revisioned feature mappings stay consumer facts. Observed tags never become a
+population denominator. Runtime evidence is empty, and CNCF computes no KPI.
+
+The actual static owner is the cbd-support
+[October 6 journal](https://github.com/asami/textus-cbd-support/blob/main/docs/journal/2026/10/2026-10-06-validation-test-metadata-static-analysis.md).
+Its closed Phase 14 is native Job integration, not metadata ownership. The
+[handoff](../notes/validation-test-metadata-consumer-handoff.md) preserves this
+workstream and the separately admitted actual sm-workflow S4 fixture obligation.
+Static application completion is outside producer acceptance.
+
 ## Remaining connected delivery
 
 P103-S1 is accepted in `ac443ed353cc682251e4d17bf4e64a1285955798`.
-P103-S2 authors the discovery/query boundary and real framework specifications;
-its parent validation and independent review are pending. The in-process
-ScalaTest selector case is framework evidence only. S3 still binds selectors to
-the existing typed CNCF execution path and supplies CML equivalence, shared
-complete/partial static fixtures and actual runtime/static consumer handoff.
-Full Phase validation/review remain open. The
+P103-S2 is accepted in `2ec6da1265d14430cf522443869a0b9b2647ea00`. The in-process
+ScalaTest selector case is framework evidence only. S3 authors binding to the
+existing typed CNCF path, CML equivalence and shared complete/incomplete static
+fixture/handoff. Focused validation passed 79 tests across eight suites;
+separate real top-level literal parameter selection passed one test in one
+suite (total 80 tests across nine suites, zero failures or aborts, SBT/wrapper
+exit 0, shared lock released). Independent protected-focused S3 Step review
+returned PASS with zero Current Boundary Blockers, Hygiene or Development
+Candidate findings and no evidence gaps. S3 is accepted pending its exact local
+Step commit. Actual sm-workflow source fixture and dependency refresh require
+separate S4 admission after producer acceptance. Full Phase validation/review
+remain open. The
 [phase checklist](../phase/phase-103-checklist.md) owns delivery status.

@@ -32,7 +32,9 @@ as implementation starts; this Phase is the work plan, not a competing ABI spec.
 - textus-cbd-support owns static Test Architecture analysis, lint, KPI and human
   review. Its implementation runs on Mac mini as separate consumer work. Publish
   the same ABI/fixtures for it; completion of its UI/KPI work is not a producer
-  or sm-workflow initial-runtime gate.
+  or sm-workflow initial-runtime gate. The owner is its
+  [October 6 metadata static-analysis journal](https://github.com/asami/textus-cbd-support/blob/main/docs/journal/2026/10/2026-10-06-validation-test-metadata-static-analysis.md);
+  its closed Phase 14 concerns native Job integration and is not reopened.
 - Cozy owns CML property syntax and generation. CNCF supplies normalized mapping
   semantics and fixtures; this phase does not implement a Cozy parser.
 - [Phase 99](https://github.com/asami/goldenport-cncf/blob/main/docs/phase/phase-99.md)
@@ -69,13 +71,30 @@ one descendant-symlink completeness defect. The bounded correction reports
 skipped links without following them and adds directory-link and class-link
 regressions. Fresh independent focused review accepted closure with no remaining
 blocker, Hygiene or Development Candidate findings. S2 is
-ACCEPTED_PENDING_LOCAL_COMMIT; its local Step commit remains pending.
+accepted in local Step commit `2ec6da1265d14430cf522443869a0b9b2647ea00`.
 
-Step P103-S3 retains the existing typed CNCF execution binding, Cozy-owned CML
-mapping equivalence, shared static-consumer inventory fixtures and actual
-sm-workflow runtime/cbd-support handoff. In-process ScalaTest selection does not
-deliver that CNCF invocation integration. VM-01..04 and all full Phase checks
-remain obligations; the internal S1/S2/S3 handoffs do not split the Phase.
+Step P103-S3 authors exact typed scenario selection, the public operation binder,
+current-context grant/host-allowlist narrowing through the existing execution
+path, and conservative exactly-one-test result interpretation. It also authors
+normalized CML mapping equivalence and one packaged synthetic portable
+static-consumer fixture with complete comparable baseline/candidate and
+PARTIAL/UNKNOWN variants. The [shared guide](../fixtures/validation-test-metadata/README.md)
+and [consumer handoff](../notes/validation-test-metadata-consumer-handoff.md)
+map consumer responsibilities. Focused validation passed 79 tests across eight
+suites; separate real top-level literal parameter selection passed one test in
+one suite (total 80 tests across nine suites, zero failures or aborts).
+SBT/wrapper exit codes were 0 and the shared lock was released. Independent
+protected-focused S3 Step review returned PASS with zero Current Boundary
+Blockers, Hygiene or Development Candidate findings and no evidence gaps.
+S3 is accepted pending its exact local Step commit. No runtime consumer
+acceptance is inferred.
+
+Actual sm-workflow source fixture/dependency refresh remains required separate
+Step P103-S4 under explicit source admission after producer acceptance. Its
+concrete discovery -> query -> exact binding -> typed invocation consumer is
+not replaced by the synthetic fixture or deterministic driver specifications.
+VM-01..04 and all full Phase checks remain obligations; internal Step handoffs
+do not split the Phase.
 
 ## Development items
 
@@ -94,8 +113,9 @@ evidence and static analysis. Executable Specifications verify the declared
 merge rules and invalid/unsupported input behavior. sm-workflow's concrete
 runtime consumer demonstrates discovery -> purpose/feature query -> typed
 operation binding; CNCF records its handoff without claiming all of sm-workflow
-Phase 5 complete. A shared static-consumer fixture is delivered for [cbd-support Phase 14](https://github.com/asami/textus-cbd-support/blob/main/docs/phase/phase-14.md) on Mac mini
-without waiting for the cbd-support application implementation.
+Phase 5 complete. A shared static-consumer fixture is supplied to the
+[cbd-support metadata static-analysis workstream](https://github.com/asami/textus-cbd-support/blob/main/docs/journal/2026/10/2026-10-06-validation-test-metadata-static-analysis.md)
+on Mac mini without waiting for the cbd-support application implementation.
 
 Discovery scope/completeness, unannotated operations, feature references and
 operation revision provenance are part of the shared consumer contract. Declared
