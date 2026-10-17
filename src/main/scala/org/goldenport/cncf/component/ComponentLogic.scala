@@ -34,7 +34,8 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Apr. 24, 2026
  *  version Jun.  9, 2026
  *  version Aug. 13, 2026
- * @version Sep. 13, 2026
+ *  version Sep. 13, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -81,7 +82,7 @@ case class ComponentLogic(
     )
     // TODO: action scope should be derived from service scope once available.
     val actionscope = component.scopeContext.createChildScope(ScopeKind.Action, action.name)
-    val ctx = boundctx.withScope(actionscope)
+    val ctx = ExecutionContext.withActionScope(boundctx, actionscope)
     val collaborator = _get_collaborator
     val core = ActionCall.Core(
       action,

@@ -152,8 +152,17 @@ The following authorization cases MUST remain observably distinct:
 An ActionCall MUST execute with its explicitly bound immutable
 `ExecutionContext`, including security, runtime facilities, observability,
 route-resolved operation identity when present, and UnitOfWork binding.
-Component execution MUST preserve the component action child scope. No-route
-embedding MUST preserve the supplied context without fabricating a Subsystem
+Component execution MUST preserve the component action child scope. The bound
+ActionCall context and the context used by its UnitOfWork interpreter MUST
+identify the same target component. Interpreted effect admission MUST use that
+target component and its inherited runtime grants, including when the supplied
+context already has a self-bound caller UnitOfWork. Binding the child Action
+MUST leave the parent context and its UnitOfWork binding untouched. The standard
+ExecutionContext Instance binds a fresh runtime and UnitOfWork to the selected
+Action context while retaining its other execution fields and runtime facilities.
+Normal synchronous Action rebinding MUST preserve shared diagnostic and
+operation-evaluation accumulation without changing the parent UnitOfWork binding.
+No-route embedding MUST preserve the supplied context without fabricating a Subsystem
 route or operation-evaluation identity; its ActionCall still binds the
 ordinary execution selector described in R1. Event continuation MUST preserve
 or derive context, Job context, transaction relation, and correlation/saga
@@ -180,6 +189,15 @@ selector/evaluation or ActionCall authorization rejection MUST have no
 started-action observation pair. Job-specific calltree and Job
 debug/persistence records MUST be produced only for explicit Job routes,
 including the explicit query trace-Job exception (R4, R6).
+
+Normal synchronous invocation rebinding and child Action execution MUST
+accumulate diagnostics and operation-evaluation metadata in the caller's
+runtime lineage even though the child has its own self-bound UnitOfWork and
+retains its selected invocation profile. An explicit public fresh-UnitOfWork
+context MUST inherit the current metadata values independently: later updates
+in either runtime MUST NOT change the other runtime's metadata. Asynchronous
+runtime ownership MUST remain independent of the submitting runtime: dequeue
+MUST establish independent metadata for every persistence and calltree setting.
 
 ## Failure semantics and asynchronous timing (R12)
 
@@ -244,10 +262,15 @@ matrix after removing case-insensitive stale `X-Textus-Job-Id` values:
 | `JobResult` | present | emit exactly one authoritative Job header |
 | `JobResult` | absent | remove every Job header |
 
-An async Job worker MUST derive a fresh response cell, so worker or nested
-response activity cannot erase its submitter's `AcceptedJob` state. Ordinary
+An async Job worker MUST derive a fresh response cell and independently owned
+diagnostic and operation-evaluation metadata at dequeue, regardless of Job
+persistence or calltree settings, so worker or nested response activity cannot
+erase its submitter's `AcceptedJob` state or change its metadata. Ordinary
 synchronous child execution shares the cell and restores its parent response
-state on return; diagnostics and operation-evaluation data remain separate.
+state on return. That response restoration MUST preserve accumulated synchronous
+child diagnostics and operation-evaluation data, which have a separate carrier
+from the response cell. Explicit fresh and asynchronous runtime bindings retain
+independent diagnostic and operation-evaluation metadata.
 
 ## Stable executable examples
 
