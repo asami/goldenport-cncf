@@ -177,10 +177,12 @@ The Rule architecture is also the natural decision boundary for domain
 evidence that originates outside the Rule Engine itself. The long-term model
 should distinguish the semantic kind of evidence from its provenance.
 
-Evidence is classified into Fact, Estimate, and Judgment. Fact is further
-classified as DefinedFact, StateFact, ObservedFact, DeclaredFact, and
-DerivedFact. Estimate includes StatisticalEstimate, Prediction, and Forecast.
-Judgment includes AIJudgment and HumanJudgment.
+Evidence is classified into Fact, Measure, Estimate, and Judgment. Fact is
+further classified as DefinedFact, StateFact, ObservedFact, DeclaredFact, and
+DerivedFact. Measure includes Similarity, Distance, and Score; embedding-based
+similarity is represented as an EmbeddingSimilarity Measure. Estimate includes
+StatisticalEstimate, Prediction, and Forecast. Judgment includes AIJudgment and
+HumanJudgment.
 
 These categories express different certainty semantics.
 
@@ -194,6 +196,13 @@ These categories express different certainty semantics.
 - A DerivedFact is deterministically derived from other Facts by an explicit
   calculation, symbolic rule, or knowledge inference. Traditional expert-system
   reasoning therefore feeds its results back into the Fact space.
+- A Measure represents a value obtained by an explicit measurement or
+  deterministic comparison/calculation over its inputs. Similarity and distance
+  are Measures, not probabilities. Embeddings and vectors are representations,
+  not Evidence by themselves; an embedding/vector comparison may produce an
+  EmbeddingSimilarity Measure with embedding-model/version/vector-space
+  provenance. Measures may be consumed directly by Domain Rules or used as
+  input Evidence for Estimates and Judgments.
 - An Estimate represents quantified uncertainty produced by an analytical,
   statistical, or predictive model. Its semantics should include the model,
   applicable population/context, uncertainty/calibration information when
@@ -222,7 +231,7 @@ point. Generative inference is not modeled as a stronger replacement for
 symbolic inference. It supplies semantic interpretation or judgment where
 deterministic inference is insufficient.
 
-A Rule may consume Facts, Estimates, and Judgments according to its declared
+A Rule may consume Facts, Measures, Estimates, and Judgments according to its declared
 evidence requirements. It should be possible for high-impact rules to require
 specific evidence kinds or Admission before accepting an AI Judgment. An AI
 model's self-reported confidence must not be treated as equivalent to a
@@ -233,12 +242,44 @@ outcomes, human correction, and downstream outcomes.
 The resulting architecture is intentionally hybrid:
 
 - symbolic/expert-system inference provides deterministic derivation;
+- embedding/vector processing provides Similarity Measures and retrieved Evidence;
 - BI/statistical/ML analysis provides quantified estimates and predictions;
 - Knowledge provides source material and may participate in deterministic
   inference;
 - generative AI provides semantic inference and judgment;
 - Human judgment remains a first-class source where required;
 - Domain Rules combine admissible Evidence into a Domain Decision.
+
+
+### Evidence Provider Boundaries
+
+Domain Rule evaluation operates on CNCF-owned Evidence semantics and does not
+read physical stores or provider-specific engines directly.
+
+StateFact acquisition should normally follow the semantic domain path:
+Fact Provider SPI -> Entity Space/EntityRealm -> DataStore -> physical store
+such as PostgreSQL. The Entity/Domain model, not the SQL schema, determines the
+proposition exposed as a StateFact. This preserves DataStore substitution and
+prevents Rule definitions from depending on tables, rows, SQL, or repository
+handles.
+
+Collection-oriented analytics may use a separate Analytics Provider that reads
+PostgreSQL views, aggregates, materialized views, or another analytical store
+directly when set processing through Entity Space would be inefficient. Such a
+provider returns Measure or Estimate Evidence, never raw storage semantics.
+
+Knowledge and semantic retrieval should be consumed through an SIE-facing
+provider/SPI boundary. SIE remains responsible for its RDF DB and Vector DB
+implementation. RDF/knowledge inference can be normalized as DerivedFact;
+semantic/vector similarity as EmbeddingSimilarity Measure; and retrieval as
+references to retrieved Evidence plus associated Measures. Rule Engine core
+does not depend on Fuseki, Chroma, SPARQL, embedding indexes, or another
+provider implementation.
+
+Likewise, a traditional expert-system provider may supply deterministic
+DerivedFacts, while a generative-AI judgment provider such as Codex supplies
+AIJudgment. The exact future SPI decomposition must be reconciled with the
+existing RuleEngine and InferenceEngine contracts before ABI expansion.
 
 The current Phase 32 Fact, WorkingMemory, RuleEngine, and InferenceEngine
 contracts remain the implemented deterministic foundation. This section

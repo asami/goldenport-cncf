@@ -29,6 +29,11 @@ Evidence
   |    |- ObservedFact
   |    |- DeclaredFact
   |    `- DerivedFact
+  |- Measure
+  |    |- Similarity
+  |    |    `- EmbeddingSimilarity
+  |    |- Distance
+  |    `- Score
   |- Estimate
   |    |- StatisticalEstimate
   |    |- Prediction
@@ -39,6 +44,13 @@ Evidence
 ```
 
 Evidence type and provenance are separate axes.
+
+Measure is a first-class Evidence kind. Embedding itself is a representation
+mechanism rather than Evidence: an embedding model produces vectors, and a
+comparison over those vectors produces an EmbeddingSimilarity Measure.
+Similarity scores are not probabilities and therefore are not Estimates.
+Measures may be consumed directly by Domain Rules and may also serve as input
+Evidence for Estimates or Judgments.
 
 ## Symbolic and Generative Reasoning
 
@@ -54,6 +66,7 @@ as AIJudgment by default rather than being silently promoted to Fact.
 The architecture deliberately combines both:
 
 - symbolic reasoning for deterministic, explainable derivation;
+- embedding/vector similarity for deterministic relational Measures and retrieval;
 - BI/statistical/ML processing for quantified uncertainty and predictions;
 - Knowledge as source material and deterministic inference input;
 - generative AI for semantic interpretation and judgment;
@@ -83,7 +96,7 @@ Rule to distinguish a calibrated probability from an AI semantic judgment.
 The intended long-term flow is not a single pipeline but a cooperative
 decision space.
 
-Symbolic inference can derive Facts, BI/ML can produce Estimates, generative AI
+Symbolic inference can derive Facts, embedding/vector processing can produce Measures and retrieve related Evidence, BI/ML can produce Estimates, generative AI
 can produce Judgments, and Human judgment can provide or admit semantic
 decisions. Domain Rules declare which Evidence kinds are acceptable. Candidate
 Admission may gate evidence or judgments before high-impact decisions.
@@ -98,6 +111,42 @@ This direction connects existing CNCF work:
 - Experiment / multi-arm evaluation;
 - future BI/Analytics boundary;
 - Component Knowledge and Domain Rule publication.
+
+
+## Provider and Persistence Boundary Decision
+
+The Rule Engine should not access PostgreSQL directly for ordinary Domain
+Facts. StateFact acquisition uses a semantic boundary:
+
+```text
+Rule Engine
+  -> Fact Provider SPI
+  -> Entity Space / EntityRealm
+  -> DataStore
+  -> PostgreSQL (or another store)
+```
+
+This keeps the Rule architecture independent from physical persistence and
+makes the Domain Model responsible for interpreting stored Entity/Aggregate
+state as propositions.
+
+Analytics is a deliberate exception: an Analytics Provider may query
+PostgreSQL set-oriented structures directly and return Measure/Estimate
+Evidence, because forcing large aggregate workloads through Entity Space would
+be unnecessary.
+
+SIE is used as a component/provider for semantic Evidence rather than being
+folded into Rule Engine core. Its RDF/Knowledge capability supplies
+DerivedFacts, while vector/semantic retrieval supplies EmbeddingSimilarity
+Measures and retrieved Evidence. The Rule architecture therefore depends on an
+SPI/CNCF Evidence contract, not on Fuseki, Chroma, SPARQL, or a concrete vector
+database.
+
+For a demo, the intended composition is PostgreSQL behind Entity/DataStore,
+SIE for RDF and vector semantics, a traditional symbolic engine such as Drools
+behind an inference provider, and Codex behind the judgment boundary. The
+precise SPI taxonomy remains to be reconciled with the existing Phase 32
+RuleEngine/InferenceEngine ABI.
 
 ## Documentation Action
 
