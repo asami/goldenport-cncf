@@ -73,7 +73,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererAuthorizationSpec extends AnyWordSpec with Matchers with GivenWhenThen with StaticFormAppRendererSpecFixtures {
@@ -806,8 +806,8 @@ final class StaticFormAppRendererAuthorizationSpec extends AnyWordSpec with Matc
       assembly.status.code shouldBe 200
     }
 
-    "allow audit viewer session to read production admin jobs but not system admin home" in {
-      Given("the prerequisites for allow audit viewer session to read production admin jobs but not system admin home")
+    "deny audit viewer access to production operator jobs, system admin home and performance" in {
+      Given("production admin is enabled for an audit_viewer session with system privilege but without job_admin or content_admin capabilities")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
           RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production"),
@@ -827,6 +827,7 @@ final class StaticFormAppRendererAuthorizationSpec extends AnyWordSpec with Matc
       )
       val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
+      When("the audit viewer requests operator jobs, system admin home and performance")
       val jobs = server
         .routes(null)
         .orNotFound
@@ -837,15 +838,14 @@ final class StaticFormAppRendererAuthorizationSpec extends AnyWordSpec with Matc
         .orNotFound
         .run(_with_session(_get_request("/web/system/admin"), "audit-viewer-session"))
         .unsafeRunSync()
-      When("allow audit viewer session to read production admin jobs but not system admin home is exercised")
       val performance = server
         .routes(null)
         .orNotFound
         .run(_with_session(_get_request("/web/system/performance"), "audit-viewer-session"))
         .unsafeRunSync()
 
-      Then("the observable contract for allow audit viewer session to read production admin jobs but not system admin home holds")
-      jobs.status.code shouldBe 200
+      Then("operator jobs conceal denied access while system admin home and performance remain forbidden")
+      jobs.status.code shouldBe 404
       home.status.code shouldBe 403
       performance.status.code shouldBe 403
     }

@@ -2,7 +2,18 @@
 
 Scope: PHASE-96 / Stage P96-11 / ordinary delivery Step P96-11A.
 
-## Current P11A acceptance — 2026-10-17
+## Current final handoff — 2026-10-17
+
+P11A is committed as `a9dc024dac9aeaaf69ed541c4c0a0bfa6ef029c5`.
+P11B supplies the successful final repository-full validation, sole full Phase
+review and focused closure under `phase96-final-closure-20261017-001@1`. See the
+[final acceptance record](2026-10-17-phase-96-final-acceptance.md) and current
+[Phase/checklist](../../../phase/phase-96.md). All 54 original outcomes are
+reconciled. Consumer artifacts and their supplied-value/native-proof distinction
+remain unchanged. No Editing Studio/application acceptance or successor work
+is inferred. The earlier acceptance/authoring snapshots below are historical.
+
+## Historical P11A acceptance — 2026-10-17
 
 P11A's first three original outcomes are accepted: the
 [consumer index](../../../spec/display-consumer-handoff.md) and twelve compact

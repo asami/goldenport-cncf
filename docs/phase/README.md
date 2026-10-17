@@ -15,6 +15,13 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
+- [Phase 96](phase-96.md) and its [checklist](phase-96-checklist.md) are closed
+  for the target-neutral Display/Projection/DisplayService contract, under
+  `phase96-final-closure-20261017-001@1`. The [acceptance journal](../journal/2026/10/2026-10-17-phase-96-final-acceptance.md)
+  records actual full/native-PostgreSQL validation and the sole Phase review
+  plus focused closure. Editing Studio Phase 2 and app Phase 5 remain separate
+  consumer boundaries; no successor execution is selected here.
+
 - [Phase 95](phase-95.md) plans a UI-facing View Model and Aggregate command
   contract over existing CNCF `ViewSpace`/`AggregateSpace`, with REST first and
   gRPC deferred. It does not block the Editing Studio Flutter application's
@@ -32,7 +39,7 @@ Current baseline:
   [Phase 89](phase-89.md) admits it into CNCF. Both require a stable first
   `sm-workflow` vertical slice plus a concrete consumer requirement; neither
   blocks Phase 64, Phase 77, or `sm-workflow` Phase 1.
-- Latest closed phase: [Phase 90](phase-90.md) - generic Candidate-Admission
+- Earlier closed phase: [Phase 90](phase-90.md) - generic Candidate-Admission
   runtime support with loose evidence persistence and an explicit sm-workflow
   consumer handoff. Its final source/spec tree passed the full suite on
   2026-09-25; real sm-workflow CML generation remains consumer-owned.

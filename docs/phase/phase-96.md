@@ -1,6 +1,7 @@
 # Phase 96: Display Model Projection and Protocol
 
-status=in-progress
+status=closed
+closed_at=2026-10-17
 planned_at=2026-09-29
 checklist=phase-96-checklist.md
 development_plan=../journal/2026/10/2026-10-03-phase-96-development-plan-proposal.md
@@ -14,7 +15,49 @@ server_reference_phase=KnowledgeHubProject/nict-editing-studio Phase 2
 abstract_ui_dependency=asami/cozy Phase 74 semantic authority; Cozy Phase 76 producer ABI
 strategy=textus-knowledge-workbench/docs/strategy/knowledge-application-integration.md
 
-## Current P96-11A Step acceptance — 2026-10-17
+## Current final Phase acceptance — 2026-10-17
+
+Phase 96 and all eleven Stage ledgers are CLOSED; all original 54 checklist
+outcomes and thirteen Phase acceptance criteria are reconciled without changing
+their text. P01–P10 and P11A have eleven actual ordinary delivery commits;
+P11A is `a9dc024dac9aeaaf69ed541c4c0a0bfa6ef029c5`. P11B is final Phase
+validation/release bookkeeping, not another implementation Step or review.
+
+PLAN epoch 1 retains exactly one comprehensive Phase review,
+`phase96-full-review-001@1` (Sol high, PASS). Two focused Phase closure reviews
+retain the first narrowing finding and final
+`phase96-final-repair-focused-review-002@1` PASS with zero blockers. Phase
+repair 2 is accepted, nonconverging 0; current typed review ledger is revision 45.
+
+Actual final CNCF repository-full validation: **638 suites / 5,670 succeeded / 0 failed / 0 aborted; 5 canceled, 1 ignored, 46 pending**.
+SBT and wrapper exited 0, with serialized lock released. All seventeen mandatory
+native PostgreSQL suites passed 424 positive cases in this run, using the
+pinned 17.11 server/durability contract; canceled/ignored/pending cases are
+not substitutes for required PostgreSQL proof. The original full run's 23
+failures, failed focused run, and historical evidence limitations are retained.
+Goldenport full validation (47 suites/383 passed/6 ignored) and separately
+accepted Cozy Phase 76 full validation (179 suites/2,484 passed/9 canceled)
+are reused on their actual relevant program contexts. The unchanged core
+producer received exactly one approved local SNAPSHOT refresh, no source edit.
+
+The [final acceptance journal](../journal/2026/10/2026-10-17-phase-96-final-acceptance.md)
+maps the original criteria and delivery history. All 25 accepted Hygiene records
+and one Development Candidate remain once in their original canonical journals;
+both unpersisted ledgers are empty. These are nonblocking follow-ups, not fixes
+silently included in this release.
+
+This is local release content under `Phase-Closure-Binding: phase96-final-closure-20261017-001@1`.
+It establishes committed closure only when that exact release commit and native
+committed-document receipt succeed; authored status alone does not complete the
+Goal. No main integration, push, publication or successor execution is included.
+Editing Studio Phase 2 owns application semantics; app Phase 4 owns prototype
+feedback and app Phase 5 owns real-server aggregate/E2E acceptance. That consumer
+acceptance remains separate; CNCF has not deferred its own full validation.
+
+The dated sections below preserve earlier snapshots and their then-pending
+statements. This current record supersedes their status, not their history.
+
+## Historical P96-11A Step acceptance — 2026-10-17
 
 P96-11 remains IN_PROGRESS, current step P96-11A accepted; its exact local
 delivery Step commit is pending. The first three original P96-11 outcomes are

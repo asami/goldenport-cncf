@@ -4,6 +4,7 @@ import scala.collection.mutable.ListBuffer
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.{ZipEntry, ZipOutputStream}
 import cats.data.State
 import cats.effect.IO
@@ -62,6 +63,7 @@ import org.goldenport.cncf.job.{ActionId, ActionTask, JobPersistencePolicy, JobR
 import org.goldenport.cncf.information.*
 import org.goldenport.cncf.knowledge.*
 import org.goldenport.cncf.path.AliasResolver
+import org.goldenport.cncf.protocol.OperationRequestValidationObserver
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.subsystem.{GenericSubsystemAuthenticationBinding, GenericSubsystemAuthenticationProviderBinding, GenericSubsystemDescriptor, GenericSubsystemSecurityBinding}
 import org.goldenport.cncf.testutil.TestComponentFactory
@@ -73,7 +75,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererTypedUpdateSpec extends AnyWordSpec with Matchers with GivenWhenThen with StaticFormAppRendererSpecFixtures {
@@ -280,7 +282,38 @@ final class StaticFormAppRendererTypedUpdateSpec extends AnyWordSpec with Matche
       }
 
       "return structured HTTP 400 for incompatible typed update commands" in {
-      Given("an executable entity update operation using the shared request boundary")
+      Given("a nullable scalar entity update operation with local observations of shared request validation and actual ActionCall execution")
+      val actioncalls = new AtomicInteger(0)
+      val validationfailures = ListBuffer.empty[Conclusion]
+      val observedoperation = new spec.OperationDefinition with OperationRequestValidationObserver {
+        override val specification: spec.OperationDefinition.Specification =
+          SuccessfulAggregateOperation("update-notice", "nickname", "updated").specification
+
+        override def observeOperationRequestValidationFailure(
+          request: GRequest,
+          conclusion: Conclusion,
+          context: ExecutionContext
+        ): Unit = {
+          validationfailures += conclusion
+        }
+
+        override def createOperationRequest(req: GRequest): Consequence[OperationRequest] =
+          Consequence.success(new QueryAction with OperationRequest.Core.Holder {
+            override val core: OperationRequest.Core = OperationRequest.Core(req)
+
+            override def createCall(core: ActionCall.Core): ActionCall = {
+              val callcore = core
+              new ProcedureActionCall {
+                override val core: ActionCall.Core = callcore
+
+                override def execute(): Consequence[OperationResponse] = {
+                  actioncalls.incrementAndGet()
+                  SuccessfulAggregateActionCall(core, "nickname", "updated").execute()
+                }
+              }
+            }
+          })
+      }
       val component = new org.goldenport.cncf.component.Component() {
         override def operationDefinitions: Vector[CmlOperationDefinition] =
           Vector(CmlOperationDefinition(
@@ -298,7 +331,7 @@ final class StaticFormAppRendererTypedUpdateSpec extends AnyWordSpec with Matche
         services = spec.ServiceDefinitionGroup(Vector(spec.ServiceDefinition(
           name = "notice",
           operations = spec.OperationDefinitionGroup(NonEmptyVector.of(
-            SuccessfulAggregateOperation("update-notice", "nickname", "updated")
+            observedoperation
           ))
         ))),
         handler = ProtocolHandler(
@@ -309,10 +342,8 @@ final class StaticFormAppRendererTypedUpdateSpec extends AnyWordSpec with Matche
       )
       _initialize_component("notice_board", component, protocol)
       val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server")).add(Vector(component))
-      val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
-      val beforeactioncalls = RuntimeDashboardMetrics.actionCallSnapshot.summary.cumulative.total
-      val beforeauthorization = RuntimeDashboardMetrics.authorizationDecisionSnapshot.summary.cumulative.total
-      val beforevalidation = RuntimeDashboardMetrics.operationRequestValidationSnapshot.summary.cumulative.total
+      val engine = new HttpExecutionEngine(subsystem)
+      val server = HttpRuntimeBindingAdmissionFixture.server(engine)
 
       When("the form submits collection clear for a nullable scalar")
       val rejected = server.routes(null).orNotFound.run(
@@ -322,11 +353,15 @@ final class StaticFormAppRendererTypedUpdateSpec extends AnyWordSpec with Matche
         )
       ).unsafeRunSync()
       val rejectedjson = parse(rejected.as[String].unsafeRunSync()).getOrElse(fail("error JSON is invalid")).hcursor
-      val afterformactioncalls = RuntimeDashboardMetrics.actionCallSnapshot.summary.cumulative.total
-      val afterformauthorization = RuntimeDashboardMetrics.authorizationDecisionSnapshot.summary.cumulative.total
-      val afterformvalidation = RuntimeDashboardMetrics.operationRequestValidationSnapshot.summary.cumulative.total
 
-      And("the canonical REST route submits the same null command grammar")
+      Then("the shared boundary returns a structured client error without executing the action")
+      rejected.status.code shouldBe 400
+      rejectedjson.downField("error").get[Int]("status") shouldBe Right(400)
+      actioncalls.get() shouldBe 0
+      validationfailures should have size 1
+      validationfailures.head.status.webCode.code shouldBe 400
+
+      When("the canonical REST route submits the accepted null command for the same scalar")
       val restaccepted = server.routes(null).orNotFound.run(
         Request[IO](
           method = Method.POST,
@@ -335,7 +370,14 @@ final class StaticFormAppRendererTypedUpdateSpec extends AnyWordSpec with Matche
           .withContentType(org.http4s.headers.`Content-Type`.parse("application/json").toOption.get)
       ).unsafeRunSync()
       val restacceptedbody = restaccepted.as[String].unsafeRunSync()
-      val afteracceptedactioncalls = RuntimeDashboardMetrics.actionCallSnapshot.summary.cumulative.total
+
+      Then("the action executes once with SetNull and adds no validation failure")
+      restaccepted.status.code shouldBe 200
+      restacceptedbody should include ("updated:SetNull")
+      actioncalls.get() shouldBe 1
+      validationfailures should have size 1
+
+      When("the canonical REST route submits incompatible collection clear for the same nullable scalar")
       val restrejected = server.routes(null).orNotFound.run(
         Request[IO](
           method = Method.POST,
@@ -343,21 +385,39 @@ final class StaticFormAppRendererTypedUpdateSpec extends AnyWordSpec with Matche
         ).withEntity("{\"nickname__update_command\":\"clear\"}")
           .withContentType(org.http4s.headers.`Content-Type`.parse("application/json").toOption.get)
       ).unsafeRunSync()
-      val afterrejectedactioncalls = RuntimeDashboardMetrics.actionCallSnapshot.summary.cumulative.total
-      val afterrejectedvalidation = RuntimeDashboardMetrics.operationRequestValidationSnapshot.summary.cumulative.total
 
-      Then("the normal operation boundary returns a structured client error")
-      rejected.status.code shouldBe 400
-      rejectedjson.downField("error").get[Int]("status") shouldBe Right(400)
-      restaccepted.status.code shouldBe 200
-      restacceptedbody should include ("updated:SetNull")
+      Then("REST rejects clear with another structured client error and no additional action execution")
       restrejected.status.code shouldBe 400
-      afterformactioncalls shouldBe beforeactioncalls
-      afterformauthorization should be > beforeauthorization
-      afterformvalidation should be > beforevalidation
-      afteracceptedactioncalls should be > afterformactioncalls
-      afterrejectedactioncalls shouldBe afteracceptedactioncalls
-      afterrejectedvalidation should be > afterformvalidation
+      actioncalls.get() shouldBe 1
+      validationfailures should have size 2
+      validationfailures.foreach { conclusion =>
+        conclusion.status.webCode.code shouldBe 400
+      }
+
+      Given("the same observed operation form is explicitly enabled and denied by the Web descriptor policy")
+      val deniedengine = new HttpExecutionEngine(subsystem, Some(engine.webDescriptor.copy(
+        form = engine.webDescriptor.form.updated(
+          "notice-board.notice.update-notice",
+          engine.webDescriptor.form.getOrElse("notice-board.notice.update-notice", WebDescriptor.Form()).copy(enabled = Some(true))
+        ),
+        authorization = engine.webDescriptor.authorization + (
+          "notice-board.notice.update-notice" -> WebDescriptor.Authorization(deny = true)
+        )
+      )))
+      val deniedserver = HttpRuntimeBindingAdmissionFixture.server(deniedengine)
+
+      When("the denied Form API receives the same incompatible clear command")
+      val denied = deniedserver.routes(null).orNotFound.run(
+        _post_form_request(
+          "/form-api/notice-board/notice/update-notice",
+          "nickname__update_command=clear"
+        )
+      ).unsafeRunSync()
+
+      Then("authorization returns forbidden before normalization or action execution")
+      denied.status.code shouldBe 403
+      actioncalls.get() shouldBe 1
+      validationfailures should have size 2
       }
     }
   }

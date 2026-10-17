@@ -1,13 +1,56 @@
 # Phase 96 Checklist: Display Model Projection and Protocol
 
-status=in-progress
+status=closed
+closed_at=2026-10-17
 phase=[Phase 96](phase-96.md)
 development_branch=codex/phase-96-display-service
 execution_baseline=6cbe877c53c116639feb11fa80546e79c051804c
-current_entry=P96-11
+current_entry=none
 development_plan=[Development plan proposal](../journal/2026/10/2026-10-03-phase-96-development-plan-proposal.md)
 
-## Current P96-11A Step acceptance — 2026-10-17
+## Current final Phase acceptance — 2026-10-17
+
+Phase 96 and all eleven Stage ledgers are CLOSED; all original 54 checklist
+outcomes and thirteen Phase acceptance criteria are reconciled without changing
+their text. P01–P10 and P11A have eleven actual ordinary delivery commits;
+P11A is `a9dc024dac9aeaaf69ed541c4c0a0bfa6ef029c5`. P11B is final Phase
+validation/release bookkeeping, not another implementation Step or review.
+
+PLAN epoch 1 retains exactly one comprehensive Phase review,
+`phase96-full-review-001@1` (Sol high, PASS). Two focused Phase closure reviews
+retain the first narrowing finding and final
+`phase96-final-repair-focused-review-002@1` PASS with zero blockers. Phase
+repair 2 is accepted, nonconverging 0; current typed review ledger is revision 45.
+
+Actual final CNCF repository-full validation: **638 suites / 5,670 succeeded / 0 failed / 0 aborted; 5 canceled, 1 ignored, 46 pending**.
+SBT and wrapper exited 0, with serialized lock released. All seventeen mandatory
+native PostgreSQL suites passed 424 positive cases in this run, using the
+pinned 17.11 server/durability contract; canceled/ignored/pending cases are
+not substitutes for required PostgreSQL proof. The original full run's 23
+failures, failed focused run, and historical evidence limitations are retained.
+Goldenport full validation (47 suites/383 passed/6 ignored) and separately
+accepted Cozy Phase 76 full validation (179 suites/2,484 passed/9 canceled)
+are reused on their actual relevant program contexts. The unchanged core
+producer received exactly one approved local SNAPSHOT refresh, no source edit.
+
+The [final acceptance journal](../journal/2026/10/2026-10-17-phase-96-final-acceptance.md)
+maps the original criteria and delivery history. All 25 accepted Hygiene records
+and one Development Candidate remain once in their original canonical journals;
+both unpersisted ledgers are empty. These are nonblocking follow-ups, not fixes
+silently included in this release.
+
+This is local release content under `Phase-Closure-Binding: phase96-final-closure-20261017-001@1`.
+It establishes committed closure only when that exact release commit and native
+committed-document receipt succeed; authored status alone does not complete the
+Goal. No main integration, push, publication or successor execution is included.
+Editing Studio Phase 2 owns application semantics; app Phase 4 owns prototype
+feedback and app Phase 5 owns real-server aggregate/E2E acceptance. That consumer
+acceptance remains separate; CNCF has not deferred its own full validation.
+
+The dated sections below preserve earlier snapshots and their then-pending
+statements. This current record supersedes their status, not their history.
+
+## Historical P96-11A Step acceptance — 2026-10-17
 
 P96-11 remains IN_PROGRESS, current step P96-11A accepted; exact local delivery
 Step commit pending. The first three original P96-11 outcomes are accepted,
@@ -784,23 +827,25 @@ Stage Status:
 
 Stage Status:
 
-- Current status: IN_PROGRESS
-- Current step: P96-11A
+- Current status: CLOSED
+- Current step: P96-11B closed (final Phase release bookkeeping)
 - Owner: CNCF Phase 96 release and integration owners
 - Update rule: Advance only when the checklist below and all preceding stage ledgers have complete evidence or explicit admitted dispositions; this checklist is the closure basis.
 
 Sub-Step A (P96-11A) references original outcomes 1–3 below and delivers the
 consumer handoff, focused validation and independent ordinary Step acceptance.
-It is independently accepted; its exact local Step commit remains pending.
-Outcomes 1–3 are checked. Final closure sub-Step B (P96-11B) references outcomes 4–5,
-which remain pending;
-ordinary delivery acceptance alone cannot close this Stage or the Phase.
+It is independently accepted and committed as
+`a9dc024dac9aeaaf69ed541c4c0a0bfa6ef029c5`. Outcomes 1–3 are checked.
+Final closure sub-Step B (P96-11B) closes outcomes 4–5 through the sole full
+Phase review, converged focused closure, actual successful final full validation
+and distinct bound release. This complete Stage closes with the committed
+release/closure receipt; P11A delivery alone did not close it.
 
 - [x] Consumer artifacts freeze the admitted schema/version, DisplayService Operation identities, List/Detail and mutation JSON examples, Business Operation descriptor, context compatibility, unsupported subset and non-goals with reproducible fixture provenance.
 - [x] TFC/TFAF handoff states transport/runtime versus visual-realization ownership; Editing Studio Phase 2 owns application semantics, app Phase 4 prototype feedback and app Phase 5 real-server aggregate/E2E acceptance.
 - [x] Focused validation and Step acceptance evidence cover the ABI/admission/provider/generated-fixture/model/projection/value/codec/read/mutation/security/conflict/Business/separation/platform/context specification matrix.
-- [ ] CNCF repository-level full-suite release validation and the single required Phase full review for the admitted PLAN epoch are recorded, with any admitted fixes closed by focused re-review and no extra full review invented for checkpoints.
-- [ ] Every Phase 96 acceptance criterion is reconciled against P96-01 through P96-10; all remaining items have explicit accepted evidence or candidate/relocation records, and the release commit, journal and Phase/strategy closure records agree.
+- [x] CNCF repository-level full-suite release validation and the single required Phase full review for the admitted PLAN epoch are recorded, with any admitted fixes closed by focused re-review and no extra full review invented for checkpoints.
+- [x] Every Phase 96 acceptance criterion is reconciled against P96-01 through P96-10; all remaining items have explicit accepted evidence or candidate/relocation records, and the release commit, journal and Phase/strategy closure records agree.
 
 ## Existing Phase acceptance coverage
 
