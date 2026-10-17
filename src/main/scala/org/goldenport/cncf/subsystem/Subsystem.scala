@@ -30,6 +30,8 @@ import org.goldenport.cncf.component.builtin.debug.DebugComponent
 import org.goldenport.cncf.association.{AssociationBindingAttachResult, AssociationBindingWorkflow, AssociationDomain, AssociationRepository, AssociationStoragePolicy}
 import org.goldenport.cncf.blob.{BlobAttachmentWorkflow, BlobPayloadSupport, BlobRepository}
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.display.{PresentationContextIngress, PresentationContextRuntime}
+import org.goldenport.cncf.display.PresentationContextIngress.Origin
 import org.goldenport.cncf.entity.{
   ChildEntityBindingSummary,
   ChildEntityBindingWorkflow,
@@ -73,7 +75,7 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Apr. 30, 2026
  *  version Aug. 15, 2026
  *  version Sep.  8, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -974,7 +976,8 @@ final class Subsystem(
 
   private def _execute_with_execution_response(
     request: Request,
-    httprequest: Option[HttpRequest]
+    httprequest: Option[HttpRequest],
+    origin: Origin = Origin.Canonical
   ): Consequence[ExecutionEnvelope] = {
     val requestwithhttpproperties =
       httprequest
@@ -1009,7 +1012,8 @@ final class Subsystem(
         ingress.flatMap { security =>
           val executioncontext =
             _with_http_runtime_parameters(security.executionContext, httprequest)
-          _execute_resolved_operation(route, normalizedrequest, executioncontext).map { result =>
+          _execute_resolved_operation(route, normalizedrequest, executioncontext,
+            presentationorigin = origin, presentationhttp = httprequest).map { result =>
             lastexecutionmetadata = _execution_metadata(executioncontext)
             lastexecutionresponse = ExecutionContext.currentExecutionResponse(executioncontext)
             ExecutionEnvelope(result, lastexecutionmetadata, lastexecutionresponse)
@@ -1040,19 +1044,22 @@ final class Subsystem(
     route: (Component, ServiceDefinition, OperationDefinition),
     request: Request,
     executioncontext: ExecutionContext,
-    queryonly: Boolean = false
+    queryonly: Boolean = false,
+    presentationorigin: Origin = Origin.Canonical,
+    presentationhttp: Option[HttpRequest] = None
   ): Consequence[OperationResponse] = {
     _with_managed_datastore_lease_c { _ =>
       val (component, _, _) = route
-      val domainrequest = _domain_request(request)
+      val domainrequest = _domain_request(request, presentationorigin)
       given ExecutionContext = executioncontext
       _authorize_operation(route, executioncontext).flatMap { _ =>
+        _restore_presentation_context(route, request, executioncontext, presentationorigin, presentationhttp).flatMap { restoredcontext =>
         if (executioncontext.operationEvaluation.invocation.isEmpty) {
           executioncontext.runtime.clearExecutionMetadata()
           if (executioncontext.scope.kind != ScopeKind.Action)
             ExecutionContext.clearExecutionResponse(executioncontext)
         }
-        val preparedcontext = _prepare_operation_evaluation_context(route, executioncontext)
+        val preparedcontext = _prepare_operation_evaluation_context(route, restoredcontext)
         val attemptcapture = _operation_evaluation_attempt_capture(route)
         val operationdomainrequest = _operation_business_request(route, domainrequest)
         val admittedcontext = _resolve_operation_evaluation_admission(route, preparedcontext)
@@ -1090,9 +1097,20 @@ final class Subsystem(
             ()
         }
         result
+        }
       }
     }
   }
+
+  private def _restore_presentation_context(
+    route: (Component, ServiceDefinition, OperationDefinition),
+    request: Request,
+    context: ExecutionContext,
+    origin: Origin = Origin.Canonical,
+    httprequest: Option[HttpRequest] = None
+  ): Consequence[ExecutionContext] =
+    PresentationContextIngress._extract_c(request, httprequest, origin)
+      .flatMap(candidate => PresentationContextRuntime.restoreC(route._1.instanceId, candidate, context))
 
   private def _prepare_operation_evaluation_context(
     route: (Component, ServiceDefinition, OperationDefinition),
@@ -1276,7 +1294,8 @@ final class Subsystem(
   ): Consequence[(org.goldenport.cncf.job.JobTask, ExecutionContext)] =
     _authorize_operation(route, context).flatMap { _ =>
       val targetscope = route._1.scopeContext.createChildScope(ScopeKind.Action, action.name)
-      val preparedcontext = _prepare_operation_evaluation_context(route, context.withScope(targetscope))
+      _restore_presentation_context(route, action.request, context.withScope(targetscope)).flatMap { restoredcontext =>
+      val preparedcontext = _prepare_operation_evaluation_context(route, restoredcontext)
       val domainrequest = _domain_request(action.request)
       val attemptcapture = _operation_evaluation_attempt_capture(route)
       val admittedcontext = _resolve_operation_evaluation_admission(route, preparedcontext)
@@ -1293,6 +1312,7 @@ final class Subsystem(
           attemptcapture,
           Some(targetscope)
         )(task) -> activecontext
+      }
       }
     }
 
@@ -1754,13 +1774,14 @@ final class Subsystem(
     context: ExecutionContext
   ): Consequence[OperationResponse] =
     _with_managed_datastore_lease_c { _ => _authorize_operation(route, context).flatMap { _ =>
+      _restore_presentation_context(route, action.request, context).flatMap { restoredcontext =>
       if (context.operationEvaluation.invocation.isEmpty) {
         context.runtime.clearExecutionMetadata()
         if (context.scope.kind != ScopeKind.Action)
           ExecutionContext.clearExecutionResponse(context)
       }
       val domainrequest = _domain_request(action.request)
-      val preparedcontext = _prepare_operation_evaluation_context(route, context)
+      val preparedcontext = _prepare_operation_evaluation_context(route, restoredcontext)
       val attemptcapture = _operation_evaluation_attempt_capture(route)
       val result = _resolve_operation_evaluation_admission(route, preparedcontext).flatMap { activecontext =>
         route._1.logic._execute_action(
@@ -1776,6 +1797,7 @@ final class Subsystem(
           ()
       }
       result
+      }
     }}
 
   private def _authorize_operation(
@@ -1928,12 +1950,24 @@ final class Subsystem(
       .getOrElse("passthrough")
 
   private def _domain_request(
-    request: Request
-  ): Request =
+    request: Request,
+    origin: Origin = Origin.Canonical
+  ): Request = {
+    val httpderived = origin match {
+      case Origin.HttpIngress(_) => true
+      case Origin.Canonical => request.source.exists {
+        case Request.Source.Http(_) => true
+        case _ => false
+      }
+    }
+    def _is_context_key_(name: String): Boolean =
+      httpderived && PresentationContextIngress._is_context_query_key(name)
     request.copy(
-      properties = request.properties.filterNot(p => _is_framework_or_query_property(p.name)),
-      arguments = request.arguments.filterNot(p => _is_framework_or_security_argument(p.name))
+      properties = request.properties.filterNot(p => _is_framework_or_query_property(p.name) || _is_context_key_(p.name)),
+      arguments = request.arguments.filterNot(p => _is_framework_or_security_argument(p.name) || _is_context_key_(p.name)),
+      switches = request.switches.filterNot(p => _is_context_key_(p.name))
     )
+  }
 
   private def _with_http_runtime_parameters(
     ctx: ExecutionContext,
@@ -2217,7 +2251,7 @@ final class Subsystem(
       // Route HTTP ingress through the standard request execution path so
       // request-derived execution mode, security, and other ingress context
       // are applied consistently with command/client execution.
-      result <- _execute_with_execution_response(normalized, Some(req))
+      result <- _execute_with_execution_response(normalized, Some(req), Origin.HttpIngress(req))
       response = result.response match {
         case OperationResponse.Http(http) => http
         case other => _egress(component).encode(operation, _to_response(normalized, other, result.metadata, result.executionResponse))
@@ -2285,7 +2319,7 @@ final class Subsystem(
     req: HttpRequest
   ): List[Property] = {
     val query = _http_query_record(req).asMap.toVector.collect {
-      case (name, value) if _is_http_framework_key(name) =>
+      case (name, value) if name != "cncf.presentationContext" && _is_http_framework_key(name) =>
         Property(name, value.toString, None)
     }
     val form = _http_form_framework_passthrough_keys.flatMap { name =>
@@ -2379,7 +2413,8 @@ final class Subsystem(
         val raw = text.substring(i + 1)
         val j = raw.indexOf('#')
         val query = if (j < 0) raw else raw.substring(0, j)
-        if (query.isEmpty) None else Some(HttpRequest.parseQuery(query))
+        val genericquery = PresentationContextIngress._without_context_query(query)
+        if (genericquery.isEmpty) None else Some(HttpRequest.parseQuery(genericquery))
       }
     }
 

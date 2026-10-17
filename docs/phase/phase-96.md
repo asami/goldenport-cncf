@@ -14,7 +14,31 @@ server_reference_phase=KnowledgeHubProject/nict-editing-studio Phase 2
 abstract_ui_dependency=asami/cozy Phase 74 semantic authority; Cozy Phase 76 producer ABI
 strategy=textus-knowledge-workbench/docs/strategy/knowledge-application-integration.md
 
-## Current P96-09 Step acceptance — 2026-10-17
+## Current P96-10 Step acceptance — 2026-10-17
+
+Connected P96-10 A+B is independently accepted on all four original criteria.
+Original whole-Step review `phase96-p96-10-step-review-001@1` and fresh focused
+closure `phase96-p10-step-repair-focused-result-001@1`, admitted in review
+ledger revision 40, resolve both Current Boundary Blockers. Step repair 6 is
+closed accepted; nonconverging count 0. The
+[acceptance record](../journal/2026/10/2026-10-17-phase-96-presentation-context.md#p96-10-step-acceptance-2026-10-17)
+maps the unchanged criteria to the existing spec/design and executable suites.
+Current focused validation passed 21/21 tests in two suites; the unchanged
+accumulator passed 407/407 in 50 suites, including five actual native
+PostgreSQL 17.11 suites with fsync=on and synchronous_commit=on. Both completed
+with SBT0/wrapper0, released serial locks and zero failed, aborted, canceled,
+ignored or pending tests. Prior B 5-suite/32-test evidence remains distinct.
+
+P96-10 is CLOSED; the unchanged 54-criterion checklist has 49 checked/5 pending
+and current_entry=P96-11. P96-11 remains OPEN. P96-09's actual local Step commit
+is `4209af1ec5098985623c5693b5618ea661f70a63`; P96-10's local Step commit is
+next, not completed. Original Goal/authority, base and PLAN epoch remain
+unchanged. Both P96-10 Hygiene items remain separate and nonblocking. No full
+Phase review has been consumed (count 0); repository-full validation, the
+single full Phase review, release, P96-11 and consumer acceptance remain owed.
+This Step acceptance does not accept the whole Phase or a consumer.
+
+## Historical P96-09 Step acceptance — 2026-10-17
 
 P96-09A's [reference contract](../spec/display-editing-studio-reference.md),
 [design](../design/display-editing-studio-reference.md) and

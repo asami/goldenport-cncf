@@ -7,7 +7,7 @@ import org.simplemodeling.model.datatype.EntityRevision
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct.  5, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 /** Supplied canonical receipt validation and one-shot postcommit projection representation. */
@@ -23,7 +23,8 @@ object DisplayMutationResult {
   }
   final class Receipt private[DisplayMutationResult](val selection: Selection,
     val kind: OutcomeKind, val resource: DisplayModel.Resource)
-  final class Result private[DisplayMutationResult](val receipt: Receipt, val projection: Option[ProjectionState]) {
+  final class Result private[DisplayMutationResult](val receipt: Receipt, val projection: Option[ProjectionState],
+    val presentationContext: Option[PresentationContext]) {
     def retryCommand: Boolean = false
     def reloadRequired: Boolean = projection match {
       case Some(ProjectionState.Ready(_)) => false
@@ -63,22 +64,57 @@ object DisplayMutationResult {
       checked.map(_ => new Receipt(expectedSelection, kind, resource))
     }
   }
-  def createC(receipt: Receipt, projection: Option[ProjectionState]): Consequence[Result] = {
+  def createC(receipt: Receipt, projection: Option[ProjectionState],
+    presentationContext: Option[PresentationContext] = None): Consequence[Result] = {
+    if (presentationContext == null || presentationContext.contains(null))
+      inputInvalidC("ELEMENT_INVALID", "presentationContext")
+    else _context_c(presentationContext).flatMap { _ =>
     if (receipt == null || projection == null || projection.contains(null)) inputInvalidC("ELEMENT_INVALID", "result")
     else if (receipt.kind == OutcomeKind.Deleted) {
       if (projection.nonEmpty) inputInvalidC("VALUE_INVALID", "projection")
-      else Consequence.success(new Result(receipt, None))
+      else Consequence.success(new Result(receipt, None, presentationContext))
     } else projection match {
       case None => inputInvalidC("ELEMENT_INVALID", "projection")
       case Some(ProjectionState.Pending(reason)) =>
         if (reason == null) inputInvalidC("ELEMENT_INVALID", "projection.reason")
-        else Consequence.success(new Result(receipt, projection))
+        else Consequence.success(new Result(receipt, projection, presentationContext))
       case Some(ProjectionState.Ready(snapshot)) =>
         _snapshot(receipt, snapshot).flatMap { resource =>
           if (resource.revision != receipt.resource.revision) inputInvalidC("VALUE_INVALID", "projection.snapshot.display.resource.revision")
-          else Consequence.success(new Result(receipt, projection))
+          else if (presentationContext.nonEmpty &&
+            !snapshot.display.presentationContext.exists(nested => _same_context(presentationContext.get, nested)))
+            inputInvalidC("VALUE_INVALID", "presentationContext/projection.snapshot.display.presentationContext")
+          else Consequence.success(new Result(receipt, projection, presentationContext))
         }
     }
+    }
+  }
+
+  /** Attach acknowledgement data without replaying a command or reloading a View. */
+  def withPresentationContextC(result: Result,
+    presentationContext: Option[PresentationContext]): Consequence[Result] = {
+    if (result == null || presentationContext == null || presentationContext.contains(null))
+      inputInvalidC("ELEMENT_INVALID", "result/presentationContext")
+    else {
+      val projection = result.projection match {
+        case Some(ProjectionState.Ready(snapshot)) =>
+          Display.withPresentationContextC(snapshot.display, presentationContext)
+            .map(display => Some(ProjectionState.Ready(ReloadedDisplay(snapshot.source, display))))
+        case other => Consequence.success(other)
+      }
+      projection.flatMap(value => createC(result.receipt, value, presentationContext))
+    }
+  }
+
+  private def _context_c(context: Option[PresentationContext]): Consequence[Unit] = context match {
+    case None => Consequence.unit
+    case Some(value) => PresentationContext.createC(value.locale, value.variant, value.flow).map(_ => ())
+  }
+
+  private def _same_context(left: PresentationContext, right: PresentationContext): Boolean = {
+    left.locale == right.locale && left.variant == right.variant &&
+      left.flow.map(value => (value.displayInstance, value.correlation, value.expiresAt)) ==
+        right.flow.map(value => (value.displayInstance, value.correlation, value.expiresAt))
   }
   def completeC(receipt: Receipt, reload: () => Consequence[ReloadedDisplay]): Consequence[Result] = {
     if (receipt == null) inputInvalidC("ELEMENT_INVALID", "receipt")

@@ -13,7 +13,7 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 17, 2026
  */
 /** Internal compiled existential owners preserve application E, A and P through execution. */
 private[cncf] object DisplayMutationRuntimeEntry {
@@ -63,7 +63,8 @@ private[cncf] object DisplayMutationRuntimeEntry {
             display <- _runtime.readC(entry.selection.definition.screenId, mutation.id)(using context)
           } yield DisplayMutationResult.ReloadedDisplay(entry.selection.source, display)
         })
-        json <- DisplayMutationCodec.encodeResultC(result).flatMap(DisplayMutationJson._parse)
+        attached <- DisplayMutationResult.withPresentationContextC(result, PresentationContextRuntime.project(context))
+        json <- DisplayMutationCodec.encodeResultC(attached).flatMap(DisplayMutationJson._parse)
       } yield json
     }
     def completeC(entry: Entry, request: Request, metadata: DisplayMutationTransport.Metadata,
@@ -77,14 +78,16 @@ private[cncf] object DisplayMutationRuntimeEntry {
             _ <- value.capture.coherence
             display <- _runtime.readC(entry.selection.definition.screenId, value.capture.created.id)(using context)
           } yield DisplayMutationResult.ReloadedDisplay(entry.selection.source, display))
-          json <- DisplayMutationCodec.encodeResultC(result).flatMap(DisplayMutationJson._parse)
+          attached <- DisplayMutationResult.withPresentationContextC(result, PresentationContextRuntime.project(context))
+          json <- DisplayMutationCodec.encodeResultC(attached).flatMap(DisplayMutationJson._parse)
         } yield json
       case (delete: Request.Delete, value: Captured.Deleted) =>
         for {
           receipt <- DisplayMutationResult.receiptC(entry.selection, delete, DisplayMutationResult.OutcomeKind.Deleted,
             DisplayModel.Resource(value.capture.deleted.id, value.capture.deleted.matchedRevision), metadata.observedRevision)
           result <- DisplayMutationResult.createC(receipt, None)
-          json <- DisplayMutationCodec.encodeResultC(result).flatMap(DisplayMutationJson._parse)
+          attached <- DisplayMutationResult.withPresentationContextC(result, PresentationContextRuntime.project(context))
+          json <- DisplayMutationCodec.encodeResultC(attached).flatMap(DisplayMutationJson._parse)
         } yield json
       case _ => inputInvalidC("SELECTION_MISMATCH", "capture.operation")
     }

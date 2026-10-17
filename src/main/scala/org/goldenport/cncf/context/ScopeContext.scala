@@ -14,6 +14,7 @@ import org.goldenport.cncf.datastore.DataStoreSpace
 import org.goldenport.cncf.entity.EntityStoreSpace
 import org.goldenport.cncf.entity.runtime.EntitySpace
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.display.PresentationContextResolver
 import org.goldenport.cncf.operation.evaluation.{OperationEvaluationCrossSinkPolicy, OperationEvaluationResolver}
 import org.goldenport.cncf.spi.evaluation.{CorpusEvaluationSink, CorpusEvaluationSinkSocket, ExperimentEvaluationSink, ExperimentEvaluationSinkSocket}
 
@@ -21,7 +22,8 @@ import org.goldenport.cncf.spi.evaluation.{CorpusEvaluationSink, CorpusEvaluatio
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Jul. 23, 2026
+ *  version Jul. 23, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ScopeKind {
@@ -74,6 +76,12 @@ abstract class ScopeContext() extends ObservationDsl with ScopeContext.Core.Hold
 
   def operationEvaluationResolver: OperationEvaluationResolver =
     operationEvaluationResolverOption.getOrElse(OperationEvaluationResolver.disabled)
+
+  def presentationContextResolverOption: Option[PresentationContextResolver] =
+    core.presentationContextResolverOption orElse parent.flatMap(_.presentationContextResolverOption)
+
+  def presentationContextResolver: PresentationContextResolver =
+    presentationContextResolverOption.getOrElse(PresentationContextResolver.disabled)
 
   def operationEvaluationCrossSinkPolicyOption: Option[OperationEvaluationCrossSinkPolicy] =
     core.operationEvaluationCrossSinkPolicyOption orElse
@@ -150,7 +158,8 @@ object ScopeContext {
     processExecutionAdmissionOption: Option[ProcessExecutionAdmission] = None,
     scopedConcurrencyAdmissionOption: Option[ScopedConcurrencyAdmission] = None,
     operationEvaluationResolverOption: Option[OperationEvaluationResolver] = None,
-    operationEvaluationCrossSinkPolicyOption: Option[OperationEvaluationCrossSinkPolicy] = None
+    operationEvaluationCrossSinkPolicyOption: Option[OperationEvaluationCrossSinkPolicy] = None,
+    presentationContextResolverOption: Option[PresentationContextResolver] = None
   )
   object Core {
     trait Holder {
@@ -211,6 +220,21 @@ object ScopeContext {
         )
     }
 
+  def withPresentationContextResolver(
+    scope: ScopeContext,
+    resolver: PresentationContextResolver
+  ): ScopeContext =
+    scope match {
+      case Instance(core) => Instance(core.copy(presentationContextResolverOption = Some(resolver)))
+      case other => ScopeContext(
+        kind = other.kind,
+        name = other.name,
+        parent = Some(other),
+        observabilitycontext = other.observabilityContext.createChild(other, other.kind, other.name),
+        presentationContextResolverOption = Some(resolver)
+      )
+    }
+
   def apply(
     kind: ScopeKind,
     name: String,
@@ -226,7 +250,8 @@ object ScopeContext {
     @deprecatedName("operationEvaluationResolverOption", "0.5.1")
     operationevaluationresolveroption: Option[OperationEvaluationResolver] = None,
     @deprecatedName("operationEvaluationCrossSinkPolicyOption", "0.5.1")
-    operationevaluationcrosssinkpolicyoption: Option[OperationEvaluationCrossSinkPolicy] = None
+    operationevaluationcrosssinkpolicyoption: Option[OperationEvaluationCrossSinkPolicy] = None,
+    presentationContextResolverOption: Option[PresentationContextResolver] = None
   ): ScopeContext = {
     Instance(
       ScopeContext.Core(
@@ -239,7 +264,8 @@ object ScopeContext {
         processExecutionAdmissionOption = processexecutionadmissionoption,
         scopedConcurrencyAdmissionOption = scopedconcurrencyadmissionoption,
         operationEvaluationResolverOption = operationevaluationresolveroption,
-        operationEvaluationCrossSinkPolicyOption = operationevaluationcrosssinkpolicyoption
+        operationEvaluationCrossSinkPolicyOption = operationevaluationcrosssinkpolicyoption,
+        presentationContextResolverOption = presentationContextResolverOption
       )
     )
   }

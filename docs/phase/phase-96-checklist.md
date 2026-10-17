@@ -4,10 +4,35 @@ status=in-progress
 phase=[Phase 96](phase-96.md)
 development_branch=codex/phase-96-display-service
 execution_baseline=6cbe877c53c116639feb11fa80546e79c051804c
-current_entry=P96-10
+current_entry=P96-11
 development_plan=[Development plan proposal](../journal/2026/10/2026-10-03-phase-96-development-plan-proposal.md)
 
-## Current P96-09 Step acceptance — 2026-10-17
+## Current P96-10 Step acceptance — 2026-10-17
+
+Connected P96-10 A+B is independently accepted on all four original criteria.
+Original whole-Step review `phase96-p96-10-step-review-001@1` and fresh focused
+closure `phase96-p10-step-repair-focused-result-001@1`, admitted in review
+ledger revision 40, resolve both Current Boundary Blockers. Step repair 6 is
+closed accepted; nonconverging count 0. The
+[acceptance record](../journal/2026/10/2026-10-17-phase-96-presentation-context.md#p96-10-step-acceptance-2026-10-17)
+maps the unchanged criteria to the existing spec/design and executable suites.
+Current focused validation passed 21/21 tests in two suites; the unchanged
+accumulator passed 407/407 in 50 suites, including five actual native
+PostgreSQL 17.11 suites with fsync=on and synchronous_commit=on. Both completed
+with SBT0/wrapper0, released serial locks and zero failed, aborted, canceled,
+ignored or pending tests. Prior B 5-suite/32-test evidence remains distinct.
+
+P96-10 is CLOSED; all 54 criterion texts remain unchanged, with 49 checked/5
+pending and current_entry=P96-11. P96-11 remains OPEN with its five outcomes
+unchecked. P96-09's actual local Step commit is
+`4209af1ec5098985623c5693b5618ea661f70a63`; P96-10's local Step commit is next,
+not completed. Original Goal/authority, base and PLAN epoch remain unchanged.
+Both P96-10 Hygiene items remain separate and nonblocking. No full Phase review
+has been consumed (count 0); repository-full validation, the single full Phase
+review, release, P96-11 and consumer acceptance remain owed. This Step
+acceptance does not accept the whole Phase or a consumer.
+
+## Historical P96-09 Step acceptance — 2026-10-17
 
 P96-09A's [reference contract](../spec/display-editing-studio-reference.md),
 [design](../design/display-editing-studio-reference.md) and
@@ -689,14 +714,14 @@ Stage Status:
 
 Stage Status:
 
-- Current status: OPEN
+- Current status: CLOSED
 - Owner: CNCF context/protocol owners
 - Update rule: Advance only from reconciled context admission/continuation scope and compatibility evidence; the checklist below is the closure basis.
 
-- [ ] The existing Presentation Context proposal is reconciled with the journal's optional variant/opaque Display Instance correlation hook; each admitted family maps to its ExecutionContext source, permitted readers/updaters, version, lifetime and propagation scope.
-- [ ] Physical context binding, strict known-family validation, bounded unknown-family policy and continuation across read/mutation/direct Business Operation/reload/retry are recorded against existing immutable evaluation/admission contracts.
-- [ ] Focused fixtures cover admitted optional context preservation, absent/unsupported/expired context, flow isolation and retry/reload behavior without serializing RuntimeContext, security capabilities or UnitOfWork.
-- [ ] Phase 98 retains Experiment/Run/Arm allocation, observation and reward ownership; receiving client context cannot assign an arm, create authority or bypass admission, and the core P96-01 through P96-09 slice works without Phase 98 implementation.
+- [x] The existing Presentation Context proposal is reconciled with the journal's optional variant/opaque Display Instance correlation hook; each admitted family maps to its ExecutionContext source, permitted readers/updaters, version, lifetime and propagation scope.
+- [x] Physical context binding, strict known-family validation, bounded unknown-family policy and continuation across read/mutation/direct Business Operation/reload/retry are recorded against existing immutable evaluation/admission contracts.
+- [x] Focused fixtures cover admitted optional context preservation, absent/unsupported/expired context, flow isolation and retry/reload behavior without serializing RuntimeContext, security capabilities or UnitOfWork.
+- [x] Phase 98 retains Experiment/Run/Arm allocation, observation and reward ownership; receiving client context cannot assign an arm, create authority or bypass admission, and the core P96-01 through P96-09 slice works without Phase 98 implementation.
 
 ## P96-11: Consumer handoff and Phase closure
 

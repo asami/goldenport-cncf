@@ -5,12 +5,13 @@ import org.goldenport.observation.Taxonomy
 
 /*
  * @since   Oct.  3, 2026
- * @version Oct.  3, 2026
+ * @version Oct. 17, 2026
  */
 /** A runtime candidate validated against one already admitted static definition. */
 final class Display private (
   val definition: GeneratedLogicalUiAbi.Definition,
-  val model: DisplayModel
+  val model: DisplayModel,
+  val presentationContext: Option[PresentationContext]
 )
 
 object Display {
@@ -24,12 +25,15 @@ object Display {
 
   def createC(
     definitions: GeneratedLogicalUiAbi.AdmittedDefinitions,
-    model: DisplayModel
+    model: DisplayModel,
+    presentationContext: Option[PresentationContext] = None
   ): Consequence[Display] = {
     if (definitions == null) {
       _validation_failure(Diagnostic("DSP96_ELEMENT_INVALID", "definitions", "expected admitted definitions"))
     } else if (model == null) {
       _validation_failure(Diagnostic("DSP96_ELEMENT_INVALID", "model", "expected runtime model"))
+    } else if (presentationContext == null || presentationContext.contains(null)) {
+      _validation_failure(Diagnostic("DSP96_ELEMENT_INVALID", "presentationContext", "expected optional presentation context shape"))
     } else {
       _id(model.screenId, "model.screenId") match {
         case Some(problem) => _validation_failure(problem)
@@ -44,11 +48,19 @@ object Display {
             }
             diagnostic match {
               case Some(problem) => _validation_failure(problem)
-              case None => Consequence.success(new Display(definition, model))
+              case None => Consequence.success(new Display(definition, model, presentationContext))
             }
         }
       }
     }
+  }
+
+  /** Attach already validated inert data, retaining the exact admitted source members. */
+  def withPresentationContextC(display: Display, context: Option[PresentationContext]): Consequence[Display] = {
+    if (display == null) _validation_failure(Diagnostic("DSP96_ELEMENT_INVALID", "display", "expected runtime display"))
+    else if (context == null || context.contains(null)) {
+      _validation_failure(Diagnostic("DSP96_ELEMENT_INVALID", "presentationContext", "expected optional presentation context shape"))
+    } else Consequence.success(new Display(display.definition, display.model, context))
   }
 
   private def _validation_failure(diagnostic: Diagnostic): Consequence[Display] = {

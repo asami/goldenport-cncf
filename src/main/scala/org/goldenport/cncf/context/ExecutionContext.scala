@@ -10,6 +10,7 @@ import org.goldenport.id.{UniversalId as CoreUniversalId}
 import org.goldenport.log.Logger
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.display.PresentationContextRuntime
 import org.goldenport.cncf.action.{CommandExecutionMode, CommandExecutionPolicy}
 import org.goldenport.cncf.config.{OperationMode, ResolvedParameters, RuntimeConfig}
 import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
@@ -48,7 +49,8 @@ import cats.~>
  *  version Apr. 25, 2026
  *  version May. 31, 2026
  *  version Jul. 31, 2026
- * @version Aug. 12, 2026
+ *  version Aug. 12, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -96,7 +98,8 @@ object ExecutionContext {
     tagSpaces: TagSpaceContext = TagSpaceContext.default,
     resources: ResourceAccess = ResourceAccess.unavailable,
     resourceTrees: ResourceTreeAccess = ResourceTreeAccess.unavailable,
-    operationEvaluation: OperationEvaluationContext = OperationEvaluationContext.empty
+    operationEvaluation: OperationEvaluationContext = OperationEvaluationContext.empty,
+    presentationContext: Option[PresentationContextRuntime.Resolution] = None
   ) {
     def major: String = idGeneration.namespace.major
     def minor: String = idGeneration.namespace.minor
@@ -124,6 +127,7 @@ object ExecutionContext {
       def resources: ResourceAccess = cncfCore.resources
       def resourceTrees: ResourceTreeAccess = cncfCore.resourceTrees
       def operationEvaluation: OperationEvaluationContext = cncfCore.operationEvaluation
+      def presentationContext: Option[PresentationContextRuntime.Resolution] = cncfCore.presentationContext
       def major = cncfCore.major
       def minor = cncfCore.minor
     }
@@ -479,10 +483,14 @@ object ExecutionContext {
   private def _operation_evaluation_scope_for_rebound(
     source: ScopeContext,
     runtime: RuntimeContext
-  ): ScopeContext =
-    source.operationEvaluationCrossSinkPolicyOption
+  ): ScopeContext = {
+    val rebound = source.operationEvaluationCrossSinkPolicyOption
       .map(ScopeContext.withOperationEvaluationCrossSinkPolicy(runtime, _))
       .getOrElse(runtime)
+    source.presentationContextResolverOption
+      .map(ScopeContext.withPresentationContextResolver(rebound, _))
+      .getOrElse(rebound)
+  }
 
   def withExecutionInvocation(
     ctx: ExecutionContext,
@@ -590,6 +598,15 @@ object ExecutionContext {
       i.copy(cncfCore = i.cncfCore.copy(operationEvaluation = evaluation))
     case _ =>
       ctx
+  }
+
+  private[cncf] def _with_presentation_context(
+    ctx: ExecutionContext,
+    presentationcontext: Option[PresentationContextRuntime.Resolution]
+  ): ExecutionContext = ctx match {
+    case instance: Instance =>
+      instance.copy(cncfCore = instance.cncfCore.copy(presentationContext = presentationcontext))
+    case _ => ctx
   }
 
   def withResourceAccess(
