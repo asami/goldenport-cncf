@@ -269,3 +269,128 @@ runtime evaluation use the CNCF Rule Engine.
    engines inside CNCF core.
 9. Which later phase should freeze the public ABI after the conceptual model is
    reconciled with Phase 32, Candidate Admission, Knowledge, and AI Audit.
+
+
+
+## Phase 114 Demonstrator Implementation Plan
+
+Phase 114 is the first implementation proving ground for this note. It should
+prefer thin adapters and one vertical scenario over framework generalization.
+
+### Suggested package direction
+
+The exact names are implementation-time decisions, but the prototype should
+keep CNCF-owned semantics separate from adapters:
+
+```text
+org.goldenport.cncf.rule.evidence
+  Evidence / Fact / Measure / Estimate / Judgment prototype
+  EvidenceProvenance
+  EvidenceLink / derivation link
+
+org.goldenport.cncf.rule.integration
+  EntityFactProjection
+  SemanticEvidenceAdapter
+  AnalyticsEvidenceAdapter
+  JudgmentEvidenceAdapter
+
+provider/test or fixture scope
+  deterministic symbolic provider
+  deterministic SIE provider
+  deterministic judgment provider
+```
+
+Do not add a provider-specific class such as `DroolsFact`, `FusekiFact`,
+`ChromaMeasure`, or `CodexJudgment` to the CNCF public model. Provider
+identity belongs in provenance/diagnostics.
+
+### StateFact implementation
+
+Reuse EntityRealm/Entity Space and existing DataStore resolution. A small
+projection function should translate an already-resolved Entity/Aggregate view
+into propositions needed by the fixture. Do not build a generic ORM-to-Fact
+reflection layer in Phase 114.
+
+For example, a fixture may project:
+
+```text
+Customer(id=C1, rank=B, birthYear=2010)
+  -> StateFact(customerRank(C1,B))
+  -> StateFact(birthYear(C1,2010))
+```
+
+The PostgreSQL integration test proves persistence substitution, while the
+deterministic unit/executable specification may use the existing in-memory
+DataStore path if that keeps the suite hermetic.
+
+### Symbolic implementation
+
+Use the Phase 32 built-in forward derivation first. Add Drools only after the
+same fixture works through the CNCF deterministic baseline. The external-engine
+adapter should translate CNCF Facts into provider input and translate only
+admitted deterministic conclusions back to DerivedFact. Provider actions,
+sessions, globals, or mutations must not escape the adapter.
+
+This order proves that Hybrid Rule architecture is a CNCF semantic capability,
+not a Drools wrapper.
+
+### SIE implementation
+
+Treat SIE as a reusable component, not a library hidden inside Rule Engine.
+Reuse its existing RDF DB SPI, Vector DB SPI, and SemanticRetrieval operations.
+
+The adapter should have two narrow mappings:
+
+- semantic/RDF proposition -> DerivedFact;
+- similarity result -> EmbeddingSimilarity Measure plus references to retrieved
+  Evidence.
+
+For Phase 114, do not redesign SIE storage. Existing Fuseki/Chroma providers are
+acceptable. PostgreSQL/pgvector migration or consolidation is explicitly later
+work.
+
+### Analytics implementation
+
+Use one small SQL aggregate or view against the PostgreSQL demo data. The
+result should be deliberately chosen to demonstrate the semantic difference
+between Measure and Estimate. Prefer a Measure if no statistically meaningful
+uncertainty model is present. Do not label an arbitrary score or ratio as an
+Estimate merely to exercise the type.
+
+### Codex judgment implementation
+
+The live path should formulate one bounded semantic question whose output can
+be normalized to a small typed alternative set plus rationale/evidence
+references. Reuse JudgmentAction/Continuation concepts rather than adding an
+LLM call inside RuleEngine.
+
+The executable specification uses a deterministic provider returning the same
+typed Judgment. Live Codex invocation is an integration proof and must not be
+required for ordinary test execution.
+
+### Explanation implementation
+
+Do not build a general graph database for explanation. Keep a lightweight
+Evidence DAG using stable Evidence identities and input/producer links:
+
+```text
+StateFact ----+
+              +--> DerivedFact ----+
+Knowledge ----+                    |
+                                   +--> DomainDecision
+SimilarityMeasure -----------------|
+AnalyticsMeasure ------------------|
+AIJudgment ------------------------+
+```
+
+The acceptance projection only needs to show Evidence identity/kind,
+producer/provenance summary, derivation inputs, Rule identity/version, and
+Decision. Raw sensitive payloads remain outside diagnostics.
+
+### Demonstrator domain
+
+Choose a synthetic domain with no privacy or external-data dependency. The
+scenario should naturally need all four evidence families rather than adding
+dummy values solely to tick checklist boxes. A small eligibility/review
+decision is preferred because it can end in typed alternatives such as
+Accept/ManualReview/Reject while keeping Action firing out of scope.
