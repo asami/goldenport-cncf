@@ -177,10 +177,12 @@ The Rule architecture is also the natural decision boundary for domain
 evidence that originates outside the Rule Engine itself. The long-term model
 should distinguish the semantic kind of evidence from its provenance.
 
-Evidence is classified into Fact, Estimate, and Judgment. Fact is further
-classified as DefinedFact, StateFact, ObservedFact, DeclaredFact, and
-DerivedFact. Estimate includes StatisticalEstimate, Prediction, and Forecast.
-Judgment includes AIJudgment and HumanJudgment.
+Evidence is classified into Fact, Measure, Estimate, and Judgment. Fact is
+further classified as DefinedFact, StateFact, ObservedFact, DeclaredFact, and
+DerivedFact. Measure includes Similarity, Distance, and Score; embedding-based
+similarity is represented as an EmbeddingSimilarity Measure. Estimate includes
+StatisticalEstimate, Prediction, and Forecast. Judgment includes AIJudgment and
+HumanJudgment.
 
 These categories express different certainty semantics.
 
@@ -194,6 +196,13 @@ These categories express different certainty semantics.
 - A DerivedFact is deterministically derived from other Facts by an explicit
   calculation, symbolic rule, or knowledge inference. Traditional expert-system
   reasoning therefore feeds its results back into the Fact space.
+- A Measure represents a value obtained by an explicit measurement or
+  deterministic comparison/calculation over its inputs. Similarity and distance
+  are Measures, not probabilities. Embeddings and vectors are representations,
+  not Evidence by themselves; an embedding/vector comparison may produce an
+  EmbeddingSimilarity Measure with embedding-model/version/vector-space
+  provenance. Measures may be consumed directly by Domain Rules or used as
+  input Evidence for Estimates and Judgments.
 - An Estimate represents quantified uncertainty produced by an analytical,
   statistical, or predictive model. Its semantics should include the model,
   applicable population/context, uncertainty/calibration information when
@@ -222,7 +231,7 @@ point. Generative inference is not modeled as a stronger replacement for
 symbolic inference. It supplies semantic interpretation or judgment where
 deterministic inference is insufficient.
 
-A Rule may consume Facts, Estimates, and Judgments according to its declared
+A Rule may consume Facts, Measures, Estimates, and Judgments according to its declared
 evidence requirements. It should be possible for high-impact rules to require
 specific evidence kinds or Admission before accepting an AI Judgment. An AI
 model's self-reported confidence must not be treated as equivalent to a
@@ -233,6 +242,7 @@ outcomes, human correction, and downstream outcomes.
 The resulting architecture is intentionally hybrid:
 
 - symbolic/expert-system inference provides deterministic derivation;
+- embedding/vector processing provides Similarity Measures and retrieved Evidence;
 - BI/statistical/ML analysis provides quantified estimates and predictions;
 - Knowledge provides source material and may participate in deterministic
   inference;
