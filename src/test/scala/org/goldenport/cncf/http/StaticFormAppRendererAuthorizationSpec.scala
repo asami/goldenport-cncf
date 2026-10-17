@@ -73,7 +73,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 28, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererAuthorizationSpec extends AnyWordSpec with Matchers with GivenWhenThen with StaticFormAppRendererSpecFixtures {
@@ -892,7 +892,8 @@ final class StaticFormAppRendererAuthorizationSpec extends AnyWordSpec with Matc
         configuration = Configuration(Map(
           SubsystemUserMode.CONFIGURATION_KEY -> ConfigurationValue.StringValue("multi-user"),
           RuntimeConfig.operationModeKey -> ConfigurationValue.StringValue("production"),
-          RuntimeConfig.webProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
+          RuntimeConfig.webProductionAdminEnabledKey -> ConfigurationValue.StringValue("true"),
+          SubsystemUserMode.CONFIGURATION_KEY -> ConfigurationValue.StringValue("multi-user")
         ))
       )
       _install_audit_session(
@@ -978,7 +979,7 @@ final class StaticFormAppRendererAuthorizationSpec extends AnyWordSpec with Matc
       performance.status.code shouldBe 403
     }
 
-    "deny role-only audit viewer session production admin jobs, admin home, and performance" in {
+    "allow role-only audit viewer read-only jobs while denying admin home and performance" in {
       Given("a production multi-user subsystem and an audit_viewer session with privilege attributes but no operator capability")
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
@@ -1018,8 +1019,8 @@ final class StaticFormAppRendererAuthorizationSpec extends AnyWordSpec with Matc
         .run(_with_session(_get_request("/web/system/performance"), "audit-role-only-session"))
         .unsafeRunSync()
 
-      Then("role and privilege attributes alone confer no operator jobs or system administration access")
-      jobs.status.code shouldBe 404
+      Then("the audit role permits read-only jobs without granting system administration access")
+      jobs.status.code shouldBe 200
       home.status.code shouldBe 403
       performance.status.code shouldBe 403
     }

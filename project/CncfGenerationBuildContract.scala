@@ -5,7 +5,7 @@ import scala.util.control.NonFatal
 
 /*
  * @since   Jul. 28, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 17, 2026
  */
 final case class CncfGenerationInputs(
   cozyGeneratorVersion: String,
@@ -17,6 +17,52 @@ final case class CncfGenerationInputs(
 
 object CncfGenerationBuildContract {
   val GENERATION_PROVENANCE_PATH = "target/cozy/generation-provenance.json"
+
+  def resolveCozyDevelopmentDirectory(
+    projectDirectory: File,
+    selection: Option[String]
+  ): Either[Vector[String], Option[File]] = selection match {
+    case None => Right(None)
+    case Some(selected) if selected.trim.isEmpty =>
+      Left(Vector("The explicit Cozy development directory must not be blank."))
+    case Some(selected) =>
+      try {
+        val source = new File(selected)
+        if (!source.isAbsolute)
+          Left(Vector("The explicit Cozy development directory must be an absolute path."))
+        else {
+          val lexicalproject = projectDirectory.getAbsoluteFile.toPath.normalize()
+          val project = projectDirectory.getCanonicalFile.toPath
+          val lexicalsource = source.toPath.normalize()
+          val canonicalsource = source.getCanonicalFile
+          val sourcepath = canonicalsource.toPath
+          val checkoutparent = lexicalproject.resolve(".codex-workflow/checkouts")
+          val dedicatedchild =
+            sourcepath.getParent == checkoutparent &&
+              lexicalsource.getParent == checkoutparent &&
+              canonicalsource.getName.matches("[A-Za-z0-9_][A-Za-z0-9_.-]*")
+          val errors = Vector.newBuilder[String]
+          if (project.startsWith(sourcepath))
+            errors += "The Cozy development directory must not equal or contain the CNCF project directory."
+          if (
+            (lexicalsource.startsWith(lexicalproject) || lexicalsource.startsWith(project)) &&
+            !sourcepath.startsWith(project)
+          )
+            errors += "The explicit Cozy development directory must not escape the CNCF project through a symlink."
+          if (sourcepath.startsWith(project) && sourcepath != project && !dedicatedchild)
+            errors += "A nested Cozy development directory must be a canonical direct .codex-workflow/checkouts child with a matching lexical parent and legal checkout name."
+          if (!new File(canonicalsource, "build.sbt").isFile)
+            errors += "The Cozy development directory must contain build.sbt."
+          if (!new File(canonicalsource, "src/main/scala/cozy/Cozy.scala").isFile)
+            errors += "The Cozy development directory must contain src/main/scala/cozy/Cozy.scala."
+          val result = errors.result()
+          if (result.nonEmpty) Left(result) else Right(Some(canonicalsource))
+        }
+      } catch {
+        case NonFatal(error) =>
+          Left(Vector(s"Cannot canonicalize the explicit Cozy development directory '$selected': ${error.getMessage}"))
+      }
+  }
 
   def selectedGeneratorRoot(
     propertyValue: Option[String],

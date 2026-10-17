@@ -17,6 +17,22 @@ labels, operation metadata, request properties and component configuration
 cannot supply a grant. The runtime admission is inherited through ordinary
 child scopes; it is injected before Component assembly.
 
+## Startup source reading
+
+Startup data and entity source reads are internal runtime initialization.
+`StartupImportReader` acquires local-file and URL text outside ordinary
+Component HTTP UnitOfWork admission. Existing configured local sources,
+default `data.d` and `entity.d` sources, and explicitly configured URL sources
+execute without an additional Component HTTP grant. URL reads use the HTTP
+driver selected by the runtime configuration.
+
+The startup reader owns the acquisition boundary for both local and URL
+sources, including any future environment-specific startup read restrictions.
+This release preserves the existing startup behavior across operation modes;
+it introduces no production prohibition, configuration key, admission
+mechanism, transport policy or capability. Ordinary Component HTTP admission
+remains unchanged.
+
 ## Host configuration
 
 `textus.subsystem.http-execution.plan` is a confidential, typed configuration
@@ -75,21 +91,36 @@ subdomain or implicit localhost grants.
 
 Host connect/read timeouts are positive finite Int milliseconds; the response
 byte limit is a positive finite Long. Caller controls can only tighten them by
-minimum. Controlled property names are case-insensitive:
+minimum. Controlled property names use `String.equalsIgnoreCase`, matching the
+bounded driver's lookup, including Unicode-equivalent spellings such as dotless
+`ı`, dotted `İ` and long `ſ` where they compare equal to `i` or `s`:
 
 | Caller control | Effective behavior |
 | --- | --- |
 | `http.connect-timeout-ms`, `http.read-timeout-ms` | Tighten the corresponding timeout |
 | `http.connect-timeout-seconds`, `http.read-timeout-seconds` | Convert bounded positive seconds to milliseconds and tighten |
 | `http.timeout-seconds` | Tighten both timeouts |
+| `http.total-timeout-ms` | Optional bounded exchange budget, capped by both effective connect/read timeouts |
 | `http.max-response-bytes` | Tighten response bytes; zero is valid |
 | `http.follow-redirects` | Only false is accepted |
 
-Duplicate case-folded controlled keys, malformed values, nonpositive timeouts,
+Duplicate equivalent controlled keys, including ASCII/Unicode pairs in either
+order, malformed values, nonpositive timeouts,
 negative byte limits and seconds above `Int.MaxValue / 1000` are refused.
 Distinct timeout aliases combine by minimum. The operation removes recognized
-controls and emits exactly one connect-ms, read-ms, max-response-bytes and
-`http.follow-redirects=false`. Unrelated properties retain their order.
+controls using that same equivalence and emits exactly one connect-ms, read-ms, max-response-bytes and
+`http.follow-redirects=false`. When total-timeout-ms is present, it uses the same
+positive Int millisecond validation and duplicate-key refusal. The operation
+also emits exactly one canonical `http.total-timeout-ms`, equal to the minimum
+of that caller total and both effective connect/read timeouts after every
+host/caller alias has narrowed them. It precedes the other four canonical
+controls. When absent, no total property is synthesized, preserving legacy
+driver dispatch. Unrelated properties retain their order before the controls.
+
+The admitted total conservatively preserves both host ceilings when the
+bounded driver uses its single whole-exchange budget. It adds no independent
+connect or idle timer. Direct driver calls retain the bounded driver's
+first-match policy; ordinary admission rejects duplicate controlled keys.
 `http.public-network-only` retains its optional additional driver check and
 cannot widen the exact origin grant.
 
@@ -127,3 +158,5 @@ protection, or impose streaming upload quotas.
 - [Existing HTTP wiring](../../src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkHttpSpec.scala)
 - [Ordinary Client behavior](../../src/test/scala/org/goldenport/cncf/component/builtin/client/ClientAdminSystemPingSpec.scala)
 - [Inline action/UoW calltree behavior](../../src/test/scala/org/goldenport/cncf/component/ComponentLogicOperationDefinitionSemanticsSpec.scala)
+- [Startup data source imports](../../src/test/scala/org/goldenport/cncf/importer/StartupDataImportSpec.scala)
+- [Startup entity source imports](../../src/test/scala/org/goldenport/cncf/importer/StartupEntityImportSpec.scala)

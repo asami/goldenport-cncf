@@ -634,3 +634,23 @@ Original independent whole-Step/full-Phase review must assess this purpose
 classification before acceptance. This editor changed no payload, source,
 fixture, schema, API, scenario, assertion, status checkbox or control and ran no
 tests, self-review, Git mutation, runtime, publication or workflow transition.
+
+
+### Retained explicit source checkout selection
+
+`TEXTUS_COZY_CNCF_SOURCE_ROOT` remains an optional execution-location selector
+through `cncfCozyDevelopmentDirectory`. Absence preserves ordinary execution;
+a present value must be absolute, nonblank, canonical and contain `build.sbt`
+and `src/main/scala/cozy/Cozy.scala`. It cannot equal or contain the consumer,
+escape a lexical consumer path through a symlink, or be nested except as a
+matching lexical/canonical direct `.codex-workflow/checkouts/<name>` child with
+an ASCII legal leaf. Invalid explicit selection fails without fallback.
+
+Main's `cncf.cozyGeneratorRoot` / `CNCF_COZY_GENERATOR_ROOT` selection has its
+existing precedence. When absent, the admitted legacy source checkout supplies
+the execution directory. Both generation and validation receive the same
+`cozy --runtime <pinned-version> --runtime-dev-dir <canonical-directory>` prefix.
+Directory selection changes neither exact generator/target coordinates nor
+main's five-field path contract and adds no publication/bootstrap responsibility.
+The existing `CncfCozyDevelopmentRuntimeSpec` E12-E22 exercises the retained
+source admission and command vectors against the current path contract.

@@ -9,7 +9,8 @@ import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentOrigi
 import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.component.builtin.admin.AdminComponent
 import org.goldenport.cncf.component.builtin.client.ClientComponent
-import org.goldenport.cncf.http.UrlConnectionHttpDriver
+import org.goldenport.cncf.context.{ExecutionContext, ScopeContext}
+import org.goldenport.cncf.http.{HttpExecutionAdmission, HttpExecutionGrant, HttpExecutionLimits, HttpExecutionMethod, UrlConnectionHttpDriver}
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.record.Record
@@ -20,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 14, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ClientOutputFormatSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -216,6 +217,12 @@ final class ClientOutputFormatSpec extends AnyWordSpec with Matchers with GivenW
       val _ = subsystem.add(component)
       val admin = AdminComponent.Factory.create(params).primary
       val _ = subsystem.add(admin)
+      val admission = HttpExecutionAdmission.fromRuntimeC(baseurl, HttpExecutionLimits(10000, 10000, 1048576),
+        Map(component.componentId -> HttpExecutionGrant(Vector(baseurl), Set(HttpExecutionMethod.Get, HttpExecutionMethod.Post))))
+        .getOrElse(fail("client output host HTTP setup failed"))
+      val base = ExecutionContext.create()
+      component.withScopeContext(ScopeContext.Instance(base.cncfCore.scope.core.copy(
+        httpExecutionAdmissionOption = Some(admission))))
       body(subsystem, baseurl, captures)
     } finally {
       server.stop(0)

@@ -2,10 +2,35 @@ import sbt.TestFrameworks
 import sbt.Tests
 import java.nio.charset.StandardCharsets
 import java.util.Base64
-import org.goldenport.cncf.phase51.build.{CncfGenerationBuildContract, CncfGenerationInputs}
+import org.goldenport.cncf.phase51.build.{CncfCoreDevelopmentBuild, CncfGenerationBuildContract, CncfGenerationInputs}
 
 val scala3Version = "3.3.8"
 val cozyGeneratorVersion = "0.3.3-SNAPSHOT"
+val goldenportCoreVersion = "0.4.3-SNAPSHOT"
+
+lazy val cncfCoreModule = "org.goldenport" %% "goldenport-core" % goldenportCoreVersion
+lazy val cncfCoreSourceDirectory = CncfCoreDevelopmentBuild.resolveSourceDirectory(
+  file("."), sys.env.get("TEXTUS_GOLDENPORT_CORE_CNCF_SOURCE_ROOT")
+).fold(errors => sys.error(errors.mkString("\n")), identity)
+lazy val cncfCoreSourceProject = cncfCoreSourceDirectory.map(source => RootProject(source.toURI))
+
+lazy val cncfCoreDevelopmentDirectory = settingKey[Option[File]]("Select an explicit canonical goldenport-core development source directory.")
+lazy val validateCncfCoreDevelopment = settingKey[Unit]("Validate the actual loaded core source coordinates against CNCF.")
+
+lazy val cncfCoreSourceSettings: Seq[Def.Setting[_]] =
+  cncfCoreSourceProject.toSeq.flatMap { source =>
+    Seq(
+      libraryDependencies ~= (_.map(_.exclude("org.goldenport", "goldenport-core_3"))),
+      validateCncfCoreDevelopment := CncfCoreDevelopmentBuild.validateCoordinates(
+        (source / organization).value,
+        (source / moduleName).value,
+        (source / version).value,
+        (source / scalaVersion).value,
+        goldenportCoreVersion,
+        scala3Version
+      ).fold(errors => sys.error(errors.mkString("\n")), identity)
+    )
+  }
 
 Compile / scalacOptions += "-release:17"
 Compile / javacOptions ++= Seq("--release", "17")
@@ -15,6 +40,7 @@ lazy val generateTextusRuntimeCatalog = taskKey[File]("Generate Textus runtime c
 lazy val exportTextusRuntimeCatalog = taskKey[File]("Export Textus runtime catalog metadata for local development consumers.")
 lazy val generateCncfRuntimeDescriptor = taskKey[File]("Generate CNCF runtime self descriptor for the runtime jar.")
 lazy val cncfRuntimeClasspathFile = taskKey[File]("Write the local CNCF runtime classpath consumed by cncf --runtime-dev-dir.")
+lazy val cncfCozyDevelopmentDirectory = settingKey[Option[File]]("Select an explicit canonical Cozy development directory for CNCF generation and provenance validation.")
 lazy val resolveInformationCmlGenerationInputs = taskKey[CncfGenerationInputs]("Resolve the exact Cozy generator, CNCF target, and runtime descriptor for Information CML generation.")
 lazy val generateInformationCmlModel = taskKey[Seq[File]]("Generate CNCF Information vocabulary model from CML.")
 lazy val copyTextusRuntimeCatalog = taskKey[File]("Copy the checked-in Textus runtime catalog into the warehouse repository.")
@@ -237,7 +263,8 @@ def runInformationCmlGeneration(
   inputs: CncfGenerationInputs,
   outputDirectory: File,
   baseDirectory: File,
-  log: sbt.util.Logger
+  log: sbt.util.Logger,
+  cozyDevelopmentDirectory: Option[File]
 ): Seq[File] = {
   val generatorroot = CncfGenerationBuildContract.selectedGeneratorRoot(
     sys.props.get("cncf.cozyGeneratorRoot"),
@@ -245,7 +272,7 @@ def runInformationCmlGeneration(
   ).fold(
     errors => sys.error(errors.mkString("CNCF Cozy generator selection failed: ", " ", "")),
     identity
-  )
+  ).orElse(cozyDevelopmentDirectory)
   IO.delete(outputDirectory)
   IO.createDirectory(outputDirectory)
   val command = CncfGenerationBuildContract.command(
@@ -399,6 +426,7 @@ def textusPublishRuntimeCatalogFile(
 
 lazy val root = project
   .in(file("."))
+  .dependsOn(cncfCoreSourceProject.toSeq.map(source => source % "compile->compile;runtime->runtime"): _*)
   .settings(
     organization := "org.goldenport",
     name := "goldenport-cncf",
@@ -407,7 +435,19 @@ lazy val root = project
     scalaVersion := scala3Version,
     Compile / exportJars := true,
 
+    cncfCoreDevelopmentDirectory := cncfCoreSourceDirectory,
+    validateCncfCoreDevelopment := (),
+
+    cncfCozyDevelopmentDirectory := CncfGenerationBuildContract.resolveCozyDevelopmentDirectory(
+      baseDirectory.value,
+      sys.env.get("TEXTUS_COZY_CNCF_SOURCE_ROOT")
+    ).fold(
+      errors => sys.error(errors.mkString("CNCF Cozy development directory selection failed: ", " ", "")),
+      identity
+    ),
+
     Test / unmanagedSources += baseDirectory.value / "project" / "CncfGenerationBuildContract.scala",
+    Test / unmanagedSources += baseDirectory.value / "project" / "CncfCoreDevelopmentBuild.scala",
 
     resolvers ++= Seq(
       Resolver.defaultLocal,
@@ -445,7 +485,7 @@ lazy val root = project
       // Route Apache POI's Log4j API through the CNCF SLF4J backend.
       "org.apache.logging.log4j" % "log4j-to-slf4j" % "2.21.1",
 
-      "org.goldenport" %% "goldenport-core" % "0.4.3-SNAPSHOT",
+    ) ++ (if (cncfCoreSourceProject.isDefined) Seq.empty else Seq(cncfCoreModule)) ++ Seq(
       "org.simplemodeling" %% "simplemodeling-model" % "0.2.2-SNAPSHOT",
       "org.goldenport" % "cncf-collaborator-api" % "0.2.0",
 
@@ -480,7 +520,7 @@ lazy val root = project
         version.value,
         scalaBinaryVersion.value,
         textusBaseProvidedModules(
-          libraryDependencies.value,
+          libraryDependencies.value :+ cncfCoreModule,
           organization.value,
           name.value,
           scalaBinaryVersion.value
@@ -497,7 +537,7 @@ lazy val root = project
           version.value,
           scalaBinaryVersion.value,
           textusBaseProvidedModules(
-            libraryDependencies.value,
+            libraryDependencies.value :+ cncfCoreModule,
             organization.value,
             name.value,
             scalaBinaryVersion.value
@@ -537,7 +577,8 @@ lazy val root = project
         generationinputs,
         outputdir,
         baseDirectory.value,
-        streams.value.log
+        streams.value.log,
+        cncfCozyDevelopmentDirectory.value
       )
     },
 
@@ -560,7 +601,7 @@ lazy val root = project
         version.value,
         scalaBinaryVersion.value,
         textusBaseProvidedModules(
-          libraryDependencies.value,
+          libraryDependencies.value :+ cncfCoreModule,
           organization.value,
           name.value,
           scalaBinaryVersion.value
@@ -599,6 +640,7 @@ lazy val root = project
     Test / testOnly / fork := true,
     Test / testOnly / testOptions := Seq.empty
   )
+  .settings(cncfCoreSourceSettings)
 ThisBuild / semanticdbEnabled := true
 ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
 ThisBuild / scalafixOnCompile := false

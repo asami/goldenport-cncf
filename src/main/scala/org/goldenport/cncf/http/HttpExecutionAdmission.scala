@@ -11,7 +11,7 @@ import org.goldenport.protocol.Property
 
 /*
  * @since   Oct. 16, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] enum HttpExecutionMethod {
@@ -58,7 +58,7 @@ private[cncf] object HttpExecutionAdmission {
 
   private val _controlled_keys = Set("http.connect-timeout-ms", "http.read-timeout-ms",
     "http.connect-timeout-seconds", "http.read-timeout-seconds", "http.timeout-seconds",
-    "http.max-response-bytes", "http.follow-redirects")
+    "http.total-timeout-ms", "http.max-response-bytes", "http.follow-redirects")
 
   def fromRuntimeC(
     baseUrl: String,
@@ -153,9 +153,11 @@ private[cncf] object HttpExecutionAdmission {
     uri.getScheme.toLowerCase(Locale.ROOT) + text.substring(text.indexOf(':'))
   }
 
+  private def _controlled_key(name: String): Option[String] =
+    _controlled_keys.find(_.equalsIgnoreCase(name))
+
   private def _properties(limits: HttpExecutionLimits, properties: Vector[Property]): Consequence[Vector[Property]] = {
-    val controls = properties.filter(x => _controlled_keys.contains(x.name.toLowerCase(Locale.ROOT)))
-    val pairs = controls.map(x => x.name.toLowerCase(Locale.ROOT) -> String.valueOf(x.value).trim)
+    val pairs = properties.flatMap(x => _controlled_key(x.name).map(_ -> String.valueOf(x.value).trim))
     val redirects = pairs.filter(_._1 == "http.follow-redirects")
     if (redirects.exists(_._2.equalsIgnoreCase("true"))) _deny("redirect")
     else if (pairs.map(_._1).distinct.size != pairs.size || redirects.exists(!_._2.equalsIgnoreCase("false"))) _deny("limits")
@@ -177,7 +179,9 @@ private[cncf] object HttpExecutionAdmission {
         val read = (Vector(limits.readTimeoutMillis.toLong) ++ generic ++
           numbers.get("http.read-timeout-ms") ++ numbers.get("http.read-timeout-seconds")).min
         val bytes = math.min(limits.responseBytes, numbers.getOrElse("http.max-response-bytes", limits.responseBytes))
-        Consequence.success(properties.filterNot(x => _controlled_keys.contains(x.name.toLowerCase(Locale.ROOT))) ++ Vector(
+        val total = numbers.get("http.total-timeout-ms").toVector.map(value =>
+          Property("http.total-timeout-ms", math.min(value, math.min(connect, read)).toString, None))
+        Consequence.success(properties.filterNot(x => _controlled_key(x.name).nonEmpty) ++ total ++ Vector(
           Property("http.connect-timeout-ms", connect.toString, None),
           Property("http.read-timeout-ms", read.toString, None),
           Property("http.max-response-bytes", bytes.toString, None),

@@ -24,7 +24,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   Mar. 27, 2026
  *  version Apr. 10, 2026
  *  version Apr. 14, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StartupEntityImportSpec
@@ -39,7 +40,7 @@ final class StartupEntityImportSpec
   private val _p2_id = _parse_entity_id(_p2_id_text)
 
   "Startup import for cncf.import.entity.file" should {
-    "import entities from a URL via UnitOfWork-backed fetch" in {
+    "import entities from a URL via startup reading helper" in {
       Given("a bootstrap URL source served over HTTP")
       val cwd = Files.createTempDirectory("cncf-startup-entity-url")
       val server = _http_server(
@@ -78,6 +79,57 @@ final class StartupEntityImportSpec
         Then("the URL content is imported")
         val space = subsystem.globalRuntimeContext.config.entityStoreSpace
         val entity = _person(_p1_id, "url-entity", 20)
+        space.load(UnitOfWorkOp.EntityStoreLoad(entity.id, _persistent)) shouldBe
+          Consequence.success(Some(entity))
+      } finally {
+        runtime.closeEmbedding()
+        server.stop(0)
+      }
+    }
+
+    "import an entity URL configured in a cwd file without a Component HTTP grant" in {
+      Given("a cwd configuration file with an entity URL and no Component HTTP plan")
+      val cwd = Files.createTempDirectory("cncf-startup-entity-config-url")
+      val configdir = Files.createDirectories(cwd.resolve(".textus"))
+      val server = _http_server(
+        "/entity.yaml",
+        s"""entitystore:
+          |  - collection: test.a.person
+          |    records:
+          |      - id: $_p1_id_text
+          |        name: config-url-entity
+          |        age: 20
+          |""".stripMargin
+      )
+      server.start()
+      val runtime = new CncfRuntime()
+      try {
+        val url = s"http://127.0.0.1:${server.getAddress.getPort}/entity.yaml"
+        Files.writeString(
+          configdir.resolve("config.json"),
+          s"""{"textus.import.entity.file":"${url}"}"""
+        )
+
+        When("bootstrapping the runtime without an import URL CLI argument")
+        val subsystem = runtime.initializeForEmbedding(
+          cwd = cwd,
+          args = Array(
+            s"--cncf.datastore.sqlite.path=${cwd.resolve("startup-import.sqlite").toString}",
+            "--cncf.runtime.http.driver=real"
+          ),
+          extraComponents = _extra_components
+        ) match {
+          case Consequence.Success(subsystem) => subsystem
+          case Consequence.Failure(conclusion) => fail(conclusion.show)
+        }
+        given ExecutionContext = _execution_context(
+          subsystem.globalRuntimeContext.config.dataStoreSpace,
+          subsystem.globalRuntimeContext.config.entityStoreSpace
+        )
+
+        Then("the configured URL entity is imported")
+        val space = subsystem.globalRuntimeContext.config.entityStoreSpace
+        val entity = _person(_p1_id, "config-url-entity", 20)
         space.load(UnitOfWorkOp.EntityStoreLoad(entity.id, _persistent)) shouldBe
           Consequence.success(Some(entity))
       } finally {
