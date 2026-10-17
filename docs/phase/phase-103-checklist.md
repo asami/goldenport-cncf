@@ -6,13 +6,15 @@ Contract input: [ABI proposal](../notes/validation-test-metadata-abi-proposal.md
 
 Step P103-S1 declaration implementation and Executable Specifications passed
 focused validation and independent protected conformance review. Unchecked Phase items
-remain open acceptance obligations, including their undelivered discovery and
-consumer portions. Local Step commit evidence is recorded after Git completion.
+remain open acceptance obligations. S1 local Step acceptance is recorded in
+`ac443ed353cc682251e4d17bf4e64a1285955798`. S2 discovery/query validation and
+independent review are accepted, with the local Step commit pending; S3 invocation
+and consumer delivery remain open.
 
 ## Step P103-S1: declaration interpretation
 
 Stage Status:
-- Current status: ACCEPTED_FOR_STEP_COMMIT
+- Current status: CLOSED (accepted local Step)
 - Owner: CNCF Phase 103
 - Update rule: Parent updates evidence after focused validation and independent review.
 - Closure basis: The Step acceptance entries below and remaining Phase VM ledger.
@@ -26,11 +28,36 @@ Progress: [journal](../journal/2026/10/2026-10-18-phase-103-validation-metadata.
 
 - [x] Focused declaration specifications and affected execution-contract regressions pass (33 tests, three suites, zero failures).
 - [x] Independent focused review accepts the connected Step change (protected conformance review, no findings).
-- [ ] Parent records Step acceptance and local commit evidence.
+- [x] Parent records Step acceptance and local commit evidence: `ac443ed353cc682251e4d17bf4e64a1285955798`.
 
 No annotation/discovery/invocation support is delivered by S1. Stable scoped
-operation identity and revision provenance, completeness, real scenario discovery,
-CML mapping and actual consumer handoff remain S2/Phase obligations below.
+operation identity and revision provenance, completeness and real scenario
+discovery are authored in S2; their acceptance and remaining S3/Phase obligations
+are tracked below.
+
+## Step P103-S2: real scoped ScalaTest discovery and pure selection
+
+Stage Status:
+- Current status: ACCEPTED_PENDING_LOCAL_COMMIT
+- Owner: CNCF Phase 103
+- Update rule: Parent records focused validation, protected-focused review and acceptance evidence.
+- Closure basis: The connected S2 boundary, without closing Phase VM-01..04.
+
+Source: [discovery ABI](../../src/main/scala/org/goldenport/cncf/validation/ValidationDiscoveryV1.scala),
+[discovery specification](../../src/test/scala/org/goldenport/cncf/validation/ValidationDiscoveryV1Spec.scala),
+[selection specification](../../src/test/scala/org/goldenport/cncf/validation/ValidationDiscoverySelectionSpec.scala).
+
+- [x] Author runtime Java annotations, typed provider admission and S1-backed interpretation of actual registered scenarios.
+- [x] Author caller-scoped directory/JAR discovery, provenance, completeness, invalid/unannotated rows and deterministic logical references/selectors.
+- [x] Author pure purpose/feature queries, exact supplemental resolution and real passing FunSuite/WordSpec/parameter fixtures.
+- [x] Parent focused discovery/selection specifications and S1 regression pass through serialized SBT with successful terminal completion and lock release (36 discovery/selection plus 17 declaration tests, three suites, zero failures or aborts).
+- [x] Independent protected-focused Step review covers all connected S2 paths and S1/build edges; fresh independent focused review accepts closure of its sole descendant-symlink completeness defect, with no remaining blocker, Hygiene or Development Candidate findings.
+- [ ] Parent records S2 acceptance and exact local Step commit evidence.
+
+S3 remains open: existing typed CNCF execution binding, CML equivalence mapping,
+shared complete/partial static fixtures, actual sm-workflow runtime handoff and
+cbd-support handoff. The authored in-process ScalaTest selector specification is
+not CNCF process invocation evidence. Full Phase validation and review remain open.
 
 ## VM-01: Contract
 

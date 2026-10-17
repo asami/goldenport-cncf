@@ -48,16 +48,34 @@ Step P103-S1 passed focused validation and independent protected conformance
 review: 17 declaration scenarios and 16 existing execution-contract regressions
 passed across three suites, with no review findings. Its public declaration ABI,
 callable normalization, Executable Specifications and normative declaration docs
-are accepted for the local Step commit; commit evidence is recorded after Git
-completion. Full Phase validation and acceptance remain pending.
+are accepted in local Step commit `ac443ed353cc682251e4d17bf4e64a1285955798`.
+Full Phase validation and acceptance remain pending.
 The [implementation journal](../journal/2026/10/2026-10-18-phase-103-validation-metadata.md)
 records the current handoff. The checklist remains the completion ledger.
 
 S1 progresses VM-01 and the interpretation portion of VM-02/VM-03. It delivers
-no annotations, framework discovery, inventory or invocation. S2 still owns
-scoped executable identity/revision provenance, completeness, real scenario
-discovery and typed invocation, CML mapping and concrete runtime/static consumer
-handoffs. VM-01..04 remain Phase obligations; S1 does not close this Phase.
+no annotations, framework discovery, inventory or invocation.
+
+Step P103-S2 authors Java runtime annotations usable from Scala, admitted typed
+declaration providers, real ScalaTest artifact/package discovery, scoped logical
+references and revision provenance, COMPLETE/PARTIAL/UNKNOWN inventory, typed
+framework selectors and pure query/reference resolution. Actual passing
+FunSuite/WordSpec fixtures and behavior specifications are authored, including
+one in-process parameter-case selector execution. S2 focused validation passed
+36 discovery/selection scenarios and 17 S1 declaration regressions across three
+suites, with zero failures or aborts and successful serialized SBT terminal
+completion and lock release. Initial independent protected-focused review found
+one descendant-symlink completeness defect. The bounded correction reports
+skipped links without following them and adds directory-link and class-link
+regressions. Fresh independent focused review accepted closure with no remaining
+blocker, Hygiene or Development Candidate findings. S2 is
+ACCEPTED_PENDING_LOCAL_COMMIT; its local Step commit remains pending.
+
+Step P103-S3 retains the existing typed CNCF execution binding, Cozy-owned CML
+mapping equivalence, shared static-consumer inventory fixtures and actual
+sm-workflow runtime/cbd-support handoff. In-process ScalaTest selection does not
+deliver that CNCF invocation integration. VM-01..04 and all full Phase checks
+remain obligations; the internal S1/S2/S3 handoffs do not split the Phase.
 
 ## Development items
 

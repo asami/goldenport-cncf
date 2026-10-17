@@ -1,11 +1,17 @@
 # Validation/Test Metadata V1
 
-This specification defines declaration admission and normalized operation-level
-interpretation. The public API is
+This specification defines declaration admission, normalized operation-level
+interpretation and scoped real ScalaTest discovery. The declaration API is
 [`ValidationMetadataV1`](../../src/main/scala/org/goldenport/cncf/validation/ValidationMetadataV1.scala);
 the behavior contract is
 [`ValidationMetadataV1Spec`](../../src/test/scala/org/goldenport/cncf/validation/ValidationMetadataV1Spec.scala).
 The [design](../design/validation-test-metadata.md) records responsibility boundaries.
+
+The discovery API is
+[`ValidationDiscoveryV1`](../../src/main/scala/org/goldenport/cncf/validation/ValidationDiscoveryV1.scala),
+with behavior specified by
+[`ValidationDiscoveryV1Spec`](../../src/test/scala/org/goldenport/cncf/validation/ValidationDiscoveryV1Spec.scala)
+and [`ValidationDiscoverySelectionSpec`](../../src/test/scala/org/goldenport/cncf/validation/ValidationDiscoverySelectionSpec.scala).
 
 ## Public declaration and compatibility
 
@@ -121,15 +127,177 @@ parameter/field and a stable policy identifier:
 Failure diagnostics are structured domain outcomes, with no string-only error
 envelope, thrown declaration-validation exception or extension of the core API.
 
+## Runtime annotations and typed providers
+
+The Java runtime annotations in `org.goldenport.cncf.validation.annotation` are
+usable directly from Scala 3. `ValidationSpecification` targets types, is
+inherited, and has `identity = ""`, `revision = ""` and
+`declaration = classOf[java.lang.Void]` defaults. `ValidationScenario` targets
+methods and requires `name`; its identity/revision/declaration defaults are the
+same. These are Java annotation interfaces with runtime retention.
+
+```scala
+import org.goldenport.cncf.validation.ValidationDeclarationProvider
+import org.goldenport.cncf.validation.ValidationMetadataV1.*
+import org.goldenport.cncf.validation.annotation.*
+import org.scalatest.funsuite.AnyFunSuite
+
+class OrderDefaults extends ValidationDeclarationProvider {
+  def declaration: Declaration = Declaration(
+    purposes = Some(Set(Purpose.ADMISSION, Purpose.FULL)),
+    features = Set(FeatureReference("component:orders", "approval")))
+}
+class HeavyOrderCase extends ValidationDeclarationProvider {
+  def declaration: Declaration = Declaration(purposes = Some(Set(Purpose.HEAVY)))
+}
+@ValidationSpecification(identity = "orders:approval", declaration = classOf[OrderDefaults])
+class OrderSpec extends AnyFunSuite {
+  test("approval case 1") { checkApproval(1) }
+  test("approval case 2") { checkApproval(2) }
+
+  @ValidationScenario(name = "approval case 1", identity = "approval:1")
+  def firstAnchor(): Unit = ()
+
+  @ValidationScenario(name = "approval case 2", identity = "approval:2",
+    declaration = classOf[HeavyOrderCase])
+  def secondAnchor(): Unit = ()
+
+  def checkApproval(caseNumber: Int): Unit = { require(caseNumber > 0) }
+}
+```
+
+An annotation's empty identity/revision explicitly requests the fallback below;
+nonempty values must be exact trimmed, control-free text of at most 512
+characters. `Void.class` supplies no declaration. An explicit provider returning
+`Declaration()` supplies an empty declaration, preserving S1 origins. Merely
+having an identity anchor does not assign purpose membership or create a
+declaration origin. No Scala source or annotation JSON is parsed.
+
+A provider is a public concrete subclass of `ValidationDeclarationProvider`
+with a public no-arg constructor. Its code source must match the selected local
+artifact containing the executable suite. Type, constructor and provenance are
+admitted before construction; `declaration` is called once per interpreted
+annotation source. Invalid type/constructor/provenance, a thrown provider
+exception, null value or an S1-invalid declaration yields bounded diagnostics
+and invalid metadata. A bad specification provider invalidates every actual
+operation even when a scenario would replace its fields. A bad scenario provider
+invalidates that operation. Valid composition always calls the S1 resolver.
+
+Scenario anchors are effective public instance no-arg `Unit`/void methods from
+`getMethods`, including effective inherited methods. An unannotated override
+does not acquire the replaced method's annotation. `name` must equal one actual
+registered full ScalaTest test name. Orphans, duplicate anchors for a name and
+invalid method shapes invalidate the containing suite's actual operations;
+they never create a nonexistent operation. Anchors bind metadata only and their
+methods are not invoked. Parameterized cases use distinct concrete registrations
+and optional distinct helper anchors, delegating bodies as in the example.
+WordSpec anchors name full names such as `orders should approve case 1`.
+
+## Explicit local discovery scope and completeness
+
+`discoverC(scope, loader)` returns `Consequence[Inventory]` from caller-admitted
+local artifacts and one caller-owned `ClassLoader`. `DiscoveryScope(identity,
+revision, artifacts)` contains a `Vector[ArtifactScope]`; each artifact supplies
+`componentIdentity`, `artifactIdentity`, `artifactRevision`, `sourceRevision`,
+`root: Path` and `packagePrefix`. Roots are canonical absolute existing
+non-symlink local directories or regular JARs. Namespaces are nonempty Java
+package names without wildcards/traversal. Enumeration visits `.class` entries
+only in that package and descendants, without JAR extraction, remote access or
+classpath-wide membership inference. Streams and JAR files close on all paths.
+Duplicate `(componentIdentity, artifactIdentity)` keys are rejected.
+
+Class loading uses `Class.forName(name, false, loader)`. Discovery supports
+public concrete no-arg flat ScalaTest `Suite`s, including actual `AnyFunSuite`
+and `AnyWordSpec`. Ordinary classes and abstract suites are ignored. Executable
+suite code source must match its admitted artifact, so a parent-loader shadow
+cannot be claimed as content of a JAR. An admitted suite is constructed once to
+read its real `testNames` and `nestedSuites`; test bodies do not run. Nonpublic,
+nonconstructible or nested suites are explicitly unsupported and make enumeration
+partial. Discovery of trusted local suites/providers can run constructor,
+registration and provider code; it is not an untrusted-code sandbox.
+Production never creates, configures, closes or globally retains the loader.
+
+| Completeness | Meaning within the explicit artifact/package scope |
+| --- | --- |
+| `COMPLETE` | Every admitted namespace was successfully enumerated and supported suites inspected, including an explicit empty scope or successfully empty namespace. |
+| `PARTIAL` | Some enumeration is usable, but traversal/loading/linkage/constructor/unsupported-suite failures leave a gap. |
+| `UNKNOWN` | No nonempty artifact scope could be enumerated, for example a scope consisting solely of an invalid/unreadable JAR. |
+
+Invalid metadata alone does not reduce completeness of executable enumeration.
+Completeness says nothing about all application tests, feature populations or
+adequacy of declared metadata. Scope diagnostics survive empty inventories and
+queries. Diagnostics have fixed known codes `enumeration`, `loading`,
+`provenance`, `unsupported-suite`, `suite-construction`, `annotation`, `anchor`,
+`provider`, `metadata`, `identity`, `ambiguity`, `truncated`. Each source/message
+is control-free and at most 512 characters. At most 32 diagnostics per artifact
+and 256 overall are retained, including operation diagnostics; an explicit final
+truncation diagnostic reports omitted details. Raw exception text and stacks
+are not exposed.
+
+## Identity, provenance and actual operation rows
+
+`OperationReference(component, specification, operation)` is a logical reference.
+Component comes from the artifact scope. Specification is the annotation's
+identity or the suite binary class name; operation is its scenario annotation's
+identity or exact registered full test name. IDs contain neither revisions nor
+hashes. Equal names in different components are different references.
+
+`Provenance(artifactIdentity, artifactRevision, sourceRevision,
+operationRevision, abiVersion = 1)` preserves independent explicit revisions.
+An operation revision uses scenario revision, otherwise specification revision,
+otherwise artifact revision. Revision-only changes leave logical IDs stable.
+Malformed annotation identity/revision text invalidates interpretation, retaining
+the real class/test name fallback for inspection.
+
+Each `Operation` has reference, provenance,
+`ScalaTestSelector(suiteClassName, testName)`, optional normalized `metadata` and
+diagnostics. Selectors have framework coordinates only. Invalid interpretation
+retains actual rows with `metadata = None`; valid unannotated rows have
+`Some(empty Metadata)` and `Origins(false, false)`. Duplicate logical references
+retain all real rows and invalidate metadata on every collision. Neither suite
+instances, loaders, callbacks nor runtime functions enter inventory equality.
+Rows sort by component/specification/operation, then artifact identity and suite/
+test selector. The returned scope orders artifacts by component/artifact identity,
+so artifact input order does not alter inventory equality or row/diagnostic semantics.
+
+## Pure queries and supplemental resolution
+
+`SelectionQuery(purposes = Set.empty, features = Set.empty)` supplies typed
+dimensions to `selectC(inventory, query): Consequence[Vector[Operation]]`.
+Matching is OR within purposes, OR within features, AND between dimensions.
+An empty dimension adds no filter. Thus FOCUSED with `{featureA, featureB}`
+selects FOCUSED operations covering either scoped reference, without assigning
+extra purpose memberships. Only valid unambiguous normalized operations are
+returned, in deterministic order. Empty queries include valid unannotated rows.
+
+`resolveC(inventory, reference): Consequence[Operation]` requires one exact,
+present, valid, unambiguous logical reference. Supplemental references can bind
+an unannotated operation or a purpose outside a query; resolution preserves
+metadata and execution requirements. Absent (`validation.discovery.absent`),
+invalid (`validation.discovery.invalid`) and ambiguous
+(`validation.discovery.ambiguous`) are distinct structured policies. Queries
+perform no artifact I/O or loader actions. They do not reinterpret an empty
+selection from PARTIAL/UNKNOWN scope as evidence of missing coverage; the source
+inventory retains its completeness and diagnostics.
+
+Public boundaries reject null and malformed scopes, inventories, queries,
+references, selectors, diagnostics and unsupported provenance ABI through
+`Consequence.argumentPolicyViolation` policies under `validation.discovery.`.
+Identity/revision and test-name text is exact nonempty trimmed control-free
+text of at most 512 characters; suite/package names follow Java binary/package
+grammar. No generic record replaces these fixed public models.
+
 ## Phase boundary
 
-Step P103-S1 supplies only the callable declaration model and interpretation
-contract. It supplies no annotation syntax, framework adapter, discovery,
-operation inventory or invocation support. Scoped executable identities,
-source/artifact revisions and provenance, COMPLETE/PARTIAL/UNKNOWN enumeration,
-unannotated-operation visibility, real scenario discovery, parameterized
-invocation, CML mapping and concrete runtime/static consumer fixtures remain
-[Phase 103](../phase/phase-103.md) obligations. Origins alone does not satisfy them.
+P103-S1 is accepted at `ac443ed353cc682251e4d17bf4e64a1285955798`.
+P103-S2 authors annotations, actual discovery, typed selectors and pure queries;
+parent compilation, focused execution and independent review remain acceptance
+steps. The selector specification demonstrates in-process `Suite.run(Some(name),
+Args(reporter))` and exactly one parameter-case success. That demonstrates the
+framework selector, without claiming CNCF typed process invocation.
+S3 retains the existing CNCF execution-path adapter, CML mapping, shared static
+fixtures and actual sm-workflow/cbd-support handoff. Full connected producer
+validation and [Phase 103](../phase/phase-103.md) acceptance remain open.
 
 No pass/fail, actual runtime, Candidate state, hashes, executor arguments, KPI,
 suite registry or sm-workflow time-budget policy belongs to this ABI.

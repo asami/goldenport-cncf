@@ -37,8 +37,8 @@ failures reject incompatible aggregates without weakening class requirements.
 
 ## Producer and consumer responsibilities
 
-CNCF owns normalized declaration semantics and the later stable discovery and
-typed operation binding contract. sm-workflow owns purpose/feature selection,
+CNCF owns normalized declaration semantics, scoped discovery, pure purpose/feature
+queries and stable typed selector/reference data. sm-workflow owns query input,
 Slice validation plans, execution policy and observations. textus-cbd-support
 owns static analysis, coverage comparison and KPI presentation. Cozy owns CML
 syntax and generation; equivalent normalized mapping fixtures belong to the
@@ -49,13 +49,73 @@ test features supply inferred application mappings or a target feature inventory
 Declared duration is operation-level data. Runtime observation scopes and their
 comparability are separate consumer evidence.
 
+## Discovery separation and trust
+
+`ValidationDiscoveryV1` owns only fixed instance-independent public data and
+delegates to package-private helpers. `ValidationDiscovery` admits scope and
+coordinates registration inspection, completeness, collision invalidation,
+ordering and diagnostic budgets. `ValidationArtifactEnumeration` traverses the
+bounded directory/JAR namespace and admits matching local code sources.
+`ValidationAnnotationInterpretation` binds effective runtime anchors to real
+registered names and obtains typed declarations. `ValidationDiscoverySelection`
+admits inventory/query data and applies pure queries and exact references.
+
+Only ScalaTest core 3.2.18 is a Provided production dependency. The existing
+ScalaTest Test dependency and repository test generator remain unchanged.
+Public concrete no-arg flat Suites are the initial framework boundary. Actual
+FunSuite/WordSpec fixtures exercise their own `testNames`; there is no independent
+suite membership registry. Distinct parameter registrations and helper anchors
+avoid parsing/fuzzy matching test text. A caller can invoke one concrete selector
+through ScalaTest itself; the existing CNCF execution-path adapter remains S3.
+
+The caller supplies the local artifact roots, package namespaces, component and
+artifact/source revisions and loader. Enumeration does not infer global project
+membership. `Class.forName` suppresses initialization while loading; admitted
+suite construction/registration and provider evaluation are trusted local side
+effects. Matching code-source admission prevents parent-loader shadowing from
+claiming unrelated suite/provider content. Discovery owns short-lived file
+streams/JARs and closes them; the caller owns every loader action and lifecycle.
+There are no production loader caches, threads or retained suite objects.
+
+Java runtime annotation interfaces avoid Scala StaticAnnotation retention
+assumptions and are directly usable in Scala. Public typed declaration providers
+are admitted for type, public no-arg construction and matching artifact source
+before construction. A declaration is read once for each annotation source.
+Provider absence (`Void.class`) and explicit `Declaration()` preserve S1 origins;
+all valid metadata merge rules remain exclusively in S1. Invalid defaults cannot
+be hidden by scenario overrides. Inventory rows hold only immutable typed facts.
+
+## Logical references and scope facts
+
+Logical component/specification/operation references remain independent of
+artifact, source and operation revisions. A class annotation identity falls back
+to the binary suite name and a scenario identity to its exact registered full
+name; operation revision falls back through scenario/specification/artifact.
+Malformed identity text uses the real source fallback only for invalid inspection
+rows. Collisions preserve all selectors and invalidate all colliding metadata.
+Deterministic row order is independent of artifact input order.
+
+COMPLETE/PARTIAL/UNKNOWN describes executable enumeration within explicit scope.
+Invalid metadata can coexist with COMPLETE enumeration. Unannotated operations
+remain visible, valid and explicitly resolvable without gaining a purpose. Scope
+diagnostics are retained even when no row is available. Per-artifact and overall
+budgets include row diagnostics and provide explicit truncation, preventing
+unbounded exception/source dumps.
+
+The pure query helper consumes inventory data only. It does not re-open artifacts
+or acquire a loader. Typed sets express purpose OR and feature OR, combined with
+AND across dimensions; no purpose hierarchy or feature relationship is inferred.
+Supplemental exact resolution preserves metadata and existing execution facts.
+Consumers retain the inventory's completeness when interpreting an empty result;
+no observed-feature denominator or missing-coverage claim is generated here.
+
 ## Remaining connected delivery
 
-P103-S1 implements declaration interpretation only. It does not install
-annotations, discover classes/scenarios, enumerate artifacts or invoke tests.
-Declaration origins are presence facts, not revision provenance or inventory
-completeness. Stable scoped operation identity, source/revision references,
-COMPLETE/PARTIAL/UNKNOWN enumeration, unannotated and invalid entries, real
-scenario invocation, CML mapping and concrete consumer fixtures remain Phase
-103 work. The [phase checklist](../phase/phase-103-checklist.md) owns delivery
-status; this design does not claim Phase acceptance.
+P103-S1 is accepted in `ac443ed353cc682251e4d17bf4e64a1285955798`.
+P103-S2 authors the discovery/query boundary and real framework specifications;
+its parent validation and independent review are pending. The in-process
+ScalaTest selector case is framework evidence only. S3 still binds selectors to
+the existing typed CNCF execution path and supplies CML equivalence, shared
+complete/partial static fixtures and actual runtime/static consumer handoff.
+Full Phase validation/review remain open. The
+[phase checklist](../phase/phase-103-checklist.md) owns delivery status.

@@ -491,6 +491,7 @@ lazy val root = project
       "org.goldenport" % "cncf-collaborator-api" % "0.2.0",
 
       // Testing
+      "org.scalatest" %% "scalatest-core" % "3.2.18" % Provided,
       "org.scalatest" %% "scalatest" % "3.2.18" % Test,
       "org.scalacheck" %% "scalacheck" % "1.17.1" % Test,
       "com.mysql" % "mysql-connector-j" % "8.4.0" % Test,
