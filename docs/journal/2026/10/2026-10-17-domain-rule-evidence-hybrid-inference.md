@@ -29,6 +29,11 @@ Evidence
   |    |- ObservedFact
   |    |- DeclaredFact
   |    `- DerivedFact
+  |- Measure
+  |    |- Similarity
+  |    |    `- EmbeddingSimilarity
+  |    |- Distance
+  |    `- Score
   |- Estimate
   |    |- StatisticalEstimate
   |    |- Prediction
@@ -39,6 +44,13 @@ Evidence
 ```
 
 Evidence type and provenance are separate axes.
+
+Measure is a first-class Evidence kind. Embedding itself is a representation
+mechanism rather than Evidence: an embedding model produces vectors, and a
+comparison over those vectors produces an EmbeddingSimilarity Measure.
+Similarity scores are not probabilities and therefore are not Estimates.
+Measures may be consumed directly by Domain Rules and may also serve as input
+Evidence for Estimates or Judgments.
 
 ## Symbolic and Generative Reasoning
 
@@ -54,6 +66,7 @@ as AIJudgment by default rather than being silently promoted to Fact.
 The architecture deliberately combines both:
 
 - symbolic reasoning for deterministic, explainable derivation;
+- embedding/vector similarity for deterministic relational Measures and retrieval;
 - BI/statistical/ML processing for quantified uncertainty and predictions;
 - Knowledge as source material and deterministic inference input;
 - generative AI for semantic interpretation and judgment;
@@ -83,7 +96,7 @@ Rule to distinguish a calibrated probability from an AI semantic judgment.
 The intended long-term flow is not a single pipeline but a cooperative
 decision space.
 
-Symbolic inference can derive Facts, BI/ML can produce Estimates, generative AI
+Symbolic inference can derive Facts, embedding/vector processing can produce Measures and retrieve related Evidence, BI/ML can produce Estimates, generative AI
 can produce Judgments, and Human judgment can provide or admit semantic
 decisions. Domain Rules declare which Evidence kinds are acceptable. Candidate
 Admission may gate evidence or judgments before high-impact decisions.
