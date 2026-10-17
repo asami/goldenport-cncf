@@ -61,7 +61,8 @@ import org.goldenport.cncf.datastore.{
 import org.goldenport.cncf.entity.{
   EntityConcurrencyPolicy,
   EntityWritePolicy,
-  RevisionPreconditionPolicy
+  RevisionPreconditionPolicy,
+  SimpleEntityStorageShapePolicy
 }
 import org.goldenport.cncf.unitofwork.{CommitRecorder, PrepareResult, TransactionContext}
 import org.goldenport.cncf.directive.{Query as EntityQuery}
@@ -76,7 +77,7 @@ import org.simplemodeling.model.datatype.EntityRevision
  *  version May. 26, 2026
  *  version Jul. 26, 2026
  *  version Sep. 29, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -1319,7 +1320,7 @@ class SqlDataStore(
     def _read_field_(name: String): String =
       if (config.normalizeColumnNames &&
           !SimpleEntityStorageShapePolicy.isConcurrencyRevisionStorageField(name))
-        _to_property_name(_column_name(name))
+        org.goldenport.record.RecordKeyNaming.toCanonicalCamelName(_column_name(name))
       else name
     val guards = plan.exclusionGuards.map {
       case EntityMutationExclusionGuard.EqualTo(fieldname, value) =>

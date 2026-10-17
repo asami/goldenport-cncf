@@ -1,10 +1,11 @@
 package org.goldenport.cncf.phase51.build
 
 import java.io.File
+import scala.util.control.NonFatal
 
 /*
  * @since   Jul. 28, 2026
- * @version Oct.  9, 2026
+ * @version Oct. 14, 2026
  */
 final case class CncfGenerationInputs(
   cozyGeneratorVersion: String,
@@ -16,6 +17,38 @@ final case class CncfGenerationInputs(
 
 object CncfGenerationBuildContract {
   val GENERATION_PROVENANCE_PATH = "target/cozy/generation-provenance.json"
+
+  def selectedGeneratorRoot(
+    propertyValue: Option[String],
+    environmentValue: Option[String]
+  ): Either[Vector[String], Option[File]] = {
+    propertyValue.orElse(environmentValue) match {
+      case None => Right(None)
+      case Some(value) =>
+        val selected = value.trim
+        def _failure_(reason: String): Left[Vector[String], Option[File]] = {
+          Left(Vector(
+            s"The selected Cozy generator root '$selected' $reason. " +
+              "recovery=set-cncf.cozyGeneratorRoot-or-CNCF_COZY_GENERATOR_ROOT-to-an-existing-Cozy-project-directory-containing-build.sbt"
+          ))
+        }
+        if (selected.isEmpty)
+          _failure_("is blank")
+        else {
+          try {
+            val root = new File(selected).getCanonicalFile
+            if (!root.isDirectory)
+              _failure_("must be an existing directory")
+            else if (!new File(root, "build.sbt").isFile)
+              _failure_("must contain a regular build.sbt file")
+            else
+              Right(Some(root))
+          } catch {
+            case NonFatal(_) => _failure_("cannot be canonicalized or inspected")
+          }
+        }
+    }
+  }
 
   def isGenerationNotice(message: String): Boolean =
     Option(message).exists { value =>
@@ -74,7 +107,8 @@ object CncfGenerationBuildContract {
 
   def command(
     inputs: CncfGenerationInputs,
-    outputDirectory: File
+    outputDirectory: File,
+    generatorRoot: Option[File] = None
   ): Either[Vector[String], Vector[String]] = {
     val outputdir = _normalize_file(outputDirectory)
     val errors = Vector.newBuilder[String]
@@ -89,7 +123,8 @@ object CncfGenerationBuildContract {
       Right(Vector(
         "cozy",
         "--runtime",
-        inputs.cozyGeneratorVersion,
+        inputs.cozyGeneratorVersion
+      ) ++ generatorRoot.toVector.flatMap(root => Vector("--runtime-dev-dir", root.getCanonicalPath)) ++ Vector(
         "modeler-scala-value",
         inputs.source.getAbsolutePath,
         "--cncf-version",
@@ -115,7 +150,8 @@ object CncfGenerationBuildContract {
 
   def validationCommand(
     inputs: CncfGenerationInputs,
-    outputDirectory: File
+    outputDirectory: File,
+    generatorRoot: Option[File] = None
   ): Either[Vector[String], Vector[String]] = {
     val outputdir = _normalize_file(outputDirectory)
     val errors = Vector.newBuilder[String]
@@ -130,7 +166,8 @@ object CncfGenerationBuildContract {
       Right(Vector(
         "cozy",
         "--runtime",
-        inputs.cozyGeneratorVersion,
+        inputs.cozyGeneratorVersion
+      ) ++ generatorRoot.toVector.flatMap(root => Vector("--runtime-dev-dir", root.getCanonicalPath)) ++ Vector(
         "generation-provenance-validate",
         inputs.source.getAbsolutePath,
         s"--save=${outputdir.get.getAbsolutePath}",
@@ -148,5 +185,4 @@ object CncfGenerationBuildContract {
 
   private def _normalize_file(file: File): Option[File] =
     Option(file).map(_.getAbsoluteFile.toPath.normalize().toFile)
-
 }

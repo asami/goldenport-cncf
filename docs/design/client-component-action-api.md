@@ -67,3 +67,33 @@ are specified in `docs/spec/output-format.md`.
 ### Configuration
 - `cncf.http.driver = real | fake` (default: real)
 - `cncf.http.baseurl = http://localhost:8080` (default)
+
+## Public Client CLI Contract
+
+The supported client entry point is:
+
+```text
+cncf client <component.service.operation> <operation parameters> [--baseurl <URL>]
+```
+
+Client mode uses the same operation selector and declared operation parameters
+as `cncf command`, and invokes the operation on a remote CNCF server.
+Transport options such as `--baseurl` configure the remote connection.
+New features, examples, and client acceptance checks MUST use this entry point.
+
+### Client Acceptance Contract
+
+Operation acceptance scenarios use the same operation selector, declared
+business parameters, and semantic result assertions in command and client
+modes. Remote execution changes the execution mode and connection settings.
+The scenario MUST NOT construct HTTP paths or request bodies to invoke the
+operation; CNCF owns that transport mapping.
+
+### Skill Stability Across Deployment Modes
+
+Skills define operations and business parameters independently of deployment
+mode. Switching between local execution and remote CNCF execution MUST NOT
+require changes to skill definitions or their invocation procedures.
+CNCF execution configuration owns the execution mode and remote connection
+settings, and CNCF owns the transport mapping. Acceptance verification MUST
+exercise the same unchanged skill under both execution configurations.

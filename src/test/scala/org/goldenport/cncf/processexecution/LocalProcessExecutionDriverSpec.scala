@@ -2,8 +2,11 @@ package org.goldenport.cncf.processexecution
 
 import java.io.IOException
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
+import java.nio.file.{Files, Path, Paths}
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
+import scala.jdk.CollectionConverters.*
+import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.resource.{ResourceTreeAccess, ResourceTreeEntry, ResourceTreeLimits, ResourceTreeReference}
 import org.goldenport.cncf.workarea.WorkAreaSpace
@@ -16,7 +19,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for Phase 34 controlled local Process Execution.
  *
  * @since   Jul. 17, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -38,6 +42,211 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
   )
 
   "Local Process Execution driver" should {
+    "send normal Git vectors with fixed environment and canonical workspace cwd through both start variants" in {
+      Given("an admitted typed Git Head and a controlled launcher that records direct launch attempts")
+      val fixture = GitExecutionSpecSupport.create()
+      val calls = new ConcurrentLinkedQueue[(Vector[String], Path, Map[String, String])]()
+      val driver = new LocalProcessExecutionDriver("controlled-git", _sbt_launcher(calls))
+      val workarea = new ProcessExecutionWorkArea(Files.createDirectory(fixture.root.resolve("driver-area")))
+      val execution = GitExecutionAdmission.resolveC(fixture.context, fixture.target, GitOperation.Head).toOption.get
+      try {
+        When("the direct and WorkArea variants start the same admitted typed execution")
+        val results = Vector(driver.startC(execution), driver.startC(execution, workarea)).map(_.flatMap(_.awaitC))
+        Then("both reach the normal Git executable once with no wrapper, fixed argv, environment and actual checkout")
+        results.foreach(_.toOption.map(_.termination) shouldBe Some(ProcessExecutionTermination.LaunchFailed))
+        val recorded = calls.iterator().asScala.toVector
+        recorded should have size 2
+        recorded.foreach { case (command, cwd, environment) =>
+          command shouldBe Vector(Paths.get("/usr/bin/git").toRealPath().toString) ++ GitProgramDefinition.prefix ++
+            Vector("rev-parse", "--verify", "HEAD^{commit}")
+          cwd shouldBe fixture.checkout.toRealPath()
+          environment shouldBe Map("PATH" -> "/usr/bin:/bin") ++ GitProgramDefinition.fixedEnvironment
+        }
+        driver.activeHandleCount shouldBe 0
+        driver.activeProcessCount shouldBe 0
+      } finally { driver.close(); workarea.close(); fixture.close() }
+    }
+
+    "deny Git binding invalidation and request override before either launcher entry" in {
+      Given("an admitted Git Head, a forged request override and a binding invalidated after admission")
+      val fixture = GitExecutionSpecSupport.create()
+      val calls = new ConcurrentLinkedQueue[(Vector[String], Path, Map[String, String])]()
+      val driver = new LocalProcessExecutionDriver("invalid-git", _sbt_launcher(calls))
+      val workarea = new ProcessExecutionWorkArea(Files.createDirectory(fixture.root.resolve("driver-area")))
+      val execution = GitExecutionAdmission.resolveC(fixture.context, fixture.target, GitOperation.Head).toOption.get
+      val forged = execution.copy(request = execution.request.copy(arguments = Vector("--help")))
+      try {
+        When("the driver receives a non-template argument and then the original root is moved before both starts")
+        val argument = driver.startC(forged, workarea)
+        Files.move(fixture.checkout, fixture.root.resolve("moved-checkout"))
+        val roots = Vector(driver.startC(execution), driver.startC(execution, workarea))
+        Then("all prelaunch checks fail without any controlled launcher call or live process resource")
+        argument.isFaillure shouldBe true
+        roots.foreach(_.isFaillure shouldBe true)
+        calls shouldBe empty
+        driver.activeHandleCount shouldBe 0
+        driver.activeProcessCount shouldBe 0
+      } finally { driver.close(); workarea.close(); fixture.close() }
+    }
+
+    "reclaim normal Git handles and captures after bounded output termination" in {
+      Given("an actual temporary Git repository and a finite stdout bound smaller than its root output")
+      val fixture = GitExecutionSpecSupport.create()
+      GitExecutionSpecSupport.setup(fixture.checkout, "init", "--initial-branch=main")
+      val driver = new LocalProcessExecutionDriver()
+      val admitted = GitExecutionAdmission.resolveC(fixture.context, fixture.target, GitOperation.Root).toOption.get
+      val bounded = admitted.copy(effectiveLimits = admitted.effectiveLimits.copy(stdoutBytes = Some(1L)))
+      try {
+        When("the normal direct Git process exceeds its bounded stdout capture")
+        val result = driver.startC(bounded).flatMap(_.awaitC)
+        Then("the shared lifecycle returns an incomplete bounded capture and removes every active handle")
+        result.toOption.get.termination shouldBe ProcessExecutionTermination.OutputLimitExceeded(ProcessExecutionStream.Stdout)
+        result.toOption.get.stdout.truncated shouldBe true
+        result.toOption.get.stdout.content.size shouldBe 1
+        driver.activeHandleCount shouldBe 0
+        driver.activeProcessCount shouldBe 0
+      } finally { driver.close(); fixture.close() }
+    }
+
+    "send fixed Compile and Test vectors with the admitted checkout cwd through both start variants" in {
+      Given("tagged build definitions and a controlled launcher that records attempts without starting SBT")
+      val root = _sbt_root()
+      val cleanup = new ProcessExecutionWorkArea(root)
+      val workarea = new ProcessExecutionWorkArea(Files.createDirectory(root.resolve("workarea")))
+      val calls = new ConcurrentLinkedQueue[(Vector[String], Path, Map[String, String])]()
+      val driver = new LocalProcessExecutionDriver("controlled-build", _sbt_launcher(calls))
+      val executions = Vector(SbtOperation.Compile, SbtOperation.Test).map(_sbt_execution(root, _))
+      try {
+        When("each semantic operation uses the direct and UnitOfWork WorkArea driver overloads")
+        val results = executions.flatMap { execution =>
+          Vector(driver.startC(execution).flatMap(_.awaitC), driver.startC(execution, workarea).flatMap(_.awaitC))
+        }
+
+        Then("the controlled launcher receives only the fixed vector, fixed environment and actual checkout")
+        results.map(_.toOption.map(_.termination)) shouldBe Vector.fill(4)(Some(ProcessExecutionTermination.LaunchFailed))
+        val recorded = calls.iterator().asScala.toVector
+        recorded.map(_._2) shouldBe Vector.fill(4)(root.resolve("checkout").toRealPath())
+        recorded.map(_._1.last) shouldBe Vector("compile", "compile", "test", "test")
+        recorded.foreach { case (command, _, environment) =>
+          command shouldBe Vector(Paths.get("/usr/bin/true").toRealPath().toString, "--batch",
+            "-Dsbt.server.autostart=false", "-Dsbt.supershell=false", "-Dsbt.color=false",
+            command.last)
+          environment shouldBe Map("TEXTUS_BUILD_PROFILE" -> "controlled")
+        }
+        driver.activeProcessCount shouldBe 0
+        driver.activeHandleCount shouldBe 0
+      } finally {
+        driver.close()
+        workarea.close()
+        cleanup.close()
+      }
+    }
+
+    "keep generic working directories relative to the existing WorkArea" in {
+      Given("a generic admitted probe with a nested WorkArea cwd and the same controlled launcher")
+      val root = _sbt_root()
+      val workarea = new ProcessExecutionWorkArea(root)
+      val calls = new ConcurrentLinkedQueue[(Vector[String], Path, Map[String, String])]()
+      val driver = new LocalProcessExecutionDriver("controlled-generic", _sbt_launcher(calls))
+      val execution = _execution(Vector("streams", "literal"),
+        workingdirectory = Some(WorkAreaRelativePath.parseC("nested").toOption.get))
+      try {
+        When("the generic execution starts through the WorkArea overload")
+        val result = driver.startC(execution, workarea).flatMap(_.awaitC)
+
+        Then("its working directory still resolves under the WorkArea and its arguments are unchanged")
+        result.toOption.map(_.termination) shouldBe Some(ProcessExecutionTermination.LaunchFailed)
+        calls.iterator().asScala.toVector.map(_._2) shouldBe Vector(root.resolve("nested"))
+        calls.iterator().asScala.toVector.map(_._1) shouldBe Vector(_java_path +: execution.effectiveArguments)
+      } finally {
+        driver.close()
+        workarea.close()
+      }
+    }
+
+    "reject a retargeted workspace before either launcher entry and retain driver closure semantics" in {
+      Given("an admitted configured root symlink later pointing at a different checkout")
+      val root = _sbt_root()
+      val cleanup = new ProcessExecutionWorkArea(root)
+      val first = Files.createDirectory(root.resolve("first"))
+      val second = Files.createDirectory(root.resolve("second"))
+      val configured = Files.createSymbolicLink(root.resolve("configured"), first)
+      val execution = _sbt_execution(root, SbtOperation.Test, Some(configured))
+      val workarea = new ProcessExecutionWorkArea(Files.createDirectory(root.resolve("workarea")))
+      val calls = new ConcurrentLinkedQueue[(Vector[String], Path, Map[String, String])]()
+      val driver = new LocalProcessExecutionDriver("retargeted-build", _sbt_launcher(calls))
+      Files.delete(configured)
+      Files.createSymbolicLink(configured, second)
+      try {
+        When("both driver overloads receive the retargeted binding and the driver then closes")
+        val direct = driver.startC(execution)
+        val scoped = driver.startC(execution, workarea)
+        driver.close()
+        val closed = driver.startC(execution)
+
+        Then("all starts fail before the launcher and closure leaves no runtime-owned process")
+        Vector(direct, scoped, closed).foreach(_.isFaillure shouldBe true)
+        calls shouldBe empty
+        driver.activeProcessCount shouldBe 0
+        driver.activeHandleCount shouldBe 0
+        Files.isDirectory(first) shouldBe true
+        Files.isDirectory(second) shouldBe true
+      } finally {
+        driver.close()
+        workarea.close()
+        cleanup.close()
+      }
+    }
+
+    "reject every mixed WorkArea input and request override for a tagged build before launch" in {
+      Given("one admitted Test intent and forged requests carrying argv, cwd, stdin, files, trees or outputs")
+      val root = _sbt_root()
+      val cleanup = new ProcessExecutionWorkArea(root)
+      val execution = _sbt_execution(root, SbtOperation.Test)
+      val workarea = new ProcessExecutionWorkArea(Files.createDirectory(root.resolve("workarea")))
+      val path = WorkAreaRelativePath.parseC("input.txt").toOption.get
+      val name = ProcessArtifactName.parseC("input").toOption.get
+      val file = ProcessExecutionInputFile.createC(name, path, Vector(1.toByte), 16L).toOption.get
+      val output = ProcessExecutionOutputDeclaration.createC(name, path, ProcessArtifactKind.File, 16L).toOption.get
+      val reference = ResourceTreeReference.parseC("fixtures").toOption.get
+      val treelimits = ResourceTreeLimits(maxDepth = 1, maxEntries = 1, maxFileBytes = 16L, maxTotalBytes = 16L)
+      val entry = ResourceTreeEntry.createC("input.txt", Vector(1.toByte)).toOption.get
+      val snapshot = ResourceTreeAccess.inMemory(Map(reference -> Vector(entry))).snapshot(reference, treelimits).toOption.get
+      val tree = ProcessExecutionResourceTreeInput.createC(snapshot, path).toOption.get
+      val requests = Vector(
+        execution.request.copy(arguments = Vector("runMain hostile.Main")),
+        execution.request.copy(workingDirectory = Some(path)),
+        execution.request.copy(input = ProcessExecutionInput.Bytes(Vector(1.toByte))),
+        execution.request.copy(input = ProcessExecutionInput.WorkAreaFile(path)),
+        execution.request.copy(inputFiles = Vector(file)),
+        execution.request.copy(resourceTrees = Vector(tree)),
+        execution.request.copy(outputs = Vector(output)),
+        execution.request.copy(requestedLimits = ProcessExecutionLimits(stdoutBytes = Some(8L)))
+      )
+      val calls = new ConcurrentLinkedQueue[(Vector[String], Path, Map[String, String])]()
+      val driver = new LocalProcessExecutionDriver("mixed-build", _sbt_launcher(calls))
+      try {
+        When("program policy and both local driver overloads receive the unsupported mixed inputs")
+        val policyresults = requests.map(execution.definition.validateRequestC(_, execution.effectiveLimits))
+        val driverresults = requests.flatMap { request =>
+          val changed = execution.copy(request = request)
+          Vector(driver.startC(changed), driver.startC(changed, workarea))
+        }
+
+        Then("every mixed request is denied without a launcher call or checkout projection")
+        policyresults.foreach(_.isFaillure shouldBe true)
+        driverresults.foreach(_.isFaillure shouldBe true)
+        calls shouldBe empty
+        Files.exists(root.resolve("checkout").resolve(path.value)) shouldBe false
+        driver.activeProcessCount shouldBe 0
+        driver.activeHandleCount shouldBe 0
+      } finally {
+        driver.close()
+        workarea.close()
+        cleanup.close()
+      }
+    }
+
     "launch an approved argument vector directly and drain stdout and stderr concurrently" in {
       Given("a local JVM probe and a literal value that a shell would normally expand")
       val execution = _execution(Vector("streams", "$HOME"))
@@ -397,6 +606,37 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
       result.toOption.map(_.artifacts.map(_.byteCount)) shouldBe Some(Vector(2L))
       Files.exists(workspace.root) shouldBe false
     }
+  }
+
+  private def _sbt_root(): Path = {
+    val base = Files.createDirectories(Paths.get("target", "sbt-local-driver-spec").toAbsolutePath)
+    Files.createTempDirectory(base, "case-")
+  }
+
+  private def _sbt_launcher(
+    calls: ConcurrentLinkedQueue[(Vector[String], Path, Map[String, String])]
+  ): LocalProcessLauncher = new LocalProcessLauncher {
+    def startBlocking(command: Vector[String]): Process =
+      throw new IOException("controlled launcher requires an explicit working directory")
+
+    override def startBlocking(command: Vector[String], workingDirectory: Path, environment: Map[String, String]): Process = {
+      calls.add((command, workingDirectory, environment))
+      throw new IOException("controlled launch failure; no host process is created")
+    }
+  }
+
+  private def _sbt_execution(
+    root: Path,
+    operation: SbtOperation,
+    configuredroot: Option[Path] = None
+  ): ResolvedProcessExecution = {
+    val checkout = configuredroot.getOrElse(Files.createDirectories(root.resolve("checkout")))
+    val binding = WorkspaceBinding.createC(WorkspaceId.parseC("project").toOption.get, checkout).toOption.get
+    val capability = ProcessCapabilityId.parseC("project-build").toOption.get
+    val definition = SbtProgramDefinition.createC(binding, operation, capability, "project-build",
+      Paths.get("/usr/bin/true"), _limits(), Map("TEXTUS_BUILD_PROFILE" -> "controlled")).toOption.get
+    val policy = ProcessExecutionPolicy.createC(Vector(definition)).toOption.get
+    policy.resolveSbtC(definition, ProcessExecutionGrant(capability)).toOption.get
   }
 
   private def _execution(

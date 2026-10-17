@@ -9,7 +9,9 @@ import WorkflowExecutionProfileMapping.ClassBinding
 /** Decode only a standard CNCF Component parameter snapshot. No filesystem
   * discovery, configuration precedence, profile defaults or provider invocation.
   * @since   Oct.  8, 2026
-  * @version Oct.  8, 2026
+  *  version Oct.  8, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 object WorkflowExecutionProfileParameters {
   val schemaVersion = "cncf.workflow-execution-profile-mapping.v1"
@@ -31,16 +33,20 @@ object WorkflowExecutionProfileParameters {
 
   def decodeC(value: Json): Consequence[WorkflowExecutionProfileMapping] = {
     val decoded = for {
-      root <- _fields(value, Set("schemaVersion", "identity", "revision", "profiles", "classes"))
+      root <- Option(value).flatMap(_.asObject).filter { fields =>
+        val required = Set("schemaVersion", "identity", "revision", "profiles", "classes")
+        required.subsetOf(fields.keys.toSet) && fields.keys.toSet.subsetOf(required + "fallbacks")
+      }.toRight("Execution profile fields are missing or unknown")
       schema <- _string(root, "schemaVersion")
       _ <- Either.cond(schema == schemaVersion, (), "Workflow execution profile mapping schema differs")
       identity <- _string(root, "identity")
       revision <- _string(root, "revision")
       profiles <- _vector(root("profiles").get, _profile)
       classes <- _vector(root("classes").get, _binding)
-    } yield (identity, revision, profiles, classes)
-    decoded.fold(Consequence.configurationInvalid(_), { case (identity, revision, profiles, classes) =>
-      WorkflowExecutionProfileMapping.createC(identity, revision, profiles, classes)
+      fallbacks <- root("fallbacks").map(_vector(_, _binding)).getOrElse(Right(Vector.empty))
+    } yield (identity, revision, profiles, classes, fallbacks)
+    decoded.fold(Consequence.configurationInvalid(_), { case (identity, revision, profiles, classes, fallbacks) =>
+      WorkflowExecutionProfileMapping.createC(identity, revision, profiles, classes, fallbacks)
     })
   }
 

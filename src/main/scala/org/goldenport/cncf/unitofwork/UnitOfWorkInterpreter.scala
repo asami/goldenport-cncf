@@ -14,7 +14,7 @@ import org.goldenport.cncf.blob.{
   ContentRenderWorkflow
 }
 import org.goldenport.cncf.config.ConfigurationAccess
-import org.goldenport.cncf.http.{HttpDriver, RuntimeDashboardMetrics}
+import org.goldenport.cncf.http.{HttpDriver, HttpExecutionAdmission, HttpExecutionMethod, RuntimeDashboardMetrics}
 import org.goldenport.cncf.datastore.*
 import org.goldenport.cncf.embedded.{EmbeddedDataStore, EmbeddedDataStoreRunner}
 import org.goldenport.cncf.entity.*
@@ -26,7 +26,6 @@ import org.goldenport.cncf.observability.{
   ConclusionDiagnostics,
   EntityConditionalTransitionObservation
 }
-import org.goldenport.process.ShellCommandExecutor
 import org.goldenport.cncf.statemachine.TransitionValidationHook
 import org.goldenport.cncf.workflow.{ActionExecution, Continuation, ProviderExecutionRequest, ProviderIdentity, StateMachineDeterministicProvider, StateMachineProgramProvider, StateMachineProvider, StateMachineProvidedApiDispatcher, StateMachineProvidedApiRequest}
 import org.goldenport.cncf.security.{EntityAccessMode, OperationAccessPolicy}
@@ -36,7 +35,11 @@ import org.goldenport.cncf.processexecution.{
   ProcessExecutionHandle,
   ProcessExecutionResult,
   ProcessExecutionWorkArea,
-  ResolvedProcessExecution
+  ProcessExternalEffectPolicy,
+  ResolvedProcessExecution,
+  SbtExecutionAdmission,
+  SbtExecutionResult,
+  GitExecutionAdmission
 }
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.record.Record
@@ -56,7 +59,7 @@ import org.simplemodeling.model.directive.Update
  *  version May. 11, 2026
  *  version Aug.  1, 2026
  *  version Sep. 19, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -239,22 +242,30 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case UnitOfWorkOp.HttpGet(path, headers, properties) =>
       _with_calltree("uow:http:get") {
-        Consequence(_http_driver.get(path, headers, properties))
+        HttpExecutionAdmission.resolveC(uow.executionContext, HttpExecutionMethod.Get, path, properties).flatMap { admitted =>
+          Consequence(_http_driver.get(admitted.absoluteUrl, headers, admitted.properties))
+        }
       }
 
     case UnitOfWorkOp.HttpPost(path, body, headers, properties) =>
       _with_calltree("uow:http:post") {
-        Consequence(_http_driver.post(path, body, headers, properties))
+        HttpExecutionAdmission.resolveC(uow.executionContext, HttpExecutionMethod.Post, path, properties).flatMap { admitted =>
+          Consequence(_http_driver.post(admitted.absoluteUrl, body, headers, admitted.properties))
+        }
       }
 
     case UnitOfWorkOp.HttpPostBag(path, body, headers, properties) =>
       _with_calltree("uow:http:post") {
-        Consequence(_http_driver.postBag(path, body, headers, properties))
+        HttpExecutionAdmission.resolveC(uow.executionContext, HttpExecutionMethod.Post, path, properties).flatMap { admitted =>
+          Consequence(_http_driver.postBag(admitted.absoluteUrl, body, headers, admitted.properties))
+        }
       }
 
     case UnitOfWorkOp.HttpPut(path, body, headers, properties) =>
       _with_calltree("uow:http:put") {
-        Consequence(_http_driver.put(path, body, headers, properties))
+        HttpExecutionAdmission.resolveC(uow.executionContext, HttpExecutionMethod.Put, path, properties).flatMap { admitted =>
+          Consequence(_http_driver.put(admitted.absoluteUrl, body, headers, admitted.properties))
+        }
       }
 
     case UnitOfWorkOp.DataStoreLoad(id) =>
@@ -1136,14 +1147,46 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         }
       }
 
-    case UnitOfWorkOp.ShellCommandExec(command) =>
+    case UnitOfWorkOp.ShellCommandExec(_) =>
       _with_calltree("uow:shell:exec") {
-        _shell_command_executor.execute(command)
+        ProcessExternalEffectPolicy.rejectOrdinaryShellC
       }
 
     case UnitOfWorkOp.ProcessExec(execution) =>
-      _with_process_execution_calltree(execution) {
-        _execute_process_c(execution)
+      SbtExecutionAdmission.validateGenericExecutionC(execution).flatMap(_ =>
+        GitExecutionAdmission.validateGenericExecutionC(execution)).flatMap(_ =>
+        ProcessExternalEffectPolicy.validateGenericDefinitionC(execution.definition)).flatMap { _ =>
+        _with_process_execution_calltree(execution) {
+          _execute_process_c(execution)
+        }
+      }
+
+    case UnitOfWorkOp.FileReadText(target, path) =>
+      _with_calltree("uow:file:read-text") {
+        org.goldenport.cncf.workspace.WorkspaceFileExecution.readTextC(uow.executionContext, target, path)
+      }
+
+    case UnitOfWorkOp.FileWriteText(target, path, text, mode) =>
+      _with_calltree("uow:file:write-text") {
+        org.goldenport.cncf.workspace.WorkspaceFileExecution.writeTextC(uow.executionContext, target, path, text, mode)
+      }
+
+    case UnitOfWorkOp.SbtExec(target, operation) =>
+      _with_calltree("uow:sbt:execute") {
+        SbtExecutionAdmission.resolveC(uow.executionContext, target, operation).flatMap { execution =>
+          _with_process_execution_calltree(execution) {
+            _execute_process_c(execution)
+          }.map(result => SbtExecutionAdmission.decode(target, operation, execution, result))
+        }
+      }
+
+    case UnitOfWorkOp.GitExec(target, operation) =>
+      _with_calltree("uow:git:execute") {
+        GitExecutionAdmission.resolveC(uow.executionContext, target, operation).flatMap { execution =>
+          _with_process_execution_calltree(execution) {
+            _execute_process_c(execution)
+          }.map(result => GitExecutionAdmission.decode(target, operation, execution, result))
+        }
       }
   }
 
@@ -1958,9 +2001,6 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     conclusion: org.goldenport.Conclusion
   ): Boolean =
     conclusion.observation.taxonomy.symptom == org.goldenport.observation.Taxonomy.Symptom.NotImplemented
-
-  private def _shell_command_executor: ShellCommandExecutor =
-    uow.shellCommandExecutor
 
   private def _calltree_context: CallTreeContext =
     uow.executionContext.observability.callTreeContext

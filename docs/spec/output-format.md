@@ -82,6 +82,52 @@ Suffixes bypass default presentation and request a defined output format.
    - selector/path suffix (for example `.json`, `.yaml`, `.text`)
    - mode default
 
+8. **Explicit client output format (R8).** The normal CLI HTTP client MUST
+   forward an explicitly requested format option, `--json`, or ordinary
+   operation selector suffix as exactly one canonical `textus.format` query
+   property. Canonical and legacy format
+   aliases MUST use that same canonical wire key. An explicit format option
+   takes precedence over `--json`, which takes precedence over the selector
+   suffix (R7). Slash, dotted and split operation selectors retain their
+   requested suffix before alias normalization; an alias-expanded suffix is
+   used only when the input selector has none.
+   Without an explicit format request,
+   the client MUST leave the server's format selection unchanged rather than
+   forwarding its generated runtime default. Existing debug forwarding MUST
+   remain available; client-only no-exit and execution-mode controls MUST NOT
+   be forwarded. The selected operation method, path and named input MUST
+   remain unchanged, and the received HTTP response MUST be printed verbatim.
+
+
+# Client Format Examples
+
+The executable counterpart is
+[ClientOutputFormatSpec](../../src/test/scala/org/goldenport/cncf/cli/ClientOutputFormatSpec.scala).
+
+## E2 Operation format precedence and aliases (R7, R8)
+
+Given the normal Admin/system/ping FQN, `--json` selects JSON,
+`--json --format yaml` selects YAML, and both `--textus.format json` and
+`--cncf.format json` send only canonical `textus.format=json`. The resolved
+GET route and received response remain unchanged.
+
+## E3 Unspecified client format (R8)
+
+Given that FQN without a format option, together with `--no-exit`,
+`textus.command.execution-mode=direct` and `--debug.trace-job`, the client
+forwards debug trace-job while omitting canonical and legacy format keys,
+no-exit and execution-mode controls. The server-default text is preserved
+with successful exit.
+
+## E4 Operation selector suffixes and precedence (R7, R8)
+
+Given normal operation selectors, a slash `Admin/system/ping.json` selects
+JSON, dotted `Admin.system.ping.yaml` selects YAML, and split `Admin system
+ping.text` selects text. `--format yaml` overrides `.json`, and `--json`
+overrides `.yaml`. Each request preserves the resolved GET route, sends one
+canonical format property with an empty body, and prints the receiver's
+selected response verbatim with successful exit.
+
 
 # Recommended Suffixes
 

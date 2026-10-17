@@ -8,7 +8,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWork
 
 /*
  * @since   Sep. 28, 2026
- * @version Oct.  6, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] trait InMemoryJobEngineAdmissionPart extends JobEngine { self: InMemoryJobEngine =>
@@ -362,13 +362,7 @@ private[job] trait InMemoryJobEngineAdmissionPart extends JobEngine { self: InMe
             case JobRunMode.Async =>
               option.scheduledStartAt.filter(_.isAfter(now)) match {
                 case Some(scheduledat) =>
-                  _append_timeline(
-                    jobid,
-                    "job.delayed.scheduled",
-                    None,
-                    None,
-                    Some(scheduledat.toString)
-                  )
+                  _append_timeline(jobid, "job.delayed.scheduled", None, None, Some(scheduledat.toString))
                   _append_event(
                     jobid = jobid,
                     name = "job.delayed.scheduled",

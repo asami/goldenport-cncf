@@ -57,7 +57,7 @@ import org.goldenport.cncf.protocol.OperationRequestValidationObserver
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, ChildEntityBindingOperationDefinition, CmlOperationAssociationBinding, CmlOperationChildEntityBinding, CmlOperationDefinition, CmlOperationImageBinding, ImageBindingOperationDefinition}
 import org.goldenport.cncf.operation.evaluation.{CmlOperationEvaluationDeclaration, EvaluationAdmissionRequirement, OperationEvaluationActionTask, OperationEvaluationAdmission, OperationEvaluationAdmissionDiagnostic, OperationEvaluationAdmissionRequest, OperationEvaluationAttemptCapture, OperationEvaluationCrossSinkPolicy, OperationEvaluationDeliveryRuntime, OperationEvaluationLimitation, OperationEvaluationLimitationKind, OperationEvaluationOperationIdentity}
-import org.goldenport.cncf.security.{AdminAuthorizationPolicy, IngressSecurityResolver, OperationAuthorization, OperationAuthorizationProvider}
+import org.goldenport.cncf.security.{AdminAuthorizationPolicy, AuthenticationRequest, IngressSecurityResolver, OperationAuthorization, OperationAuthorizationProvider}
 import org.goldenport.cncf.config.{ResolvedParameter, ResolvedParameters}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.metrics.{ComponentMetricsRegistry, EntityAccessMetricsRegistry}
@@ -74,7 +74,7 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Apr. 30, 2026
  *  version Aug. 15, 2026
  *  version Sep.  8, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -1223,7 +1223,7 @@ final class Subsystem(
       profile <- executionProfileC
       response <- {
         val (component, _, _) = route
-        val attributes = _request_security_attributes(normalizedrequest)
+        val attributes = _request_security_attributes(normalizedrequest, route._3)
         val accesspolicy = component.operationDefinitions
           .find(x => _normalize_operation_name(x.name) == _normalize_operation_name(route._3.name))
           .flatMap(_.access.map(_.policy))
@@ -1941,12 +1941,12 @@ final class Subsystem(
 
   def executeAction(action: Action): Consequence[OperationResponse] =
     _with_managed_datastore_lease_c { _ => _resolve_route(action.request) match {
-      case Some((component, _, _)) =>
+      case Some((component, _, operation)) =>
         executionProfileC.flatMap { profile =>
           IngressSecurityResolver.resolve(
             profile,
             component.logic.executionContext(),
-            _request_security_attributes(action.request)
+            _request_security_attributes(action.request, operation)
           ).flatMap { security =>
             _execute_action_c(action, security.executionContext)
           }
@@ -2674,14 +2674,26 @@ final class Subsystem(
 
   private def _allows_controlled_test_execution: Boolean = true
 
-  private def _request_security_attributes(request: Request): Map[String, String] = {
+  private def _request_security_attributes(
+    request: Request,
+    operation: OperationDefinition
+  ): Map[String, String] = {
+    val declarednames = operation.specification.request.parameters
+      .flatMap(_.names).map(AuthenticationRequest.normalizeToken).toSet
+    val businesssession = declarednames.contains(AuthenticationRequest.normalizeToken("sessionId"))
+    def _is_business_session_(name: String): Boolean =
+      businesssession && AuthenticationRequest.normalizeToken(name) == AuthenticationRequest.normalizeToken("sessionId")
     val properties = request.properties.foldLeft(Map.empty[String, String]) { (z, property) =>
       val value = Option(property.value).map(_.toString).getOrElse("")
-      if (property.name.nonEmpty && value.nonEmpty) z.updated(property.name, value) else z
+      if (property.name.nonEmpty && value.nonEmpty && !_is_business_session_(property.name))
+        z.updated(property.name, value)
+      else z
     }
     request.arguments.foldLeft(properties) { (z, argument) =>
       val value = Option(argument.value).map(_.toString).getOrElse("")
-      if (argument.name.nonEmpty && value.nonEmpty) z.updated(argument.name, value) else z
+      if (argument.name.nonEmpty && value.nonEmpty && !_is_business_session_(argument.name))
+        z.updated(argument.name, value)
+      else z
     }
   }
 

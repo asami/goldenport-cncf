@@ -20,10 +20,11 @@ import org.goldenport.cncf.blob.{
   InlineImageOccurrence
 }
 import org.goldenport.cncf.embedded.{EmbeddedDataStore, EmbeddedStatement, EmbeddedUpdateResult}
-import org.goldenport.cncf.processexecution.{ProcessExecutionResult, ResolvedProcessExecution}
+import org.goldenport.cncf.processexecution.{GitExecutionResult, GitOperation, GitTarget, ProcessExecutionResult, ResolvedProcessExecution, SbtExecutionResult, SbtOperation, SbtTarget}
 import org.goldenport.cncf.operation.evaluation.OperationEvaluationSupplementalIntent
 import org.goldenport.cncf.workflow.{ActionExecution, ProviderExecutionRequest, StateMachineProvidedApiRequest}
 import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
+import org.goldenport.cncf.workspace.{FileReadTextResult, FileTarget, FileWriteMode, FileWriteTextResult, WorkspaceFilePath}
 
 /*
  * UnitOfWork operation algebra.
@@ -40,7 +41,7 @@ import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
  *  version Apr. 29, 2026
  *  version May.  4, 2026
  *  version Jul. 26, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -116,6 +117,32 @@ object UnitOfWorkOp {
   final case class ProcessExec(
     execution: ResolvedProcessExecution
   ) extends UnitOfWorkOp[ProcessExecutionResult]
+
+  final case class SbtExec(
+    target: SbtTarget,
+    operation: SbtOperation
+  ) extends UnitOfWorkOp[SbtExecutionResult]
+
+  final case class GitExec[A](
+    target: GitTarget,
+    operation: GitOperation[A]
+  ) extends UnitOfWorkOp[GitExecutionResult[A]]
+
+  final case class FileReadText(
+    target: FileTarget,
+    path: WorkspaceFilePath
+  ) extends UnitOfWorkOp[FileReadTextResult] {
+    override def toString: String = s"FileReadText($target,FileRead)"
+  }
+
+  final case class FileWriteText(
+    target: FileTarget,
+    path: WorkspaceFilePath,
+    text: String,
+    mode: FileWriteMode
+  ) extends UnitOfWorkOp[FileWriteTextResult] {
+    override def toString: String = s"FileWriteText($target,FileWrite)"
+  }
 
   // ------------------------------------------------------------
   // DataStore operations

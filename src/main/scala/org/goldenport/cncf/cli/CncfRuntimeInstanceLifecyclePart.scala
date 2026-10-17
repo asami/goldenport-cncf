@@ -32,7 +32,10 @@ import org.goldenport.cncf.config.StandaloneUserProfileResolver
 import org.goldenport.cncf.config.SubsystemInstanceId
 import org.goldenport.cncf.config.SubsystemStorageConfiguration
 import org.goldenport.cncf.config.SubsystemProcessExecutionConfiguration
+import org.goldenport.cncf.config.SubsystemHttpExecutionConfiguration
+import org.goldenport.cncf.http.HttpExecutionAdmission
 import org.goldenport.cncf.processexecution.{LocalProcessExecutionDriver, ProcessExecutionAdmission, ProcessExecutionDriver}
+import org.goldenport.cncf.workspace.WorkspaceExecutionAdmission
 import org.goldenport.cncf.config.SystemNodeShutdownConfiguration
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.context.ExecutionProfileActivation
@@ -89,7 +92,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Jul. 30, 2026
  *  version Aug. 19, 2026
  *  version Sep.  8, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cli] trait CncfRuntimeInstanceLifecyclePart {
@@ -136,7 +139,9 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
     configuration: ResolvedConfiguration,
     aliasresolver: AliasResolver,
     processdriver: Option[ProcessExecutionDriver] = None,
-    processadmission: Option[ProcessExecutionAdmission] = None
+    processadmission: Option[ProcessExecutionAdmission] = None,
+    workspaceadmission: Option[WorkspaceExecutionAdmission] = None,
+    httpadmission: Option[HttpExecutionAdmission] = None
   ): GlobalRuntimeContext = {
     val execution = ExecutionContext.create(
       runconfig.idNamespace,
@@ -149,7 +154,9 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
       observabilityContext = execution.observability,
         aliasresolver,
         processdriver,
-        processadmission
+        processadmission,
+        workspaceadmission,
+        httpadmission
       // httpDriver = httpDriver,
       // aliasResolver = aliasResolver,
       // runtimeMode = mode,
@@ -395,6 +402,9 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
     val processplan = runtimeconfigurationpreflight.flatMap { preflight =>
       SubsystemProcessExecutionConfiguration.admitC(preflight.bindings, preflight.identity).TAKE
     }
+    val httpplan = runtimeconfigurationpreflight.flatMap { preflight =>
+      SubsystemHttpExecutionConfiguration.admitC(preflight.bindings, preflight.identity).TAKE
+    }
     val runconfig = RuntimeConfig.from(configuration, runtimehint, executionprofile)
     val aliasresolver = AliasLoader.load(configuration.configuration)
     LogBackendHolder.install(runconfig.logBackend)
@@ -418,7 +428,7 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
         }
       }
       _create_global_runtime_context(runconfig, configuration, aliasresolver,
-        processdriver, processplan.map(_.admission))
+        processdriver, processplan.map(_.admission), processplan.flatMap(_.workspaceAdmissionOption), httpplan.map(_.admission))
       SystemNodeConstruction.withNode(systemnode) {
         def assemble() = DefaultSubsystemFactory.runtimeDefaultWithScopeC(
           _runtime_scope_context(),

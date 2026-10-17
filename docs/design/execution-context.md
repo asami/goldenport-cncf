@@ -25,6 +25,12 @@ Execution assumptions are resolved according to
 context extension. The two layers MUST represent one coherent resolved
 execution profile.
 
+## Propagation across execution boundaries
+
+Client/server and asynchronous boundaries use the normative `execution-context-propagation-architecture.md`. CNCF does not serialize or reuse the client ExecutionContext object on the server. Client functionality projects an allowlisted `ExecutionContextEnvelope`; server ingress verifies/admit its fields and constructs a new server-local ExecutionContext from server policy, admitted propagated assumptions/restrictions and Operation definitions.
+
+Propagation is an execution-platform responsibility rather than application boilerplate. Runtime-local capabilities, providers, secrets, physical resource handles and mutable facilities do not propagate. Authority cannot be widened by a propagated value. Safety Sandbox uses this mechanism to carry the Client Sandbox Definition, which is intersected with Server and Operation definitions before the server ActionCall is bound.
+
 ## Provisioning
 - CNCF constructs SystemContext during server startup.
 - Construction is explicit.

@@ -3,11 +3,12 @@ package org.goldenport.cncf.processexecution
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ScopeContext
 import org.goldenport.cncf.resource.{ResourceTreeLimits, ResourceTreeReference, ResourceTreeSnapshot}
+import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceExecutionAdmission}
 
 /*
  * @since   Jul. 17, 2026
  *  version Jul. 22, 2026
- * @version Oct.  7, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ProcessCapabilityId private (value: String) {
@@ -342,7 +343,9 @@ final class ProcessProgramDefinition private (
   val allowedInputFiles: Set[ProcessArtifactName],
   val allowedInputFilePaths: Map[ProcessArtifactName, WorkAreaRelativePath],
   val allowedResourceTrees: Map[ResourceTreeReference, ResourceTreeLimits],
-  private[processexecution] val _environment: ProcessEnvironment
+  private[processexecution] val _environment: ProcessEnvironment,
+  private[processexecution] val _sbt_metadata: Option[SbtProgramMetadata] = None,
+  private[processexecution] val _git_metadata: Option[GitProgramMetadata] = None
 ) {
   def validateRequestC(
     request: ProcessExecutionRequest,
@@ -350,6 +353,8 @@ final class ProcessProgramDefinition private (
   ): Consequence[Unit] =
     for {
       _ <- limits.requireFiniteC
+      _ <- _sbt_metadata.fold(Consequence.unit)(_ => SbtExecutionAdmission.validateRequestC(request))
+      _ <- _git_metadata.fold(Consequence.unit)(_ => GitExecutionAdmission.validateRequestC(request))
       _ <- argumentPolicy.validateC(request.arguments, limits)
       _ <- _validate_working_directory_c(request)
       _ <- _validate_artifacts_c(request)
@@ -524,6 +529,47 @@ final class ProcessProgramDefinition private (
 object ProcessProgramDefinition {
   private val _safe_identity_pattern = "[a-z][a-z0-9-]{0,63}".r
 
+  private[processexecution] def fromGitRuntimeC(
+    capability: ProcessCapabilityId,
+    safeProgramIdentity: String,
+    executableLocation: String,
+    fixedArguments: Vector[String],
+    argumentPolicy: ProcessArgumentPolicy,
+    maximumLimits: ProcessExecutionLimits,
+    environment: Map[String, String],
+    metadata: GitProgramMetadata
+  ): Consequence[ProcessProgramDefinition] =
+    fromRuntimeC(capability, safeProgramIdentity, executableLocation, fixedArguments,
+      argumentPolicy, maximumLimits, Set.empty, environment = environment).map { definition =>
+      new ProcessProgramDefinition(definition.capability, definition.safeProgramIdentity,
+        definition._executable_location, definition.fixedArguments, definition.argumentPolicy,
+        definition.maximumLimits, definition.allowedArtifacts, definition.allowsWorkingDirectory,
+        definition.allowedInputFiles, definition.allowedInputFilePaths, definition.allowedResourceTrees,
+        definition._environment, None, Some(metadata))
+    }
+
+  private[processexecution] def fromSbtRuntimeC(
+    capability: ProcessCapabilityId,
+    safeProgramIdentity: String,
+    executableLocation: String,
+    fixedArguments: Vector[String],
+    maximumLimits: ProcessExecutionLimits,
+    environment: Map[String, String],
+    metadata: SbtProgramMetadata
+  ): Consequence[ProcessProgramDefinition] =
+    fromRuntimeC(
+      capability, safeProgramIdentity, executableLocation, fixedArguments,
+      ProcessArgumentPolicy(fixedArguments), maximumLimits, Set.empty, environment = environment
+    ).map { definition =>
+      new ProcessProgramDefinition(
+        definition.capability, definition.safeProgramIdentity, definition._executable_location,
+        definition.fixedArguments, definition.argumentPolicy, definition.maximumLimits,
+        definition.allowedArtifacts, definition.allowsWorkingDirectory, definition.allowedInputFiles,
+        definition.allowedInputFilePaths, definition.allowedResourceTrees, definition._environment,
+        Some(metadata)
+      )
+    }
+
   /**
    * Creates a definition during trusted runtime assembly. Component and
    * provider behavior must submit only ProcessExecutionRequest values to an
@@ -636,6 +682,38 @@ final class ProcessExecutionAdmission private (
   grants: Map[ProcessCapabilityId, ProcessExecutionGrant],
   componentadmissions: Option[Map[org.goldenport.cncf.component.ComponentId, ProcessExecutionAdmission]] = None
 ) {
+  private[cncf] def admitGitForScopeC(
+    scope: ScopeContext,
+    binding: WorkspaceBinding,
+    operation: GitOperation[?]
+  ): Consequence[ResolvedProcessExecution] = for {
+    owner <- WorkspaceExecutionAdmission.componentIdC(scope)
+    admission <- componentadmissions.flatMap(_.get(owner)).map(Consequence.success).getOrElse(
+      Consequence.argumentPolicyViolation("git", "git.execution.component-grant", "actual component Git capability grant", "unapproved"))
+    definition <- policy.gitDefinitionC(binding, operation.kind, operation.selectionIdOption)
+    grant <- admission._grant_c(definition.capability)
+    arguments <- GitProgramDefinition.typedArgumentsC(operation, definition._git_metadata.get)
+    execution <- policy.resolveGitC(definition, grant, arguments)
+  } yield execution
+
+  /** Semantic admission requires actual component grants, including for single-scope test services. */
+  private[cncf] def admitSbtForScopeC(
+    scope: ScopeContext,
+    binding: WorkspaceBinding,
+    operation: SbtOperation
+  ): Consequence[ResolvedProcessExecution] =
+    for {
+      owner <- WorkspaceExecutionAdmission.componentIdC(scope)
+      admission <- componentadmissions.flatMap(_.get(owner)).map(Consequence.success).getOrElse(
+        Consequence.argumentPolicyViolation(
+          "sbt", "sbt.execution.component-grant", "actual component build capability grant", "unapproved"
+        )
+      )
+      definition <- policy.sbtDefinitionC(binding, operation)
+      grant <- admission._grant_c(definition.capability)
+      execution <- policy.resolveSbtC(definition, grant)
+    } yield execution
+
   private[cncf] def admitForScopeC(
     scope: ScopeContext,
     request: ProcessExecutionRequest
@@ -653,12 +731,15 @@ final class ProcessExecutionAdmission private (
   }
 
   def admitC(request: ProcessExecutionRequest): Consequence[ResolvedProcessExecution] =
-    grants.get(request.capability).map(policy.resolveC(request, _)).getOrElse(
+    _grant_c(request.capability).flatMap(policy.resolveC(request, _))
+
+  private def _grant_c(capability: ProcessCapabilityId): Consequence[ProcessExecutionGrant] =
+    grants.get(capability).map(Consequence.success).getOrElse(
       Consequence.argumentPolicyViolation(
         "capability",
         "process.execution.capability-grant",
         "runtime-installed capability grant",
-        request.capability.print
+        capability.print
       )
     )
 }
@@ -832,8 +913,67 @@ final class ProcessExecutionPolicy private (
     grant: ProcessExecutionGrant
   ): Consequence[ResolvedProcessExecution] =
     for {
-      _ <- request.validateC
       definition <- _definition_c(request.capability)
+      _ <- if (definition._sbt_metadata.isEmpty) Consequence.unit else
+        Consequence.argumentPolicyViolation(
+          "capability", "sbt.execution.semantic-only", "protected typed SBT admission", "generic request"
+        )
+      _ <- if (definition._git_metadata.isEmpty) Consequence.unit else
+        Consequence.argumentPolicyViolation(
+          "capability", "git.execution.semantic-only", "protected typed Git admission", "generic request")
+      execution <- _resolve_c(request, grant, definition)
+    } yield execution
+
+  private[processexecution] def sbtDefinitionC(
+    binding: WorkspaceBinding,
+    operation: SbtOperation
+  ): Consequence[ProcessProgramDefinition] = {
+    val definitions = _definitions.values.filter(_._sbt_metadata.exists(x =>
+      x.binding.workspaceId == binding.workspaceId && x.operation == operation
+    )).toVector
+    definitions match {
+      case Vector(definition) if definition._sbt_metadata.exists(x => x.binding eq binding) =>
+        Consequence.success(definition)
+      case _ => Consequence.argumentPolicyViolation(
+        "sbt", "sbt.execution.program-definition", "one definition for the same admitted binding and operation", "unavailable"
+      )
+    }
+  }
+
+  private[processexecution] def resolveSbtC(
+    definition: ProcessProgramDefinition,
+    grant: ProcessExecutionGrant
+  ): Consequence[ResolvedProcessExecution] =
+    _resolve_c(ProcessExecutionRequest(definition.capability, arguments = Vector.empty), grant, definition)
+
+  private[processexecution] def gitDefinitionC(
+    binding: WorkspaceBinding,
+    kind: GitOperationKind,
+    selectionId: Option[GitSelectionId]
+  ): Consequence[ProcessProgramDefinition] = {
+    val definitions = _definitions.values.filter(_._git_metadata.exists(x =>
+      x.binding.workspaceId == binding.workspaceId && x.kind == kind && x.selectionId == selectionId)).toVector
+    definitions match {
+      case Vector(definition) if definition._git_metadata.exists(x => x.binding eq binding) => Consequence.success(definition)
+      case _ => Consequence.argumentPolicyViolation("git", "git.execution.program-definition",
+        "one definition for the same admitted binding, operation and selection", "unavailable")
+    }
+  }
+
+  private[processexecution] def resolveGitC(
+    definition: ProcessProgramDefinition,
+    grant: ProcessExecutionGrant,
+    typedArguments: Vector[String]
+  ): Consequence[ResolvedProcessExecution] =
+    _resolve_c(ProcessExecutionRequest(definition.capability, arguments = typedArguments), grant, definition)
+
+  private def _resolve_c(
+    request: ProcessExecutionRequest,
+    grant: ProcessExecutionGrant,
+    definition: ProcessProgramDefinition
+  ): Consequence[ResolvedProcessExecution] =
+    for {
+      _ <- request.validateC
       _ <- _validate_grant_c(request.capability, grant)
       effective <- ProcessExecutionLimits.effectiveC(
         definition.maximumLimits,
@@ -879,6 +1019,8 @@ object ProcessExecutionPolicy {
     definitions: Vector[ProcessProgramDefinition]
   ): Consequence[ProcessExecutionPolicy] = {
     val capabilities = definitions.map(_.capability)
+    val sbtkeys = definitions.flatMap(_._sbt_metadata.map(x => x.binding.workspaceId -> x.operation))
+    val gitkeys = definitions.flatMap(_._git_metadata.map(x => (x.binding.workspaceId, x.kind, x.selectionId)))
     if (capabilities.distinct.size != capabilities.size)
       Consequence.argumentPolicyViolation(
         "definitions",
@@ -886,6 +1028,13 @@ object ProcessExecutionPolicy {
         "unique capability definitions",
         "duplicate"
       )
+    else if (sbtkeys.distinct.size != sbtkeys.size)
+      Consequence.argumentPolicyViolation(
+        "definitions", "sbt.execution.program-definition", "unique workspace and operation definitions", "duplicate"
+      )
+    else if (gitkeys.distinct.size != gitkeys.size || definitions.exists(x => x._sbt_metadata.nonEmpty && x._git_metadata.nonEmpty))
+      Consequence.argumentPolicyViolation("definitions", "git.execution.program-definition",
+        "unique workspace, operation and selection with one semantic tag", "duplicate")
     else
       Consequence.success(new ProcessExecutionPolicy(definitions.map(x => x.capability -> x).toMap))
   }

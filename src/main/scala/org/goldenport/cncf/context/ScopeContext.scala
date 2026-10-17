@@ -7,9 +7,10 @@ import org.goldenport.cncf.context.DataStoreContext
 import org.goldenport.cncf.context.EntityStoreContext
 import org.goldenport.cncf.context.EntitySpaceContext
 import org.goldenport.cncf.workarea.WorkAreaSpace
-import org.goldenport.cncf.http.HttpDriver
+import org.goldenport.cncf.http.{HttpDriver, HttpExecutionAdmission}
 import org.goldenport.cncf.admission.ScopedConcurrencyAdmission
 import org.goldenport.cncf.processexecution.{ProcessExecutionAdmission, ProcessExecutionDriver}
+import org.goldenport.cncf.workspace.WorkspaceExecutionAdmission
 import org.goldenport.cncf.datastore.DataStoreSpace
 import org.goldenport.cncf.entity.EntityStoreSpace
 import org.goldenport.cncf.entity.runtime.EntitySpace
@@ -21,7 +22,8 @@ import org.goldenport.cncf.spi.evaluation.{CorpusEvaluationSink, CorpusEvaluatio
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Jul. 23, 2026
+ *  version Jul. 23, 2026
+ * @version Oct. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ScopeKind {
@@ -64,6 +66,14 @@ abstract class ScopeContext() extends ObservationDsl with ScopeContext.Core.Hold
   /** Runtime-owned capability/program admission for Process Execution. */
   def processExecutionAdmissionOption: Option[ProcessExecutionAdmission] =
     core.processExecutionAdmissionOption orElse parent.flatMap(_.processExecutionAdmissionOption)
+
+  /** The same runtime-owned workspace service is inherited by every semantic tool. */
+  private[cncf] def workspaceExecutionAdmissionOption: Option[WorkspaceExecutionAdmission] =
+    core.workspaceExecutionAdmissionOption orElse parent.flatMap(_.workspaceExecutionAdmissionOption)
+
+  /** Runtime host HTTP authority follows the actual semantic scope ancestry. */
+  private[cncf] def httpExecutionAdmissionOption: Option[HttpExecutionAdmission] =
+    core.httpExecutionAdmissionOption orElse parent.flatMap(_.httpExecutionAdmissionOption)
 
   /** Runtime-owned, per-logical-scope concurrency admission. */
   def scopedConcurrencyAdmissionOption: Option[ScopedConcurrencyAdmission] =
@@ -150,7 +160,9 @@ object ScopeContext {
     processExecutionAdmissionOption: Option[ProcessExecutionAdmission] = None,
     scopedConcurrencyAdmissionOption: Option[ScopedConcurrencyAdmission] = None,
     operationEvaluationResolverOption: Option[OperationEvaluationResolver] = None,
-    operationEvaluationCrossSinkPolicyOption: Option[OperationEvaluationCrossSinkPolicy] = None
+    operationEvaluationCrossSinkPolicyOption: Option[OperationEvaluationCrossSinkPolicy] = None,
+    private[cncf] val workspaceExecutionAdmissionOption: Option[WorkspaceExecutionAdmission] = None,
+    private[cncf] val httpExecutionAdmissionOption: Option[HttpExecutionAdmission] = None
   )
   object Core {
     trait Holder {
@@ -226,7 +238,9 @@ object ScopeContext {
     @deprecatedName("operationEvaluationResolverOption", "0.5.1")
     operationevaluationresolveroption: Option[OperationEvaluationResolver] = None,
     @deprecatedName("operationEvaluationCrossSinkPolicyOption", "0.5.1")
-    operationevaluationcrosssinkpolicyoption: Option[OperationEvaluationCrossSinkPolicy] = None
+    operationevaluationcrosssinkpolicyoption: Option[OperationEvaluationCrossSinkPolicy] = None,
+    workspaceExecutionAdmissionOption: Option[WorkspaceExecutionAdmission] = None,
+    httpExecutionAdmissionOption: Option[HttpExecutionAdmission] = None
   ): ScopeContext = {
     Instance(
       ScopeContext.Core(
@@ -239,7 +253,9 @@ object ScopeContext {
         processExecutionAdmissionOption = processexecutionadmissionoption,
         scopedConcurrencyAdmissionOption = scopedconcurrencyadmissionoption,
         operationEvaluationResolverOption = operationevaluationresolveroption,
-        operationEvaluationCrossSinkPolicyOption = operationevaluationcrosssinkpolicyoption
+        operationEvaluationCrossSinkPolicyOption = operationevaluationcrosssinkpolicyoption,
+        workspaceExecutionAdmissionOption = workspaceExecutionAdmissionOption,
+        httpExecutionAdmissionOption = httpExecutionAdmissionOption
       )
     )
   }

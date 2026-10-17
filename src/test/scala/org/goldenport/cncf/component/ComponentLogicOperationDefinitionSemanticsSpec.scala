@@ -12,6 +12,7 @@ import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.cncf.action.{Action, ActionCall, CommandExecutionPolicy, ProcedureActionCall}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.http.{HttpExecutionAdmission, HttpExecutionGrant, HttpExecutionLimits, HttpExecutionMethod}
 import org.goldenport.cncf.operation.CmlOperationDefinition
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWorkOp}
@@ -23,7 +24,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 22, 2026
  *  version Apr. 25, 2026
  *  version May. 11, 2026
- * @version Aug. 19, 2026
+ *  version Aug. 19, 2026
+ * @version Oct. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentLogicOperationDefinitionSemanticsSpec
@@ -157,13 +159,23 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
       "when a QUERY action executes a UoW with inline calltree enabled" in {
       Given("Spec: docs/spec/action-execution-semantics.md; Rules: R2, R4, R11; Example: E3; a functional query action that executes a UoW operation")
       val component = _component()
+      val root = component.scopeContext.parent.getOrElse(fail("component runtime scope is missing"))
+      val admission = HttpExecutionAdmission.fromRuntimeC("http://localhost/", HttpExecutionLimits(1000, 1000, 4096),
+        Map(component.componentId -> HttpExecutionGrant(Vector("http://localhost"), Set(HttpExecutionMethod.Get))))
+        .getOrElse(fail("host HTTP setup failed"))
+      component.withScopeContext(org.goldenport.cncf.context.ScopeContext.Instance(
+        root.core.copy(httpExecutionAdmissionOption = Some(admission))))
       val req = Request.of(
         component = component.name,
         service = "entity",
         operation = "fetchWithUow"
       )
       val action = component.logic.makeOperationRequest(req).toOption.getOrElse(fail("action creation failed")).asInstanceOf[Action]
-      val debugctx = ExecutionContext.withFrameworkInlineCallTreeEnabled(ExecutionContext.create(), enabled = true)
+      val tracectx = ExecutionContext.withFrameworkInlineCallTreeEnabled(ExecutionContext.create(), enabled = true)
+      lazy val debugctx: ExecutionContext = ExecutionContext.withRuntimeContext(
+        tracectx,
+        tracectx.runtime.withUnitOfWorkContext(debugctx)
+      ).withScope(component.scopeContext)
 
       When("the action is executed")
       val result = component.logic.executeAction(action, debugctx)

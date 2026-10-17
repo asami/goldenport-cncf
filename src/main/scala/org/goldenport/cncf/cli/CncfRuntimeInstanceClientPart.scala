@@ -13,6 +13,7 @@ import org.goldenport.cncf.component.builtin.client.GetQuery
 import org.goldenport.cncf.component.builtin.client.PostCommand
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.config.ClientConfig
+import org.goldenport.cncf.path.{AliasResolver, PathPreNormalizer}
 import org.goldenport.http.HttpRequest
 import org.goldenport.protocol.Argument
 import org.goldenport.protocol.Property
@@ -44,7 +45,8 @@ import org.goldenport.cncf.observability.global.GlobalObservable
  *  version Jun. 29, 2026
  *  version Jul. 30, 2026
  *  version Aug. 19, 2026
- * @version Sep.  8, 2026
+ *  version Sep.  8, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cli] trait CncfRuntimeInstanceClientPart {
@@ -98,14 +100,19 @@ private[cli] trait CncfRuntimeInstanceClientPart {
     val operations = _component_operation_fqns(subsystem)
     val residualargs = CncfRuntime._admit_configuration_binding_arguments(args).residualArguments
     val (runtimeoptions, cleanargs) = RuntimeOptionsParser.extract(residualargs)
+    val selectedformat = _client_requested_format(subsystem, cleanargs, runtimeoptions)
     val runtimeproperties = RuntimeOptionsParser.properties(runtimeoptions)
-      .filter(p => _is_client_debug_passthrough_key(p.name))
+      .filter(p => _is_client_debug_passthrough_key(p.name)) ++
+      selectedformat.toList.map(format => Property("textus.format", format, None))
     observe_trace(
       s"executeClient start args=${CncfRuntime._trace_safe_args(cleanargs).mkString(" ")} componentCount=${subsystem.components.size} operations=${_operation_sample(operations)}"
     )
     val result = _client_component(subsystem).flatMap { component =>
         parseClientArgs(subsystem, cleanargs.toArray).flatMap { req0 =>
-        val req = req0.copy(properties = req0.properties ++ runtimeproperties)
+        val properties = req0.properties.filterNot(p =>
+          p.name.equalsIgnoreCase("textus.format") || p.name.equalsIgnoreCase("cncf.format")
+        )
+        val req = req0.copy(properties = properties ++ runtimeproperties)
         _client_action_from_request(req).flatMap { action =>
           component.execute(action).map(_ -> _request_debug_trace_job(req))
         }
@@ -121,6 +128,28 @@ private[cli] trait CncfRuntimeInstanceClientPart {
     }
     _exit_code(result)
   }
+
+  private def _client_requested_format(
+    subsystem: Subsystem,
+    args: Seq[String],
+    options: RuntimeOptionsParser.Options
+  ): Option[String] =
+    options.format.orElse(if (options.json) Some("json") else None).orElse {
+      if (args.headOption.contains("http"))
+        None
+      else
+        _selector_and_arguments(args, RunMode.Client).toOption.flatMap { case (selector, tail) =>
+          val normalized = _normalize_meta_selector(subsystem, selector, tail.toVector)
+          val requestedformat = _extract_selector_format(normalized._1)._2
+          requestedformat.orElse {
+            val aliasresolver =
+              if (subsystem.aliasResolver ne AliasResolver.empty) subsystem.aliasResolver
+              else _alias_resolver
+            val rewritten = PathPreNormalizer.rewriteSelector(normalized._1, RunMode.Client, aliasresolver)
+            _extract_selector_format(rewritten)._2
+          }
+        }
+    }
 
   private[cli] def _component_operation_fqns(subsystem: Subsystem): Vector[String] =
     subsystem.components.flatMap { comp =>
@@ -173,6 +202,11 @@ private[cli] trait CncfRuntimeInstanceClientPart {
     args: Seq[String]
   ): Consequence[Request] = {
     args.toVector match {
+      // DEPRECATED (2026-10-14): raw `client http get/post` CLI syntax.
+      // Retained for compatibility only, with no removal date. Do not extend it
+      // or expose it in public help, documentation, examples, or new features.
+      // Use `client <operation selector> <operation parameters>` instead;
+      // CNCF owns transport mapping for the same business inputs as command mode.
       case Vector("http", operation, rest @ _*) =>
         _parse_http_operation(operation).flatMap { op =>
           if (rest.isEmpty) {
@@ -366,6 +400,8 @@ private[cli] trait CncfRuntimeInstanceClientPart {
     }
   }
 
+  // Deprecated raw HTTP CLI compatibility parser; not the operation-based client API.
+  @deprecated("Compatibility only; use client <operation selector> <operation parameters>.", "2026-10-14")
   private[cli] def _parse_client_http(
     operation: String,
     params: Seq[String]
