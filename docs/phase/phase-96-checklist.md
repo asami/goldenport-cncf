@@ -7,7 +7,64 @@ execution_baseline=6cbe877c53c116639feb11fa80546e79c051804c
 current_entry=P96-11
 development_plan=[Development plan proposal](../journal/2026/10/2026-10-03-phase-96-development-plan-proposal.md)
 
-## Current P96-10 Step acceptance — 2026-10-17
+## Current P96-11A Step acceptance — 2026-10-17
+
+P96-11 remains IN_PROGRESS, current step P96-11A accepted; exact local delivery
+Step commit pending. The first three original P96-11 outcomes are accepted,
+and P96-11B's final two remain open. All 54 criterion texts and original 13
+Phase acceptance criteria remain unchanged: 52 checked/2 pending,
+current_entry=P96-11.
+
+Fresh independent Sol medium ordinary review
+`phase96-p96-11a-step-review-001@1` returned PASS with zero Current Boundary
+Blockers, Hygiene or Development Candidates; parent admission advanced typed
+review ledger 40 to 41. Actual focused attempt
+`phase96-p96-11a-consumer-handoff-focused-001` passed one suite/8 tests, zero
+failed, aborted, canceled, ignored or pending, with Test compilation/generation
+covered, SBT0/wrapper0 and serial lock released. CHP1 passed 100 generated cases
+(minimum 100, zero discards, one worker) with lawful reducing shrinkers. One
+unspecified deprecation warning is nonblocking.
+
+P01..10 accepted history and P10 commit
+`53ecdfadb00003b995b81ab9548a54b0a4880cab` remain intact. P10's actual focused
+2-suite/21-test and same 50-suite/407-test evidence, including all five native
+PostgreSQL 17.11 suites, durability and SQL NULL logical omission, was
+independently assessed for reuse for unchanged product scope; it was not rerun
+for new fixtures/docs. Supplied-value/codec examples do not establish native
+persistence, live continuation authority or consumer app completion. P10 repair
+6/nonconverging 0 remains historical; P11A Step repair 0/nonconverging 0,
+Phase repair 0 and full Phase review count 0 remain unchanged.
+
+Original authority, Goal binding, baseline and PLAN epoch 1 are retained.
+After actual ordinary local P11A delivery commit, the epoch's sole full Phase
+review is frozen Sol high across original base through all Step commits;
+final repository-full validation and distinct Phase release/ledger closure
+follow. P11B's final two gates remain owed; Stage and Phase cannot close yet.
+
+## Historical P96-11 consumer handoff authoring — 2026-10-17
+
+The following initial authoring snapshot is superseded by current P11A
+acceptance above; its pending statements describe that earlier checkpoint.
+
+P96-11 is IN_PROGRESS. Current step: P96-11A, ordinary consumer handoff
+delivery. The [consumer index](../spec/display-consumer-handoff.md) and
+[sample/provenance journal](../journal/2026/10/2026-10-17-phase-96-consumer-handoff.md)
+reference accepted P96-01 through P96-10 contracts. Sub-Step A references
+the first three original P96-11 outcomes: reproducible artifacts, consumer
+ownership and focused validation/Step acceptance correspondence. Authoring is
+unvalidated, unreviewed and uncommitted; none of those outcomes is checked yet.
+
+Sub-Step P96-11B references the last two original outcomes: repository-full
+release validation and the single Phase full review, then all-criterion
+reconciliation and consistent release/closure records. P96-11 remains open
+until all five original outcomes have accepted evidence. All 54 criterion
+texts remain unchanged, with 49 checked/5 pending. Original authority, Goal
+binding, baseline, PLAN epoch 1 and review ledger revision 40 are retained.
+Full Phase review count is 0; final full-suite validation and release have not
+run. The accepted P96-10 local commit is now verified as
+`53ecdfadb00003b995b81ab9548a54b0a4880cab`.
+
+## Historical P96-10 Step acceptance — 2026-10-17
 
 Connected P96-10 A+B is independently accepted on all four original criteria.
 Original whole-Step review `phase96-p96-10-step-review-001@1` and fresh focused
@@ -727,13 +784,21 @@ Stage Status:
 
 Stage Status:
 
-- Current status: OPEN
+- Current status: IN_PROGRESS
+- Current step: P96-11A
 - Owner: CNCF Phase 96 release and integration owners
 - Update rule: Advance only when the checklist below and all preceding stage ledgers have complete evidence or explicit admitted dispositions; this checklist is the closure basis.
 
-- [ ] Consumer artifacts freeze the admitted schema/version, DisplayService Operation identities, List/Detail and mutation JSON examples, Business Operation descriptor, context compatibility, unsupported subset and non-goals with reproducible fixture provenance.
-- [ ] TFC/TFAF handoff states transport/runtime versus visual-realization ownership; Editing Studio Phase 2 owns application semantics, app Phase 4 prototype feedback and app Phase 5 real-server aggregate/E2E acceptance.
-- [ ] Focused validation and Step acceptance evidence cover the ABI/admission/provider/generated-fixture/model/projection/value/codec/read/mutation/security/conflict/Business/separation/platform/context specification matrix.
+Sub-Step A (P96-11A) references original outcomes 1–3 below and delivers the
+consumer handoff, focused validation and independent ordinary Step acceptance.
+It is independently accepted; its exact local Step commit remains pending.
+Outcomes 1–3 are checked. Final closure sub-Step B (P96-11B) references outcomes 4–5,
+which remain pending;
+ordinary delivery acceptance alone cannot close this Stage or the Phase.
+
+- [x] Consumer artifacts freeze the admitted schema/version, DisplayService Operation identities, List/Detail and mutation JSON examples, Business Operation descriptor, context compatibility, unsupported subset and non-goals with reproducible fixture provenance.
+- [x] TFC/TFAF handoff states transport/runtime versus visual-realization ownership; Editing Studio Phase 2 owns application semantics, app Phase 4 prototype feedback and app Phase 5 real-server aggregate/E2E acceptance.
+- [x] Focused validation and Step acceptance evidence cover the ABI/admission/provider/generated-fixture/model/projection/value/codec/read/mutation/security/conflict/Business/separation/platform/context specification matrix.
 - [ ] CNCF repository-level full-suite release validation and the single required Phase full review for the admitted PLAN epoch are recorded, with any admitted fixes closed by focused re-review and no extra full review invented for checkpoints.
 - [ ] Every Phase 96 acceptance criterion is reconciled against P96-01 through P96-10; all remaining items have explicit accepted evidence or candidate/relocation records, and the release commit, journal and Phase/strategy closure records agree.
 

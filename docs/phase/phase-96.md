@@ -14,7 +14,67 @@ server_reference_phase=KnowledgeHubProject/nict-editing-studio Phase 2
 abstract_ui_dependency=asami/cozy Phase 74 semantic authority; Cozy Phase 76 producer ABI
 strategy=textus-knowledge-workbench/docs/strategy/knowledge-application-integration.md
 
-## Current P96-10 Step acceptance — 2026-10-17
+## Current P96-11A Step acceptance — 2026-10-17
+
+P96-11 remains IN_PROGRESS, current step P96-11A accepted; its exact local
+delivery Step commit is pending. The first three original P96-11 outcomes are
+accepted: reproducible consumer artifacts, explicit ownership and focused
+validation/Step evidence correspondence. All 54 criterion texts and the original
+13 Phase acceptance criteria are retained; the checklist has 52 checked/2 pending
+and current_entry=P96-11. P96-11B's final two outcomes remain open.
+
+Fresh independent Sol medium ordinary Step review
+`phase96-p96-11a-step-review-001@1` returned PASS with zero Current Boundary
+Blockers, Hygiene or Development Candidates. Parent admission advanced typed
+review ledger 40 to 41. Actual focused attempt
+`phase96-p96-11a-consumer-handoff-focused-001` passed 8/8 tests in one suite,
+with zero failed, aborted, canceled, ignored or pending, Test compilation and
+generation covered, SBT0/wrapper0 and serial lock released. CHP1 actually passed
+100 generated cases (minimum 100, zero discards, one worker), with lawful
+reducing shrinkers. One unspecified deprecation warning is nonblocking.
+
+Accepted P01..10 history and P10 commit
+`53ecdfadb00003b995b81ab9548a54b0a4880cab` remain intact. Prior P10 focused
+2-suite/21-test and same 50-suite/407-test evidence, including all five native
+PostgreSQL 17.11 suites and durability/SQL NULL logical-omission boundaries,
+was independently assessed for reuse for unchanged product scope, not rerun
+for these fixtures/docs. Pure supplied-value/codec examples establish neither
+native persistence, live continuation authority nor consumer app completion.
+P10 repair 6/nonconverging 0 remains historical; P11A Step repair 0,
+nonconverging 0, Phase repair 0 and full Phase review count 0 remain unchanged.
+
+Original authority, Goal binding, baseline and PLAN epoch 1 remain unchanged.
+After the actual ordinary local P11A delivery commit, the epoch's sole full
+Phase review is frozen Sol high across the original base through all Step
+commits, followed by final repository-full validation, distinct Phase release
+and consistent ledger/closure records for P11B. These gates remain owed;
+neither this acceptance nor its projection closes the Stage or Phase.
+
+## Historical P96-11 consumer handoff authoring — 2026-10-17
+
+The following is the initial authoring snapshot, superseded by current P11A
+acceptance above; its pending statements describe that earlier checkpoint.
+
+P96-11 is IN_PROGRESS. Current step: P96-11A, ordinary consumer handoff
+delivery. Its [consumer index](../spec/display-consumer-handoff.md) and
+[sample/provenance journal](../journal/2026/10/2026-10-17-phase-96-consumer-handoff.md)
+consolidate accepted P96-01 through P96-10 contracts without changing protocol,
+ABI or runtime authority. P96-11A references the first three original P96-11
+outcomes: reproducible consumer artifacts, explicit consumer ownership and
+focused validation/Step acceptance correspondence. It is authored, unvalidated,
+unreviewed and uncommitted; no P96-11 criterion is checked yet.
+
+P96-11B is the final closure sub-Step referencing the last two original
+outcomes: actual repository-full validation and the single Phase full review,
+then criterion reconciliation and consistent release/closure records. P96-11
+cannot close before those final gates. All 54 criterion texts remain unchanged,
+with 49 checked/5 pending; the original 13 Phase acceptance criteria remain
+unchanged. Full Phase review count is 0; final full-suite validation and release
+have not run. Original authority, Goal binding, baseline, PLAN epoch 1 and
+review ledger revision 40 remain unchanged. The accepted P96-10 local commit
+is verified as `53ecdfadb00003b995b81ab9548a54b0a4880cab`.
+
+## Historical P96-10 Step acceptance — 2026-10-17
 
 Connected P96-10 A+B is independently accepted on all four original criteria.
 Original whole-Step review `phase96-p96-10-step-review-001@1` and fresh focused
