@@ -24,3 +24,5 @@ define shared structure and boundaries across the codebase.
 - document-boundary.md — Document roles, immutability, and evolution rules (anchor/process vs design/spec vs notes)
 - **stage-status-and-checklist-convention.md**  
   Canonical rule for Stage Status blocks and checklist semantics.
+
+- [Collection and semi-structured data representation](collection-and-semi-structured-data.md) — Record/Vector/NonEmptyVector/Map representation convention.
