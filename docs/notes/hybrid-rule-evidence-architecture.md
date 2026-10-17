@@ -22,6 +22,11 @@ Evidence
   |    |- ObservedFact
   |    |- DeclaredFact
   |    `- DerivedFact
+  |- Measure
+  |    |- Similarity
+  |    |    `- EmbeddingSimilarity
+  |    |- Distance
+  |    `- Score
   |- Estimate
   |    |- StatisticalEstimate
   |    |- Prediction
@@ -31,7 +36,7 @@ Evidence
        `- HumanJudgment
 ```
 
-Fact, Estimate, and Judgment must not be collapsed into one confidence-bearing
+Fact, Measure, Estimate, and Judgment must not be collapsed into one confidence-bearing
 value. They have different certainty semantics.
 
 ### Fact
@@ -51,6 +56,27 @@ DerivedFact is produced deterministically from other Facts. Symbolic expert
 system reasoning, deterministic calculation, and deterministic Knowledge
 inference therefore produce Derived Facts that can be fed back into subsequent
 inference.
+
+### Measure
+
+Measure is first-class Evidence. It represents the result of an explicit
+measurement, comparison, or deterministic scoring function and may be consumed
+directly by a Domain Rule or used as input to an Estimate or Judgment.
+
+Embedding is not itself Evidence. An embedding model produces a vector
+representation; a similarity or distance function over vectors produces
+Evidence. Embedding-based similarity is therefore represented as an
+EmbeddingSimilarity Measure. Its provenance should retain the embedding model,
+model version, vector space/index, compared subjects, source versions, and
+similarity/distance function.
+
+A similarity value such as 0.87 is not a probability that two subjects have the
+same meaning. This is why Similarity belongs to Measure rather than Estimate.
+
+Similarity search may additionally return retrieved Evidence or references to
+Evidence. Retrieval is a discovery mechanism; the returned similarity scores
+are Measures and the retrieved domain/knowledge material retains its own
+Evidence kind and provenance.
 
 ### Estimate
 
@@ -113,7 +139,7 @@ Symbolic Inference     Knowledge Inference
 ```
 
 The diagram is not a required processing order. A Rule may consume any
-admissible combination of Facts, Estimates, and Judgments. Symbolic inference
+admissible combination of Facts, Measures, Estimates, and Judgments. Symbolic inference
 may iterate over newly Derived Facts. Generative AI may consume Facts,
 Estimates, Knowledge, or other evidence and return a Judgment. Candidate
 Admission may be required before a Judgment is accepted for a high-impact
@@ -134,6 +160,7 @@ decision.
   outcomes.
 - Knowledge can provide source material and deterministic knowledge-derived
   Facts.
+- Embedding/vector providers can provide Similarity Measures and retrieve related Evidence.
 - BI/Analytics can provide Estimates and Predictions; it may also discover
   candidates for later Domain Rule evolution.
 
@@ -156,13 +183,14 @@ runtime evaluation use the CNCF Rule Engine.
    creating duplicate Evidence abstractions.
 3. How DomainRule declares accepted evidence kinds, provenance constraints,
    freshness, validity, and Admission requirements.
-4. Whether Estimate needs a general uncertainty model or starts with a small
+4. Whether Measure needs a common value/unit/function contract and how Similarity provenance is represented.
+5. Whether Estimate needs a general uncertainty model or starts with a small
    statistical metadata contract.
-5. How JudgmentAction results are projected into AIJudgment without coupling
+6. How JudgmentAction results are projected into AIJudgment without coupling
    Rule Engine core to an AI provider.
-6. How Knowledge propositions and operational StateFacts share proposition
+7. How Knowledge propositions and operational StateFacts share proposition
    identity while retaining different provenance.
-7. How BI/Analytics adapters expose estimates without putting analytics
+8. How BI/Analytics adapters expose estimates without putting analytics
    engines inside CNCF core.
-8. Which later phase should freeze the public ABI after the conceptual model is
+9. Which later phase should freeze the public ABI after the conceptual model is
    reconciled with Phase 32, Candidate Admission, Knowledge, and AI Audit.
