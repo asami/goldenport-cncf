@@ -9,7 +9,7 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.mcp.McpToolCatalog
 import org.goldenport.cncf.observability.ConclusionDiagnostics
-import org.goldenport.cncf.resource.{InMemoryUrnResourceProvider, ResourceAccess, ResourceAccessTestProfile, ResourceContent, ResourceReference, ResourceUrlPolicy, StaticWebUrlResourceProvider}
+import org.goldenport.cncf.resource.{ResourceReadLimits, InMemoryUrnResourceProvider, ResourceAccess, ResourceAccessTestProfile, ResourceContent, ResourceReference, ResourceUrlPolicy, StaticWebUrlResourceProvider}
 import org.goldenport.cncf.security.OperationAuthorizationRule
 import org.goldenport.cncf.spi.web.search.{WebSearch, WebSearchItem, WebSearchRequest, WebSearchResponse}
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, GenericSubsystemDescriptor, Subsystem}
@@ -23,7 +23,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 21, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -152,22 +153,29 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
   "Builtin static Web Operations" should {
     "fetch text and project HEAD metadata through one admitted read path" must _web_metadata {
       "when a public HTTPS target is explicitly configured" in {
-        Given("a public literal target and deterministic configured HTTPS provider")
+        Given("a public literal target and a configured provider with preowned content and an exact runtime cap")
         val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
+        val contentbytes = "static web content".getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector
+        val readlimits = ResourceReadLimits(contentbytes.size)
+        var observed = Vector.empty[ResourceReadLimits]
         val access = ResourceAccess.url(
           ResourceUrlPolicy(httpsHosts = Vector("8.8.8.8")),
           Vector(new StaticWebUrlResourceProvider {
             val scheme = "https"
-            def read(reference: ResourceReference.Url): Consequence[ResourceContent] =
-              readStaticWeb(reference)
-            def readStaticWeb(reference: ResourceReference.Url): Consequence[ResourceContent] =
-              Consequence.success(ResourceContent(
-                reference,
-                "static web content".getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector,
-                mediaType = Some("text/plain"),
-                declaredCharset = Some(java.nio.charset.StandardCharsets.UTF_8)
-              ))
-          })
+            def read(reference: ResourceReference.Url, limits: ResourceReadLimits): Consequence[ResourceContent] =
+              readStaticWeb(reference, limits)
+            def readStaticWeb(reference: ResourceReference.Url, limits: ResourceReadLimits): Consequence[ResourceContent] = {
+              observed = observed :+ limits
+              if (contentbytes.size > limits.maximumBytes)
+                Consequence.resourceInvalid("test resource exceeds runtime byte limit")
+              else
+                Consequence.success(ResourceContent(
+                  reference, contentbytes, mediaType = Some("text/plain"),
+                  declaredCharset = Some(java.nio.charset.StandardCharsets.UTF_8)
+                ))
+            }
+          }),
+          readlimits
         )
         given ExecutionContext = ExecutionContext.withResourceAccess(ExecutionContext.create(), access)
 
@@ -179,7 +187,8 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
           _request("web", "head", "url" -> "https://8.8.8.8/article")
         ).map(_.response).flatMap(_record_response_c).toOption.get
 
-        Then("fetch contains text while head exposes only safe metadata")
+        Then("fetch contains text, head exposes safe metadata and each provider call receives the runtime cap")
+        observed shouldBe Vector(readlimits, readlimits)
         fetch.getString("text") shouldBe Some("static web content")
         fetch.getString("mode") shouldBe Some("fetch")
         head.getString("text") shouldBe None
@@ -216,17 +225,25 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
 
     "reject non-textual content before projecting a Web result" must _web_metadata {
       "when an admitted provider returns image content" in {
-        Given("a public target whose configured provider returns a binary media type")
+        Given("a public target whose configured provider owns a binary value within its runtime cap")
         val subsystem = RuntimeBindingAdmissionFixture.default(Some("command"))
+        val contentbytes = Vector[Byte](1, 2, 3)
+        var observed = Vector.empty[ResourceReadLimits]
         val access = ResourceAccess.url(
           ResourceUrlPolicy(httpsHosts = Vector("8.8.8.8")),
           Vector(new StaticWebUrlResourceProvider {
             val scheme = "https"
-            def read(reference: ResourceReference.Url): Consequence[ResourceContent] =
-              readStaticWeb(reference)
-            def readStaticWeb(reference: ResourceReference.Url): Consequence[ResourceContent] =
-              Consequence.success(ResourceContent(reference, Vector(1, 2, 3), Some("image/png")))
-          })
+            def read(reference: ResourceReference.Url, limits: ResourceReadLimits): Consequence[ResourceContent] =
+              readStaticWeb(reference, limits)
+            def readStaticWeb(reference: ResourceReference.Url, limits: ResourceReadLimits): Consequence[ResourceContent] = {
+              observed = observed :+ limits
+              if (contentbytes.size > limits.maximumBytes)
+                Consequence.resourceInvalid("test resource exceeds runtime byte limit")
+              else
+                Consequence.success(ResourceContent(reference, contentbytes, Some("image/png")))
+            }
+          }),
+          ResourceReadLimits(3)
         )
         given ExecutionContext = ExecutionContext.withResourceAccess(ExecutionContext.create(), access)
 
@@ -235,7 +252,8 @@ final class ToolComponentSpec extends AnyWordSpec with Matchers with GivenWhenTh
           _request("web", "fetch", "url" -> "https://8.8.8.8/image.png")
         )
 
-        Then("the media policy is a structured failure and no binary data is projected")
+        Then("the cap is forwarded and media policy fails structurally without projecting binary data")
+        observed shouldBe Vector(ResourceReadLimits(3))
         result.isSuccess shouldBe false
       }
     }

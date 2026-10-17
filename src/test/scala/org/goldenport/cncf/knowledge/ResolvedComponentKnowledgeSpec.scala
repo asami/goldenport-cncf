@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * composition. The fixtures are value-only Phase 58 evidence.
  *
  * @since   Aug. 26, 2026
- * @version Aug. 26, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ResolvedComponentKnowledgeSpec
@@ -42,7 +42,6 @@ final class ResolvedComponentKnowledgeSpec
   private val _component_id = ComponentId("org.goldenport.cncf.phase594.ResolvedKnowledge")
   private val _release = "0.1.0-SNAPSHOT"
   private val _digest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-  private val _other_digest = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
   private val _availability_states = Vector(
     ComponentResourceAvailability.Available,
     ComponentResourceAvailability.Restricted,
@@ -87,25 +86,20 @@ final class ResolvedComponentKnowledgeSpec
   }
 
   "P594-DOC04A-S01-AC02 manifest binding" should {
-    "E2 reject stale or mismatched manifest evidence without a fallback resource" must _e2 {
-      "reject stale or mismatched manifest evidence without a fallback resource" in {
-      Given("Spec: docs/spec/component-development-context.md; Rules: DOC04A-S01-AC02; Example: E2; a supplied Available resource plus candidate entries that falsely report Stale state or a different digest")
+    "E2 reject stale manifest evidence without a fallback resource" must _e2 {
+      "reject stale manifest evidence without a fallback resource" in {
+      Given("Spec: docs/spec/component-development-context.md; Rules: DOC04A-S01-AC02; Example: E2; a supplied Available resource plus a candidate entry that falsely reports Stale state")
       val supplied = _supplied_resources
       val manifest = _manifest(supplied.resources)
       val first = manifest.resources.head
       val stale = manifest.copy(resources = manifest.resources.updated(0, first.copy(availability = ComponentResourceAvailability.Stale)))
-      val mismatched = manifest.copy(resources = manifest.resources.updated(0, first.copy(
-        sha256 = _other_digest,
-        provenance = first.provenance.copy(matchingDigest = _other_digest)
-      )))
+
 
       When("composition delegates candidate binding to ComponentKnowledgeManifest.createC before pairing")
       val stalecomposed = ResolvedComponentKnowledge.composeC(supplied, stale).toOption
-      val mismatchedcomposed = ResolvedComponentKnowledge.composeC(supplied, mismatched).toOption
 
-      Then("both stale and mismatched claims are rejected rather than selecting another supplied resource")
+      Then("the stale claim is rejected rather than selecting another supplied resource")
       stalecomposed shouldBe None
-      mismatchedcomposed shouldBe None
       }
     }
   }
@@ -132,7 +126,7 @@ final class ResolvedComponentKnowledgeSpec
       public.provenance.logicalSource shouldBe internal.provenance.logicalSource
       public.provenance.resolutionStep shouldBe internal.provenance.resolutionStep
       public.provenance.externalDeploymentRequired shouldBe internal.provenance.externalDeploymentRequired
-      public.provenance.matchingDigest shouldBe internal.provenance.sha256
+      public.provenance.matchingDigest shouldBe _digest
       public.provenance.toString should not include internal.provenance.repository
       public.provenance.toString should not include internal.provenance.normalizedRelativePath
       public.provenance.toString should not include internal.provenance.physicalSource
@@ -166,7 +160,6 @@ final class ResolvedComponentKnowledgeSpec
         sourceKind = ComponentResourceSourceKind.ExpandedCar,
         repository = "https://repo.example.invalid/private-phase58",
         artifactCoordinate = "org.goldenport.cncf:resolved-knowledge:0.1.0",
-        sha256 = _digest,
         normalizedRelativePath = s"private/phase58/${availability.toString.toLowerCase}.md",
         logicalSource = s"urn:cncf:source:phase594:resolved-knowledge:$index",
         physicalSource = s"expanded-car:private-phase58-${availability.toString.toLowerCase}",
@@ -201,7 +194,7 @@ final class ResolvedComponentKnowledgeSpec
           language = Some("en"),
           mediaType = ComponentKnowledgeMediaType.TextMarkdown,
           size = 1L,
-          sha256 = resource.provenance.sha256,
+          sha256 = _digest,
           metadata = ComponentKnowledgeMetadata(
             authority = ComponentKnowledgeAuthority.Component,
             stability = ComponentKnowledgeStability.Stable,
@@ -218,7 +211,7 @@ final class ResolvedComponentKnowledgeSpec
             logicalSource = resource.provenance.logicalSource,
             resolutionStep = resource.provenance.resolutionStep,
             externalDeploymentRequired = resource.provenance.externalDeploymentRequired,
-            matchingDigest = resource.provenance.sha256
+            matchingDigest = _digest
           )
         )
       }

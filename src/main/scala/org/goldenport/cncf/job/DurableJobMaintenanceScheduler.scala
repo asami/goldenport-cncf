@@ -10,7 +10,7 @@ import org.goldenport.cncf.context.ExecutionContext
  * The supplied timer registers nonblockingly and cannot fire before its due time.
  *
  * @since   Oct.  1, 2026
- * @version Oct.  3, 2026
+ * @version Oct.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] final case class DurableJobMaintenanceSchedulerStatus(
@@ -104,22 +104,29 @@ private[job] final class DurableJobMaintenanceScheduler(
       }
     }
     if (admitted) {
-      val result = try {
-        val sweep = lease match {
-          case Some(value) => value.use(maintenance.sweep(source, maxCandidates, timeSource.now()))
-          case None => maintenance.sweep(source, maxCandidates, timeSource.now())
+      var result: Consequence[DurableJobMaintenanceReport] = _refused
+      try {
+        result = try {
+          val sweep = lease match {
+            case Some(value) => value.use(maintenance.sweep(source, maxCandidates, timeSource.now()))
+            case None => maintenance.sweep(source, maxCandidates, timeSource.now())
+          }
+          sweep match {
+            case success @ Consequence.Success(_) => success
+            case _ => _refused[DurableJobMaintenanceReport]
+          }
+        } catch {
+          case exception: InterruptedException =>
+            Thread.currentThread().interrupt()
+            throw exception
+          case NonFatal(_) => _refused[DurableJobMaintenanceReport]
         }
-        sweep match {
-          case success @ Consequence.Success(_) => success
-          case _ => _refused[DurableJobMaintenanceReport]
+      } finally {
+        _monitor.synchronized {
+          _last_result = Some(result)
+          _in_flight = false
+          if (!_closed && _started) _arm()
         }
-      } catch {
-        case NonFatal(_) => _refused[DurableJobMaintenanceReport]
-      }
-      _monitor.synchronized {
-        _last_result = Some(result)
-        _in_flight = false
-        if (!_closed && _started) _arm()
       }
     }
   }

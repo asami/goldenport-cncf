@@ -192,6 +192,14 @@ Entity-id expectation values MUST be no longer than 4096 characters in their
 canonical encoded form. Values exceeding these bounds MUST fail before provider
 mutation.
 
+These bounds apply to explicitly selected scalar predicates, not to the total
+issued-work body. Completion of a revision-managed workflow Continuation MUST
+check the selected storage revision atomically and advance it on success.
+Identity, kind, state, claim and authorization admission MUST be retained.
+Full stored-body equality guards are not required for concurrency protection
+when every Continuation change advances that revision and the issued-work body
+is immutable after its atomic creation.
+
 ## Successor Intent (R8)
 
 A conditional transition MUST use exactly one closed successor intent:
@@ -277,7 +285,19 @@ The normalized provider plan MAY contain only explicit framework-owned
 component ownership, bounded record-level mutation data, safe logical
 correlation metadata, provider-neutral collection and entry identities, the
 expected revision for a bound successor, and bounded framework-owned side-record
-save/delete effects required by the canonical Entity storage shape.
+create/save/delete effects required by the canonical Entity storage shape or
+an explicitly admitted framework Workflow record composition.
+
+`EntityVersionedSideEffect.Create` MUST insert only a previously absent primary
+target inside that same native transaction. Existing targets, including identical
+records, MUST produce a structured datastore duplicate failure and roll back
+every staged root, successor and side effect. It MUST NOT upsert, return
+NotMatched, silently deduplicate or authorize automatic retry. An absence read
+before provider execution MUST NOT replace the native insertion constraint.
+Save remains overwrite/upsert and Delete retains its existing semantics.
+Create uses the same normalized-record, target-isolation and bounded effect
+admission as Save. The shared effect algebra MUST retain this behavior for
+ordinary versioned mutation as well as conditional transitions.
 
 An admitted plan MUST carry a non-optional expected root revision and the exact
 next revision. Its root patch MUST be non-empty and MUST NOT contain the managed
@@ -685,6 +705,7 @@ constructed, then construction fails before ActionCall or provider admission.
 | R6-R10 | E5-E6, E13-E14 | `EntityConditionalTransitionModelSpec`, `EntityConditionalTransitionRevisionSpec` |
 | R8, R14-R15 | E19 | `EntityConditionalTransitionModelSpec`, `UnitOfWorkConditionalTransitionSpec`, `ActionCallConditionalTransitionDslSpec` |
 | R11-R13 | E3-E4, E8-E11, E13, E15 | `EntityVersionedMutationDataStoreSpec`, `ContentBodyVersionedMutationSpec`, `DataStoreConditionalTransitionSpec` |
+| R12-R13, R21-R22 | Create-only side-record collision, atomic rollback, independent roots sharing one identity | `DataStoreCreateSideEffectSpec`, `WorkflowPreparedDataStoreTransitionSpec` |
 | R14-R16 | E5, E7, E13-E14 | `UnitOfWorkConditionalTransitionSpec` |
 | R17-R18 | E6, E12, E14, E16 | `EntityConditionalTransitionCoherenceSpec` |
 | R19-R20 | E4, E7-E15 | `EntityConditionalTransitionDiagnosticsSpec` |

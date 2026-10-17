@@ -256,6 +256,29 @@ object CandidateAdmissionProducerAbi {
         }
       }
 
+  /** Compatibility of executable Judgment/Admission policies. Diagnostic
+    * locations, display names and generator provenance are deliberately absent.
+    * This is not a whole-declaration equality or unchanged-content certificate.
+    */
+  def compatiblePolicy(left: ProducerModel, right: ProducerModel): Boolean = {
+    def _reference_(value: SourceReference): String = value.value
+    def _judgment_(value: Judgment) = (
+      value.identity, value.operation, value.inputBinding,
+      _reference_(value.goal), _reference_(value.context), _reference_(value.candidate),
+      value.alternatives.map(_reference_), value.criteria.map(_reference_),
+      _reference_(value.expectedResult), _reference_(value.rationale), _reference_(value.evidence),
+      _reference_(value.evidenceScope), _reference_(value.evidenceFreshness), _reference_(value.evidenceProvenance))
+    def _admission_(value: Admission) = (value.identity, value.candidateJudgmentActionIdentity,
+      value.operation, value.inputBinding, value.effectClass, value.transactionRequirement)
+    def _relation_(value: JudgmentAdmission) = (value.judgmentActionIdentity, value.admissionActionIdentity)
+    def _required_(value: RequiredSpi) = (value.identity, value.actionIdentity, value.operation)
+    left != null && right != null &&
+      left.judgments.map(_judgment_).toSet == right.judgments.map(_judgment_).toSet &&
+      left.admissions.map(_admission_).toSet == right.admissions.map(_admission_).toSet &&
+      left.judgmentAdmissions.map(_relation_).toSet == right.judgmentAdmissions.map(_relation_).toSet &&
+      left.requiredSpi.map(_required_).toSet == right.requiredSpi.map(_required_).toSet
+  }
+
   private def _artifact_diagnostic(value: Artifact): Option[Diagnostic] =
     if (value.schemaVersion != acceptedSchemaVersion)
       Some(_diagnostic(
@@ -263,8 +286,6 @@ object CandidateAdmissionProducerAbi {
         "actual" -> value.schemaVersion,
         "expected" -> acceptedSchemaVersion
       ))
-    else if (!_is_generator(value.generator))
-      Some(_generator_diagnostic(value.generator, "artifact"))
     else if (value.models.isEmpty)
       Some(_diagnostic(DiagnosticCode.MissingRequiredFact, "kind" -> "models"))
     else
@@ -279,14 +300,7 @@ object CandidateAdmissionProducerAbi {
         .orElse(value.models.iterator.map(_model_diagnostic).collectFirst { case Some(x) => x })
 
   private def _model_diagnostic(value: ProducerModel): Option[Diagnostic] =
-    _generator_diagnostic_if_needed(value.generator, value.model.identity.value)
-      .orElse(_model_fact_diagnostic(value.model))
-      .orElse(_duplicate(value.judgments.map(_.identity.value), "judgment")
-        .map(identity => _diagnostic(DiagnosticCode.DuplicateIdentity, "identity" -> identity, "kind" -> "judgment")))
-      .orElse(_duplicate(value.admissions.map(_.identity.value), "admission")
-        .map(identity => _diagnostic(DiagnosticCode.DuplicateIdentity, "identity" -> identity, "kind" -> "admission")))
-      .orElse(_duplicate(value.requiredSpi.map(_.identity.value), "required-spi")
-        .map(identity => _diagnostic(DiagnosticCode.DuplicateIdentity, "identity" -> identity, "kind" -> "required-spi")))
+    _model_fact_diagnostic(value.model)
       .orElse(value.judgments.iterator.map(_judgment_diagnostic).collectFirst { case Some(x) => x })
       .orElse(value.admissions.iterator.map(_admission_diagnostic).collectFirst { case Some(x) => x })
       .orElse(value.requiredSpi.iterator.map(_required_spi_diagnostic).collectFirst { case Some(x) => x })
@@ -455,23 +469,6 @@ object CandidateAdmissionProducerAbi {
   private def _result_required_diagnostic(kind: String, value: String): Option[Diagnostic] =
     if (_is_blank(value)) Some(_diagnostic(DiagnosticCode.IncompleteJudgmentResult, "kind" -> kind))
     else None
-
-  private def _generator_diagnostic_if_needed(value: Generator, model: String): Option[Diagnostic] =
-    if (_is_generator(value)) None else Some(_generator_diagnostic(value, model))
-
-  private def _generator_diagnostic(value: Generator, location: String): Diagnostic =
-    _diagnostic(
-      DiagnosticCode.UnsupportedGenerator,
-      "actual-generator" -> value.generatorIdentity,
-      "actual-schema" -> value.schemaVersion,
-      "expected-generator" -> acceptedGeneratorIdentity,
-      "expected-schema" -> acceptedSchemaVersion,
-      "location" -> location
-    )
-
-  private def _is_generator(value: Generator): Boolean =
-    value.schemaVersion == acceptedSchemaVersion &&
-      value.generatorIdentity == acceptedGeneratorIdentity
 
   private def _operation_diagnostic(kind: String, value: Operation): Option[Diagnostic] =
     _required_diagnostic(s"$kind-service", value.service.value)

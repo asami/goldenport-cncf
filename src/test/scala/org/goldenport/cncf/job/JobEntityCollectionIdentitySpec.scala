@@ -11,10 +11,11 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for exact Job persistence collection identity.
  *
  * @since   Jul. 30, 2026
- *  version Jul. 30, 2026
- * @version Sep. 17, 2026
+ *  version Sep. 17, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobEntityCollectionIdentitySpec
   extends AnyWordSpec
   with Matchers

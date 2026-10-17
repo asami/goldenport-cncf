@@ -1,5 +1,22 @@
 # Durable Job Terminal-Projection Contract
 
+## Current caller-authorized result consumer
+
+The [OperationResponse query contract](durable-job-operation-response-query-contract.md)
+and [design](../design/durable-job-operation-response-query.md) define a separate
+consumer of this closed projection. Only the exact registered Succeeded owned
+operation-response reference/header is eligible after original overview policy.
+The same ready native owner resolves the actual current caller once inside its
+real lease and uses the original B2 current-signed/Active/Published bounded reader.
+Only a detached model copy contains the exact decoded response. This projection
+remains body-free and non-executable; raw query/getResult and authorized original
+management retain None/UnavailableAfterRestart. New queries refuse after logical
+close; admitted reads may finish while subsystem drain waits and SystemNode owns
+physical finalization. No cache, authority inference or admin bypass is added.
+The [query journal](../journal/2026/10/2026-10-04-phase-69.7-job-result-query.md)
+owns authoring and execution evidence; actual CBD completed pipeline/fresh-runtime
+acceptance remains a separate required downstream responsibility.
+
 status=normative
 phase=JM69-03H
 source-authority=`P69.1-JM69-03-TERMINAL-PROJECTION-001`

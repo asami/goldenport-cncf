@@ -22,7 +22,7 @@ import org.goldenport.cncf.projection.{
  * wires HTTP or CLI behavior. Resolver evidence stays private to accessC.
  *
  * @since   Aug. 26, 2026
- * @version Aug. 26, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentKnowledgeHelpManifestIdentity(
@@ -250,8 +250,6 @@ object ComponentKnowledgeHelpContract {
     val provenance = resource.provenance
     for {
       _ <- Either.cond(entry.binding.logicalIdentity == resource.logicalIdentity, (), s"$context logical identity must match its supplied resource")
-      _ <- Either.cond(entry.sha256 == provenance.sha256, (), s"$context digest must match its supplied resource")
-      _ <- Either.cond(entry.provenance.matchingDigest == provenance.sha256, (), s"$context matching digest must match its supplied resource")
       _ <- Either.cond(entry.provenance.sourceKind == provenance.sourceKind, (), s"$context source kind must match its supplied resource")
       _ <- Either.cond(entry.provenance.artifactCoordinate == provenance.artifactCoordinate, (), s"$context artifact coordinate must match its supplied resource")
       _ <- Either.cond(entry.provenance.logicalSource == provenance.logicalSource, (), s"$context logical source must match its supplied resource")

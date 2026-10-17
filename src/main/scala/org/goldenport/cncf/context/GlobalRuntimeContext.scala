@@ -8,8 +8,10 @@ import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.action.CommandExecutionMode
 import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.assembly.AssemblyReport
-import org.goldenport.cncf.http.HttpDriver
+import org.goldenport.cncf.http.{HttpDriver, HttpExecutionAdmission}
 import org.goldenport.cncf.path.AliasResolver
+import org.goldenport.cncf.processexecution.{ProcessExecutionAdmission, ProcessExecutionDriver}
+import org.goldenport.cncf.workspace.WorkspaceExecutionAdmission
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 
 /*
@@ -18,7 +20,8 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
  *  version Apr. 11, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Oct. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GlobalRuntimeContext(
@@ -109,7 +112,11 @@ object GlobalRuntimeContext {
     runconfig: RuntimeConfig,
     resolvedConfiguration: ResolvedConfiguration,
     observabilityContext: ObservabilityContext,
-    aliasresolver: AliasResolver
+    aliasresolver: AliasResolver,
+    processdriver: Option[ProcessExecutionDriver] = None,
+    processadmission: Option[ProcessExecutionAdmission] = None,
+    workspaceAdmission: Option[WorkspaceExecutionAdmission] = None,
+    httpAdmission: Option[HttpExecutionAdmission] = None
   ): GlobalRuntimeContext = {
     val core = ScopeContext.Core(
       ScopeKind.Runtime, // Global
@@ -118,7 +125,11 @@ object GlobalRuntimeContext {
       observabilityContext,
       Some(runconfig.httpDriver),
       Some(DataStoreContext(runconfig.dataStoreSpace)),
-      Some(EntityStoreContext(runconfig.entityStoreSpace))
+      Some(EntityStoreContext(runconfig.entityStoreSpace)),
+      processExecutionDriverOption = processdriver,
+      processExecutionAdmissionOption = processadmission,
+      workspaceExecutionAdmissionOption = workspaceAdmission,
+      httpExecutionAdmissionOption = httpAdmission
     )
     GlobalRuntimeContext(
       core,

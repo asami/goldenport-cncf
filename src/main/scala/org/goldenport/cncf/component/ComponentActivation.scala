@@ -13,7 +13,8 @@ import org.goldenport.observation.{Cause, Observation, Taxonomy}
 
 /*
  * @since   Sep.  7, 2026
- * @version Sep.  8, 2026
+ *  version Sep.  8, 2026
+ * @version Oct.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ComponentActivation {
@@ -118,6 +119,22 @@ object ComponentActivation {
       _states.synchronized(Option(_states.get(subsystem))).flatMap { state =>
         state.synchronized(state._terminal_diagnostic)
       }
+
+  /** Observes existing successful terminality without starting or waiting for activation. */
+  private[cncf] def isCompleteFor(subsystem: Subsystem): Boolean = {
+    if (subsystem == null)
+      false
+    else {
+      _states.synchronized(Option(_states.get(subsystem))).exists { state =>
+        state.synchronized {
+          !state.inProgress && (state.terminalResult match {
+            case Some(Consequence.Success(_)) => true
+            case _ => false
+          })
+        }
+      }
+    }
+  }
 
   private def _activate_c(
     subsystem: Subsystem,

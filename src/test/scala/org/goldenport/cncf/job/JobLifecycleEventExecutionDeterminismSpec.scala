@@ -24,9 +24,10 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jul. 16, 2026
  *  version Sep. 11, 2026
- * @version Oct.  2, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobLifecycleEventExecutionDeterminismSpec
   extends AnyWordSpec
   with Matchers

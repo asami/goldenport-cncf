@@ -29,6 +29,7 @@ import org.typelevel.ci.CIString
  * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobExperienceHttpSpec extends AnyWordSpec with Matchers with GivenWhenThen with StaticFormAppRendererSpecFixtures {
   "Job experience Http4s routes" should {
     "H9 preserve configured Production audit list and bounded detail through real provider-authenticated routes" in {

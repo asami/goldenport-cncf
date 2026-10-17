@@ -42,6 +42,35 @@ import scala.util.Try
  */
 private[component] trait ComponentFactoryWorkflowPart { self: ComponentFactory =>
 
+  private[component] def _bootstrap_workflow_instance_persistence_c(
+    component: Component
+  ): Consequence[Unit] = {
+    import org.goldenport.cncf.datastore.ComponentDataStore
+    import org.goldenport.cncf.workflow.{WorkflowInstancePersistenceBinding, WorkflowInstancePersistenceSource}
+    val source = component match {
+      case m: WorkflowInstancePersistenceSource => Some(m)
+      case _ => component.factory.collect {
+        case m: WorkflowInstancePersistenceSource => m
+      }
+    }
+    source.flatMap(_.workflowInstancePersistenceDeclarationOption) match {
+      case None => Consequence.unit
+      case Some(declaration) =>
+        component.subsystem match {
+          case None => Consequence.configurationInvalid("Workflow instance persistence requires an owning Subsystem")
+          case Some(subsystem) =>
+            given ctx: ExecutionContext = component.logic.executionContext()
+            val environment = ComponentDataStore.Environment(
+              ctx.runtime.resolvedParameters, Some(subsystem.configuration))
+            WorkflowInstancePersistenceBinding.bindC(component.componentId,
+              subsystem, environment, declaration).map { binding =>
+              component.withWorkflowInstancePersistenceBinding(binding)
+              ()
+            }
+        }
+    }
+  }
+
   private[component] def _bootstrap_event_reception(
     component: Component
   ): Unit = {

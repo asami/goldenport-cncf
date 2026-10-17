@@ -4,7 +4,7 @@ import org.goldenport.cncf.metrics.RuntimeMetricPoint
 
 /*
  * @since   Oct. 3, 2026
- * @version Oct. 3, 2026
+ * @version Oct. 5, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] final class JobOperationalMetrics {
@@ -16,12 +16,12 @@ private[job] final class JobOperationalMetrics {
       val persistenceindex = persistence match {
         case JobPersistencePolicy.Persistent => 0
         case JobPersistencePolicy.Ephemeral => 1
-        case _ => -1
+        case null => -1
       }
       val modeindex = runMode match {
         case JobRunMode.Sync => 0
         case JobRunMode.Async => 1
-        case _ => -1
+        case null => -1
       }
       if (factindex >= 0 && persistenceindex >= 0 && modeindex >= 0) {
         val cell = factindex * 4 + persistenceindex * 2 + modeindex

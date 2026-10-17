@@ -42,6 +42,12 @@ declared bounded-text admission may accept dynamic non-empty text arguments,
 but finite argument-count and encoded-size limits remain mandatory and unsafe
 control characters are rejected before driver selection.
 
+Trusted runtime definitions may instead explicitly select Template admission
+for complete ordered literal/lower-hex argument forms. The additive contract
+and paired executable examples are in [Process argument templates](process-argument-templates.md).
+Template matching does not replace native workflow authority or capability and
+resource-limit admission, and registered values are never its fallback.
+
 ## Program Definition And Effective Policy
 
 `ProcessProgramDefinition` is runtime configuration or framework registration,
@@ -57,6 +63,12 @@ behavior submits a `ProcessExecutionRequest` through protected
 the DSL creates the capability-admitted resolved execution. A missing admission
 service MUST fail deterministically. `UnitOfWorkOp.ProcessExec` has that
 resolved intent as its sole payload.
+
+Runtime-owned semantic tools may use tagged definitions through their protected
+typed DSL. [Typed SBT execution](typed-sbt-execution.md) admits only Compile/Test
+on the shared Manage workspace and an independent actual component capability
+grant. Generic `admitC` and `resolveC` reject those definitions. Public request,
+resolved execution and terminal result shapes remain unchanged.
 
 The effective limit is the strictest compatible value among the runtime maximum,
 program-definition maximum, component/provider grant, and request override. A
@@ -93,6 +105,88 @@ forbidden environment request, incompatible limit, unavailable executable, or
 unsupported driver policy returns a structured `Consequence.Failure` and MUST
 NOT invoke the driver.
 
+## Ordinary External Effect Admission
+
+`ExternalEffectKind` and the workspace-bound `ExternalEffect` remain the shared
+effect vocabulary. `Persistence` additionally describes recognized database CLI
+effects. `ExternalEffectClassification(effectKinds, route)` describes effects
+and provenance; classification never installs a permission or establishes a
+safety PASS. Its closed routes and structured diagnostic policies are:
+
+| Route | Diagnostic policy | Meaning |
+| --- | --- | --- |
+| Managed | `external.effect.managed` | CNCF-owned typed adapter provenance |
+| Direct | `external.effect.direct` | Recognized shell, interpreter or wrapper |
+| CapabilityLaundering | `external.effect.capability-laundering` | Recognized command access to another managed effect |
+| Unclassified | `external.effect.unclassified` | Command-name inference provides no effect assurance |
+
+The public pure `ProcessExternalEffectPolicy.classifyCommandName` normalizes
+the basename across `/` and backslash separators, folds case with `Locale.ROOT`,
+and removes an optional `.exe` suffix. It recognizes only the bounded names
+below; it does not inspect or execute files, resolve symlinks, parse command
+strings or argv, or infer arbitrary binary or script behavior.
+
+| Names | Effect kinds | Route |
+| --- | --- | --- |
+| sh, bash, zsh, dash, ksh, csh, tcsh, fish, cmd, powershell, pwsh | Process | Direct |
+| java, javaw, python, python2, python3, node, nodejs, ruby, perl, php, env, busybox, xargs, sudo, doas, command, exec | Process | Direct |
+| python followed only by numeric dot-separated version components, such as python3.12 | Process | Direct |
+| cat, head, tail, find, ls | FileRead | CapabilityLaundering |
+| rm, mkdir, rmdir, touch, tee | FileWrite | CapabilityLaundering |
+| cp, mv | FileRead, FileWrite | CapabilityLaundering |
+| curl, wget | Http | CapabilityLaundering |
+| psql, mysql, sqlite3, redis-cli | Persistence | CapabilityLaundering |
+| untagged git | GitRead, GitWrite | CapabilityLaundering |
+| untagged sbt, sbt.cmd, sbt.bat | Build | CapabilityLaundering |
+| Other names | Process | Unclassified |
+
+`classifyDefinition` uses CNCF-owned private SBT/Git tags for Managed Build or
+Managed GitRead/GitWrite according to the typed Git operation's ReadOnly/Manage
+workspace permission. A safe identity, a caller assertion, or the executable's
+name cannot supply that provenance. The protected typed Git/SBT routes retain
+their independent actual component, shared workspace, remote and finite-limit
+admission. Their normal tool launchers and legitimate child processes are not
+generic command opt-ins.
+
+`validateGenericDefinitionC` refuses Managed definitions on the generic route
+and refuses Direct and CapabilityLaundering definitions even when the host has
+registered that exact program and declared a component capability grant.
+`RuntimeProcessExecutionPlan.createC` applies this gate before policy and
+admission installation; V2 and V3 reuse it for their generic declarations before
+combining separate typed tools. Generic `UnitOfWorkOp.ProcessExec` applies the
+same definition gate before driver resolution or WorkArea allocation, after
+the existing SBT-then-Git typed-intent checks and their structured failures.
+This does not redesign generic intent or re-resolve current component grants.
+
+Unclassified leaves a definition eligible only for existing exact host program
+registration and separate actual component capability admission, bounded
+arguments, finite limits, environment policy and applicable declared resource
+scopes. A request is not a grant. CAR metadata, a provider result, a safe
+identity and a command name grant nothing. Unclassified is an explicit inference
+limitation, and arbitrary registered programs may have effects beyond this
+bounded vocabulary.
+
+The owning UnitOfWork interpreter always refuses ordinary
+`UnitOfWorkOp.ShellCommandExec` with policy `external.effect.ordinary-shell`,
+including harmless argv and fake executors. Free program construction remains
+passive; direct and Free interpretation refuse before obtaining or invoking
+`shellCommandExecutor`. There is no ordinary shell opt-in. Refusals remain
+inside the existing UoW/calltree failure path. These effect policy failures use
+`Consequence.argumentPolicyViolation` with only fixed logical kind/route values;
+they never echo executable paths, command text, argv, environment or provider
+secrets.
+
+This boundary does not provide hostile-CAR containment. HTTP destination
+admission for the normal client DSL, loading/scanner breadth, and the actual
+later CBD consumer of the public classifier remain separate unfinished work.
+This slice does not complete P6-SBX04 or P6-SBX05 or their overall same-workflow
+command and outbound-destination acceptance obligations.
+
+Executable specifications:
+[ProcessExternalEffectPolicySpec](../../src/test/scala/org/goldenport/cncf/processexecution/ProcessExternalEffectPolicySpec.scala),
+[UnitOfWorkExternalEffectSpec](../../src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkExternalEffectSpec.scala),
+and [RuntimeProcessExecutionPlanCodecSpec](../../src/test/scala/org/goldenport/cncf/processexecution/RuntimeProcessExecutionPlanCodecSpec.scala).
+
 ## Driver Contract
 
 `ProcessExecutionDriver` receives only a resolved and admitted execution. It
@@ -118,10 +212,18 @@ an explicit deterministic test fixture and MUST NOT create a host process.
 
 ## WorkArea And Artifact Contract
 
-Input files, working directories, and declared outputs are confined to the
-execution WorkArea. Relative paths MUST be non-empty normalized relative paths
+For ordinary generic executions, input files, working directories, and declared
+outputs are confined to the execution WorkArea. Relative paths MUST be non-empty normalized relative paths
 without traversal segments. Runtime path validation MUST prevent real-path and
 symlink escape before launch or artifact collection.
+
+The runtime-tagged Compile/Test tool uses the actual canonical checkout cwd
+from its shared immutable workspace binding. Both local-driver entry points
+recheck that binding. It admits no caller argv, cwd, stdin, input files,
+resource trees, artifacts or request limit overrides, and projects no WorkArea
+files under the checkout. The existing UnitOfWork WorkArea/handle ownership,
+bounded captures, cancellation and closure still apply. This is a semantic
+cwd exception, not an unrestricted host working-directory request.
 
 A runtime-materialized input file is admitted by logical name, bounded before
 write, materialized by CNCF before launch, and removed with the WorkArea. It is
@@ -172,6 +274,12 @@ Admission and runtime failures remain `Consequence.Failure(Conclusion)` values.
 Provider adapters consume the neutral `ProcessExecutionResult` and map its
 termination to provider/domain outcomes. CNCF does not supply a Cozy-,
 CAR Review-, or application-specific adapter vocabulary.
+
+The CNCF-owned typed SBT adapter retains this actual result and maps build
+meaning to Succeeded, Failed(exitCode) or Incomplete(termination), as specified
+in [Typed SBT execution](typed-sbt-execution.md). The reusable ExternalEffect
+vocabulary describes Build on a logical workspace without granting authority
+or implying rollback or hard OS containment.
 
 ## Cancellation And Job Contract
 
@@ -252,6 +360,6 @@ executable specifications:
 ## Non-Goals
 
 This contract does not define container or remote drivers, arbitrary shell
-execution, process retention, live Codex integration, a compatibility migration
-for legacy shell facilities, BPM/process orchestration, or an independent
+execution, process retention, live Codex integration, migration of legacy
+Docker/shell adapters, BPM/process orchestration, or an independent
 process scheduler.

@@ -25,9 +25,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 29, 2026
- * @version Sep. 29, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobExperienceProtocolSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Job experience protocol" should {
     "P1 expose one descriptor-backed service with the frozen operations and HTTP methods" in {

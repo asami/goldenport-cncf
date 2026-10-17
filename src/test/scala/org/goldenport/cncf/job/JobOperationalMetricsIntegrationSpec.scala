@@ -17,9 +17,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 3, 2026
- * @version Oct. 3, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobOperationalMetricsIntegrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "E5 ON1 native synchronous snapshot purity" must _scenario("E5", "R1,R3,R4") {
     "preserve semantic Events, results, paid facts and time and ID call counts" in {

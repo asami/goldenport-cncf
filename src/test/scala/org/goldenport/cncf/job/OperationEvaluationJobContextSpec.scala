@@ -21,9 +21,11 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for operation-evaluation correlation across Job attempts.
  *
  * @since   Jul. 23, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class OperationEvaluationJobContextSpec
     extends AnyWordSpec
     with Matchers

@@ -5,7 +5,8 @@ import org.goldenport.cncf.context.{CorrelationId, ExecutionContext}
 
 /*
  * @since   Mar. 30, 2026
- * @version Jul. 23, 2026
+ *  version Jul. 23, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Behavior
@@ -13,6 +14,7 @@ trait Behavior
   with BehaviorFeaturePart
   with BehaviorOperationEvaluationPart
   with BehaviorProcessExecutionPart
+  with BehaviorFileExecutionPart
   with BehaviorInformationPart
 
 object Behavior {

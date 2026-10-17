@@ -57,7 +57,7 @@ import org.goldenport.cncf.protocol.OperationRequestValidationObserver
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, ChildEntityBindingOperationDefinition, CmlOperationAssociationBinding, CmlOperationChildEntityBinding, CmlOperationDefinition, CmlOperationImageBinding, ImageBindingOperationDefinition}
 import org.goldenport.cncf.operation.evaluation.{CmlOperationEvaluationDeclaration, EvaluationAdmissionRequirement, OperationEvaluationActionTask, OperationEvaluationAdmission, OperationEvaluationAdmissionDiagnostic, OperationEvaluationAdmissionRequest, OperationEvaluationAttemptCapture, OperationEvaluationCrossSinkPolicy, OperationEvaluationDeliveryRuntime, OperationEvaluationLimitation, OperationEvaluationLimitationKind, OperationEvaluationOperationIdentity}
-import org.goldenport.cncf.security.{AdminAuthorizationPolicy, IngressSecurityResolver, OperationAuthorization, OperationAuthorizationProvider}
+import org.goldenport.cncf.security.{AdminAuthorizationPolicy, AuthenticationRequest, IngressSecurityResolver, OperationAuthorization, OperationAuthorizationProvider}
 import org.goldenport.cncf.config.{ResolvedParameter, ResolvedParameters}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.metrics.{ComponentMetricsRegistry, EntityAccessMetricsRegistry}
@@ -74,7 +74,7 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Apr. 30, 2026
  *  version Aug. 15, 2026
  *  version Sep.  8, 2026
- * @version Oct.  4, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -135,7 +135,21 @@ final class Subsystem(
     _find_global_runtime_context(scopeContext)
       .map(x => InMemoryJobEngine.create(x.executionProfileRuntime))
       .getOrElse(InMemoryJobEngine.create())
-  private val _event_store: EventStore = EventStore.inMemory
+  private val _event_store: EventStore = EventStoreConstruction.current.getOrElse(EventStore.inMemory)
+  private val _event_store_persistence_declaration = EventStorePersistenceConstruction.current
+  private val _component_record_storage_declaration = ComponentRecordStorageConstruction.current
+  private val _component_record_reserved_collections =
+    _event_store_persistence_declaration.toVector.flatMap(d =>
+      Vector(d.cursorCollection, d.eventCollection, d.deliveryIndexCollection) ++
+        d.workflowGrants.flatMap(g => Vector(g.rootCollection, g.continuationCollection)))
+  private lazy val _component_record_storage_binding = new ComponentRecordStorageBinding(
+    _component_record_storage_declaration,
+    _component_record_reserved_collections,
+    () => Option(_active_datastore_lease.get()),
+    lease => _datastore_binding.inheritLeaseC(lease).map(_ => ()),
+    request => resolveManagedComponentDataStoreC(
+      org.goldenport.cncf.datastore.ComponentDataStore.Environment(
+        ResolvedParameters.fromResolvedConfiguration(configuration), Some(configuration)), request))
   private lazy val _event_bus: EventBus =
     EventBus.default(EventEngine.noop(DataStore.noop(), eventstore = _event_store))
   private lazy val _workflow_engine: WorkflowEngine = WorkflowEngine.inMemory(this)
@@ -898,6 +912,169 @@ final class Subsystem(
         Consequence.stateInvalid("managed component datastore access requires an active SystemNode lease")
     }
 
+  /** Pure captured-grant checks precede resource resolution. No lease is opened
+    * here: only a currently managed dispatch may obtain this narrow capability.
+    */
+  private[cncf] def bindComponentRecordStorageC(
+    componentId: ComponentId, storeName: String,
+    collection: org.goldenport.cncf.datastore.DataStore.CollectionId,
+    entryId: org.goldenport.cncf.datastore.DataStore.StringEntryId,
+    context: ExecutionContext
+  ): Consequence[org.goldenport.cncf.datastore.ComponentRecordStorage] =
+    _component_record_storage_binding.bindC(componentId, storeName, collection, entryId, context)
+
+  /** Explicit trusted bootstrap only. Duplicate Create fails; never reset/upsert. */
+  private[cncf] def initializeEventCursorC(
+    environment: org.goldenport.cncf.datastore.ComponentDataStore.Environment
+  )(using org.goldenport.cncf.context.ExecutionContext):
+      Consequence[org.goldenport.cncf.event.EventCursorRecordV1] =
+    _with_event_cursor_store_c(environment) { (declaration, store) =>
+      store.load(declaration.cursorCollection, declaration.cursorEntryId).flatMap {
+        case Some(_) => Consequence.stateConflict("Event cursor already exists; initialization cannot reset it")
+        case None => store.create(declaration.cursorCollection, declaration.cursorEntryId,
+          org.goldenport.cncf.event.EventCursorRecordV1.initial.toRecord)
+          .flatMap(_ => _load_event_cursor_c(declaration, store).recoverWith { _ =>
+            org.goldenport.cncf.datastore.DataStoreConditionalTransitionFailure.transactionIndeterminate(
+              "Created Event cursor authoritative readback is uncertain")
+          })
+      }
+    }
+
+  /** Normal progression never initializes missing storage. */
+  private[cncf] def loadEventCursorC(
+    environment: org.goldenport.cncf.datastore.ComponentDataStore.Environment
+  )(using org.goldenport.cncf.context.ExecutionContext):
+      Consequence[org.goldenport.cncf.event.EventCursorRecordV1] =
+    _with_event_cursor_store_c(environment)(_load_event_cursor_c)
+
+  private def _with_event_cursor_store_c[A](
+    environment: org.goldenport.cncf.datastore.ComponentDataStore.Environment
+  )(f: (org.goldenport.cncf.event.EventStorePersistenceDeclaration,
+      org.goldenport.cncf.datastore.DataStore) => Consequence[A]): Consequence[A] =
+    _event_store_persistence_declaration match {
+      case None => Consequence.configurationInvalid("Subsystem has no EventStore persistence declaration")
+      case Some(declaration) => _with_managed_datastore_lease_c { _ =>
+        resolveManagedComponentDataStoreC(environment, declaration.serviceRequest).flatMap {
+          case sql: org.goldenport.cncf.datastore.sql.SqlDataStore if sql.managedResourceOption.isDefined =>
+            // Reuse the verified view admission to require borrowed managed SQLite.
+            sql.managedMultiGuardVerifiedViewC().flatMap(store => f(declaration, store))
+          case _ => Consequence.configurationInvalid("Event cursor requires borrowed managed SQLite")
+        }
+      }
+    }
+
+  private def _load_event_cursor_c(
+    declaration: org.goldenport.cncf.event.EventStorePersistenceDeclaration,
+    store: org.goldenport.cncf.datastore.DataStore
+  )(using org.goldenport.cncf.context.ExecutionContext):
+      Consequence[org.goldenport.cncf.event.EventCursorRecordV1] =
+    store.load(declaration.cursorCollection, declaration.cursorEntryId).flatMap {
+      case Some(record) if record.fields.count(_.key == "id") == 1 &&
+          record.getString("id").contains(declaration.cursorEntryId.print) =>
+        org.goldenport.cncf.event.EventCursorRecordV1.decodeC(
+          org.goldenport.record.Record(record.fields.filterNot(_.key == "id")))
+      case _ => Consequence.stateConflict("Declared Event cursor is missing or has a different physical identity")
+    }
+
+  /** Trusted Workflow assembly borrows one admitted view for the active lease.
+    * The declaration is captured at Subsystem construction, never from a plan.
+    */
+  private[cncf] def withWorkflowMultiGuardSpaceC[A](
+    componentId: org.goldenport.cncf.component.ComponentId,
+    environment: org.goldenport.cncf.datastore.ComponentDataStore.Environment
+  )(f: org.goldenport.cncf.datastore.DataStoreSpace => Consequence[A]): Consequence[A] =
+    _with_workflow_multi_guard_space_c(componentId, environment, false)(f)
+
+  /** Explicit internal verified path; ordinary component datastore views and
+    * the raw multi-guard path remain unchanged.
+    */
+  private[cncf] def withWorkflowVerifiedMultiGuardSpaceC[A](
+    componentId: org.goldenport.cncf.component.ComponentId,
+    environment: org.goldenport.cncf.datastore.ComponentDataStore.Environment
+  )(f: org.goldenport.cncf.datastore.DataStoreSpace => Consequence[A]): Consequence[A] =
+    _with_workflow_multi_guard_space_c(componentId, environment, true)(f)
+
+  /** Pure admission against captured host authority, before provider access. */
+  private[cncf] def admitWorkflowStorageC(
+    componentId: ComponentId,
+    storeName: String,
+    instances: DataStore.CollectionId,
+    continuations: DataStore.CollectionId
+  ): Consequence[Unit] =
+    _event_store_persistence_declaration match {
+      case None => Consequence.configurationInvalid("Subsystem has no EventStore persistence declaration")
+      case Some(declaration) => declaration.grantC(componentId).flatMap { grant =>
+        if (storeName == grant.storeName && instances == grant.rootCollection &&
+            continuations == grant.continuationCollection) Consequence.unit
+        else Consequence.configurationInvalid("Workflow storage differs from its captured host grant")
+      }
+    }
+
+  private def _with_workflow_multi_guard_space_c[A](
+    componentId: org.goldenport.cncf.component.ComponentId,
+    environment: org.goldenport.cncf.datastore.ComponentDataStore.Environment,
+    verified: Boolean
+  )(f: org.goldenport.cncf.datastore.DataStoreSpace => Consequence[A]): Consequence[A] =
+    _event_store_persistence_declaration match {
+      case None => Consequence.configurationInvalid("Subsystem has no EventStore persistence declaration")
+      case Some(declaration) =>
+        for {
+          grant <- declaration.grantC(componentId)
+          basepolicy <- declaration.policyC(grant)
+          policy <- if (verified)
+            _workflow_verified_record_policy_c(basepolicy, componentId, grant.storeName)
+            else Consequence.success(basepolicy)
+          result <- _with_managed_datastore_lease_c { lease =>
+            for {
+              workflowStore <- resolveManagedComponentDataStoreC(environment, grant.request)
+              eventStore <- resolveManagedComponentDataStoreC(environment, declaration.serviceRequest)
+              _ <- (workflowStore, eventStore) match {
+                case (left: org.goldenport.cncf.datastore.sql.SqlDataStore,
+                      right: org.goldenport.cncf.datastore.sql.SqlDataStore)
+                    if left.managedResourceOption.exists(resource =>
+                      right.managedResourceOption.exists(_ eq resource)) => Consequence.unit
+                case _ => Consequence.configurationInvalid("Workflow and EventStore require one shared managed datastore resource")
+              }
+              provider <- if (!verified) Consequence.success(workflowStore)
+                else workflowStore match {
+                  case sql: org.goldenport.cncf.datastore.sql.SqlDataStore => sql.managedMultiGuardVerifiedViewC()
+                  case _ => Consequence.configurationInvalid("Verified Workflow requires managed SQLite")
+                }
+              readPolicy <- org.goldenport.cncf.datastore.DataStoreObservationPolicy.createC(
+                org.goldenport.cncf.datastore.DataStoreObservationTarget(
+                  declaration.cursorCollection, declaration.cursorEntryId),
+                declaration.eventCollection, declaration.deliveryIndexCollection)
+              space <- org.goldenport.cncf.datastore.DataStoreSpace
+                .multiGuardHostViewC(policy, provider, lease, if (verified) Some(readPolicy) else None,
+                  if (verified) Some(_event_store) else None)
+              value <- f(space)
+            } yield value
+          }
+        } yield result
+    }
+
+  /** Captured declarations add Create collections, not guards or runtime
+    * authority. Admission is pure and precedes resolution of the shared pool.
+    */
+  private def _workflow_verified_record_policy_c(
+    basepolicy: org.goldenport.cncf.datastore.DataStoreConditionalMultiGuardHostPolicy,
+    componentid: ComponentId,
+    storename: String
+  ): Consequence[org.goldenport.cncf.datastore.DataStoreConditionalMultiGuardHostPolicy] =
+    _component_record_storage_declaration match {
+      case None => Consequence.success(basepolicy)
+      case Some(declaration) =>
+        declaration.validateReservedC(_component_record_reserved_collections).flatMap { _ =>
+          val collections = declaration.grants.collect {
+            case grant if grant.componentId == componentid && grant.storeName == storename => grant.collection
+          }
+          if (collections.isEmpty) Consequence.success(basepolicy)
+          else org.goldenport.cncf.datastore.DataStoreConditionalMultiGuardHostPolicy.create(
+            basepolicy.workflowOwner, basepolicy.rootCollection, basepolicy.successorCollection,
+            basepolicy.guardBindings, basepolicy.sideCreateCollections ++ collections, basepolicy.guardTargets)
+        }
+    }
+
   private[cncf] def _with_managed_datastore_lease_c[A](
     f: SystemNodeResourceLease => Consequence[A]
   ): Consequence[A] =
@@ -1046,7 +1223,7 @@ final class Subsystem(
       profile <- executionProfileC
       response <- {
         val (component, _, _) = route
-        val attributes = _request_security_attributes(normalizedrequest)
+        val attributes = _request_security_attributes(normalizedrequest, route._3)
         val accesspolicy = component.operationDefinitions
           .find(x => _normalize_operation_name(x.name) == _normalize_operation_name(route._3.name))
           .flatMap(_.access.map(_.policy))
@@ -1764,12 +1941,12 @@ final class Subsystem(
 
   def executeAction(action: Action): Consequence[OperationResponse] =
     _with_managed_datastore_lease_c { _ => _resolve_route(action.request) match {
-      case Some((component, _, _)) =>
+      case Some((component, _, operation)) =>
         executionProfileC.flatMap { profile =>
           IngressSecurityResolver.resolve(
             profile,
             component.logic.executionContext(),
-            _request_security_attributes(action.request)
+            _request_security_attributes(action.request, operation)
           ).flatMap { security =>
             _execute_action_c(action, security.executionContext)
           }
@@ -2497,14 +2674,26 @@ final class Subsystem(
 
   private def _allows_controlled_test_execution: Boolean = true
 
-  private def _request_security_attributes(request: Request): Map[String, String] = {
+  private def _request_security_attributes(
+    request: Request,
+    operation: OperationDefinition
+  ): Map[String, String] = {
+    val declarednames = operation.specification.request.parameters
+      .flatMap(_.names).map(AuthenticationRequest.normalizeToken).toSet
+    val businesssession = declarednames.contains(AuthenticationRequest.normalizeToken("sessionId"))
+    def _is_business_session_(name: String): Boolean =
+      businesssession && AuthenticationRequest.normalizeToken(name) == AuthenticationRequest.normalizeToken("sessionId")
     val properties = request.properties.foldLeft(Map.empty[String, String]) { (z, property) =>
       val value = Option(property.value).map(_.toString).getOrElse("")
-      if (property.name.nonEmpty && value.nonEmpty) z.updated(property.name, value) else z
+      if (property.name.nonEmpty && value.nonEmpty && !_is_business_session_(property.name))
+        z.updated(property.name, value)
+      else z
     }
     request.arguments.foldLeft(properties) { (z, argument) =>
       val value = Option(argument.value).map(_.toString).getOrElse("")
-      if (argument.name.nonEmpty && value.nonEmpty) z.updated(argument.name, value) else z
+      if (argument.name.nonEmpty && value.nonEmpty && !_is_business_session_(argument.name))
+        z.updated(argument.name, value)
+      else z
     }
   }
 

@@ -7,7 +7,8 @@ import org.goldenport.cncf.resource.{ResourceAccess, ResourceContent, ResourceRe
 
 /*
  * @since   Jul. 16, 2026
- * @version Jul. 21, 2026
+ *  version Jul. 21, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object ResourceAccessObservation {

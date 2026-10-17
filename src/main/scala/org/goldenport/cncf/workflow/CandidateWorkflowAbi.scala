@@ -1,8 +1,5 @@
 package org.goldenport.cncf.workflow
 
-import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
-
 import io.circe.Json
 import io.circe.parser.parse
 import org.goldenport.{Conclusion, Consequence}
@@ -11,7 +8,7 @@ import org.goldenport.{Conclusion, Consequence}
   * Candidate-Admission sidecar. This does not change the closed Phase 62.3 ABI.
   *
   * @since   Sep. 25, 2026
-  * @version Sep. 28, 2026
+  * @version Oct.  1, 2026
   */
 object CandidateWorkflowAbi {
   final case class Operation(service: String, name: String, inputType: Option[String], resultType: Option[String])
@@ -19,33 +16,60 @@ object CandidateWorkflowAbi {
   final case class RequiredSpi(capability: String, actionIdentity: String, operation: Operation, line: Int)
   final case class Workflow(identity: String, version: String, rootLine: Int, definitionLine: Int,
     states: Vector[String], actions: Vector[Action], requiredSpi: Vector[RequiredSpi])
-  final case class Definition private[workflow] (rawJson: String,
+  final case class Definition private[workflow] (
     sidecar: CandidateAdmissionProducerAbi.Artifact, sourceResource: String,
-    workflow: Workflow, sha256: String)
+    workflow: Workflow)
 
   val schemaVersion: String = "cozy.cml.statemachine-workflow-abi.v1"
 
   def parseC(rawJson: String, sidecar: CandidateAdmissionProducerAbi.Artifact,
     sourceResource: String): Consequence[Definition] =
-    _parse(rawJson, sidecar, sourceResource).fold(
+    _parse(rawJson, sidecar, sourceResource, None).fold(
+      message => _failure(s"CWF77-CANDIDATE-WORKFLOW-ABI: $message"),
+      Consequence.success
+    )
+
+  /** Selects a declared Workflow without filtering or rewriting artifact bytes.
+    * The legacy parseC entry remains strictly single-Workflow.
+    */
+  def parseSelectedC(rawJson: String, sidecar: CandidateAdmissionProducerAbi.Artifact,
+    sourceResource: String, identity: String, version: String): Consequence[Definition] =
+    _parse(rawJson, sidecar, sourceResource, Some(identity -> version)).fold(
       message => _failure(s"CWF77-CANDIDATE-WORKFLOW-ABI: $message"),
       Consequence.success
     )
 
   def admitC(definition: Definition): Consequence[Definition] =
-    if (definition == null)
+    if (definition == null || definition.workflow == null)
       _failure("CWF77-CANDIDATE-WORKFLOW-ABI: missing definition")
+    else if (definition.sidecar == null)
+      _failure("CWF77-CANDIDATE-WORKFLOW-ABI: candidate-admission sidecar missing")
     else
-      parseC(definition.rawJson, definition.sidecar, definition.sourceResource).flatMap { admitted =>
-        if (admitted == definition) Consequence.success(definition)
-        else _failure("CWF77-CANDIDATE-WORKFLOW-ABI: definition facts diverge")
-      }
+      _match_sidecar(definition.workflow, definition.sidecar).fold(
+        message => _failure(s"CWF77-CANDIDATE-WORKFLOW-ABI: $message"),
+        _ => Consequence.success(definition))
+
+  /** Runtime compatibility concerns state and executable interfaces, not
+    * formatting, diagnostic source locations or generator identity.
+    */
+  def compatibleWorkflow(left: Workflow, right: Workflow): Boolean =
+    left != null && right != null && left.states == right.states &&
+      left.actions.map(_action_contract).toSet == right.actions.map(_action_contract).toSet &&
+      left.requiredSpi.map(_spi_contract).toSet == right.requiredSpi.map(_spi_contract).toSet
+
+  private def _action_contract(value: Action) =
+    (value.identity, value.kind, value.operation, value.inputBinding)
+  private def _spi_contract(value: RequiredSpi) =
+    (value.capability, value.actionIdentity, value.operation)
 
   private def _parse(raw: String, sidecar: CandidateAdmissionProducerAbi.Artifact,
-    resource: String): Either[String, Definition] =
+    resource: String, selection: Option[(String, String)]): Either[String, Definition] =
     for {
       _ <- Either.cond(raw != null && raw.nonEmpty && resource != null && resource.trim.nonEmpty,
         (), "missing workflow JSON or source resource")
+      _ <- Either.cond(selection.forall { case (identity, version) =>
+        identity != null && identity.trim.nonEmpty && version != null && version.trim.nonEmpty
+      }, (), "missing explicit workflow identity/version")
       _ <- if (sidecar == null) Left("candidate-admission sidecar missing")
       else CandidateAdmissionProducerAbi.admitC(sidecar) match {
         case Consequence.Success(_) => Right(())
@@ -56,10 +80,21 @@ object CandidateWorkflowAbi {
       schema <- _string(root, "schemaVersion", "root")
       _ <- Either.cond(schema == schemaVersion, (), s"unsupported schema: $schema")
       workflows <- _array(root, "workflows", "root")
-      _ <- Either.cond(workflows.size == 1, (), "exactly one workflow required")
-      workflow <- _workflow(workflows.head)
+      workflow <- selection match {
+        case None =>
+          if (workflows.size == 1) _workflow(workflows.head)
+          else Left("exactly one workflow required")
+        case Some((identity, version)) => for {
+          decoded <- _traverse(workflows)(_workflow)
+          _ <- Either.cond(decoded.map(w => w.identity -> w.version).distinct.size == decoded.size,
+            (), "duplicate workflow identity/version")
+          selected = decoded.filter(w => w.identity == identity && w.version == version)
+          value <- if (selected.size == 1) Right(selected.head)
+            else Left("explicit workflow identity/version not found")
+        } yield value
+      }
       _ <- _match_sidecar(workflow, sidecar)
-    } yield Definition(raw, sidecar, resource, workflow, _sha256(raw))
+    } yield Definition(sidecar, resource, workflow)
 
   private def _workflow(json: Json): Either[String, Workflow] =
     for {
@@ -129,7 +164,6 @@ object CandidateWorkflowAbi {
     if (models.size != 1) Left("workflow identity/version does not match one sidecar model")
     else {
       val model = models.head
-      val source = model.model.workflow.get
       val expectedActions = model.judgments.map(j =>
         Action(j.identity.value, "JUDGMENT", _operation(j.operation),
           j.inputBinding.map(_.value), j.actionSource.line)) ++
@@ -143,22 +177,18 @@ object CandidateWorkflowAbi {
       val ordinaryActions = workflow.actions.filter(_.kind == "OPERATION")
       // The CAM sidecar contains only Judgment/Admission actions, but its
       // Required SPI also covers ordinary operations. Admit those operations
-      // only with exact operation and source correlation to that same sidecar.
+      // only with compatible executable operation/type bindings to that sidecar.
       val ordinaryMatched = ordinaryActions.forall(action => {
         val bindings = model.requiredSpi.filter(_.actionIdentity.value == action.identity)
-        bindings.size == 1 && bindings.head.actionSource.line == action.line &&
+        bindings.size == 1 &&
           _operation(bindings.head.operation) == action.operation &&
           action.inputBinding.nonEmpty && action.operation.inputType.nonEmpty &&
           action.operation.resultType.nonEmpty
       })
-      if (workflow.rootLine != source.rootSource.line ||
-          workflow.definitionLine != source.definitionSource.line)
-        Left("workflow source does not match sidecar")
-      else if (camActions.toSet != expectedActions.toSet ||
-          camActions.size != expectedActions.size || !ordinaryMatched)
+      if (camActions.map(_action_contract).toSet != expectedActions.map(_action_contract).toSet ||
+          !ordinaryMatched)
         Left("workflow actions do not match sidecar")
-      else if (workflow.requiredSpi.toSet != expectedSpi.toSet ||
-          workflow.requiredSpi.size != expectedSpi.size)
+      else if (workflow.requiredSpi.map(_spi_contract).toSet != expectedSpi.map(_spi_contract).toSet)
         Left("workflow Required SPI does not match sidecar")
       else Right(())
     }
@@ -195,9 +225,6 @@ object CandidateWorkflowAbi {
   private def _traverse[A](values: Vector[Json])(f: Json => Either[String, A]): Either[String, Vector[A]] =
     values.foldLeft[Either[String, Vector[A]]](Right(Vector.empty))((acc, value) =>
       for { items <- acc; item <- f(value) } yield items :+ item)
-  private def _sha256(value: String): String =
-    MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))
-      .map(byte => f"${byte & 0xff}%02x").mkString
 
   private def _failure[A](message: String): Consequence[A] =
     Consequence.Failure(Conclusion.from(new IllegalArgumentException(message)))

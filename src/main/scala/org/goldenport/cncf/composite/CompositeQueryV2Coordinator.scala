@@ -10,7 +10,7 @@ import org.goldenport.cncf.subsystem.Subsystem
 
 /*
  * @since   Sep. 29, 2026
- * @version Sep. 29, 2026
+ * @version Oct.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 private[composite] final class CompositeQueryV2Coordinator(
@@ -46,11 +46,11 @@ private[composite] final class CompositeQueryV2Coordinator(
   private val _deadline_nanos = deadlineNanos
 
   def execute(context: ExecutionContext): Consequence[CompositeQueryV2Response] = {
-    if (request.branches.isEmpty)
+    if (request.branches.isEmpty) {
       Consequence.success(CompositeQueryV2Response(Vector.empty, Vector.empty, CompositeQueryV2AggregateStatus.Succeeded))
-    else if (cancellation.isCancelled)
+    } else if (cancellation.isCancelled) {
       Consequence.success(_cancelled_response())
-    else {
+    } else {
       val registration = cancellation.register(_cancel_request())
       val inherited = context.jobContext.cancellationScope.map(_.register(Consequence { _cancel_request() }))
       try {
@@ -71,9 +71,11 @@ private[composite] final class CompositeQueryV2Coordinator(
       val ready = _admit_ready(now)
       ready.foreach(_submit(_, context))
       if (!_is_complete) {
-        try _monitor.synchronized {
-          if (!_is_complete)
-            _monitor.wait(math.max(1L, math.min(25L, _remaining_millis())))
+        try {
+          _monitor.synchronized {
+            if (!_is_complete)
+              _monitor.wait(math.max(1L, math.min(25L, _remaining_millis())))
+          }
         } catch {
           case _: InterruptedException =>
             interrupted = true
@@ -86,17 +88,20 @@ private[composite] final class CompositeQueryV2Coordinator(
     Consequence.success(_response)
   }
 
-  private def _admit_ready(now: Long): Vector[(CompositeQueryV2Branch, Reservation)] =
+  private def _admit_ready(now: Long): Vector[(CompositeQueryV2Branch, Reservation)] = {
     _monitor.synchronized {
       _cascade_unavailable_dependencies()
-      if (_cancelled || _timed_out) Vector.empty
-      else {
+      if (_cancelled || _timed_out) {
+        Vector.empty
+      } else {
         // A physical body leaving its worker does not free this compositor slot
         // by itself.  Canonical settlement still owns the reservation; only a
         // logical timeout/cancel together with body exit may release it.
         val capacity = request.policy.maxParallelism - _reservations.size
-        if (capacity <= 0) Vector.empty
-        else request.branches.iterator
+        if (capacity <= 0) {
+          Vector.empty
+        } else {
+          request.branches.iterator
           .filter(branch => !_results.contains(branch.branchId) && !_reservations.contains(branch.branchId))
           .filter(_dependencies_completed)
           .take(capacity)
@@ -109,15 +114,18 @@ private[composite] final class CompositeQueryV2Coordinator(
                 new CompositeQueryV2Protocol(subsystem, targets),
                 invocation,
                 _complete_task,
-                _body_exited
+                _body_exited,
+                persistentDiagnostics = request.policy.persistence == CompositeQueryV2Persistence.PersistentDiagnostics
               )
               val reservation = Reservation(branch.branchId, task, targetid, now)
               _reservations.update(branch.branchId, reservation)
               branch -> reservation
             }
           }.toVector
+        }
       }
     }
+  }
 
   private def _submit(pair: (CompositeQueryV2Branch, Reservation), context: ExecutionContext): Unit = {
     val (branch, reservation) = pair
@@ -135,9 +143,10 @@ private[composite] final class CompositeQueryV2Coordinator(
         _reservations.update(branch.branchId, reservation.copy(submitting = false, bodyexited = true))
         _timeout_branch(branch.branchId, reservation)
         false
-      } else
+      } else {
         _reservations.get(branch.branchId).contains(reservation) &&
           !_results.contains(branch.branchId) && !_cancelled && !_timed_out
+      }
     }
     if (!submit) {
       _monitor.synchronized {
@@ -282,7 +291,7 @@ private[composite] final class CompositeQueryV2Coordinator(
   private def _fallback(
     branch: CompositeQueryV2Branch,
     code: CompositeQueryV2FailureCode
-  ): Option[CompositeQueryV2BranchResult] =
+  ): Option[CompositeQueryV2BranchResult] = {
     branch.fallback.filter { fallback =>
       (code == CompositeQueryV2FailureCode.QueryFailed || code == CompositeQueryV2FailureCode.TimedOut) &&
         fallback.onCodes.contains(code)
@@ -296,6 +305,7 @@ private[composite] final class CompositeQueryV2Coordinator(
         Some(code)
       )
     }
+  }
 
   private def _advance_timeouts(now: Long): Unit = {
     val requestexpired = now >= _deadline_nanos
@@ -316,7 +326,7 @@ private[composite] final class CompositeQueryV2Coordinator(
     }
   }
 
-  private def _timeout_branch(id: String, reservation: Reservation): Unit =
+  private def _timeout_branch(id: String, reservation: Reservation): Unit = {
     _monitor.synchronized {
       val current = _reservations.getOrElse(id, reservation)
       if (!_results.contains(id)) {
@@ -332,6 +342,7 @@ private[composite] final class CompositeQueryV2Coordinator(
       if (current.bodyexited) _reservations.remove(id)
       _monitor.notifyAll()
     }
+  }
 
   private def _cancel_request(): Unit = _monitor.synchronized {
     if (!_cancelled && !_timed_out) {
@@ -428,12 +439,13 @@ private[composite] final class CompositeQueryV2Coordinator(
     _monitor.notifyAll()
   }
 
-  private def _branch_expired(reservation: Reservation, now: Long): Boolean =
+  private def _branch_expired(reservation: Reservation, now: Long): Boolean = {
     _branches(reservation.branchid).timeoutMillis.exists { timeout =>
       // The branch budget begins when the coordinator reserves it, before
       // provider admission and while the official scheduler queues it.
       now - reservation.admittednanos >= TimeUnit.MILLISECONDS.toNanos(timeout)
     }
+  }
 
   private def _remaining_millis(): Long =
     math.max(1L, TimeUnit.NANOSECONDS.toMillis(_deadline_nanos - System.nanoTime()))

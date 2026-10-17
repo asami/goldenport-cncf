@@ -44,7 +44,7 @@ import org.goldenport.cncf.messagedelivery.MessageDeliveryProvider
 import org.goldenport.cncf.usernotification.UserNotificationProvider
 import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection, StateMachineProjection}
 import org.goldenport.cncf.workflow.WorkflowDefinition
-import org.goldenport.cncf.workflow.{ContinuationRuntime, ContinuationRuntimeSource, GeneratedProvidedApiAbi, GeneratedWorkflowAbi, StateMachineProvidedApiDispatcher, StateMachineProviderResolver, StateMachineProviderSource}
+import org.goldenport.cncf.workflow.{ContinuationRuntime, ContinuationRuntimeSource, GeneratedProvidedApiAbi, GeneratedWorkflowAbi, StateMachineProvidedApiDispatcher, StateMachineProviderResolver, StateMachineProviderSource, WorkflowInstancePersistenceBinding, WorkflowInstancePersistenceSource}
 import cats.data.NonEmptyVector
 import java.io.InputStream
 import java.nio.charset.StandardCharsets
@@ -92,6 +92,7 @@ abstract class Component() extends Component.Core.Holder {
   private var _state_machine_provider_resolver: StateMachineProviderResolver =
     StateMachineProviderResolver.empty
   private var _continuation_runtime: ContinuationRuntime = ContinuationRuntime.empty
+  private var _workflow_instance_persistence_binding: Option[WorkflowInstancePersistenceBinding] = None
   private var _working_set_entity_names: Set[String] = Set.empty
   private var _artifact_metadata: Option[Component.ArtifactMetadata] = None
   private var _event_reception: Option[EventReception] = None
@@ -189,6 +190,18 @@ abstract class Component() extends Component.Core.Holder {
 
   def initializeC(params: ComponentInit): Consequence[Component] =
     try {
+      _prepare_factory_initialization(params)
+      _services = Some(ServiceGroup(protocol.services.services.map(_to_service)))
+      initialize_component_c(params).map(_ => this)
+    } catch {
+      case NonFatal(e) => Consequence.componentInvalid(e)
+    }
+
+  /** Framework-only metadata preparation after typed parameter resolution.
+    * The existing Factory hook can derive its actual owner's runtime context
+    * before services are constructed. This is not ingress authentication.
+    */
+  private[component] final def _prepare_factory_initialization(params: ComponentInit): Unit = {
       _core = Some(params.core)
       _origin = Some(params.origin)
       _participant_role = params.participantRole
@@ -204,11 +217,7 @@ abstract class Component() extends Component.Core.Holder {
         case _ =>
           ()
       }
-      _services = Some(ServiceGroup(protocol.services.services.map(_to_service)))
-      initialize_component_c(params).map(_ => this)
-    } catch {
-      case NonFatal(e) => Consequence.componentInvalid(e)
-    }
+  }
 
   private def _to_service(p: ServiceDefinition): Service = {
     serviceFactory.setup(this)
@@ -447,6 +456,20 @@ abstract class Component() extends Component.Core.Holder {
 
   def continuationRuntime: ContinuationRuntime =
     _continuation_runtime
+
+  def workflowInstancePersistenceBindingOption: Option[WorkflowInstancePersistenceBinding] =
+    _workflow_instance_persistence_binding
+
+  def requireWorkflowInstancePersistenceBindingC: Consequence[WorkflowInstancePersistenceBinding] =
+    _workflow_instance_persistence_binding.map(Consequence.success).getOrElse(
+      Consequence.configurationInvalid("Workflow instance persistence is not configured for this Component"))
+
+  private[component] def withWorkflowInstancePersistenceBinding(
+    binding: WorkflowInstancePersistenceBinding
+  ): Component = {
+    _workflow_instance_persistence_binding = Some(binding)
+    this
+  }
 
   def withContinuationRuntime(
     runtime: ContinuationRuntime
@@ -926,7 +949,7 @@ object Component  extends ComponentMetadataActions {
     }
   }
 
-  abstract class Factory extends StateMachineProviderSource with ContinuationRuntimeSource {
+  abstract class Factory extends StateMachineProviderSource with ContinuationRuntimeSource with WorkflowInstancePersistenceSource {
     def serviceFactory: ServiceFactory = ServiceFactory.empty
 
     // Internal aggregate-assembly DSL lookup. Keep final until a concrete Component extension needs a narrower reviewed contract.
@@ -1088,9 +1111,7 @@ object Component  extends ComponentMetadataActions {
             initializationParameterPathRoutes
           )
           .flatMap { parameters =>
-            initialize_component_c(
-              comp,
-              ComponentInit(
+            val initialization = ComponentInit(
                 subsystem = params.subsystem,
                 core = sharedcore,
                 origin = params.origin,
@@ -1099,7 +1120,8 @@ object Component  extends ComponentMetadataActions {
                 instanceMetadata = params.instanceMetadata,
                 initializationParameters = parameters
               )
-            )
+            comp._prepare_factory_initialization(initialization)
+            initialize_component_c(comp, initialization)
           }
       } catch {
         case NonFatal(e) => Consequence.componentInvalid(e)

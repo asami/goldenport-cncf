@@ -1,28 +1,18 @@
 package org.goldenport.cncf.phase51.build
 
 import java.io.File
-import java.nio.file.Files
-import java.security.MessageDigest
 import scala.util.control.NonFatal
 
 /*
  * @since   Jul. 28, 2026
- * @version Oct.  6, 2026
- * @author  ASAMI, Tomoharu
+ * @version Oct. 17, 2026
  */
 final case class CncfGenerationInputs(
   cozyGeneratorVersion: String,
   cncfTargetVersion: String,
   runtimeDescriptor: File,
-  runtimeDescriptorSha256: String,
   source: File,
-  sourceIdentity: String,
-  sourceSha256: String
-)
-
-final case class CncfGenerationSnapshot(
-  scalaArtifacts: Vector[(String, String)],
-  provenanceSha256: String
+  sourceIdentity: String
 )
 
 object CncfGenerationBuildContract {
@@ -74,6 +64,38 @@ object CncfGenerationBuildContract {
       }
   }
 
+  def selectedGeneratorRoot(
+    propertyValue: Option[String],
+    environmentValue: Option[String]
+  ): Either[Vector[String], Option[File]] = {
+    propertyValue.orElse(environmentValue) match {
+      case None => Right(None)
+      case Some(value) =>
+        val selected = value.trim
+        def _failure_(reason: String): Left[Vector[String], Option[File]] = {
+          Left(Vector(
+            s"The selected Cozy generator root '$selected' $reason. " +
+              "recovery=set-cncf.cozyGeneratorRoot-or-CNCF_COZY_GENERATOR_ROOT-to-an-existing-Cozy-project-directory-containing-build.sbt"
+          ))
+        }
+        if (selected.isEmpty)
+          _failure_("is blank")
+        else {
+          try {
+            val root = new File(selected).getCanonicalFile
+            if (!root.isDirectory)
+              _failure_("must be an existing directory")
+            else if (!new File(root, "build.sbt").isFile)
+              _failure_("must contain a regular build.sbt file")
+            else
+              Right(Some(root))
+          } catch {
+            case NonFatal(_) => _failure_("cannot be canonicalized or inspected")
+          }
+        }
+    }
+  }
+
   def isGenerationNotice(message: String): Boolean =
     Option(message).exists { value =>
       val normalized = value.trim
@@ -123,10 +145,8 @@ object CncfGenerationBuildContract {
         cozyversion,
         cncfversion,
         descriptor.get,
-        _sha256(descriptor.get),
         sourcefile.get,
-        sourceidentity,
-        _sha256(sourcefile.get)
+        sourceidentity
       ))
     }
   }
@@ -134,21 +154,23 @@ object CncfGenerationBuildContract {
   def command(
     inputs: CncfGenerationInputs,
     outputDirectory: File,
-    cozyDevelopmentDirectory: Option[File] = None
+    generatorRoot: Option[File] = None
   ): Either[Vector[String], Vector[String]] = {
     val outputdir = _normalize_file(outputDirectory)
     val errors = Vector.newBuilder[String]
     if (!inputs.source.isFile)
       errors += "The Information CML source is required."
-    else if (_sha256(inputs.source) != inputs.sourceSha256)
-      errors += "The Information CML source changed after generation inputs were resolved."
     if (outputdir.isEmpty)
       errors += "The generation output directory is required."
     val result = errors.result()
     if (result.nonEmpty)
       Left(result)
     else
-      Right(_cozy_command_prefix(inputs, cozyDevelopmentDirectory) ++ Vector(
+      Right(Vector(
+        "cozy",
+        "--runtime",
+        inputs.cozyGeneratorVersion
+      ) ++ generatorRoot.toVector.flatMap(root => Vector("--runtime-dev-dir", root.getCanonicalPath)) ++ Vector(
         "modeler-scala-value",
         inputs.source.getAbsolutePath,
         "--cncf-version",
@@ -157,8 +179,6 @@ object CncfGenerationBuildContract {
         inputs.cozyGeneratorVersion,
         "--cncf-runtime-descriptor",
         inputs.runtimeDescriptor.getAbsolutePath,
-        "--cncf-runtime-descriptor-sha256",
-        inputs.runtimeDescriptorSha256,
         "--generation-source-identity",
         inputs.sourceIdentity,
         s"--save=${outputdir.get.getAbsolutePath}"
@@ -177,7 +197,7 @@ object CncfGenerationBuildContract {
   def validationCommand(
     inputs: CncfGenerationInputs,
     outputDirectory: File,
-    cozyDevelopmentDirectory: Option[File] = None
+    generatorRoot: Option[File] = None
   ): Either[Vector[String], Vector[String]] = {
     val outputdir = _normalize_file(outputDirectory)
     val errors = Vector.newBuilder[String]
@@ -189,85 +209,26 @@ object CncfGenerationBuildContract {
     if (result.nonEmpty)
       Left(result)
     else
-      Right(_cozy_command_prefix(inputs, cozyDevelopmentDirectory) ++ Vector(
+      Right(Vector(
+        "cozy",
+        "--runtime",
+        inputs.cozyGeneratorVersion
+      ) ++ generatorRoot.toVector.flatMap(root => Vector("--runtime-dev-dir", root.getCanonicalPath)) ++ Vector(
         "generation-provenance-validate",
         inputs.source.getAbsolutePath,
         s"--save=${outputdir.get.getAbsolutePath}",
         "--cncf-version",
         inputs.cncfTargetVersion,
-        "--cncf-runtime-descriptor-sha256",
-        inputs.runtimeDescriptorSha256,
         "--cozy-generator-version",
         inputs.cozyGeneratorVersion,
         "--generation-source-identity",
-        inputs.sourceIdentity,
-        "--generation-source-sha256",
-        inputs.sourceSha256
+        inputs.sourceIdentity
       ))
   }
 
   def provenanceFile(outputDirectory: File): File =
     new File(outputDirectory.getAbsoluteFile.toPath.normalize().toFile, GENERATION_PROVENANCE_PATH)
 
-  def snapshot(
-    outputDirectory: File
-  ): Either[Vector[String], CncfGenerationSnapshot] = {
-    val outputdir = _normalize_file(outputDirectory)
-    val errors = Vector.newBuilder[String]
-    if (!outputdir.exists(_.isDirectory))
-      errors += "The generation output directory is required."
-    val provenance = outputdir.map(provenanceFile)
-    if (outputdir.exists(_.isDirectory) && !provenance.exists(_.isFile))
-      errors += s"Generation provenance is required at $GENERATION_PROVENANCE_PATH."
-    val result = errors.result()
-    if (result.nonEmpty)
-      Left(result)
-    else {
-      val target = new File(outputdir.get, "target")
-      val artifacts =
-        _files_below(target)
-          .filter(file => file.isFile && file.getName.endsWith(".scala"))
-          .sortBy(_.getAbsolutePath)
-          .map { file =>
-            val relative =
-              target.toPath
-                .relativize(file.toPath)
-                .toString
-                .replace(File.separatorChar, '/')
-            relative -> _sha256(file)
-          }
-      if (artifacts.isEmpty)
-        Left(Vector("At least one generated Scala artifact is required."))
-      else
-        Right(CncfGenerationSnapshot(artifacts, _sha256(provenance.get)))
-    }
-  }
-
-  private def _cozy_command_prefix(
-    inputs: CncfGenerationInputs,
-    cozydevelopmentdirectory: Option[File]
-  ): Vector[String] =
-    Vector("cozy", "--runtime", inputs.cozyGeneratorVersion) ++
-      cozydevelopmentdirectory.toVector.flatMap(directory =>
-        Vector("--runtime-dev-dir", directory.getAbsolutePath)
-      )
-
   private def _normalize_file(file: File): Option[File] =
     Option(file).map(_.getAbsoluteFile.toPath.normalize().toFile)
-
-  private def _files_below(file: File): Vector[File] =
-    if (!file.exists())
-      Vector.empty
-    else if (file.isFile)
-      Vector(file)
-    else
-      Option(file.listFiles())
-        .map(_.toVector.flatMap(_files_below))
-        .getOrElse(Vector.empty)
-
-  private def _sha256(file: File): String =
-    MessageDigest.getInstance("SHA-256").
-      digest(Files.readAllBytes(file.toPath)).
-      map(byte => f"${byte & 0xff}%02x").
-      mkString
 }

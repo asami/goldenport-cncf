@@ -10,6 +10,10 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.GivenWhenThen
 
+/** Actual continuation scope is distinct from diagnostic content equality.
+  * @since   Sep. 25, 2026
+  * @version Oct.  9, 2026
+  */
 final class WorkflowProtocolV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
   import WorkflowProtocolV1.*
 
@@ -377,19 +381,35 @@ final class WorkflowProtocolV1Spec extends AnyWordSpec with Matchers with GivenW
         def decode(value: Json): Either[String, String] =
           value.asString.toRight("expected ReviewResult string")
       }
-      When("the result is encoded and checked against the issued WorkOrder")
+      When("the supplied codec converts the result and native admission consumes applicability")
       val json = WorkflowResultJsonV1.encodeC(submitted, codec).toOption.getOrElse(fail("result must encode"))
-      Then("the matching Result is admitted while schema, revision, evidence, and type drift fail")
-      WorkflowResultJsonV1.decodeC(json, codec) shouldBe Consequence.success(submitted)
-      admitResultC(issued, submitted) shouldBe Consequence.success(
-        StateMachineOperationResult(StateMachineResultTypeReference("ReviewResult"), submitted.resultReference)
-      )
-      WorkflowResultJsonV1.decodeC(json.replace("cncf.workflow-protocol.v1", "unknown"), codec) shouldBe a[Consequence.Failure[_]]
-      WorkflowResultJsonV1.decodeC(json.replace("\"kind\":", "\"unknown\":1,\"kind\":"), codec) shouldBe a[Consequence.Failure[_]]
-      WorkflowResultJsonV1.decodeC(json.replace("\"approved\"", "1"), codec) shouldBe a[Consequence.Failure[_]]
-      admitResultC(issued, submitted.copy(expectedRevision = StateMachineRevision("2"))) shouldBe a[Consequence.Failure[_]]
-      admitResultC(issued, submitted.copy(evidence = ExecutionEvidence(Vector.empty))) shouldBe a[Consequence.Failure[_]]
-      admitResultC(issued, submitted.copy(result = TypedValue("WrongResult", "approved"))) shouldBe a[Consequence.Failure[_]]
+      val decoded = WorkflowResultJsonV1.decodeC(json, codec)
+      val admitted = admitResultC(issued, submitted)
+      val annotated = WorkflowResultJsonV1.decodeC(json.replace("\"kind\":", "\"unknown\":1,\"kind\":"), codec)
+      val malformed = Vector(json.replace("cncf.workflow-protocol.v1", "unknown"), json.replace("\"approved\"", "1"))
+        .map(WorkflowResultJsonV1.decodeC(_, codec))
+      val incompatible = Vector(submitted.copy(expectedRevision = StateMachineRevision("2")),
+        submitted.copy(evidence = ExecutionEvidence(Vector.empty)),
+        submitted.copy(result = TypedValue("WrongResult", "approved"))).map(admitResultC(issued, _))
+      Then("annotations convert without granting authority, while real representation and native applicability failures remain failures")
+      decoded shouldBe Consequence.success(submitted)
+      annotated shouldBe Consequence.success(submitted)
+      admitted shouldBe Consequence.success(
+        StateMachineOperationResult(StateMachineResultTypeReference("ReviewResult"), submitted.resultReference))
+      malformed.foreach(_ shouldBe a[Consequence.Failure[?]])
+      incompatible.foreach(_ shouldBe a[Consequence.Failure[?]])
+
+      Given("Spec: docs/spec/workflow-completion-applicability.md; Rule: R1; Example: E1; the same executable/model target with different workspace/evidence diagnostics")
+      val diagnostics = submitted.copy(contextSnapshot = submitted.contextSnapshot.copy(
+        workspaceRevision = Some(""), evidenceRevision = Some("")))
+      When("the real typed result is admitted without an unchanged-diagnostics certificate")
+      val accepted = admitResultC(issued, diagnostics)
+      val foreign = Vector(diagnostics.copy(contextSnapshot = diagnostics.contextSnapshot.copy(workflowRevision = "foreign")),
+        diagnostics.copy(contextSnapshot = diagnostics.contextSnapshot.copy(modelRevision = Some("foreign-model"))))
+        .map(admitResultC(issued, _))
+      Then("diagnostic values do not block it, but another executable/model target still rejects")
+      accepted shouldBe admitted
+      foreign.foreach(_ shouldBe a[Consequence.Failure[?]])
     }
 
     "normalize a Skill completion into typed result and dispatch evidence" in {
@@ -442,32 +462,41 @@ final class WorkflowProtocolV1Spec extends AnyWordSpec with Matchers with GivenW
       val wire = WorkflowResultJsonV1.encodeC(normalized, codec).toOption.getOrElse(
         fail("normalized Skill result must encode")
       )
-      Then("only complete compatible dispatch evidence is admitted")
-      WorkflowResultJsonV1.decodeC(wire, codec) shouldBe Consequence.success(normalized)
-      WorkflowResultJsonV1.decodeC(wire.replace("\"mappingPolicyVersion\":\"mapping-v1\"",
-        "\"mappingPolicyVersion\":null"), codec) shouldBe a[Consequence.Failure[_]]
-      WorkflowResultJsonV1.decodeC(wire.replace("\"skillDispatch\":{",
-        "\"skillDispatch\":{\"unknown\":true,"), codec) shouldBe a[Consequence.Failure[_]]
+      val restored = WorkflowResultJsonV1.decodeC(wire, codec)
+      val malformed = WorkflowResultJsonV1.decodeC(wire.replace("\"mappingPolicyVersion\":\"mapping-v1\"",
+        "\"mappingPolicyVersion\":null"), codec)
+      val annotated = WorkflowResultJsonV1.decodeC(wire.replace("\"skillDispatch\":{",
+        "\"skillDispatch\":{\"unknown\":true,"), codec)
+      Then("declared diagnostics and annotations convert, while a non-string policy cannot be represented")
+      restored shouldBe Consequence.success(normalized)
+      annotated shouldBe Consequence.success(normalized)
+      malformed shouldBe a[Consequence.Failure[?]]
 
-      normalizer.admitC(issued, completion.copy(expectedRevision = StateMachineRevision("stale"))) shouldBe
-        a[Consequence.Failure[_]]
-      normalizer.admitC(issued, completion.copy(evidenceReferences = Vector.empty)) shouldBe
-        a[Consequence.Failure[_]]
-      normalizer.admitC(issued, completion.copy(selectedWorkerProfile = "")) shouldBe
-        a[Consequence.Failure[_]]
-      normalizer.admitC(issued, completion.copy(mappingPolicyVersion = "")) shouldBe
-        a[Consequence.Failure[_]]
-      admitResultC(issued, normalized.copy(evidence = normalized.evidence.copy(
-        skillDispatch = Some(SkillDispatchEvidence(
-          requirement.copy(reasoning = ReasoningLevel.Routine), "reviewer-profile-v1", "mapping-v1"
-        ))
-      ))) shouldBe a[Consequence.Failure[_]]
-
+      When("normalization transports stale native values and blank returned diagnostics without applying a transition")
+      val variants = Vector(completion.copy(expectedRevision = StateMachineRevision("stale")),
+        completion.copy(evidenceReferences = Vector.empty), completion.copy(selectedWorkerProfile = ""),
+        completion.copy(mappingPolicyVersion = ""))
+      val converted = variants.map(value => value -> normalizer.admitC(issued, value))
+      val copied = normalized.copy(evidence = normalized.evidence.copy(skillDispatch = Some(SkillDispatchEvidence(
+        requirement.copy(reasoning = ReasoningLevel.Routine), "", ""))))
+      val admittedcopy = admitResultC(issued, copied)
       val anotherprofile = normalizer.admitC(issued, completion.copy(
-        selectedWorkerProfile = "different-host-profile", modelIdentity = Some("other-model")
-      )).toOption.getOrElse(fail("another host profile must not change result admission"))
-      Then("a different valid Host profile does not change Workflow result admission")
-      admitResultC(issued, anotherprofile) shouldBe admitResultC(issued, normalized)
+        selectedWorkerProfile = "different-host-profile", modelIdentity = Some("other-model")))
+        .toOption.getOrElse(fail("another host diagnostic must convert"))
+      val admittedprofile = admitResultC(issued, anotherprofile)
+      val admittedoriginal = admitResultC(issued, normalized)
+      Then("conversion preserves data, copied diagnostics do not decide native applicability, and no execution is fabricated")
+      converted.foreach { case (submitted, outcome) =>
+        val value = outcome.toOption.getOrElse(fail("representable completion must convert"))
+        value.expectedRevision shouldBe submitted.expectedRevision
+        value.evidence.references shouldBe submitted.evidenceReferences
+        value.evidence.skillDispatch shouldBe Some(SkillDispatchEvidence(requirement,
+          submitted.selectedWorkerProfile, submitted.mappingPolicyVersion))
+      }
+      admittedcopy shouldBe admittedoriginal
+      admittedprofile shouldBe admittedoriginal
+      normalized.evidence.execution shouldBe None
+
     }
 
     "resume a verified WorkOrder through a recovered private claim after runtime recreation" in {
@@ -516,8 +545,12 @@ final class WorkflowProtocolV1Spec extends AnyWordSpec with Matchers with GivenW
       opened shouldBe 0
       retainedClaim shouldBe Consequence.success(claim)
 
-      When("the matching Result resumes through the recovered private claim")
-      val resumed = resumeIssuedWorkOrderC(issued, submitted, recovered, fresh)
+      Given("Spec: docs/spec/workflow-completion-applicability.md; Rule: R1; Example: E2; an original issued Context whose diagnostic description differs from the recovered runtime projection")
+      val diagnosticwork = issued.copy(current = work.copy(presentation = MinimalPresentation("Original saved meaning", "Saved diagnostics"),
+        request = work.request.copy(context = work.request.context.copy(summary = "Original saved context",
+          snapshot = work.request.context.snapshot.copy(workspaceRevision = Some("original-workspace"), evidenceRevision = Some("original-evidence"))))))
+      When("the matching Result resumes through the recovered private claim without complete WorkOrder reprojection equality")
+      val resumed = resumeIssuedWorkOrderC(diagnosticwork, submitted, recovered, fresh)
       val duplicate = resumeIssuedWorkOrderC(
         issued, submitted, new PersistentContinuationRuntime(persistence), fresh
       )

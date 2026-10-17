@@ -6,12 +6,13 @@ import org.goldenport.Consequence
 
 /*
  * @since   Jul. 16, 2026
- * @version Jul. 16, 2026
+ *  version Jul. 16, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 trait UrnResourceProvider {
   def nid: String
-  def read(reference: ResourceReference.Urn): Consequence[ResourceContent]
+  def read(reference: ResourceReference.Urn, limits: ResourceReadLimits): Consequence[ResourceContent]
 }
 
 final case class UrnResourceProviderBinding(
@@ -107,7 +108,8 @@ object UrnResourceProviderConfig {
 }
 
 private final class UrnResourceAccess(
-  providers: Vector[UrnResourceProvider]
+  providers: Vector[UrnResourceProvider],
+  limits: ResourceReadLimits
 ) extends ResourceAccess {
   private val _providers = providers.flatMap { provider =>
     Option(provider).flatMap { value =>
@@ -125,7 +127,7 @@ private final class UrnResourceAccess(
         Consequence.resourceUnsupported("Textus URN resources require the dedicated standard provider")
       case urn: ResourceReference.Urn =>
         _providers.get(urn.nid) match {
-          case Some(provider) => provider.read(urn)
+          case Some(provider) => provider.read(urn, limits)
           case None => Consequence.resourceUnsupported("URN resource NID is not configured")
         }
       case _ =>

@@ -118,6 +118,34 @@ VAL-005 (53 suites/463 passed/zero failures/zero warnings/pending1) and independ
 conformance PASS remain bounded incremental proof. Mandatory B2 fresh-State
 runtime/terminal registration and all later Phase acceptance remain open.
 
+### Continuation strict compensation correspondence
+
+An existing Continuation relation retains strict compensation correspondence
+in Running and Succeeded V2 projection. When all live compensation fields are
+empty, its supplied descriptor must have compensation=None. Any nonempty but
+incomplete action/target/status metadata, including a targetless declaration,
+status or failure summary, refuses before a durable record is returned.
+A complete explicit target retains the existing strict descriptor equality,
+including its operation, target, status and optional failure summary. Projection
+does not invent a companion or normalize the live model or supplied source.
+
+The targetless normal aggregate exception above remains Root/Child only.
+Continuation still requires exact task identity, parent/reference, kind/target,
+operation and transaction correspondence. V1 retains terminal-only admission
+and strict correspondence; Running V1 remains refused. Schema, codec/wire,
+live source authority and actual compensation-companion semantics are unchanged.
+
+[DurableJobProjectionSpec](../../src/test/scala/org/goldenport/cncf/job/DurableJobProjectionSpec.scala)
+authors CP1 (both lifecycles, canonical authorized roundtrip and V1 compatibility),
+CP2 (all seven nonempty targetless subsets in both lifecycles and complete
+explicit correspondence), and CP3 (six independent supplied-source divergences
+in both lifecycles). The actual C10 EC1..EC9 process acceptance remains in
+[JobJclEventCrossProcessAcceptanceSpec](../../src/test/scala/org/goldenport/cncf/job/JobJclEventCrossProcessAcceptanceSpec.scala).
+These repair additions passed parent-selected subject4 validation recorded below.
+The [C10 journal](../journal/2026/10/2026-10-06-phase-69.7-job-jcl-event-cross-process.md)
+retains actual failed-subject3 history and separate original whole-Step review
+and Phase acceptance obligations.
+
 `DurableJobRecordCodec` is the sole v1/v2 value codec. It produces explicit-field
 order compact JSON and UTF-8 bytes. Set values are sorted and the only map,
 the declared profile, is key-sorted. Equivalent admitted records therefore
@@ -431,3 +459,32 @@ Independent incremental Slice conformance, independent Step acceptance and
 commits remain pending. Mandatory B2 fresh-State recovery, C/D, JM69-10 actual
 two-process/CBD Support and original full Phase obligations remain open.
 See the [runtime validation chronology](../journal/2026/10/2026-10-02-phase-69.7-native-lifetime-runtime.md).
+
+## Selected repaired-subject4 validation
+
+| Selected actual evidence | Result |
+| --- | --- |
+| [Focused](../../.codex-workflow/phases/PHASE-69.7/JM69-10C10-fix03-focused02-result.json) | 2 suites; 25/25 passed; failed0; pending0; compilerwarnings0; reader0/SBT0/wrapper0; lock=released |
+| [Representative](../../.codex-workflow/phases/PHASE-69.7/JM69-10C10-fix03-representative01-result.json) | 9 suites; 92/92 passed; failed0; pending0; compilerwarnings0; reader0/SBT0/wrapper0; lock=released |
+| [Accumulator](../../.codex-workflow/phases/PHASE-69.7/JM69-10C10-fix03-accumulator01-result.json) | 130 suites; 1069/1069 passed; failed0; pending1; compilerwarnings0; reader0/SBT0/wrapper0; lock=released |
+
+The first repaired [focused01 attempt](../../.codex-workflow/phases/PHASE-69.7/JM69-10C10-fix03-focused01-result.json) stopped before compilation/test
+on a stale Cozy development classpath. Authorized [CP002 export](../../.codex-workflow/phases/PHASE-69.7/JM69-10C10-cozy-classpath-prerequisite02-result.json)
+succeeded at the selected0.3.3-SNAPSHOT; its actual prerequisite notices remain
+in that separate record. Only then was the same selected focused command run
+under a fresh invocation. Every listed actual result consumed its own permission
+and released the shared serial lock; no failed request was replayed.
+
+The actual C10 failing surface narrowed8→7→5→0 through three consumed
+pre-review repairs, nonconverging0. CP1..CP3 and all EC1..EC9 passed, including
+the original min24 real-process shrinking property. The accumulator retains
+only the previously admitted SqliteDataStoreSpec pending case.
+
+This is selected incremental validation only. StageC10 remains IN_PROGRESS,
+JM69-10 OPEN, Phase69.7 in_progress and acceptance not-accepted. Original
+whole-JM69-10 independent protected M2/local Step commit, actual CBD provider→
+Entity→completed full Review and independent fresh recovery, positive started-work
+closure, predecessor deferred-full validations, aggregate final full validation,
+sole epoch1 full Phase review and final local release remain OPEN.
+Original authority/base/binding/history/counters and failure records are retained.
+No push, publication, deployment or successor work occurred.

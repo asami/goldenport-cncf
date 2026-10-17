@@ -11,9 +11,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 29, 2026
- * @version Sep. 29, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobExperienceSpec extends AnyWordSpec with Matchers with GivenWhenThen with JobEngineTestFixture {
   "Job experience" should {
     "J1 reject anonymous Mine admission before any canonical query" in {

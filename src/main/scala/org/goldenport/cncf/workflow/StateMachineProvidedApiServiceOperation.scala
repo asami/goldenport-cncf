@@ -9,6 +9,8 @@ import org.goldenport.protocol.spec as spec
 
 /** Binds one admitted Provided Operation to the ordinary public Service/ActionEngine path.
   * The application supplies its transport codec; CNCF owns operation identity and commit staging.
+  * @since   Sep. 25, 2026
+  * @version Oct. 12, 2026
   */
 object StateMachineProvidedApiServiceOperation {
   trait Codec {
@@ -36,12 +38,11 @@ object StateMachineProvidedApiServiceOperation {
     responseDefinition: spec.ResponseDefinition,
     codec: Codec,
     suspensionPersistence: Option[SuspensionPersistence] = None
-  ): Consequence[spec.OperationDefinition] =
+  ): Consequence[spec.OperationDefinition] = {
     if (definition == null || operation == null || requestDefinition == null ||
         responseDefinition == null || codec == null ||
         definition.schemaVersion != GeneratedProvidedApiAbi.schemaVersion ||
-        definition.generator != GeneratedProvidedApiAbi.generatorIdentity ||
-        definition.providedOperations == null || !definition.providedOperations.contains(operation) ||
+        !definition.providesOperation(operation) ||
         !_name(definition.identity) || !_name(definition.version) ||
         !_name(operation.service) || !_name(operation.name) ||
         suspensionPersistence == null || suspensionPersistence.exists(_ == null))
@@ -49,22 +50,23 @@ object StateMachineProvidedApiServiceOperation {
     else Consequence.success(new BoundOperation(
       definition, operation, requestDefinition, responseDefinition, codec, suspensionPersistence
     ))
+  }
 
   private final class BoundOperation(
     definition: GeneratedProvidedApiAbi.Definition,
     operation: GeneratedProvidedApiAbi.Operation,
-    requestDefinition: spec.RequestDefinition,
-    responseDefinition: spec.ResponseDefinition,
+    requestdefinition: spec.RequestDefinition,
+    responsedefinition: spec.ResponseDefinition,
     codec: Codec,
-    suspensionPersistence: Option[SuspensionPersistence]
+    suspensionpersistence: Option[SuspensionPersistence]
   ) extends spec.OperationDefinition {
     val specification: spec.OperationDefinition.Specification = spec.OperationDefinition.Specification(
       name = operation.name,
-      request = requestDefinition,
-      response = responseDefinition
+      request = requestdefinition,
+      response = responsedefinition
     )
 
-    def createOperationRequest(request: Request): Consequence[OperationRequest] =
+    def createOperationRequest(request: Request): Consequence[OperationRequest] = {
       if (request == null || request.operation != operation.name ||
           !request.service.contains(operation.service))
         Consequence.stateConflict("public Service request differs from the bound Provided Operation")
@@ -73,37 +75,38 @@ object StateMachineProvidedApiServiceOperation {
             decoded.workflowRevision != definition.version ||
             decoded.operation != StateMachineOperationIdentity(operation.service, operation.name))
           Consequence.stateConflict("public Service payload differs from the declared Provided Operation")
-        else Consequence.success(BoundAction(request, decoded, codec, suspensionPersistence))
+        else Consequence.success(BoundAction(request, decoded, codec, suspensionpersistence))
       }
+    }
   }
 
   private final case class BoundAction(
     request: Request,
-    providedRequest: StateMachineProvidedApiRequest,
+    providedrequest: StateMachineProvidedApiRequest,
     codec: Codec,
-    suspensionPersistence: Option[SuspensionPersistence]
+    suspensionpersistence: Option[SuspensionPersistence]
   ) extends CommandAction {
     override def commandExecutionMode: CommandExecutionMode = CommandExecutionMode.Sync
     def createCall(core: ActionCall.Core): ActionCall =
-      BoundCall(core, providedRequest, codec, suspensionPersistence)
+      BoundCall(core, providedrequest, codec, suspensionpersistence)
   }
 
   private final case class BoundCall(
     core: ActionCall.Core,
-    providedRequest: StateMachineProvidedApiRequest,
+    providedrequest: StateMachineProvidedApiRequest,
     codec: Codec,
-    suspensionPersistence: Option[SuspensionPersistence]
+    suspensionpersistence: Option[SuspensionPersistence]
   ) extends ProcedureActionCall {
     private var _encoded_outcome: Option[ActionExecution] = None
 
     def execute(): Consequence[OperationResponse] =
       {
         val interpreter = new UnitOfWorkInterpreter(executionContext.runtime.unitOfWork)
-        val staged = suspensionPersistence match {
+        val staged = suspensionpersistence match {
           case Some(persistence) => interpreter.stageProvidedForExternalCommitC(
-            providedRequest, continuation => persistence.persistC(providedRequest, continuation)
+            providedrequest, continuation => persistence.persistC(providedrequest, continuation)
           )
-          case None => interpreter.stageProvidedForExternalCommitC(providedRequest)
+          case None => interpreter.stageProvidedForExternalCommitC(providedrequest)
         }
         staged.flatMap { outcome =>
           codec.encodeC(outcome).map { encoded =>
@@ -117,7 +120,7 @@ object StateMachineProvidedApiServiceOperation {
       val outcome = _encoded_outcome
       _encoded_outcome = None
       outcome match {
-        case Some(value) => codec.encodeAfterCommitC(providedRequest, value, response)
+        case Some(value) => codec.encodeAfterCommitC(providedrequest, value, response)
         case None => Consequence.stateConflict("public Service response has no staged outcome after commit")
       }
     }

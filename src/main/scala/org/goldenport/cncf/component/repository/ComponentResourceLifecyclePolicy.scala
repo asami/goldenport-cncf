@@ -9,42 +9,39 @@ import org.goldenport.cncf.observability.CallTreeContext
 import scala.util.control.NonFatal
 
 /*
- * Lifecycle coordination for immutable resolved component-resource evidence.
+ * Lifecycle coordination for resolved component-resource objects.
  * It neither discovers content nor grants any resource or runtime authority.
  *
  * @since   Aug. 21, 2026
- * @version Aug. 22, 2026
+ *  version Aug. 22, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentResourceLifecycleKey(
   componentId: ComponentId,
   logicalRelease: String,
   role: String,
-  sourceKind: ComponentResourceSourceKind,
-  artifactDigest: String
+  sourceKind: ComponentResourceSourceKind
 ) {
-  require(ComponentResourceLifecycleKey._is_safe(componentId, logicalRelease, role, sourceKind, artifactDigest), ComponentResourceLifecycleKey.INVALID_KEY_MESSAGE)
+  require(ComponentResourceLifecycleKey._is_safe(componentId, logicalRelease, role, sourceKind), ComponentResourceLifecycleKey.INVALID_KEY_MESSAGE)
 }
 
 object ComponentResourceLifecycleKey {
   private val COMPONENT_ID_PATTERN = "[A-Za-z][A-Za-z0-9.]{0,127}".r
   private val RELEASE_PATTERN = "[A-Za-z0-9][A-Za-z0-9._-]{0,63}".r
   private val ROLE_PATTERN = "[A-Za-z][A-Za-z0-9._-]{0,63}".r
-  private val SHA256_PATTERN = "[0-9a-f]{64}".r
   private val INVALID_KEY_MESSAGE = "invalid component resource lifecycle key"
 
   private def _is_safe(
     componentid: ComponentId,
     logicalrelease: String,
     role: String,
-    sourcekind: ComponentResourceSourceKind,
-    artifactdigest: String
+    sourcekind: ComponentResourceSourceKind
   ): Boolean =
     Option(componentid).exists(id => Option(id.name).exists(value => COMPONENT_ID_PATTERN.matches(value))) &&
       Option(logicalrelease).exists(value => RELEASE_PATTERN.matches(value)) &&
       Option(role).exists(value => ROLE_PATTERN.matches(value)) &&
-      sourcekind != null &&
-      Option(artifactdigest).exists(value => SHA256_PATTERN.matches(value))
+      sourcekind != null
 }
 
 final class ComponentResourceLifecycleCancellation {
@@ -109,7 +106,6 @@ final case class ComponentResourceLifecycleDiagnostic(
   release: String,
   role: String,
   sourceKind: ComponentResourceSourceKind,
-  artifactDigest: String,
   operation: String,
   outcome: ComponentResourceLifecycleOutcome
 )
@@ -295,7 +291,6 @@ final class ComponentResourceLifecycleStore(
         release = key.logicalRelease,
         role = key.role,
         sourceKind = key.sourceKind,
-        artifactDigest = key.artifactDigest,
         operation = operation,
         outcome = ComponentResourceLifecycleOutcome.Failed
       )
@@ -314,7 +309,6 @@ final class ComponentResourceLifecycleStore(
           "logicalRelease" -> key.logicalRelease,
           "role" -> key.role,
           "sourceKind" -> key.sourceKind.toString,
-          "artifactDigest" -> key.artifactDigest,
           "operation" -> operation,
           "outcome" -> outcome.toString
         )
@@ -575,8 +569,7 @@ final class ComponentResourceLifecycleStore(
         resource.logicalIdentity.logicalRelease == key.logicalRelease &&
         resource.logicalIdentity.childRole == key.role &&
         resource.provenance.childRole == key.role &&
-        resource.provenance.sourceKind == key.sourceKind &&
-        resource.provenance.sha256 == key.artifactDigest
+        resource.provenance.sourceKind == key.sourceKind
 
     private def _terminal_locked(
       outcome: ComponentResourceLifecycleOutcome

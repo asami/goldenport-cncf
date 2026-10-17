@@ -18,7 +18,7 @@ import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 26, 2026
+ * @version Sep. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class EntityVersionedRootMutation
@@ -34,6 +34,12 @@ sealed abstract class EntityVersionedSideEffect {
 }
 
 object EntityVersionedSideEffect {
+  final case class Create(
+    collection: DataStore.CollectionId,
+    entryId: DataStore.EntryId,
+    record: Record
+  ) extends EntityVersionedSideEffect
+
   final case class Save(
     collection: DataStore.CollectionId,
     entryId: DataStore.EntryId,
@@ -649,7 +655,11 @@ private[datastore] object EntityVersionedMutationSupport {
         keys
       )
     else
-      Consequence.unit
+      plan.sideEffects.foldLeft(Consequence.unit) {
+        case (result, EntityVersionedSideEffect.Create(_, _, record)) =>
+          result.flatMap(_ => EntityConditionalTransitionSupport.validateSideRecord(record))
+        case (result, _) => result
+      }
   }
 
   private def _merge(

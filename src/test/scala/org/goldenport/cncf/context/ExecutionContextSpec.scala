@@ -14,7 +14,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Dec. 23, 2025
  *  version May.  5, 2026
- * @version Aug.  8, 2026
+ *  version Aug.  8, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class ExecutionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -144,7 +145,7 @@ class ExecutionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen 
     "bind configured Textus URN resource access when creating a context below a global runtime" in {
       Given("a global runtime with a logical Textus namespace root")
       val base = ExecutionContext.create()
-      val root = java.nio.file.Files.createTempDirectory("textus-urn-context")
+      val root = java.nio.file.Files.createTempDirectory("textus-urn-context").toRealPath()
       java.nio.file.Files.writeString(root.resolve("catalog-1.txt"), "configured-urn")
       val global = GlobalRuntimeContext.create(
         "textus-urn-resource-access-spec",

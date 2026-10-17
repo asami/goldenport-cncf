@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep.  9, 2026
- * @version Sep.  9, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DurableJobRecordSpec
@@ -126,7 +126,7 @@ final class DurableJobRecordSpec
       othersubjectprojection shouldBe a[Consequence.Failure[_]]
     }
 
-    "return a failure rather than overflowing the stack for a deeply nested acyclic task tree" in {
+    "return a failure rather than overflowing the stack for a deeply nested acyclic task tree" taggedAs org.scalatest.tagobjects.Slow in {
       Given("a finite deeply nested acyclic task tree and an invalid input")
       val record = _record()
       val deeptasks = _deep_tasks(5000)

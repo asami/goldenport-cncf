@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  6, 2026
- * @version Oct.  6, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfCozyDevelopmentRuntimeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -287,7 +287,6 @@ final class CncfCozyDevelopmentRuntimeSpec extends AnyWordSpec with Matchers wit
       "--cncf-version", "0.5.3-SNAPSHOT",
       "--cozy-generator-version", "0.3.3-SNAPSHOT",
       "--cncf-runtime-descriptor", inputs.runtimeDescriptor.getAbsolutePath,
-      "--cncf-runtime-descriptor-sha256", inputs.runtimeDescriptorSha256,
       "--generation-source-identity", "src/main/cozy/information.cml",
       s"--save=${output.getAbsolutePath}"
     )
@@ -297,10 +296,8 @@ final class CncfCozyDevelopmentRuntimeSpec extends AnyWordSpec with Matchers wit
       "generation-provenance-validate", inputs.source.getAbsolutePath,
       s"--save=${output.getAbsolutePath}",
       "--cncf-version", "0.5.3-SNAPSHOT",
-      "--cncf-runtime-descriptor-sha256", inputs.runtimeDescriptorSha256,
       "--cozy-generator-version", "0.3.3-SNAPSHOT",
-      "--generation-source-identity", "src/main/cozy/information.cml",
-      "--generation-source-sha256", inputs.sourceSha256
+      "--generation-source-identity", "src/main/cozy/information.cml"
     )
 
   private def _cozy_source(directory: Path): Path = {

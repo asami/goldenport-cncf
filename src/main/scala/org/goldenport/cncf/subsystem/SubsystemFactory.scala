@@ -239,7 +239,7 @@ object DefaultSubsystemFactory {
       .map(_.aliasResolver)
       .getOrElse(AliasResolver.empty)
   ): Subsystem = {
-    val runtimeconfig = RuntimeConfig.from(configuration)
+    val runtimeconfig = RuntimeConfig.settingsFrom(configuration)
     val runmode = mode.getOrElse(runtimeconfig.mode)
     val driver = _resolve_http_driver(runtimeconfig)
     val subsystem =
@@ -265,7 +265,7 @@ object DefaultSubsystemFactory {
         aliasResolver = aliasResolver,
         runMode = runmode
       )
-    Subsystem.withStartupCleanup(subsystem) {
+    SubsystemStorageInitialization.withPreparedStorage(subsystem) {
       val comps = builtinComponents(subsystem)
       subsystem.add(comps)
       subsystem
@@ -273,7 +273,7 @@ object DefaultSubsystemFactory {
   }
 
   private def _resolve_http_driver(
-    runtimeconfig: RuntimeConfig
+    runtimeconfig: RuntimeConfig.Settings
   ): org.goldenport.cncf.http.HttpDriver = {
     val driver = runtimeconfig.httpDriver
     // val baseurl = sys.props.getOrElse("cncf.http.baseurl", ClientConfig.DefaultBaseUrl)

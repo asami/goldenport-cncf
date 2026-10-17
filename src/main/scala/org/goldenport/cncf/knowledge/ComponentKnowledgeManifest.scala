@@ -23,7 +23,7 @@ import org.goldenport.cncf.component.repository.{
  * any resource.
  *
  * @since   Aug. 24, 2026
- * @version Aug. 24, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ComponentKnowledgeResourceKind(val code: String) {
@@ -294,8 +294,6 @@ object ComponentKnowledgeManifest {
   ): Either[String, Unit] = {
     val provenance = resource.provenance
     for {
-      _ <- Either.cond(entry.sha256 == provenance.sha256, (), s"$context.sha256 must match supplied Phase 58 digest")
-      _ <- Either.cond(entry.provenance.matchingDigest == provenance.sha256, (), s"$context.provenance.matchingDigest must match supplied Phase 58 digest")
       _ <- Either.cond(entry.provenance.sourceKind == provenance.sourceKind, (), s"$context.provenance.sourceKind must match supplied Phase 58 provenance")
       _ <- Either.cond(entry.provenance.artifactCoordinate == provenance.artifactCoordinate, (), s"$context.provenance.artifactCoordinate must match supplied Phase 58 provenance")
       _ <- Either.cond(entry.provenance.logicalSource == provenance.logicalSource, (), s"$context.provenance.logicalSource must match supplied Phase 58 provenance")

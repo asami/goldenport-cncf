@@ -11,12 +11,14 @@ import cats.~>
 import cats.free.Free
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.bag.Bag
-import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext}
+import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeContext}
+import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.EventEngine
+import org.goldenport.cncf.observability.ConclusionDiagnostics
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.http.{HttpResponse, HttpStatus}
-import org.goldenport.protocol.Property
+import org.goldenport.protocol.{Property, Protocol}
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -26,7 +28,7 @@ import scala.util.Try
 
 /*
  * @since   Oct. 16, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 17, 2026
  */
 final class BoundedHttpDriverSpec
   extends AnyWordSpec
@@ -176,15 +178,14 @@ final class BoundedHttpDriverSpec
           val properties = Vector(
             Property("HTTP.TOTAL-TIMEOUT-MS", " 2000 ", None),
             Property("HTTP.MAX-RESPONSE-BYTES", " 100 ", None),
-            Property("http.follow-redirects", "false", None),
-            Property("http.total-timeout-ms", "invalid-second-match", None)
+            Property("http.follow-redirects", "false", None)
           )
           val headers = Map("X-Correlation" -> "wire-case", "Content-Type" -> "text/plain; charset=utf-8")
 
           When("ordinary Free/ConsequenceT UoW operations reach the selected driver")
-          val get = _dispatch(fixture.driver, UnitOfWorkOp.HttpGet("/wire", headers, properties)).TAKE
+          val get = _dispatch(fixture.driver, UnitOfWorkOp.HttpGet("/wire", headers, properties), fixture.baseUrl).TAKE
           val post = _dispatch(fixture.driver,
-            UnitOfWorkOp.HttpPost(s"${fixture.baseUrl}/wire", Some("entrée-猫"), headers, properties)).TAKE
+            UnitOfWorkOp.HttpPost(s"${fixture.baseUrl}/wire", Some("entrée-猫"), headers, properties), fixture.baseUrl).TAKE
 
           Then("the wire method, body, headers, status and case-insensitive response headers survive")
           get.code shouldBe 200
@@ -198,29 +199,177 @@ final class BoundedHttpDriverSpec
         }
       }
 
-      "passes the exact properties to a configured fake without creating transport" in {
-        Given("a recording fake selected in RuntimeContext and deliberately invalid transport inputs")
+      "preserves first-match total selection for direct actual-driver GET and POST" in {
+        Given("a real UTF-8 peer and a valid mixed-case first total followed by an invalid duplicate")
+        _with_fixture { fixture =>
+          fixture.register("/direct-wire") { exchange =>
+            _respond(exchange, if (exchange.getRequestMethod == "POST") 201 else 200,
+              _utf8("résultat-猫"), headers = Vector("X-Correlation" -> "direct-wire-case"))
+          }
+          val properties = Vector(
+            Property("HTTP.TOTAL-TIMEOUT-MS", " 2000 ", None),
+            Property("HTTP.MAX-RESPONSE-BYTES", " 100 ", None),
+            Property("http.follow-redirects", "false", None),
+            Property("http.total-timeout-ms", "invalid-second-match", None))
+          val headers = Map("X-Correlation" -> "direct-wire-case", "Content-Type" -> "text/plain; charset=utf-8")
+
+          When("direct GET and string POST select the first matching case-insensitive total")
+          val get = fixture.driver.get("/direct-wire", headers, properties)
+          val post = fixture.driver.post(s"${fixture.baseUrl}/direct-wire", Some("entrée-猫"), headers, properties)
+
+          Then("the duplicate never overrides the first total and all wire and response semantics survive")
+          get.code shouldBe 200
+          post.code shouldBe 201
+          Vector(get, post).foreach { response =>
+            response.getString shouldBe Some("résultat-猫")
+            response.headerValue("x-CORRELATION") shouldBe Some("direct-wire-case")
+          }
+          fixture.requests.map(_.method) shouldBe Vector("GET", "POST")
+          fixture.requests.map(_.header("x-correlation")) shouldBe Vector.fill(2)(Some("direct-wire-case"))
+          fixture.requests.map(request => new String(request.body, StandardCharsets.UTF_8)) shouldBe Vector("", "entrée-猫")
+        }
+      }
+
+      "passes admitted properties to a configured fake and denies invalid controls without transport" in {
+        Given("a recording fake selected in RuntimeContext with explicit owner, origin and method authority")
         val response = FakeHttpDriver.okText("selected-fake").get("unused")
         val driver = new RecordingDriver(response)
-        val properties = _policy("0", "-1") :+ Property("http.follow-redirects", "true", None)
+        val properties = _policy("1000", "100") :+ Property("http.follow-redirects", "false", None)
+        val admittedproperties = Vector(
+          Property("http.total-timeout-ms", "1000", None),
+          Property("http.connect-timeout-ms", "2000", None),
+          Property("http.read-timeout-ms", "2000", None),
+          Property("http.max-response-bytes", "100", None),
+          Property("http.follow-redirects", "false", None))
         val headers = Map("Authorization" -> "fixture-secret")
-        val path = "http://malformed fixture-secret/private"
+        val path = "http://example.test/private"
 
         When("normal UoW GET and POST are interpreted with that fake selected")
         val get = _dispatch(driver, UnitOfWorkOp.HttpGet(path, headers, properties)).TAKE
         val post = _dispatch(driver, UnitOfWorkOp.HttpPost(path, Some("fixture-body"), headers, properties)).TAKE
 
-        Then("the fake receives the original arguments and supplies both responses")
+        Then("the fake receives the authorized URL, unchanged headers and canonical controls and supplies both responses")
         get shouldBe response
         post shouldBe response
         driver.calls shouldBe Vector(
-          RecordedCall("GET", path, None, headers, properties),
-          RecordedCall("POST", path, Some("fixture-body"), headers, properties)
+          RecordedCall("GET", path, None, headers, admittedproperties),
+          RecordedCall("POST", path, Some("fixture-body"), headers, admittedproperties)
         )
+
+        When("the caller attempts invalid controls through the same selected fake")
+        val denied = _dispatch(driver, UnitOfWorkOp.HttpGet(path, headers,
+          _policy("0", "-1") :+ Property("http.follow-redirects", "true", None)))
+
+        Then("host admission rejects them before acquiring the fake")
+        denied.isFaillure shouldBe true
+        driver.calls should have size 2
+
+        Given("ASCII and Unicode-equivalent total and byte pairs in both orders, alongside the existing valid controls")
+        val equivalentcontrols = Vector(
+          ("http.total-timeout-ms", "http.total-t\u0131meout-ms", "1000"),
+          ("http.max-response-bytes", "http.max-re\u017fponse-bytes", "100"))
+        val unicodepairs = for {
+          (canonical, equivalent, value) <- equivalentcontrols
+          reverse <- Vector(false, true)
+        } yield {
+          val pair = Vector(Property(canonical, value, None), Property(equivalent, "invalid-second-match", None))
+          (if (reverse) pair.reverse else pair) ++ properties.filterNot(_.name == canonical)
+        }
+        val duplicateproperties = Vector(properties :+ Property("HTTP.TOTAL-TIMEOUT-MS", "invalid-second-match", None)) ++ unicodepairs
+
+        When("normal UoW GET and POST contain ASCII or Unicode-equivalent total and byte duplicates in either order")
+        val duplicateoutcomes = duplicateproperties.flatMap { duplicates => Vector(
+          _dispatch(driver, UnitOfWorkOp.HttpGet(path, headers, duplicates)),
+          _dispatch(driver, UnitOfWorkOp.HttpPost(path, Some("fixture-body"), headers, duplicates))) }
+
+        Then("ordinary admission returns the exact limits policy and neither operation reaches the fake")
+        duplicateoutcomes.foreach { outcome =>
+          outcome match {
+            case Consequence.Failure(conclusion) =>
+              ConclusionDiagnostics.classify(conclusion).policy shouldBe Some("http.execution.limits")
+            case _ => fail("Duplicate controlled key must be refused by ordinary HTTP admission")
+          }
+          outcome.toString should not include "invalid-second-match"
+          outcome.toString should not include "fixture-secret"
+        }
+        driver.calls shouldBe Vector(
+          RecordedCall("GET", path, None, headers, admittedproperties),
+          RecordedCall("POST", path, Some("fixture-body"), headers, admittedproperties))
       }
     }
 
     "bound the whole exchange (BH4)" which {
+      "caps ordinary UoW GET and POST before stalled header or body peers are released" in {
+        Given("host connect-lower, host read-lower and caller-total-lower policies with ASCII or Unicode-equivalent totals and test-owned stalled peers")
+        val cases = Vector(
+          ("connect-lower", HttpExecutionLimits(600, 60000, 4096), "60000"),
+          ("read-lower", HttpExecutionLimits(60000, 600, 4096), "60000"),
+          ("caller-total-lower", HttpExecutionLimits(60000, 60000, 4096), "300"))
+        for {
+          (label, limits, total) <- cases
+          post <- Vector(false, true)
+          body <- Vector(false, true)
+          totalname <- Vector("http.total-timeout-ms", "http.total-t\u0131meout-ms")
+        } {
+          _with_fixture { fixture =>
+            val observed = new CountDownLatch(1)
+            val release = new CountDownLatch(1)
+            val stopped = new CountDownLatch(1)
+            val secret = "admitted-timeout-private-sentinel"
+            val path = s"/$label/${if (body) "body" else "headers"}/$secret"
+            fixture.register(path) { exchange =>
+              try {
+                if (body) {
+                  exchange.getResponseHeaders.add("Content-Type", "text/plain; charset=utf-8")
+                  exchange.sendResponseHeaders(200, 2)
+                  exchange.getResponseBody.write(65)
+                  exchange.getResponseBody.flush()
+                }
+                observed.countDown()
+                release.await(6, TimeUnit.SECONDS)
+                if (body) exchange.getResponseBody.write(66)
+                else _respond(exchange, 200, _utf8(secret))
+              } finally {
+                exchange.close()
+                stopped.countDown()
+              }
+            }
+            val properties = Vector(Property(totalname, total, None), Property("http.max-response-bytes", "4096", None))
+            val headers = Map("Authorization" -> secret)
+            val operation = if (post) UnitOfWorkOp.HttpPost(path, Some(secret), headers, properties)
+              else UnitOfWorkOp.HttpGet(path, headers, properties)
+            var waiting = Option.empty[Future[Consequence[HttpResponse]]]
+
+            try {
+              When(s"ordinary Free/ConsequenceT ${if (post) "POST" else "GET"} reaches a stalled ${if (body) "body" else "header"} under $label with $totalname")
+              val started = System.nanoTime()
+              val task = fixture.submit(() => _dispatch(fixture.driver, operation, fixture.baseUrl, limits))
+              waiting = Some(task)
+              val peerobserved = observed.await(2, TimeUnit.SECONDS)
+              val result = task.get(2500, TimeUnit.MILLISECONDS)
+              val elapsed = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)
+
+              Then("the fixed safe timeout reaches the program before peer release under the admitted ceiling")
+              peerobserved shouldBe true
+              result.isFaillure shouldBe true
+              result.toString should include ("Bounded HTTP exchange timed out")
+              result.toString should not include secret
+              result.toString should not include fixture.baseUrl
+              elapsed should be < 4000L
+              release.getCount shouldBe 1L
+              fixture.hits(path) shouldBe 1
+              fixture.requests.head.method shouldBe (if (post) "POST" else "GET")
+              fixture.requests.head.header("authorization") shouldBe Some(secret)
+              fixture.requests.head.body shouldBe (if (post) _utf8(secret) else Array.emptyByteArray)
+            } finally {
+              release.countDown()
+              waiting.foreach(_.cancel(true))
+              stopped.await(2, TimeUnit.SECONDS) shouldBe true
+            }
+          }
+        }
+      }
+
       "terminates while a real peer withholds response headers" in {
         Given("an observed request whose peer withholds headers behind a bounded release latch")
         _with_fixture { fixture =>
@@ -285,6 +434,39 @@ final class BoundedHttpDriverSpec
     }
 
     "enforce raw-byte ceilings (BH5)" which {
+      "caps admitted GET and POST response bytes despite a larger Unicode-equivalent caller ceiling" in {
+        Given("a test-owned response larger than the host byte cap and Unicode-equivalent total and byte controls")
+        _with_fixture { fixture =>
+          val secret = "admitted-byte-private-sentinel"
+          val path = s"/admitted-bytes/$secret"
+          val bytes = _utf8(secret)
+          fixture.register(path) { exchange => _respond(exchange, 200, bytes) }
+          val properties = Vector(
+            Property("http.total-t\u0130meout-ms", "60000", None),
+            Property("http.max-re\u017fponse-bytes", "60000", None))
+          val headers = Map("Authorization" -> secret)
+          val limits = HttpExecutionLimits(2000, 2000, bytes.length - 1L)
+          val operations = Vector(
+            UnitOfWorkOp.HttpGet(path, headers, properties),
+            UnitOfWorkOp.HttpPost(path, Some(secret), headers, properties))
+
+          When("ordinary admitted UoW GET and POST receive a body one byte beyond the host ceiling")
+          val outcomes = operations.map(operation => _dispatch(fixture.driver, operation, fixture.baseUrl, limits))
+
+          Then("both real exchanges fail safely without returning the oversized response or widening the host cap")
+          outcomes.foreach { outcome =>
+            outcome.isFaillure shouldBe true
+            outcome.toString should include ("Bounded HTTP exchange failed")
+            outcome.toString should not include secret
+            outcome.toString should not include fixture.baseUrl
+          }
+          fixture.hits(path) shouldBe 2
+          fixture.requests.map(_.method) shouldBe Vector("GET", "POST")
+          fixture.requests.map(_.header("authorization")) shouldBe Vector.fill(2)(Some(secret))
+          fixture.requests.map(_.body.toVector) shouldBe Vector(Vector.empty[Byte], bytes.toVector)
+        }
+      }
+
       "accepts exact UTF-8 and binary ceilings and rejects a one-byte excess" in {
         Given("real complete UTF-8 and binary responses with exact raw-byte limits")
         _with_fixture { fixture =>
@@ -495,7 +677,7 @@ final class BoundedHttpDriverSpec
 
           Vector(401, 403, 500).foreach { code =>
             When("the selected bounded driver receives the remote HTTP outcome")
-            val result = _dispatch(fixture.driver, UnitOfWorkOp.HttpGet(s"/status/$code", properties = _policy()))
+            val result = _dispatch(fixture.driver, UnitOfWorkOp.HttpGet(s"/status/$code", properties = _policy()), fixture.baseUrl)
 
             Then("UoW preserves a response and its exact status and body with one request")
             result.isSuccess shouldBe true
@@ -622,7 +804,12 @@ final class BoundedHttpDriverSpec
     secrets.foreach { secret => failure.toString should not include secret }
   }
 
-  private def _dispatch(driver: HttpDriver, operation: UnitOfWorkOp[HttpResponse]): Consequence[HttpResponse] = {
+  private def _dispatch(
+    driver: HttpDriver,
+    operation: UnitOfWorkOp[HttpResponse],
+    baseurl: String = "http://example.test",
+    limits: HttpExecutionLimits = HttpExecutionLimits(2000, 2000, 4096)
+  ): Consequence[HttpResponse] = {
     val base = ExecutionContext.create()
     val runtime = new RuntimeContext(
       core = RuntimeContext.core(name = "bounded-http-spec", parent = None,
@@ -634,7 +821,13 @@ final class BoundedHttpDriverSpec
       },
       commitaction = _ => (), abortaction = _ => (), disposeaction = _ => (), token = "bounded-http-spec"
     )
-    val context = ExecutionContext.withRuntimeContext(base, runtime)
+    val owner = ComponentId("org.example.BoundedHttpSpec")
+    val admission = HttpExecutionAdmission.fromRuntimeC(baseurl, limits,
+      Map(owner -> HttpExecutionGrant(Vector(baseurl), Set(HttpExecutionMethod.Get, HttpExecutionMethod.Post))))
+      .getOrElse(fail("bounded HTTP host setup failed"))
+    val component = Component.create(owner.name, owner, ComponentInstanceId.default(owner), Protocol.empty)
+    component.withScopeContext(ScopeContext.Instance(runtime.core.copy(httpExecutionAdmissionOption = Some(admission))))
+    val context = ExecutionContext.withRuntimeContext(base, runtime).withScope(component.scopeContext)
     val datastore = DataStore.noop()
     val uow = new UnitOfWork(context, EventEngine.noop(datastore))
     val program = ConsequenceT.liftF(Free.liftF[UnitOfWorkOp, HttpResponse](operation))

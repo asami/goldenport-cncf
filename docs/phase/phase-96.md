@@ -3,7 +3,10 @@
 status=planned
 planned_at=2026-09-29
 driver=KnowledgeHubProject/nict-editing-studio-app
-abstract_ui_dependency=asami/cozy Phase 74
+driver_phase=KnowledgeHubProject/nict-editing-studio-app Phase 4
+integration_acceptance_phase=KnowledgeHubProject/nict-editing-studio-app Phase 5
+server_reference_phase=KnowledgeHubProject/nict-editing-studio Phase 2
+abstract_ui_dependency=asami/cozy Phase 74 semantic authority; Cozy Phase 76 producer ABI
 strategy=textus-knowledge-workbench/docs/strategy/knowledge-application-integration.md
 
 ## Goal
@@ -22,14 +25,63 @@ Semantic/Application Model
             -> Display Model Protocol
             -> presentation clients
 
-Display Model instances conform to the target-neutral Abstract/Logical UI runtime contract owned by Cozy Phase 74.
+Display Model instances conform to the target-neutral Abstract/Logical UI semantics established by Cozy Phase 74. CNCF owns the Scala 3 runtime ABI consumed by generated component code; Cozy Phase 76 generates that ABI usage through the ordinary CML producer path.
+
+## Development-driver Phase relationship
+
+The UI/prototype driver is
+[nict-editing-studio-app Phase 4](../../../../Project2026/nict-editing-studio-app/docs/phase/phase-4.md).
+It owns UI-driven protocol/model proposals and fixture-backed client feasibility.
+[App Phase 5](../../../../Project2026/nict-editing-studio-app/docs/phase/phase-5.md)
+owns real-server integration and final aggregate/end-to-end acceptance. The
+2026-10-02 scope decision supersedes the earlier Phase 4 integration gate.
+[nict-editing-studio Phase 2](../../../../Project2026/nict-editing-studio/docs/phase/phase-2.md)
+is the server-side development child: it supplies concrete application
+DisplayModel content, semantic projection, admitted mutation contracts and
+deterministic reference fixtures before the client is connected.
+
+Phase 96 is a generic infrastructure dependency, not the owner of Editing
+Studio domain semantics. Develop the minimum projection/protocol contract from
+the concrete server fixtures; do not require the application to wait for all
+Phase 96 scope before its first contract handoff. Cozy
+[Phase 74, Abstract UI Runtime Contract](https://github.com/asami/cozy/blob/main/docs/phase/phase-74.md)
+owns the shared target-neutral vocabulary. Flutter Core consumes the versioned
+protocol/runtime fixtures, and TFAF owns visual realization.
+
+Handoffs identify the protocol/vocabulary version, fixture provenance and
+focused verification evidence. Scoped child/dependency handoffs do not require
+full-test runs; app Phase 5 owns final real-server aggregate/E2E validation for this
+integration line. Phase 96 retains its independent repository acceptance:
+app acceptance does not imply closure of unrelated generic scope.
+
+Use an existing admitted resource or an explicitly development-only fixture.
+The real Workbench/KnowledgeHub admission gate in server Phase 1.2 is separate;
+no production Knowledge Candidate/admission API is invented here to bypass it.
+Preparation is recorded in the non-normative
+[Phase 96 Display proposal](../notes/display-model-phase-96-proposal.md),
+Editing Studio's
+[ESS2-01 sample journal](../../../../Project2026/nict-editing-studio/docs/journal/2026/10/2026-10-01-display-model-phase-96-sample.md),
+and the [preparation history](../journal/2026/10/2026-10-01-display-model-phase-96-preparation.md).
+These records do not freeze the contract or close a Phase/stage.
+
+The 2026-10-02 [UI-driven Presentation Context proposal](../notes/display-protocol-presentation-context-proposal.md)
+adds the server-side handoff for presentation-relevant ExecutionContext
+projection, generic context families and validated continuation. Core carries
+context, TFAF uses supplied arm/variant identity to realize registered UI, and
+the app remains unaware of experiment logic. This is proposed Phase 96 scope
+for review against existing admission rules; no runtime or protocol is accepted.
 
 ## Initial scope
 
 Implement the minimum infrastructure required for the Editing Studio List -> Detail -> standard Mutation vertical slice.
 
+Phase 96 also defines the consumer-side Logical UI generated ABI. Cozy itself remains Scala 2.12 and is not a runtime binary dependency of Scala 3 CNCF. As with other CML model elements, Cozy emits Scala 3 source/metadata against CNCF-owned public ABI types and ComponentFactory discovery/bootstrap seams.
+
 Phase 96 also establishes the component-scoped `DisplayService` as the UI-facing public service. Aggregate and View runtime access remain internal for this phase; ordinary Business Operations remain independently published through the existing CNCF Operation/REST mechanism.
 
+- CNCF-owned Scala 3 Logical UI generated ABI types/metadata corresponding to the admitted Cozy Phase 74 semantic subset;
+- generated metadata/provider discovery through the existing ComponentFactory pattern, with admission/validation before runtime use;
+- a hand-written CNCF consumer fixture that freezes the exact Scala 3 source shape Cozy Phase 76 must generate;
 - Display Model identity/version metadata;
 - Display Projection SPI/API from semantic View Models;
 - List and Detail Display Model shapes based on the Cozy runtime contract;
@@ -65,18 +117,41 @@ The protocol carries abstract presentation semantics, values, actions, identity 
 
 Semantic clients may continue to consume CNCF View Models independently.
 
+## Producer/consumer ABI boundary
+
+Use the same mechanism as existing CML-generated StateMachine/Workflow contracts:
+
+```text
+CML / Cozy semantic model
+  -> Cozy producer projection/code generation (Scala 2.12 implementation)
+  -> generated Scala 3 source + bounded metadata/provider surface
+  -> CNCF public Logical UI ABI
+  -> ComponentFactory discovery/admission
+  -> component Logical UI definitions
+  -> Display Projection + semantic View
+  -> Display Model instance
+```
+
+CNCF must not import `cozy_2.12`, reflect Cozy runtime classes, copy Cozy runtime objects as a second authority, or introduce a special cross-built Logical UI library solely for this integration. Cozy Phase 74 remains semantic authority/reference; CNCF Phase 96 owns runtime consumer types and admission; Cozy Phase 76 owns producer mapping and source generation.
+
+The consumer ABI should follow existing generated-ABI conventions: closed/versioned definition values, deterministic order, stable identity/provenance, provider-neutral metadata, ComponentFactory discovery, fail-closed admission, and a released producer fixture for cross-repository acceptance.
+
 ## Development proof
 
-Use an Editing Studio/Knowledge Candidate fixture to prove:
+Use the concrete resource fixture supplied by Editing Studio Phase 2 to prove
+the following. A Knowledge Candidate example remains explicitly development-
+only until its production contract is admitted:
 
-1. semantic List View -> List Display Model;
-2. semantic Detail View -> Detail Display Model;
-3. semantic property -> presentation-role mapping;
-4. opaque/server-native value -> displayable value conversion;
-5. Detail Display Object -> standard update mutation -> Entity/Aggregate update -> refreshed Display Object;
-6. create/delete metadata sufficient for standard client interaction patterns;
-7. one Business Operation action descriptor whose execution target remains the ordinary REST Operation API; and
-8. deterministic encode/decode fixture for a future Flutter Core client.
+1. a hand-written/generated-shape Logical UI ABI fixture -> ComponentFactory admission/discovery;
+2. semantic List View + admitted Logical UI definition -> List Display Model;
+3. semantic Detail View + admitted Logical UI definition -> Detail Display Model;
+4. semantic property -> presentation-role mapping;
+5. opaque/server-native value -> displayable value conversion;
+6. Detail Display Object -> standard update mutation -> Entity/Aggregate update -> refreshed Display Object;
+7. create/delete metadata sufficient for standard client interaction patterns;
+8. one Business Operation action descriptor whose execution target remains the ordinary REST Operation API;
+9. deterministic encode/decode fixture for a future Flutter Core client; and
+10. a Cozy Phase 76 generated producer fixture accepted through the same CNCF ABI with no Cozy runtime binary dependency.
 
 The later integration acceptance is replacement of the Android mock source with a CNCF Display Model source without rewriting standard List/Detail UI.
 
@@ -84,7 +159,9 @@ The later integration acceptance is replacement of the Android mock source with 
 
 Phase 96 completes when:
 
-- semantic View Model and Display Model are distinct public concepts;
+- semantic View Model, Logical UI definition and Display Model are distinct public concepts;
+- CNCF exposes the versioned Scala 3 Logical UI generated ABI and ComponentFactory admission/discovery route;
+- Cozy Phase 76 can generate a conformant producer fixture without CNCF depending on `cozy_2.12`;
 - Display Projection produces Cozy Phase 74-conformant runtime models;
 - the minimum List/Detail/Value/Action protocol is versioned and deterministic;
 - no Flutter-specific Widget semantics enter CNCF;
@@ -119,4 +196,24 @@ Display Mutation metadata is intentionally sufficient for a generic presentation
 
 - docs/journal/2026/09/2026-09-29-display-model-protocol-direction.md
 - docs/journal/2026/09/2026-09-27-operation-client-ui-continuity.md
-- asami/cozy Phase 74
+- asami/cozy Phase 74 semantic authority
+- asami/cozy Phase 76 Logical UI producer ABI/code generation
+
+## Online Experiment presentation handoff
+
+Phase 96 does not own Experiment assignment, but the Display Model Protocol must be able to carry a server-resolved presentation variant for CNCF Phase 98 online experiments.
+
+CNCF assigns the subject to an Experiment Arm. DisplayService/Display Projection exposes only the client-safe Experiment presentation context required to render the assigned UI variant, together with a Display Instance/correlation reference. The presentation client must not perform random assignment or choose another Arm.
+
+The client may use the assigned Arm/variant to select between target-specific UI realizations that cannot be expressed solely by target-neutral Display Model fields. Detailed Experiment/Run/assignment state remains server-side where possible.
+
+Standard Display Mutation must preserve the Display Instance/correlation reference. CNCF restores the authoritative Experiment/Run/Arm assignment from server-side context and records mutation lifecycle/outcome against that Arm. The client-supplied Arm value is not the authority for later mutation or Business Operation evaluation.
+
+This permits one Experiment assignment to correlate:
+Display variant -> user interaction -> Display Mutation -> Entity/Aggregate mutation -> Business Operation -> optional AI Interaction -> downstream business outcome.
+
+TFAF and other clients render the assigned variant; CNCF owns assignment, correlation, observation and subsequent routing.
+
+### Multi-arm presentation semantics
+
+Display Model does not assume binary A/B experiments. The client-safe presentation variant identifies the server-assigned Arm from an N-arm Experiment. A/B UI testing is simply the two-arm case. Allocation policy, including future adaptive allocation, remains server-side; the presentation client only renders the assigned variant.

@@ -13,9 +13,23 @@ remain the dispatch path, including configured fake-driver substitution.
 ## Explicit policy
 
 `UrlConnectionHttpDriver` selects bounded mode only when the exact property
-name `http.total-timeout-ms` is present, compared case-insensitively. Property
-selection retains the existing first-match convention. There are no aliases
-or new duplicate-key rules. Absence alone selects legacy mode.
+name `http.total-timeout-ms` is present, compared with `String.equalsIgnoreCase`,
+including its Unicode-equivalent spellings. Property
+selection retains the existing first-match convention. Direct driver calls
+have no aliases or new duplicate-key rules, and an invalid first match never
+falls back to a later match or legacy mode. Absence alone selects legacy mode.
+
+Ordinary Component UnitOfWork calls first pass through
+[HTTP execution admission](http-execution-runtime.md). That authority boundary
+recognizes controlled keys with the same `String.equalsIgnoreCase` equivalence,
+rejects equivalent duplicate controlled keys (including ASCII/Unicode pairs in
+either order), and normalizes an optional total
+to the minimum of the caller total and both effective host/caller connect/read
+limits. Its one canonical total precedes the other canonical controls. It
+removes every equivalent caller control before appending the canonical controls,
+so none can shadow the admitted time or byte ceilings. It does not synthesize a
+total when absent. Direct driver first-match behavior
+and ordinary admission's stricter duplicate refusal are distinct contracts.
 
 The present value is trimmed and parsed as a decimal integer in
 `1..Int.MaxValue`. Empty, malformed, zero, negative, or overflowing values
@@ -55,7 +69,9 @@ timeout alone is insufficient evidence of this contract.
 
 The total budget is bounded mode's timing policy. Existing legacy connect and
 read timeout settings do not imply additional independent bounded-mode idle
-or connection deadlines. Runtime elapsed timing is distinct from component
+or connection deadlines. Ordinary admission conservatively caps that total
+by both effective limits before dispatch, so a caller cannot widen host
+authority by opting into bounded mode. Runtime elapsed timing is distinct from component
 execution clocks.
 
 The body subscriber checks aggregate incoming batch bytes before copying or

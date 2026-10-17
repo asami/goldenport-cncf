@@ -19,7 +19,7 @@ import org.goldenport.observation.Cause
  * @since   Mar. 20, 2026
  *  version Apr. 22, 2026
  *  version Jul. 16, 2026
- * @version Oct.  4, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EventDispatchHandler {
@@ -101,6 +101,11 @@ final case class EventPublishResult(
 )
 
 trait EventBus {
+  /** Internal post-native delivery only. Implementations must not append or
+    * regenerate a record here; lifecycle authorization belongs to managed UoW.
+    */
+  private[cncf] def dispatchCommittedRecordC(record: EventRecord)(using ExecutionContext): Consequence[EventPublishResult] =
+    Consequence.stateConflict("EventBus has no managed committed-record delivery capability")
   def register(subscription: EventSubscription): Unit
   def subscriptions: Vector[EventSubscription]
   def subscriptionsVisible(
@@ -138,6 +143,11 @@ object EventBus {
 final class DefaultEventBus(
   eventengine: EventEngine
 ) extends EventBus {
+  override private[cncf] def dispatchCommittedRecordC(record: EventRecord)(using ctx: ExecutionContext): Consequence[EventPublishResult] =
+    if (record == null || record.id == null || record.lane != EventLane.Transactional ||
+        (record.persistent && record.sequence <= 0L) || (!record.persistent && record.sequence != 0L))
+      Consequence.stateConflict("Managed delivery requires a finalized transactional record")
+    else _publish(FinalizedRecordDomainEvent(record), EventPublishOption(record.persistent), Some(ctx), append = false)
   private case class Entry(
     order: Long,
     subscription: EventSubscription
@@ -187,7 +197,8 @@ final class DefaultEventBus(
   private def _publish(
     event: DomainEvent,
     option: EventPublishOption,
-    context: Option[ExecutionContext]
+    context: Option[ExecutionContext],
+    append: Boolean = true
   ): Consequence[EventPublishResult] = {
     val name = _event_name(event)
     val kind = _event_kind(event)
@@ -201,7 +212,7 @@ final class DefaultEventBus(
         .sortBy(e => (e.subscription.priority, e.order))
     }
 
-    val persisted = if (option.persistent) {
+    val persisted = if (option.persistent && append) {
       context match {
         case Some(ctx) =>
           val result = eventengine.emit(Vector(event), EventRecordFactory.from(ctx))
@@ -242,6 +253,7 @@ final class DefaultEventBus(
   private def _event_name(event: DomainEvent): String =
     event match {
       case e: ReceptionDomainEvent => e.name
+      case e: FinalizedRecordDomainEvent => e.record.name
       case e: TransitionLifecycleEvent => e.name
       case e: ActionEvent => e.actionName
       case other => other.getClass.getSimpleName
@@ -250,6 +262,7 @@ final class DefaultEventBus(
   private def _event_kind(event: DomainEvent): String =
     event match {
       case e: ReceptionDomainEvent => e.kind
+      case e: FinalizedRecordDomainEvent => e.record.kind
       case e: TransitionLifecycleEvent => e.kind.value
       case e: ActionEvent => e.result.toString.toLowerCase
       case _ => "domain-event"

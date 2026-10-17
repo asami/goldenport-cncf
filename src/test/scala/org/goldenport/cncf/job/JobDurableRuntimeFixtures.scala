@@ -30,7 +30,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRe
  * Only target-owned paths and real managed bindings are positive runtimes.
  *
  * @since   Oct.  3, 2026
- * @version Oct.  3, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object JobDurableRuntimeFixtures {
@@ -155,6 +155,7 @@ private[cncf] object JobDurableRuntimeFixtures {
     val entity = new JobDurableLifetimeRecoveryFixtures.ObservedEntityStore
     val blob = new LocalBlobStore(root.resolve("blobs"))
     var selectedBlob: BlobStore = blob
+    var selectedCallerAccessResolver: Option[DurableJobCallerAccessResolver] = None
     var storagePolicy = DurableJobStorageResourcePolicy.default
     var blobPolicy = DurableJobOwnedBlobResourcePolicy.default
     var lifetimePolicy = DurableJobLifetimeQuotaPolicy.default
@@ -170,7 +171,8 @@ private[cncf] object JobDurableRuntimeFixtures {
         context.entityStoreSpace.addEntityStore(entity)
         JobDurableLifetimeRecoveryFixtures.installJobEntity(entity, context)
         val value = DurableJobRuntimeInputs(entity, selectedBlob, selectedEvidence, startup, selectedPort, retention,
-          context, storagePolicy, blobPolicy, lifetimePolicy)
+          context, storagePolicy, blobPolicy, lifetimePolicy,
+          callerAccessResolver = selectedCallerAccessResolver)
         inputs = Some(value)
         value
       }
@@ -202,13 +204,20 @@ private[cncf] object JobDurableRuntimeFixtures {
     }
   }
 
-  final class CliInputs(val root: Path) {
+  final class CliInputs(val root: Path, expectedSubmitter: Option[JobSubmitter] = None) {
+    val recordAccess = expectedSubmitter.map(submitter => access.copy(subjectId = submitter.principalId)).getOrElse(access)
     val startup = new StartupSource
     val retention = new RetentionSource
     val builds = new AtomicInteger
     val context = ExecutionContext.create(Clock.fixed(instant, ZoneOffset.UTC))
     val entity = new JobDurableLifetimeRecoveryFixtures.ObservedEntityStore
-    val evidence = new DurableJobKeyedEvidenceFixtures.Source(_ => DurableJobKeyedEvidenceFixtures.recipe())
+    val evidence = new DurableJobKeyedEvidenceFixtures.Source(_ => {
+      val selected = DurableJobKeyedEvidenceFixtures.recipe()
+      expectedSubmitter.map { submitter => selected.copy(access = recordAccess, projection = selected.projection.copy(
+        authorization = selected.projection.authorization.copy(
+          submitter = DurableSubject(submitter.principalId, submitter.subjectKind))))
+      }.getOrElse(selected)
+    })
     val port = new JobDurableLifetimeRecoveryFixtures.Port(snapshot => DurableJobRuntimeRehydration(
       success(JobId.parse(snapshot.record.body.identity.jobId)), Nil, context, None, None))
     val blob = new LocalBlobStore(root.resolve("blobs"))

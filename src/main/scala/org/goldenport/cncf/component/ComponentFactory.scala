@@ -34,6 +34,9 @@ import org.goldenport.cncf.workflow.WorkflowDefinition
 import org.goldenport.cncf.workflow.{ContinuationRuntimeSource, ContinuationSpiAdapter, IssuedWorkOrderPersistence, GeneratedProvidedApiAbi, GeneratedProvidedApiMetadataProvider, GeneratedWorkflowAbi, GeneratedWorkflowMetadataProvider, StateMachineProvidedApiDispatcher, StateMachineProvidedApiProgramSource, StateMachineProviderResolver, StateMachineProviderSource}
 import org.simplemodeling.model.value.BaseContent
 import scala.util.Try
+import org.goldenport.cncf.component.capability.{ComponentCapabilityDiscovery, ComponentCapabilityMetadataProvider, ComponentUsageCapabilityPackageLoader}
+import org.goldenport.cncf.component.capability.ComponentCapabilityPackageSource.PackageInput
+import org.goldenport.cncf.component.capability.ComponentCapabilityAdmissionScope.Diagnostic
 
 /*
  * @since   Jan. 30, 2026
@@ -43,7 +46,8 @@ import scala.util.Try
  *  version Apr. 25, 2026
  *  version Apr. 26, 2026
  *  version May.  7, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -53,7 +57,7 @@ final class ComponentFactory(
   private[component] val _configuration: Option[ResolvedConfiguration] = None,
   workingsetclock: java.time.Clock = RuntimeConfig.DEFAULT_EXECUTION_CLOCK.clock,
   private[component] val _runtime_component_descriptors: Vector[ComponentDescriptor] = Vector.empty
-)  extends ComponentFactoryEntityPlanPart with ComponentFactoryDescriptorPart with ComponentFactoryWorkflowPart with ComponentFactoryStateMachinePart with ComponentFactoryEntityBootstrapPart with ComponentFactoryReflectionPart {
+)  extends ComponentFactoryEntityPlanPart with ComponentFactoryDescriptorPart with ComponentFactoryWorkflowPart with ComponentFactoryStateMachinePart with ComponentFactoryEntityBootstrapPart with ComponentFactoryReflectionPart with ComponentFactoryCapabilityPart {
   private[component] val _working_set_clock = workingsetclock
 
   def discover(): Vector[Component] =
@@ -69,7 +73,7 @@ final class ComponentFactory(
   def bootstrap(component: Component): Component =
     _or_raise(bootstrapC(component))
 
-  /** Bind an application-owned external result adapter to this Component's injected runtime. */
+  /** Bind Component-scoped input access; actual completion consumes runtime authority. */
   def bindContinuationSpiAdapterC[W, S, R](
     component: Component,
     issuedPersistence: IssuedWorkOrderPersistence[W],
@@ -78,7 +82,7 @@ final class ComponentFactory(
     if (component == null || component.coreOption.isEmpty)
       Consequence.configurationInvalid("Continuation SPI adapter requires a Component")
     else ContinuationSpiAdapter.bindC(
-      component.componentId, component.continuationRuntime, issuedPersistence, adapter
+      component.componentId, issuedPersistence, adapter
     )
 
   def bootstrapC(component: Component): Consequence[Component] =
@@ -299,6 +303,14 @@ final class ComponentFactory(
 }
 
 object ComponentFactory {
+  def acquireUsageCapabilities(input: PackageInput): Either[Diagnostic, Option[ComponentUsageCapabilityPackageLoader.Acquired]] = {
+    ComponentUsageCapabilityPackageLoader.load(input)
+  }
+
+  def discoverCapabilities(input: PackageInput, provider: ComponentCapabilityMetadataProvider): Either[Diagnostic, ComponentCapabilityDiscovery.Discovered] = {
+    ComponentCapabilityDiscovery.discover(input, provider)
+  }
+
   // NEW
   def create(
     subsystem: Subsystem,

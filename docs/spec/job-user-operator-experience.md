@@ -245,3 +245,174 @@ FailureModel files, were preserved without edits or feature acceptance.
 Current selected prerequisite context therefore contains413 source paths.
 The producer reported three existing missing-credentials notices; these are
 separate from the selected CNCF compiler-warning count.
+
+
+## Phase 69.7 restart and retained-result operational companion — JM69-10D2
+
+status=authored_review_pending
+stage_status=IN_PROGRESS
+phase=69.7
+step=JM69-10
+slice=JM69-10D2
+validation_status=retained-selected-ACC001-passed-static-checks-passed
+review_status=original-wholeStep-protected-M2-pending
+acceptance_status=not-accepted
+
+This appendix is authored guidance awaiting original Step review and accepted
+promotion. The Phase69.6 accepted header, history, routes and controls above
+remain authoritative. The [consolidated matrix](job-cross-process-acceptance-contract.md#jm69-10d2-consolidated-restart-acceptance-matrix--2026-10-06)
+and [D2 journal](../journal/2026/10/2026-10-06-phase-69.7-restart-acceptance-matrix.md)
+bind the existing executable evidence and retained selected execution.
+
+### Existing restart and read behavior
+
+Eligible canonically authorized, proof-complete V2 Submitted work without
+startedAt/recoveryRequired reaches the provider-owned port; ordinary timer/
+queue processing owns due execution. Actual interrupted started work refuses
+startup before Port/Task/queue. Operators retain the fixed safe refusal and
+bounded diagnostic facts rather than prescribing Retry/Resume for refused
+startup, raw-row edits, fabricated Submitted state, grant expansion, refund
+or proof reset. The [scheduled executable specification](../../src/test/scala/org/goldenport/cncf/job/JobScheduledCrossProcessAcceptanceSpec.scala)
+and [retry executable specification](../../src/test/scala/org/goldenport/cncf/job/JobRetryCrossProcessAcceptanceSpec.scala)
+distinguish positive unstarted execution, completed writer retry with fresh
+terminal observation, and SC5/RC5 started-state no-replay refusal.
+
+Completed legacy Absent/body-free projections retain raw getResult=None and
+authorized UnavailableAfterRestart. Existing B4 queryVisible alone hydrates
+an exact eligible job-owned OperationResponse External/header after ordinary
+model policy and the actual current-caller resolver under the same ready native
+owner lease. Startup credentials, a stored grant or job_admin capability never
+replace that admission. The [current-caller query contract](durable-job-operation-response-query-contract.md)
+and [DurableJobOperationResponseQuerySpec](../../src/test/scala/org/goldenport/cncf/job/DurableJobOperationResponseQuerySpec.scala)
+bind the existing consumer; this companion defines no readCompletionResponse
+API, endpoint or control and synthesizes no result from a terminal summary.
+
+Mine requires the original same current owner. Operator requires existing
+capabilities and still satisfies durable tenant/subject/scope admission.
+Durable controls remain only the originally admitted behavior.
+[JobExperienceCrossProcessAcceptanceSpec](../../src/test/scala/org/goldenport/cncf/job/JobExperienceCrossProcessAcceptanceSpec.scala)
+covers owner, administrators, foreign/different-kind/anonymous/broad readers,
+bounded redacted diagnostics and durable-control compatibility.
+[JobSecurityCrossProcessAcceptanceSpec](../../src/test/scala/org/goldenport/cncf/job/JobSecurityCrossProcessAcceptanceSpec.scala)
+covers exact/additional-scope admission and foreign/missing/unrelated/mixed
+refusals without capability bypass.
+
+Ready may own one existing maintenance registration; refused startup installs
+no owner. Zero replay/write/body/getter/queue effects remain distinct from
+maintenance timers. The original owned shutdown cancels the timer, closes
+the scheduler and managed native resources. C11’s raw preclosure timer1 for
+Ready and timer0 for denial, then closure0, retain their actual meaning.
+
+Notification providers own persistence, deduplication and inbox state.
+[JobNotificationCrossProcessAcceptanceSpec](../../src/test/scala/org/goldenport/cncf/job/JobNotificationCrossProcessAcceptanceSpec.scala)
+demonstrates accepted/internal/disabled/refused/failed/exception/unsafe-application
+forwarding and fresh-reader no replay, including bounded generated modes.
+Those writer/provider observations supply no generic fresh persistent-inbox
+proof. Retain body-free redaction and bounded diagnostics; this guidance
+contains no private row/payload/credential dump or manual destructive recovery
+procedure.
+
+### Restart boundary and retained original obligation
+
+The [recovery truth table](durable-job-recovery-contract.md)
+continues to classify Running/Suspended or Submitted with startedAt present as
+RecoveryRequired; existing ActiveLifecycle and ExecutionAlreadyStarted reasons
+remain unchanged. The [rehydration R2/R3 contract](durable-job-runtime-rehydration-contract.md)
+retains canonical/access admission, unchanged classification and eligible V2
+Submitted-only port admission, with complete replay evidence, no startedAt and
+no recoveryRequired. Its ordinary timer/queue owns due dispatch.
+
+SC1..SC3 and CR1 demonstrate genuine unstarted/scheduled admission, independently
+reconstructed live execution and a third terminal reader, including unstarted
+halt71 recovery. Immediate/default delayed retry completes in its writer before
+fresh terminal observation. SC5 actual Running4/Pending after TaskStart halt71
+and RC5 actual Running5/Pending after Failed pending retry (graceful exit or
+halt71) refuse before Port/Task/queue, retaining native rows/payment without
+replay, refund or reset. Those refusal fixtures do not establish positive
+automatic fresh retry or recovery of started work.
+
+The original checklist calls for the real scheduled/retry/crash-interrupted
+matrix; the retained original plan separately keeps positive-started-work
+closure/design choice OPEN. This tension is retained parent planning evidence,
+not an implementation decision or waiver. D2 introduces no recovery policy,
+automatic retry, checkpoint/schema, proof-token rule or acceptance change.
+
+Actual CBD provider/Entity/completed full Review and independently fresh recovery
+remain OPEN. Its gateway is provider-pipeline-pending and read requires reportId/
+reportDigest. Framework payload/Review fixtures cannot complete that downstream
+obligation. The downstream checkout stays read-only and the unanswered source
+authority request remains retained. Complete compatibility and accepted guidance
+promotion, original whole-Step protected M2/local acceptance commit, predecessor
+ancestry/reciprocal deferred-full, aggregate CNCF/downstream full validation,
+sole original epoch1 Phase review, version/closure evidence and local release
+also remain OPEN.
+
+The retained same unchanged program/configuration/inputs evidence is
+[PH697-JM10C11-ACC-001](../../.codex-workflow/phases/PHASE-69.7/JM69-10C11-accumulator01-result.json):
+131 completed suites, 1076 succeeded, pending1 (only the original
+SqliteDataStoreSpec “should store record fields as columns”), failed0/aborted0/
+canceled0/ignored0/compilerwarnings0, typed reader0/SBT0/wrapper0,
+permission consumed and lock=released.
+[PH697-JM10C11-REP-002](../../.codex-workflow/phases/PHASE-69.7/JM69-10C11-representative02-result.json)
+passed four suites/26 succeeded, pending0 and the same zero failure/exit/warning
+counts with consumed permission and released lock. REP002 covered its selected
+four suites; it supplies no whole-matrix coverage claim. No D2 execution occurred.
+
+## Current native operator guarantees — JM69-10D4 — 2026-10-06
+
+status=authored_review_pending
+acceptance_status=not-accepted
+
+This current companion preserves the accepted Phase69.6 contract and existing
+operator controls. The [closure boundary](../journal/2026/10/2026-10-06-phase-69.7-cncf-job-closure-boundary.md)
+records CBD exclusion/HANDED_OFF_UNVALIDATED and pending native Step/Phase
+acceptance. Earlier dated CBD/OPEN design-choice projections are historical.
+
+The [configured native owner](durable-job-runtime-owner-contract.md) and its
+original bound bridge/access remain required; unconfigured access has no fallback.
+[Native UOW R1–R5](job-unit-of-work-submission-contract.md) issues one identity
+only after admission/reservation for Persistent Async work under that Ready owner.
+Until outer commit activation, that identity is unpublished: no JobRecord/Entity
+Job, paid root, evidence/event, queue, timer or body. No staged registry or
+immediate-submit fallback exists. Commit activates the same identity through the
+original owner lease/State/publication path using commit-time now. Abort/dispose/
+failure releases only unpublished capacity; acknowledged native evidence survives.
+Committed post-commit Failure does not roll back the outer UOW or authorize a
+second ID, replacement owner, retry or automatic resubmission. These guarantees
+are mapped by [UJS1–UJS10](../../src/test/scala/org/goldenport/cncf/job/JobUnitOfWorkSubmissionSpec.scala).
+
+The [recovery truth table](durable-job-recovery-contract.md),
+[rehydration R2/R3](durable-job-runtime-rehydration-contract.md) and
+[parent conformance decision](../../.codex-workflow/phases/PHASE-69.7/JM69-10-native-restart-conformance-decision01.json)
+permit eligible proof-complete unstarted V2 Submitted work through its original
+port and due timer/queue. Running/Suspended/startedAt-present interrupted work
+remains RecoveryRequired, with no automatic replay or resubmit, no refund/reset
+and no manual raw-row/proof/grant repair. Scheduled SC5 and retry RC5 are safe
+started-work refusals, distinct from unstarted success and completed writer retry
+with fresh terminal reads; see
+[scheduled](../../src/test/scala/org/goldenport/cncf/job/JobScheduledCrossProcessAcceptanceSpec.scala)
+and [retry](../../src/test/scala/org/goldenport/cncf/job/JobRetryCrossProcessAcceptanceSpec.scala).
+The design choice is decided-conformance-review-pending, never positive
+started-work recovery achieved.
+
+[Current-caller query](durable-job-operation-response-query-contract.md) retains
+exact eligible owned OperationResponse payload hydration under the same Ready
+owner's lease and original access/policy. Legacy Absent/raw body-free/getResult=None
+and authorized UnavailableAfterRestart remain limits; a terminal summary cannot
+reconstruct a result or CBD Report. Startup credentials and administrator labels
+do not bypass current tenant/subject/scopes. Retain Mine/Operator admission,
+redacted diagnostics, original durable controls and
+[experience](../../src/test/scala/org/goldenport/cncf/job/JobExperienceCrossProcessAcceptanceSpec.scala)/
+[security](../../src/test/scala/org/goldenport/cncf/job/JobSecurityCrossProcessAcceptanceSpec.scala)
+caller isolation.
+
+[Retention and maintenance](job-operations-contract.md) retain terminal-only
+expiry, LegalHold, authorized deletion, cleanup/refusal and paid authority.
+Ready's maintenance registration is distinct from zero replay/write/body/queue
+effects; refused startup installs no owner, and owned shutdown closes timer,
+scheduler and native resources. Notification persistence/inbox remains provider-owned;
+writer forwarding and fresh no-replay observation establish no generic fresh inbox.
+Current representative9/accumulator132 is planned-not-run. Accepted guidance
+promotion, protected native Step review/local commit and separate Phase full
+validation/review/version/local release/closure audit remain pending. This
+appendix claims no CBD report recovery or accepted Step/Phase outcome.

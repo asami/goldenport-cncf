@@ -1,11 +1,11 @@
 package org.goldenport.cncf.resource
 
-import java.nio.charset.StandardCharsets
 import org.goldenport.Consequence
 
 /*
  * @since   Jul. 16, 2026
- * @version Jul. 16, 2026
+ *  version Jul. 16, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResourceProviderMetadata(
@@ -34,7 +34,8 @@ final case class ResourceAccessTestProfile(
   urlPolicy: ResourceUrlPolicy = ResourceUrlPolicy(),
   urlProviders: Vector[UrlResourceProvider] = Vector.empty,
   textusUrnProviders: Vector[TextusUrnResourceProvider] = Vector.empty,
-  urnProviders: Vector[UrnResourceProvider] = Vector.empty
+  urnProviders: Vector[UrnResourceProvider] = Vector.empty,
+  readLimits: ResourceReadLimits = ResourceReadLimits.default
 ) {
   def resourceAccess: ResourceAccess = ResourceAccess.testProfile(this)
 }
@@ -43,9 +44,9 @@ final class InMemoryUrlResourceProvider(
   val scheme: String,
   contents: Map[String, String]
 ) extends UrlResourceProvider {
-  def read(reference: ResourceReference.Url): Consequence[ResourceContent] =
+  def read(reference: ResourceReference.Url, limits: ResourceReadLimits): Consequence[ResourceContent] =
     contents.get(reference.print) match {
-      case Some(value) => Consequence.success(InMemoryResourceContent(reference, value))
+      case Some(value) => InMemoryResourceContent.createC(reference, value, limits)
       case None => Consequence.resourceNotFound("configured in-memory URL resource is not available")
     }
 }
@@ -54,9 +55,9 @@ final class InMemoryTextusUrnResourceProvider(
   val namespace: String,
   contents: Map[String, String]
 ) extends TextusUrnResourceProvider {
-  def read(reference: TextusUrnReference): Consequence[ResourceContent] =
+  def read(reference: TextusUrnReference, limits: ResourceReadLimits): Consequence[ResourceContent] =
     contents.get(reference.resourceId) match {
-      case Some(value) => Consequence.success(InMemoryResourceContent(reference.reference, value))
+      case Some(value) => InMemoryResourceContent.createC(reference.reference, value, limits)
       case None => Consequence.resourceNotFound("configured in-memory Textus URN resource is not available")
     }
 }
@@ -65,14 +66,14 @@ final class InMemoryUrnResourceProvider(
   val nid: String,
   contents: Map[String, String]
 ) extends UrnResourceProvider {
-  def read(reference: ResourceReference.Urn): Consequence[ResourceContent] =
+  def read(reference: ResourceReference.Urn, limits: ResourceReadLimits): Consequence[ResourceContent] =
     contents.get(reference.nss) match {
-      case Some(value) => Consequence.success(InMemoryResourceContent(reference, value))
+      case Some(value) => InMemoryResourceContent.createC(reference, value, limits)
       case None => Consequence.resourceNotFound("configured in-memory URN resource is not available")
     }
 }
 
 private object InMemoryResourceContent {
-  def apply(reference: ResourceReference, value: String): ResourceContent =
-    ResourceContent(reference, value.getBytes(StandardCharsets.UTF_8).toVector)
+  def createC(reference: ResourceReference, value: String, limits: ResourceReadLimits): Consequence[ResourceContent] =
+    ResourceReadAcquisition.utf8C(value, limits).map(ResourceContent(reference, _))
 }

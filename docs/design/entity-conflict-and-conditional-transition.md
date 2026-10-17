@@ -402,6 +402,17 @@ The provider plan contains only bounded record-level values:
   canonical Entity storage shape; and
 - bounded logical correlation metadata.
 
+The closed side-record algebra also admits Create for explicitly admitted
+framework Workflow record composition. Unlike Save (upsert), Create uses
+insert-only primary identity admission in the same native transaction. An
+existing identity, even with equal data, is a structured datastore duplicate
+failure and rolls back every staged record. Memory checks its replacement
+state before publication; SQL uses insert with its native uniqueness constraint,
+never an upsert or a caller-owned absence check. Shared ordinary versioned
+mutation and conditional transition preserve the same effect semantics.
+This primitive alone is not an EventStore, sequence allocator or active UoW
+enlistment capability.
+
 The admitted record plan is closed and bounded:
 
 - at most 32 exact expected fields;

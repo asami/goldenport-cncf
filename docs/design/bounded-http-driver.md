@@ -16,6 +16,21 @@ Presence first admits the complete bounded policy, then selects the private
 bounded helper for GET and string POST. PUT and `postBag` reject before
 transport or Bag access.
 
+Ordinary Component UnitOfWork admission owns host authority before driver
+selection. One canonical controlled-key lookup uses `String.equalsIgnoreCase`,
+matching the bounded driver for ASCII and Unicode-equivalent spellings. That
+lookup governs recognition, value pairing, duplicate refusal and removal of
+caller controls. It recognizes an optional total as a controlled property,
+rejects equivalent duplicates in either order, and emits one canonical total capped by both effective
+connect/read limits after existing caller aliases have narrowed host ceilings.
+The canonical total precedes the other four controls after unrelated properties.
+No equivalent caller time or byte key survives ahead of those canonical controls.
+Absence leaves the existing four controls and legacy dispatch unchanged. This
+conservative cap preserves host ceilings under the helper's single total-only
+timing policy; it adds no independent connection or idle timer. Direct driver
+calls retain first-match selection, including invalid-first refusal without
+fallback, outside ordinary admission's duplicate-key contract.
+
 One lazy helper belongs to each driver. It owns one reusable JDK 17
 `java.net.http.HttpClient`, uses the ordinary default executor, and configures
 redirect policy `NEVER`. There is no JVM-global client or application executor

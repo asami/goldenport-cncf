@@ -8,7 +8,8 @@ import org.goldenport.cncf.component.repository._
  * Read-only consumer projection for resolved component-resource evidence.
  *
  * @since   Aug. 22, 2026
- * @version Aug. 26, 2026
+ *  version Aug. 26, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ComponentResourceConsumer:
@@ -25,7 +26,6 @@ final case class ResolvedComponentResourceConsumerView(
   authorization: ComponentResourceAuthorization,
   sourceKind: ComponentResourceSourceKind,
   artifactCoordinate: String,
-  sha256: String,
   logicalSource: String,
   resolutionStep: String,
   externalDeploymentRequired: Boolean
@@ -65,7 +65,6 @@ object ResolvedComponentResourcesConsumerProjection:
           authorization = resource.authorization,
           sourceKind = resource.provenance.sourceKind,
           artifactCoordinate = resource.provenance.artifactCoordinate,
-          sha256 = resource.provenance.sha256,
           logicalSource = resource.provenance.logicalSource,
           resolutionStep = resource.provenance.resolutionStep,
           externalDeploymentRequired = resource.provenance.externalDeploymentRequired

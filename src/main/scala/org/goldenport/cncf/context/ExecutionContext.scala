@@ -21,6 +21,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.observability.{CallTreeContext, DslChokepointHook, ResourceAccessObservation, ResourceTreeAccessObservation}
 import org.goldenport.cncf.operation.evaluation.{CorpusEvaluationCorrelation, ExperimentEvaluationCorrelation, OperationEvaluationAssignment, OperationEvaluationContext, OperationEvaluationOperationIdentity, OperationEvaluationSinkIdentity}
 import org.goldenport.cncf.resource.{ResourceAccess, ResourceAccessTestProfile, ResourceTreeAccess}
+import org.goldenport.cncf.workspace.WorkspaceExecutionAdmission
 import cats.~>
 
 /**
@@ -48,7 +49,8 @@ import cats.~>
  *  version Apr. 25, 2026
  *  version May. 31, 2026
  *  version Jul. 31, 2026
- * @version Aug. 12, 2026
+ *  version Aug. 12, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -76,6 +78,14 @@ abstract class ExecutionContext
     ResourceTreeAccessObservation.observed(cncfCore.resourceTrees)(using this)
 
   def isAggregateInternalRead: Boolean = cncfCore.scope.isAggregateInternalRead
+
+  private[cncf] def workspaceExecutionAdmissionOption: Option[WorkspaceExecutionAdmission] =
+    cncfCore.scope.workspaceExecutionAdmissionOption
+
+  private[cncf] def resourceReadLimitsC: Consequence[org.goldenport.cncf.resource.ResourceReadLimits] =
+    ExecutionContext._global_runtime_context(cncfCore.scope)
+      .map(global => Consequence.success(global.config.resourceReadLimits))
+      .getOrElse(Consequence.serviceUnavailable("Runtime resource read limits are unavailable"))
 
   lazy val transactionContext = TransactionContext(runtime)
 }
@@ -460,6 +470,12 @@ object ExecutionContext {
       ctx
   }
 
+  def withFreshUnitOfWorkContext(ctx: ExecutionContext): Consequence[ExecutionContext] =
+    ctx match {
+      case instance: Instance => Consequence.success(_rebind_runtime_context(instance))
+      case _ => Consequence.operationInvalid("execution-context-uow-rebind-unsupported")
+    }
+
   private def _with_runtime_context_preserving_execution_profile(
     ctx: ExecutionContext,
     runtime: RuntimeContext
@@ -820,6 +836,21 @@ object ExecutionContext {
       ctx
   }
 
+  /** Attach opaque invocation routing inside an already executing Operation.
+    * Keep its actual UoW, response lineage, actor and authentication attributes.
+    * This is not authentication, a resource owner or a new execution context.
+    */
+  def withRoutingSessionIdentity(ctx: ExecutionContext,
+    sessionIdentity: String): Consequence[ExecutionContext] = ctx match {
+    case value: Instance =>
+      val session = value.security.session.getOrElse(SessionContext()).copy(sessionId = Some(sessionIdentity))
+      val security = value.security.copy(session = Some(session))
+      org.goldenport.cncf.security.SecurityAuthenticationProvenance.inherit(value.security, security)
+      Consequence.success(value.copy(cncfCore = value.cncfCore.copy(
+        security = security)))
+    case _ => Consequence.configurationInvalid("Invocation context cannot carry session routing")
+  }
+
   def withAggregateInternalRead(
     ctx: ExecutionContext,
     enabled: Boolean
@@ -922,7 +953,8 @@ object ExecutionContext {
           global.config.resourceUrlPolicy,
           global.config.textusUrnResourcePolicy,
           global.config.urnResourceProviders,
-          global.httpDriver
+          global.httpDriver,
+          global.config.resourceReadLimits
         )
       }
       .getOrElse(ResourceAccess.unavailable)

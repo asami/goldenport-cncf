@@ -470,7 +470,7 @@ object GenericSubsystemFactory {
         aliasResolver = aliasresolver,
         runMode = runmode
       )
-    Subsystem.withStartupCleanup(subsystem) {
+    SubsystemStorageInitialization.withPreparedStorage(subsystem) {
       val params = ComponentCreate(subsystem, ComponentOrigin.Repository("subsystem-name"))
         .withRuntimeConfiguration(configuration)
       val repositories = repos.map(_.build(params)).toVector
@@ -635,7 +635,7 @@ object GenericSubsystemFactory {
         runMode = runmode
       ).withDescriptor(admitteddescriptor)
         .withAssemblyAdmissionReport(admissionreport)
-    Subsystem.withStartupCleanup(subsystem) {
+    SubsystemStorageInitialization.withPreparedStorage(subsystem) {
       val params = ComponentCreate(
         subsystem,
         ComponentOrigin.Repository("subsystem-descriptor"),

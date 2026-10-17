@@ -70,8 +70,11 @@ traversal-like, or noncanonical selections MUST fail closed. An admitted
 request MUST delegate to the existing
 `ResolvedComponentResourcesConsumerProjection` with the `DirectAi` consumer.
 
-The existing authorization policy MUST remain responsible for content bytes,
-integrity, archive, cache, availability, and authorization decisions. Help
+The existing authorization policy MUST remain responsible for explicit
+role/repository grants, parent/release membership, availability, authorization,
+coordinate/repository agreement, safe archive paths, content bytes, policy
+refusal, and non-disclosure. Supplied integrity state remains independent
+descriptive metadata. Help
 and Direct-AI MUST NOT scan, fetch, mount, cache, re-resolve, fall back,
 inspect, or transform hostile content, and MUST NOT grant activation,
 operation, MCP, disclosure, deployment, or Admin authority.

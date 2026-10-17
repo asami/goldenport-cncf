@@ -4,7 +4,8 @@ package org.goldenport.cncf.unitofwork
  * Metadata-independent planning values for the UnitOfWork operation algebra.
  *
  * @since   Sep.  8, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] enum UnitOfWorkEffectClass {
@@ -25,10 +26,15 @@ private[cncf] object UnitOfWorkOperationClassifier {
           UnitOfWorkOp.HttpPostBag(_, _, _, _) |
           UnitOfWorkOp.HttpPut(_, _, _, _) |
           UnitOfWorkOp.ShellCommandExec(_) |
-          UnitOfWorkOp.ProcessExec(_) =>
+          UnitOfWorkOp.ProcessExec(_) |
+          UnitOfWorkOp.SbtExec(_, _) |
+          UnitOfWorkOp.GitExec(_, _) |
+          UnitOfWorkOp.FileReadText(_, _) |
+          UnitOfWorkOp.FileWriteText(_, _, _, _) =>
         UnitOfWorkEffectClass.External
 
       case UnitOfWorkOp.DataStoreLoad(_) |
+          UnitOfWorkOp.StageWorkflowClosingLocalIntent(_) |
           UnitOfWorkOp.StateMachineProviderExecute(_) |
           UnitOfWorkOp.StateMachineProvidedApiExecute(_) |
           UnitOfWorkOp.DataStoreSave(_, _) |

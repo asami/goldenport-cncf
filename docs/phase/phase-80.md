@@ -43,9 +43,12 @@ Phase 80 uses operational evidence to add only the extensions needed on the Phas
 3. richer Completion / Evidence projection and validation.
 4. AI / Human / remote participant integration using the same Phase 77.1 Continuation identity.
 5. UI/client continuation retrieval and resumption ergonomics.
-6. provider/invocation placement policy that remains outside Workflow semantics.
-7. richer Generic Skill Workflow metadata beyond Phase 77.2's model-independent capability / complexity / risk / review hints.
-8. future local/remote transport or Workflow-to-Workflow integration preparation where justified.
+6. generic execution placement requirement/evidence, initially INLINE / DELEGATED as provider/runtime placement rather than StateMachine semantics.
+7. generic execution independence requirement and execution-context identity/evidence sufficient to prove producer/reviewer separation.
+8. richer Generic Skill Workflow metadata beyond Phase 77.2's model-independent capability / risk / review hints.
+9. Requirement -> ExecutionEvidence conformance/admission for selected placement and independence constraints.
+10. future local/remote transport or Workflow-to-Workflow integration preparation where justified.
+11. later provider capability negotiation, fallback/escalation, context-budget-aware routing, and Human/AI/remote-worker generalization when justified by sm-workflow Phase 6 evidence.
 
 ## Normative compatibility rule
 
@@ -74,9 +77,23 @@ CNCF Phase 80 extended invocation/integration runtime
 
 Phase 80 should be refined from the Phase 1 / skill connectivity work rather than implemented speculatively.
 
+## Minimum slice for sm-workflow Phase 5
+
+Operational feedback from sm-workflow requires a small Phase 80 slice before sm-workflow Phase 5 can close practical execution routing:
+
+- extend generic ExecutionRequirement with model/provider-independent placement and independence requirements;
+- extend ExecutionEvidence with the actual execution placement/context identity needed to validate those requirements;
+- preserve concrete model/provider/effort as host/runtime mapping and evidence only;
+- allow INLINE execution by the current participant without a child AI invocation;
+- allow REQUIRED independence to reject a completion that cannot demonstrate a distinct permitted execution context.
+
+This minimum slice must remain application-neutral. TRIVIAL, PROGRAMMING / ENGINEERING, and software-development context-footprint classification remain sm-workflow policy, not CNCF vocabulary.
+
 ## Acceptance direction
 
-Acceptance criteria are to be frozen when concrete extension candidates are selected from operational evidence. At minimum, all selected extensions must preserve Phase 77-sequence semantics and existing sm-workflow executable specifications.
+For the minimum slice, prove JSON/typed round-trip compatibility, INLINE and DELEGATED evidence, independence conformance/rejection, and backward-compatible defaults for existing Phase 77.2 consumers. Later Phase 80 work may add richer capability negotiation, fallback/escalation, context/resource policy, and participant integration based on sm-workflow Phase 6 evidence.
+
+All selected extensions must preserve Phase 77-sequence StateMachine semantics and existing sm-workflow executable specifications.
 
 ## Non-goals
 

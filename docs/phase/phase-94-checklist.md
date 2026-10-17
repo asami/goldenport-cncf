@@ -54,3 +54,5 @@ Stage Status:
 - [ ] Exercise the real consumer's suspension/resume path under the shared backend.
 - [ ] Complete focused and repository-wide validation, independent review, and release evidence under the Phase 94 execution plan.
 - [ ] Confirm Phase 77.1, Phase 77.2, Cozy, and the first `sm-workflow` vertical slice were not retroactively made dependent on Phase 94.
+- [ ] Trace the [Textus EAI requirements](../journal/2026/10/2026-10-03-textus-eai-workflow-requirements.md) to a selected later migration: inventory its concrete WorkflowInstance/Continuation/WorkOrder providers and EventReceipt store, identify which effects belong to the shared transaction, and keep external delivery/Edge work outside any unsupported atomicity claim.
+- [ ] If EAI migration is selected, prove same-instance separate-call completion, admission/duplicate rejection and truthful Succeeded/Failed/Cancelled results under durable commit failure/indeterminacy. Preserve EAI's loose minimum baseline and do not make its initial AC-01 through AC-10 proof wait for Phase 94.

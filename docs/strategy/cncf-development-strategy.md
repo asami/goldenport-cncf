@@ -2319,9 +2319,14 @@ Alignment with Phase 64:
   with this candidate and Saga Management.
 
 ### 9.14 Job Management Follow-ups
-Planned as the eight-Phase 69 Job Management completion sequence after the
-Phase 22 baseline. The sequence is separately selectable and no child is the
-active Phase.
+The eight-Phase 69 Job Management sequence after the Phase 22 baseline is
+closed for its retained CNCF scope. [Phase 69.7](../phase/phase-69.7.md) and its
+[checklist](../phase/phase-69.7-checklist.md) closed on 2026-10-07 in local release
+`f394034fff40a20cd635f196de7d61a3a9e4f5af`; no child remains active.
+The [current closure evidence](../journal/2026/10/2026-10-06-phase-69.7-cncf-job-closure-boundary.md#current-phase-release-and-closure--2026-10-07)
+records the actual final-owner full validation, independent review and native
+Step/release commits. CBD is excluded/HANDED_OFF_UNVALIDATED under the human
+scope amendment, with unfinished work retained by its canonical owner.
 
 Phase 22 closed the baseline Job Management scope. Completed behavior is
 recorded in section 8.12 and the closed Phase 22 documents:
@@ -2331,17 +2336,22 @@ recorded in section 8.12 and the closed Phase 22 documents:
 
 Phase 69 sequence scope:
 
-The approved 2026-09-09 split assigns every unfinished stage exactly once:
+The approved 2026-09-09 split assigned each then-unfinished stage exactly once;
+all eight Phases are now closed for their retained CNCF scope:
 
 - Phase 69: inventory and durable Job/Task contract (`JM69-01/02`).
 - Phase 69.1: durable storage and process recovery (`JM69-03`).
 - Phase 69.2: query, pagination, result, and control (`JM69-04`).
 - Phase 69.3: executable JCL (`JM69-05`).
-- Phase 69.4: active lightweight direct JobDefinition lifecycle (`JM69-06`).
+- Phase 69.4: lightweight direct JobDefinition lifecycle (`JM69-06`).
 - Phase 69.5: CompositeQuery v2 (`JM69-07`).
 - Phase 69.6: user and operator Job experience (`JM69-08`).
 - Phase 69.7: security, retention, operations, downstream acceptance, and
   Phase 69 release (`JM69-09/10`).
+
+The following inventory preserves the original completion requirements, not
+an open backlog. The committed Phase ledgers and 2026-10-07 closure govern
+their disposition, including the explicit exclusion of CBD acceptance:
 
 - Implement executable JCL runtime for procedural `flow` and Event-driven
   `events` / `onEvent` sections. Phase 22 stores and documents those sections
@@ -2395,7 +2405,7 @@ Alignment with Phase 64:
 - It may add only the correlation/idempotency evidence required for that path;
   executable JCL flow/events, the lightweight direct JobDefinition lifecycle,
   durable Task Execution Tree/history, CompositeQuery v2, and general Job UX
-  remain owned by the planned Phase 69 sequence. JobDefinition rollout remains
+  are delivered by the closed Phase 69 sequence. JobDefinition rollout remains
   deliberately retired from that sequence.
 
 ### 9.15 Saga Management
@@ -5088,6 +5098,16 @@ Planned as Phase 73. Components contribute their own domain knowledge to a
 domain-neutral CNCF hub, and Textus BoK or other consumers discover and read
 the contribution through CNCF rather than binding directly to its provider.
 
+Execution ordering was optimized on 2026-10-08; the Phase remains unstarted.
+The [Phase 73 execution plan](../phase/phase-73.md#execution-order-and-evidence-allocation)
+first settles only the minimum main-route contract, proves one assembled
+provider -> CNCF discovery/read -> one consumer, then adds a second consumer.
+After that working route is established, it specifies and implements provider
+replacement/failure/isolation, and closes with a shared supplier handoff and
+final validation. Phase 70 mode semantics remain unchanged. Focused evidence
+is reused across the work groups; TKE/BoK implementation and external consumer
+acceptance remain separately owned.
+
 - Contract direction:
   - keep stable `knowledgeDomainId` separate from the current
     `providerComponent`;
@@ -5317,6 +5337,63 @@ candidate code only, not accepted Phase 77.1/77.2 behavior.
 Planning references: [Phase 94](../phase/phase-94.md) and
 [Phase 94 Checklist](../phase/phase-94-checklist.md).
 
+### 9.67 Textus EAI Consumer Requirements for Planned Workflow Phases
+
+Requirement intake: 2026-10-03. `sm-workflow` remains the Workflow development
+driver and first representative consumer. `textus-eai`
+(`textus-enterprise-application-integration`) is an additional consumer whose
+minimum Event-to-managed-Job/Workflow, deterministic invocation, external
+WorkOrder and separate-call same-instance completion requirements are recorded
+in the [consumer intake and AC allocation](../journal/2026/10/2026-10-03-textus-eai-workflow-requirements.md).
+
+- The user reports [Phase 88](../phase/phase-88.md) is executing on Air; this
+  intake does not amend its frozen execution scope. The
+  [unnumbered post-88 follow-up](../phase/workflow-consumer-integration-follow-up.md)
+  receives that actual result and the stable sm-workflow handoff, assesses
+  provider/configuration, generated Start/completion, native progression and
+  lookup facts, and allocates only residual gaps to their actual owners.
+  The accepted Phase 77 SPI remains provider-neutral; consumer datastore/provider
+  policy is not replaced by an inferred CNCF default.
+- [Phase 87](../phase/phase-87.md) adds truthful EAI Workflow/Job observation
+  through generic, authorized and redacted projections.
+- [Phase 93](../phase/phase-93.md) adds EAI Event/lifecycle/journal correlation
+  without turning delivery or replay into admission or Workflow-start authority.
+- [Phase 94](../phase/phase-94.md) retains its later shared-transaction priority
+  and records EAI as an explicitly selected future migration compatibility case.
+
+EAI Phase 1 consumes a stable artifact/provider and real application handoff
+driven by `sm-workflow`; it does not trigger competing upstream implementation.
+The Web Console, Service Bus deployment, joint atomicity and completion of all
+these future Phases are not prerequisites for its fixed non-network minimum
+fixture. EAI owns Event/Binding/receipt association and business evidence;
+CNCF owns runtime identity/admission/progression, and the concrete provider's
+actual supplier is identified from the delivered handoff during post-88
+assessment. A sufficient handoff requires no additional upstream Phase. No Phase is started,
+renumbered or marked accepted, and no closed Phase 77 ledger is changed.
+
+### 9.68 DataStore Logical Types, Storage Mapping and Recovery
+
+Allocated on 2026-10-03 and renumbered on 2026-10-05 as
+[Phase 100](../phase/phase-100.md), with its
+[open checklist](../phase/phase-100-checklist.md). The application declares
+String, class X, semi-structured Record, JSON or array semantics. The OR mapper
+owns their application codecs and JSON-text storage mapping; DataStore handles
+physical values and returns String from the text backend. SQL TEXT syntax is not application type
+evidence. This is a dedicated persistence contract and recovery Phase rather
+than another caller-specific JSON-decoding exception.
+
+The scope includes declaration ownership, direct DataStore and EntityStore
+bindings, consistent provider read/write/query/mutation behavior, explicit
+consumer transition, and diagnosis/migration/recovery on isolated existing-data
+copies. workbench provides the restart roundtrip proof; durable Job canonical
+text and opaque identity provide compatibility cases. Preserve current
+transaction/OCC semantics and the closed Phase 69.7 Job contracts. The new Phase does not
+depend on Phase 94 shared transactions or Phase 95/96 UI completion.
+
+The [allocation evidence](../journal/2026/10/2026-10-03-datastore-logical-type-mapping-phase.md)
+records current implementation limits and data ambiguity. Status is planned;
+no implementation, acceptance or live migration is authorized by this entry.
+
 ## Status Navigation Erratum — 2026-09-28
 
 The `Process Status Pointers` and `Current Phase Status Snapshot` sections
@@ -5332,6 +5409,10 @@ authority. Later phase ledgers take precedence over an older strategy
 snapshot. No Phase status or acceptance evidence is changed by this erratum.
 
 ## Phase 69.5 Closure — 2026-09-29
+
+This dated section retains the original closure and deferred handoff state.
+The [2026-10-07 Phase 69.7 closure](#phase-697-closure--2026-10-07) below
+supersedes its successor and aggregate-validation pointers.
 
 [Phase 69.5](../phase/phase-69.5.md) and its
 [checklist](../phase/phase-69.5-checklist.md) are closed for JM69-07 / JM69-07A,
@@ -5351,6 +5432,10 @@ historical.
 
 ## Phase 69.6 Closure — 2026-09-29
 
+This dated section retains the original closure and deferred handoff state.
+The [2026-10-07 Phase 69.7 closure](#phase-697-closure--2026-10-07) below
+supersedes its successor and aggregate-validation pointers.
+
 [Phase 69.6](../phase/phase-69.6.md) and its
 [checklist](../phase/phase-69.6-checklist.md) close JM69-08 / JM69-08A,
 User and Operator Job Experience. Step
@@ -5369,3 +5454,33 @@ security/operations, durable integrity, and aggregate repository-full CNCF
 and required downstream validation for Phase 69.4--69.7. Phase 69.6 closes
 with focused assurance and `repository_full_suite=deferred-not-run`; aggregate
 acceptance remains pending.
+
+## Phase 69.7 Closure — 2026-10-07
+
+[Phase 69.7](../phase/phase-69.7.md) and its
+[checklist](../phase/phase-69.7-checklist.md) are closed in the distinct local
+release `f394034fff40a20cd635f196de7d61a3a9e4f5af`, with a verified committed-tree
+closure receipt. JM69-09 and retained CNCF JM69-10 are DONE in native Step
+commits `7aee36edb5651e3b6c1223bd2bc60c6412da11ac` and
+`5500e8e4c4ababd55d551bfce771318433484fbe`.
+
+The sole original-epoch comprehensive Phase review and two independent focused
+repair closures passed. Actual aggregate CNCF `sbt --batch test` completed
+604 suites and 4594 successful tests, zero failures/aborts, SBT/wrapper exit0
+and terminal lock=released. The inherited 13 canceled, one ignored and 46
+pending examples remain explicit validation limits; no current Job acceptance
+scenario was disabled. This final-owner execution discharges the aggregate
+obligation transferred by Phases 69.4–69.6 while retaining their historical
+full executions as deferred-not-run.
+
+The [closure journal](../journal/2026/10/2026-10-06-phase-69.7-cncf-job-closure-boundary.md#current-phase-release-and-closure--2026-10-07)
+records the authority, native evidence, repaired causes and validation limits.
+Five nonblocking Hygiene findings are persisted in the
+[canonical follow-up journal](../journal/2026/10/2026-10-01-phase-69.7-hygiene-follow-up.md);
+no Development Candidate or unpersisted accepted finding remains. CBD stays
+excluded/HANDED_OFF_UNVALIDATED; its unfinished runtime acceptance is owned
+by the regular `textus-cbd-support` repository and is not claimed passed.
+
+This closes the retained CNCF Phase 69 sequence and supersedes the earlier
+69.7 planned/not-started and aggregate-pending pointers. This navigation update
+starts no successor and makes no publication or remote-sync claim.

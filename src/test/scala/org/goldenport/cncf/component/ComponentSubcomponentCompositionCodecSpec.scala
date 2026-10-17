@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * production vocabulary frozen by RSC01-B for this pass.
  *
  * @since   Aug. 20, 2026
- * @version Aug. 20, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentSubcomponentCompositionCodecSpec
@@ -34,24 +34,18 @@ final class ComponentSubcomponentCompositionCodecSpec
   private val _parent_physical_path = "repository/components/rsc-parent-0.1.0.car"
   private val _parent_artifact_coordinate = "org.example:rsc-parent-car:0.1.0"
   private val _repository = "https://repo.example.invalid/cncf/rsc"
-  private val _sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-  private val _signature = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
 
   private def _car_json(
     classification: String,
     artifactcoordinate: String,
     physicalpath: String,
     logicalsource: String,
-    sha256: String = _sha256,
-    signature: String = _signature,
     repository: String = _repository
   ): String =
     s"""{
        |        "classification":"$classification",
        |        "artifact":{
        |          "coordinate":"$artifactcoordinate",
-       |          "sha256":"$sha256",
-       |          "signature":"$signature",
        |          "repository":"$repository",
        |          "physicalPath":"$physicalpath"
        |        },
@@ -81,8 +75,6 @@ final class ComponentSubcomponentCompositionCodecSpec
     artifactcoordinate: String = _artifact_coordinate,
     physicalpath: String = _physical_path,
     repository: String = _repository,
-    sha256: String = _sha256,
-    signature: String = _signature,
     deploymentplatform: String = "documentation-delivery",
     deploymentmode: String = "external",
     requiresexplicitplatformaction: Boolean = true,
@@ -105,8 +97,6 @@ final class ComponentSubcomponentCompositionCodecSpec
          artifactcoordinate,
          physicalpath,
          "composition-registry:rsc-documentation",
-         sha256,
-         signature,
          repository
        )},
        |      "payload":{
@@ -249,7 +239,7 @@ final class ComponentSubcomponentCompositionCodecSpec
   }
 
   "E5 logical and physical identities remain separate" should afterWord("in spec:component-subcomponent-composition-codec, example:E5, rules:RSC02-AC-02, phase:58.1, slice:RSC-02") {
-    "retain logical release, artifact, digest, path, repository, and provenance evidence independently" in {
+    "retain logical release, artifact, path, repository, and provenance evidence independently" in {
       Given("a child logical release with distinct physical artifact and provenance evidence")
       val json = _composition_json(_member_json())
 
@@ -259,7 +249,6 @@ final class ComponentSubcomponentCompositionCodecSpec
       Then("logical identity and all physical source evidence remain distinguishable")
       encoded should include (s"\"logicalRelease\":\"$_release\"")
       encoded should include (s"\"coordinate\":\"$_artifact_coordinate\"")
-      encoded should include (s"\"sha256\":\"$_sha256\"")
       encoded should include (s"\"physicalPath\":\"$_physical_path\"")
       encoded should include (s"\"repository\":\"$_repository\"")
       encoded should include ("\"logicalSource\":\"composition-registry:rsc-documentation\"")
@@ -407,32 +396,6 @@ final class ComponentSubcomponentCompositionCodecSpec
       val result = _rejected(json)
 
       Then("the incompatible authority claim is rejected")
-      result shouldBe None
-    }
-  }
-
-  "E12 malformed SHA-256 rejects" should afterWord("in spec:component-subcomponent-composition-codec, example:E12, rules:RSC02-AC-03, phase:58.1, slice:RSC-02") {
-    "reject a physical artifact with a malformed SHA-256 digest" in {
-      Given("a child artifact whose SHA-256 value is not a 64-character hexadecimal digest")
-      val json = _composition_json(_member_json(sha256 = "not-a-sha256"))
-
-      When("the codec decodes the malformed digest")
-      val result = _rejected(json)
-
-      Then("the malformed SHA-256 evidence is rejected")
-      result shouldBe None
-    }
-  }
-
-  "E13 malformed signature rejects" should afterWord("in spec:component-subcomponent-composition-codec, example:E13, rules:RSC02-AC-03, phase:58.1, slice:RSC-02") {
-    "reject a physical artifact with malformed signature evidence" in {
-      Given("a child artifact whose signature is not valid encoded signature material")
-      val json = _composition_json(_member_json(signature = "***"))
-
-      When("the codec decodes the malformed signature")
-      val result = _rejected(json)
-
-      Then("the malformed signature evidence is rejected")
       result shouldBe None
     }
   }

@@ -23,6 +23,13 @@ import org.goldenport.cncf.context.{ExecutionContext, IdGenerationContext}
  * @author  ASAMI, Tomoharu
  */
 trait EventStore {
+  /** Pure prepare-time selection from this store's fixed policy, not persistence
+    * or delivery authorization. Senders supply no per-event persistence option.
+    * Legacy stores without a configured policy cannot prepare the new route.
+    */
+  private[cncf] def preparePersistenceC(records: Vector[EventRecord]): Consequence[EventStore.PersistenceSelection] =
+    Consequence.configurationInvalid("EventStore persistence policy is not configured")
+
   def append(records: Seq[EventRecord]): Consequence[Vector[EventRecord]]
   def load(id: EventId): Consequence[Option[EventRecord]]
   def query(q: EventStore.Query): Consequence[Vector[EventRecord]]
@@ -257,6 +264,8 @@ object EventRecordFactory {
 }
 
 object EventStore {
+  final case class PersistenceSelection(policyRevision: String, events: Vector[EventRecord])
+
   final case class Query(
     name: Option[String] = None,
     kind: Option[String] = None,
@@ -270,25 +279,46 @@ object EventStore {
 
   def inMemory: EventStore = new InMemory
 
-  private final class InMemory extends EventStore {
+  /** Configuration, not a sender option. Legacy no-argument construction is unchanged. */
+  def inMemory(policy: EventPersistencePolicy): EventStore = {
+    require(policy != null, "EventStore requires a persistence policy")
+    new InMemory(Some(policy))
+  }
+
+  private final class InMemory(policy: Option[EventPersistencePolicy] = None) extends EventStore {
     private val _records = mutable.ArrayBuffer.empty[EventRecord]
     private val _index = mutable.HashMap.empty[EventId, EventRecord]
     private val _committed_delivery_index = mutable.HashMap.empty[CommittedDeliveryLookupKey, EventRecord]
     private var _sequence = 0L
 
+    override private[cncf] def preparePersistenceC(records: Vector[EventRecord]): Consequence[PersistenceSelection] =
+      policy match {
+        case Some(selected) => selected.selectOrdinaryC(records).map(PersistenceSelection(selected.revision, _))
+        case None => super.preparePersistenceC(records)
+      }
+
     def append(records: Seq[EventRecord]): Consequence[Vector[EventRecord]] = synchronized {
-      val stored = records.toVector.map { r =>
-        _index.get(r.id).orElse(r._delivery_lookup_key.flatMap(_committed_delivery_index.get)).getOrElse {
-          _sequence = _sequence + 1
-          val x = r.copy(sequence = _sequence)
-          x._delivery_lookup_key = r._delivery_lookup_key
-          _records += x
-          _index.update(x.id, x)
-          x._delivery_lookup_key.foreach(_committed_delivery_index.update(_, x))
-          x
+      val selected = policy match {
+        case Some(value) => if (records == null) Consequence.configurationInvalid("Event batch is missing")
+          else value.selectOrdinaryC(records.toVector)
+        case None => Consequence.success(records.toVector)
+      }
+      selected.map { batch =>
+        batch.map { r =>
+          if (policy.isDefined && !r.persistent) r
+          else {
+            _index.get(r.id).orElse(r._delivery_lookup_key.flatMap(_committed_delivery_index.get)).getOrElse {
+              _sequence = _sequence + 1
+              val x = r.copy(sequence = _sequence)
+              x._delivery_lookup_key = r._delivery_lookup_key
+              _records += x
+              _index.update(x.id, x)
+              x._delivery_lookup_key.foreach(_committed_delivery_index.update(_, x))
+              x
+            }
+          }
         }
       }
-      Consequence.success(stored)
     }
 
     def load(id: EventId): Consequence[Option[EventRecord]] =

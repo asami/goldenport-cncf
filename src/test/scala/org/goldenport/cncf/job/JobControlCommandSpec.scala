@@ -16,9 +16,11 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Apr. 22, 2026
- * @version Jul. 25, 2026
+ *  version Jul. 25, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobControlCommandSpec
   extends AnyWordSpec
   with Matchers

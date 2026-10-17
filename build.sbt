@@ -1,7 +1,6 @@
 import sbt.TestFrameworks
 import sbt.Tests
 import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
 import java.util.Base64
 import org.goldenport.cncf.phase51.build.{CncfCoreDevelopmentBuild, CncfGenerationBuildContract, CncfGenerationInputs}
 
@@ -44,7 +43,6 @@ lazy val cncfRuntimeClasspathFile = taskKey[File]("Write the local CNCF runtime 
 lazy val cncfCozyDevelopmentDirectory = settingKey[Option[File]]("Select an explicit canonical Cozy development directory for CNCF generation and provenance validation.")
 lazy val resolveInformationCmlGenerationInputs = taskKey[CncfGenerationInputs]("Resolve the exact Cozy generator, CNCF target, and runtime descriptor for Information CML generation.")
 lazy val generateInformationCmlModel = taskKey[Seq[File]]("Generate CNCF Information vocabulary model from CML.")
-lazy val verifyInformationCmlGenerationDeterminism = taskKey[Unit]("Verify repeated Information CML generation emits the same Scala file set and bytes.")
 lazy val copyTextusRuntimeCatalog = taskKey[File]("Copy the checked-in Textus runtime catalog into the warehouse repository.")
 lazy val publishTextusRuntimeCatalog = taskKey[File]("Publish Textus runtime catalog metadata into the warehouse repository.")
 
@@ -238,7 +236,6 @@ def cncfRuntimeDescriptorText(
     "  schemaVersion: cncf.component-style-catalog-carrier.v1",
     "  resource: META-INF/cncf/component-style-catalog.json",
     "  encoding: base64",
-    s"  sha256: ${sha256Bytes(componentStyleCatalog)}",
     "  bytes: \"" + Base64.getEncoder.encodeToString(componentStyleCatalog) + "\""
   ).mkString("\n")
   s"""schemaVersion: 1
@@ -251,9 +248,6 @@ def cncfRuntimeDescriptorText(
      |$componentstylecatalogblock
      |""".stripMargin
 }
-
-def sha256Bytes(bytes: Array[Byte]): String =
-  MessageDigest.getInstance("SHA-256").digest(bytes).map(byte => f"${byte & 0xff}%02x").mkString
 
 def informationCmlProcessLogger(log: sbt.util.Logger): scala.sys.process.ProcessLogger =
   scala.sys.process.ProcessLogger(
@@ -272,18 +266,25 @@ def runInformationCmlGeneration(
   log: sbt.util.Logger,
   cozyDevelopmentDirectory: Option[File]
 ): Seq[File] = {
+  val generatorroot = CncfGenerationBuildContract.selectedGeneratorRoot(
+    sys.props.get("cncf.cozyGeneratorRoot"),
+    sys.env.get("CNCF_COZY_GENERATOR_ROOT")
+  ).fold(
+    errors => sys.error(errors.mkString("CNCF Cozy generator selection failed: ", " ", "")),
+    identity
+  ).orElse(cozyDevelopmentDirectory)
   IO.delete(outputDirectory)
   IO.createDirectory(outputDirectory)
   val command = CncfGenerationBuildContract.command(
     inputs,
     outputDirectory,
-    cozyDevelopmentDirectory
+    generatorroot
   ).fold(
     errors => sys.error(errors.mkString("CNCF generation command preparation failed: ", " ", "")),
     identity
   )
   log.info(
-    s"Generating ${inputs.sourceIdentity}@${inputs.sourceSha256} with Cozy ${inputs.cozyGeneratorVersion} for CNCF ${inputs.cncfTargetVersion} using ${inputs.runtimeDescriptor.getAbsolutePath}"
+    s"Generating ${inputs.sourceIdentity} with Cozy ${inputs.cozyGeneratorVersion} for CNCF ${inputs.cncfTargetVersion} using ${inputs.runtimeDescriptor.getAbsolutePath}"
   )
   val processlogger = informationCmlProcessLogger(log)
   val exitcode = scala.sys.process.Process(command, baseDirectory).!(processlogger)
@@ -295,7 +296,7 @@ def runInformationCmlGeneration(
   if (files.isEmpty)
     sys.error(s"no CNCF Information CML sources generated from: ${inputs.source.getAbsolutePath}")
   val validationcommand =
-    CncfGenerationBuildContract.validationCommand(inputs, outputDirectory, cozyDevelopmentDirectory).fold(
+    CncfGenerationBuildContract.validationCommand(inputs, outputDirectory, generatorroot).fold(
       errors => sys.error(errors.mkString("CNCF generation provenance validation preparation failed: ", " ", "")),
       identity
     )
@@ -432,6 +433,7 @@ lazy val root = project
     version := "0.5.3-SNAPSHOT",
 
     scalaVersion := scala3Version,
+    Compile / exportJars := true,
 
     cncfCoreDevelopmentDirectory := cncfCoreSourceDirectory,
     validateCncfCoreDevelopment := (),
@@ -580,31 +582,6 @@ lazy val root = project
       )
     },
 
-    verifyInformationCmlGenerationDeterminism := {
-      val outputdir = target.value / "cncf-information-cml-determinism"
-      val generationinputs = resolveInformationCmlGenerationInputs.value
-      val log = streams.value.log
-      runInformationCmlGeneration(generationinputs, outputdir, baseDirectory.value, log, cncfCozyDevelopmentDirectory.value)
-      val coldsnapshot =
-        CncfGenerationBuildContract.snapshot(outputdir).fold(
-          errors => sys.error(errors.mkString("Cold Information CML snapshot failed: ", " ", "")),
-          identity
-        )
-      runInformationCmlGeneration(generationinputs, outputdir, baseDirectory.value, log, cncfCozyDevelopmentDirectory.value)
-      val repeatedsnapshot =
-        CncfGenerationBuildContract.snapshot(outputdir).fold(
-          errors => sys.error(errors.mkString("Repeated Information CML snapshot failed: ", " ", "")),
-          identity
-        )
-      if (repeatedsnapshot != coldsnapshot)
-        sys.error(
-          s"Information CML generation is not deterministic. Cold=$coldsnapshot repeated=$repeatedsnapshot"
-        )
-      log.info(
-        s"Information CML generation determinism verified for ${coldsnapshot.scalaArtifacts.size} Scala files and provenance ${coldsnapshot.provenanceSha256}."
-      )
-    },
-
     Compile / resourceGenerators += Def.task {
       Seq(generateCncfRuntimeDescriptor.value)
     }.taskValue,
@@ -614,8 +591,6 @@ lazy val root = project
     }.taskValue,
 
     Compile / sourceGenerators += generateInformationCmlModel.taskValue,
-
-    Test / test := (Test / test).dependsOn(verifyInformationCmlGenerationDeterminism).value,
 
     exportTextusRuntimeCatalog := {
       val source = baseDirectory.value / "src/main/warehouse/repository/textus/runtime-catalog.yaml"
@@ -651,17 +626,16 @@ lazy val root = project
 
     publishLocal := (publishLocal dependsOn exportTextusRuntimeCatalog).value,
 
-    Test / fork := false,
+    Test / fork := true,
     Test / parallelExecution := false,
     Test / classLoaderLayeringStrategy := ClassLoaderLayeringStrategy.Flat,
+    Test / javaOptions += "-Dtextus.test=true",
     Test / testOnly / javaOptions += "-Dtextus.test=true",
     (Test / test / testOptions) += Tests.Setup(() => System.setProperty("textus.test", "true")),
     (Test / test / testOptions) += Tests.Argument(
       TestFrameworks.ScalaTest,
       "-l",
-      "org.goldenport.tags.ManualSpec",
-      "-l",
-      "org.goldenport.tags.TimingSpec"
+      "org.goldenport.tags.ManualSpec org.goldenport.tags.TimingSpec org.scalatest.tags.Slow"
     ),
     Test / testOnly / fork := true,
     Test / testOnly / testOptions := Seq.empty

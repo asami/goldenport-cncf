@@ -11,9 +11,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for Job-owned active-work cancellation.
  *
  * @since   Jul. 17, 2026
- * @version Jul. 17, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobCancellationScopeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _cancellation_counts = Gen.choose(1, 12)
 

@@ -26,7 +26,8 @@ private[job] final case class DurableJobRuntimeInputs(
   storagepolicy: DurableJobStorageResourcePolicy,
   blobpolicy: DurableJobOwnedBlobResourcePolicy,
   lifetimepolicy: DurableJobLifetimeQuotaPolicy,
-  migrateV1OnStartup: Boolean = false
+  migrateV1OnStartup: Boolean = false,
+  callerAccessResolver: Option[DurableJobCallerAccessResolver] = None
 )
 
 private[cncf] abstract class DurableJobRuntimeProvider(val id: String) {

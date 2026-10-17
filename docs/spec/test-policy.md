@@ -161,7 +161,53 @@ metadata and should be removed from the semantic comparison. Reusing one
 mutable runtime is not sufficient replay evidence.
 
 ----------------------------------------------------------------------
-5. Use of TDD
+5. Normal FULL and opt-in Job HEAVY (2026-10-13)
+----------------------------------------------------------------------
+
+Normal repository `test` is FULL for its declared selection, not exhaustive Job
+acceptance. Other subsystems retain their existing policy. Job management uses
+five representative suites: InMemoryJobEngineSpec, JobPrimaryResultSpec,
+JobQueryReadModelSpec, DurableJobLifecycleWriteBridgeSpec and JobControlComponentSpec.
+These cover submission/completion, primary versus async results, queries, durable
+lifecycle writes and the public control component.
+
+HEAVY uses ScalaTest's built-in `org.scalatest.tags.Slow` tag. Detailed Job suites
+carry `@org.scalatest.tags.Slow`; mixed suites use
+`taggedAs org.scalatest.tagobjects.Slow` on individual expensive cases. In
+DurableJobRecordSpec and DurableJobTerminalProjectionSpec only the 5,000-level
+and 2,048-level cases are HEAVY; their ordinary cases remain in FULL alongside
+the five representatives. Other detailed Job suites, including integrations
+outside the job package, are opt-in. This is a coverage/budget distinction, not
+a claim that every individual case is slow. Keep assertions, depths and property
+counts intact. New tests declare their category at the test definition; there is
+no classification registry, package-name filter or custom selection command.
+
+Use the standard SBT commands below through the repository's prescribed SBT
+execution route:
+
+```text
+test
+testOnly * -- -n org.scalatest.tags.Slow
+testOnly org.goldenport.cncf.job.DurableJobRecordSpec
+testOnly org.goldenport.cncf.job.DurableJobRecordSpec -- -n org.scalatest.tags.Slow
+```
+
+`test` excludes Slow as well as the existing ManualSpec/TimingSpec tags.
+`testOnly` retains its existing empty default testOptions: selecting a suite
+without tag arguments runs all its cases, including HEAVY. `-n` selects tagged
+cases; `-l` excludes them. A tag selection may match zero tests, so report actual
+executed counts rather than treating a zero-test success as HEAVY coverage.
+
+Run affected suites for Job contract changes and the explicit HEAVY selection
+for Job-wide acceptance or changes spanning engine/durability/recovery/process
+boundaries. HEAVY is never an automatic follow-up after FULL or every repair.
+Unrelated routine FULL checks need not run it. Report omitted HEAVY as NOT RUN,
+never passed or complete Job coverage. Explicit affected heavy acceptance
+obligations remain applicable. This build policy is not a new metadata ABI or
+an implementation of CNCF Phase 103 discovery.
+
+----------------------------------------------------------------------
+6. Use of TDD
 ----------------------------------------------------------------------
 
 TDD MAY be applied selectively in later stages,
@@ -178,7 +224,7 @@ Exploratory pending specifications must be replaced by executable behavior
 specifications when the contract is promoted to design/spec.
 
 ----------------------------------------------------------------------
-6. Summary
+7. Summary
 ----------------------------------------------------------------------
 
 - Tests are executable behavior specifications by default

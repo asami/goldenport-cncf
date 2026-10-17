@@ -7,6 +7,10 @@ trait GeneratedProvidedApiMetadataProvider {
   def generatedProvidedApiDefinitions: Vector[GeneratedProvidedApiAbi.Definition] = Vector.empty
 }
 
+/** Declared Provided Operation resolution; provenance is diagnostic only.
+  * @since   Sep. 25, 2026
+  * @version Oct.  8, 2026
+  */
 object GeneratedProvidedApiAbi {
   val schemaVersion = "cozy.cml.statemachine-provided-api-abi.v1"
   val generatorIdentity = "cozy.modeler.StateMachineProvidedApiAbiGenerator"
@@ -29,7 +33,12 @@ object GeneratedProvidedApiAbi {
     version: String,
     source: WorkflowSourceCorrelation,
     providedOperations: Vector[Operation]
-  )
+  ) {
+    def providesOperation(operation: Operation): Boolean =
+      operation != null && providedOperations != null && providedOperations.exists(declared =>
+        declared != null && declared.service == operation.service && declared.name == operation.name &&
+          declared.inputType == operation.inputType && declared.resultType == operation.resultType)
+  }
 
   /** Admission requires the matching already-accepted generated Workflow declaration. */
   def admitC(
@@ -54,33 +63,23 @@ object GeneratedProvidedApiAbi {
     workflows: Vector[GeneratedWorkflowAbi.Definition]
   ): Consequence[Definition] = {
     val matches = workflows.filter(_.workflow.identity.value == definition.identity)
-    if (definition.schemaVersion != schemaVersion || definition.generator != generatorIdentity)
+    if (definition.schemaVersion != schemaVersion)
       Consequence.configurationInvalid("unsupported Provided API producer ABI")
     else if (matches.size != 1 || matches.head.workflow.revision.value != definition.version)
       Consequence.configurationInvalid(s"Provided API workflow mismatch: ${definition.identity}")
-    else if (!_valid_source(definition.source) ||
-      matches.head.workflow.source.root.line != definition.source.root.line.get ||
-      matches.head.workflow.source.definition.line != definition.source.definition.line.get)
-      Consequence.configurationInvalid(s"Provided API source mismatch: ${definition.identity}")
     else if (definition.providedOperations == null || definition.providedOperations.isEmpty ||
       definition.providedOperations.exists(_ == null))
       Consequence.configurationInvalid(s"Provided API operations missing: ${definition.identity}")
     else if (definition.providedOperations.map(_.key).distinct.size != definition.providedOperations.size)
       Consequence.configurationInvalid(s"duplicate Provided API operation: ${definition.identity}")
     else if (definition.providedOperations.exists(op =>
-      !_name(op.service) || !_name(op.name) || !_valid_source(op.source) ||
+      !_name(op.service) || !_name(op.name) ||
       op.inputType.exists(value => !_name(value)) || op.resultType.exists(value => !_name(value))
     ))
       Consequence.configurationInvalid(s"malformed Provided API operation: ${definition.identity}")
     else
       Consequence.success(definition)
   }
-
-  private def _valid_source(value: WorkflowSourceCorrelation): Boolean =
-    value != null && _valid_source(value.root) && _valid_source(value.definition)
-
-  private def _valid_source(value: SourceIdentity): Boolean =
-    value != null && value.line.exists(_ > 0)
 
   private def _name(value: String): Boolean =
     value != null && value.trim.nonEmpty

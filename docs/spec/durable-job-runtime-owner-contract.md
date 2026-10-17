@@ -35,6 +35,38 @@ frozen M1 fixture repairs preceded REP-004's 68/68. `PH697-D1A-ACC-001` discover
 Those are prior-tree results, not D1B results. Step Repair Attempt 1 and limit 3 retain
 their cumulative history; no counter reset or M2 waiver is introduced.
 
+## Canonical native terminal publication composition
+
+The [terminal publication contract](durable-job-operation-response-publication-contract.md)
+owns opted-in framework successful-result production. The actual owner creates
+its original owned `_payloads`, one `_result_payloads` from the same native
+payloads, then the original bridge with that capability. Only this pure
+constructor dependency order changes. Original engine/State/store/SystemNode
+lease, policy, timer, scheduler, recovery/startup, health and shutdown ordering
+remain authoritative. No new runtime input, public API, configuration, provider
+or signed schema is added. The optional bridge capability preserves old callers.
+
+Independent source evidence carries only closed intent; default Supplied retains
+legacy absence. Actual successful owned publication follows signed preflight,
+native producer and result-only original checkpoint. Checkpoint refusal or lost
+acknowledgement after Published success grants no caller rollback/refund/retry.
+Fresh configured owners can read actual bytes through their actual lease.
+The separate [current-caller query contract](durable-job-operation-response-query-contract.md)
+appends optional private callerAccessResolver after migrateV1OnStartup; null
+container/element refuses startup, None preserves compatibility. The original
+ready owner resolves only the actual caller once inside the admitted real lease
+and invokes its existing result reader explicitly using that caller. Brief
+Ready/engine/identity checks end before callbacks, and admitted work may finish
+through logical close without a second ready gate. Only a detached visible model
+escapes; projection/raw/getResult/management remain None/UnavailableAfterRestart,
+with no cache, startup grant, admin bypass or physical ownership change.
+The [query design](../design/durable-job-operation-response-query.md) fixes these
+boundaries and the [query journal](../journal/2026/10/2026-10-04-phase-69.7-job-result-query.md)
+owns query execution. Actual completed CBD fresh-runtime acceptance remains a
+separate required downstream responsibility. See the
+[design](../design/durable-job-operation-response-publication.md) and
+[execution journal](../journal/2026/10/2026-10-04-phase-69.7-job-result-publication.md).
+
 ## R1
 
 Original JM69-09D1B production composition/lifecycle boundary only. Bind durable operations to the original Subsystem-owned InMemoryJobEngine, State, TimeSource and JobTimer. Never create a replacement engine, secondary worker pool/timer/physical SQL pool, global provider registry, standalone fallback or paid-authority reconstruction. All original native signed OCC/payment/protected-replay/task settlement/cancellation invariants and CPBs remain unchanged.

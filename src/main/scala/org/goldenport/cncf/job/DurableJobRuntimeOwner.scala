@@ -6,6 +6,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.config.JobDurableRuntimeConfiguration
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.protocol.operation.OperationResponse
 
 /*
  * One native composition on the original engine and actual binding lease.
@@ -31,8 +32,10 @@ private[cncf] final class DurableJobRuntimeOwner private[job] (
   private[job] val _entity_store = new DurableJobLeasedEntityStore(inputs.entitystore, lease, () => _fault())
   private[job] val _blob_store = new DurableJobLeasedBlobStore(inputs.blobstore, lease, () => _fault())
   private[job] val _store = new DurableJobStore(_entity_store, inputs.storagepolicy)
-  private[job] val _bridge = new DurableJobLifecycleWriteBridge(_store, inputs.evidence, inputs.lifetimepolicy)
   private[job] val _payloads = new DurableJobOwnedBlobPayloads(_store, _entity_store, _blob_store, inputs.blobpolicy)
+  private[job] val _result_payloads = new DurableJobOperationResponsePayloads(_payloads)
+  private[job] val _bridge = new DurableJobLifecycleWriteBridge(_store, inputs.evidence, inputs.lifetimepolicy,
+    Some(_result_payloads))
   private[job] val _lifetime = _store.lifetimeQuota(inputs.lifetimepolicy)
   private[job] val _retention = new DurableJobRetentionMaintenance(_store)
   private[job] val _cleanup = new DurableJobPayloadCleanup(_store, _payloads)
@@ -85,6 +88,36 @@ private[cncf] final class DurableJobRuntimeOwner private[job] (
   private[job] def _ready(): Unit = _monitor.synchronized { _state = JobDurableOperationalState.Ready }
   private def _fault(): Unit = _monitor.synchronized { _degraded = true }
   private[job] def _execute_c[A](body: => Consequence[A]): Consequence[A] = lease.use(body)
+
+  private[job] def _read_result_c(snapshot: DurableJobStoreSnapshot,
+    caller: ExecutionContext): Consequence[OperationResponse] = {
+    val admitted = _monitor.synchronized { _state == JobDurableOperationalState.Ready }
+    if (!admitted || !engine._durable_runtime_ready ||
+        !engine._durable_runtime_owner_option.exists(_ eq this)) DurableJobCallerAccessResolver.refused
+    else try {
+      lease.use {
+        if (caller == null) DurableJobCallerAccessResolver.refused
+        else if (Thread.currentThread().isInterrupted) throw new InterruptedException()
+        else inputs.callerAccessResolver match {
+          case Some(resolver) =>
+            resolver.resolve(caller) match {
+              case Consequence.Success(access) =>
+                DurableJobCallerAccessResolver.admitAccess(access).flatMap { selected =>
+                  _result_payloads.readObserved(snapshot, selected)(using caller)
+                }
+              case _ => DurableJobCallerAccessResolver.refused
+            }
+          case _ => DurableJobCallerAccessResolver.refused
+        }
+      } match {
+        case success @ Consequence.Success(response) if response != null => success
+        case _ => DurableJobCallerAccessResolver.refused
+      }
+    } catch {
+      case _: InterruptedException => Thread.currentThread().interrupt(); DurableJobCallerAccessResolver.refused
+      case NonFatal(_) => DurableJobCallerAccessResolver.refused
+    }
+  }
 
   private[job] def _prepare_backup_c(policy: DurableJobBackupResourcePolicy): Consequence[DurableJobBackupSource] = {
     val current = health
@@ -174,6 +207,7 @@ private[cncf] object DurableJobRuntimeOwner {
     if (inputs == null || inputs.entitystore == null || inputs.blobstore == null || inputs.evidence == null ||
         inputs.startup == null || inputs.port == null || inputs.retention == null || inputs.context == null ||
         inputs.storagepolicy == null || inputs.blobpolicy == null || inputs.lifetimepolicy == null ||
+        inputs.callerAccessResolver == null || inputs.callerAccessResolver.exists(_ == null) ||
         !inputs.storagepolicy.isValid || !inputs.blobpolicy.isValid || !inputs.lifetimepolicy.isValid ||
         inputs.lifetimepolicy.lifetime != engine.runtimeState._lifetime_budget.policy) refused
     else Consequence.success(new DurableJobRuntimeOwner(engine, inputs, configuration, lease, subsystem))

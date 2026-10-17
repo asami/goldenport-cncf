@@ -15,7 +15,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * RSC-01 invariants, preserving deterministic provenance and terminal outcomes.
  *
  * @since   Aug. 21, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ResolvedComponentResourcesSpec
@@ -30,8 +31,6 @@ final class ResolvedComponentResourcesSpec
   private val _source_id = ComponentId(s"$_namespace.RscSourceCode")
   private val _external_platform_id = ComponentId(s"$_namespace.RscWebPresentation")
   private val _component_ids = Vector(_parent_id, _documentation_id, _source_id, _external_platform_id)
-  private val _sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-  private val _signature = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
   private val _repository = "https://repo.example.invalid/cncf/rsc"
   private val _source_order = Vector(
     ComponentResourceSourceKind.EmbeddedPrimary,
@@ -148,7 +147,6 @@ final class ResolvedComponentResourcesSpec
       documentation.provenance.sourceKind shouldBe ComponentResourceSourceKind.ExpandedCar
       documentation.provenance.repository shouldBe _repository
       documentation.provenance.artifactCoordinate shouldBe "org.example:rsc-documentation-car:0.1.0"
-      documentation.provenance.sha256 shouldBe _sha256
       documentation.provenance.normalizedRelativePath shouldBe "expanded/rsc-documentation/web/index.md"
       documentation.provenance.logicalSource shouldBe "composition-registry:rsc-documentation"
       documentation.provenance.physicalSource shouldBe "expanded-car:rsc-documentation"
@@ -396,7 +394,6 @@ final class ResolvedComponentResourcesSpec
         sourceKind = sourcekind,
         repository = _repository,
         artifactCoordinate = coordinate,
-        sha256 = _sha256,
         normalizedRelativePath = path,
         logicalSource = logicalsource,
         physicalSource = physicalsource,
@@ -479,8 +476,6 @@ final class ResolvedComponentResourcesSpec
       classification = classification,
       artifact = ComponentSubcomponentArtifact(
         coordinate = coordinate,
-        sha256 = _sha256,
-        signature = _signature,
         repository = _repository,
         physicalPath = physicalpath
       ),

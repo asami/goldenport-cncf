@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 27, 2026
- * @version Mar. 27, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StartupDataImportSpec
@@ -23,7 +23,7 @@ final class StartupDataImportSpec
   with GivenWhenThen {
 
   "Startup import for cncf.import.data.file" should {
-    "import data from a URL via UnitOfWork-backed fetch" in {
+    "import data from a URL via startup reading helper" in {
       Given("a bootstrap URL source served over HTTP")
       val cwd = Files.createTempDirectory("cncf-startup-import-url-data")
       val server = _http_server(
@@ -49,6 +49,52 @@ final class StartupDataImportSpec
         val cid = DataStore.CollectionId("startup_people")
         space.dataStore(cid).flatMap(_.load(cid, DataStore.StringEntryId("p1"))) shouldBe
           Consequence.success(Some(Record.dataAuto("id" -> "p1", "name" -> "url-data")))
+      } finally {
+        runtime.closeEmbedding()
+        server.stop(0)
+      }
+    }
+
+    "import a data URL configured in a cwd file without a Component HTTP grant" in {
+      Given("a cwd configuration file with a data URL and no Component HTTP plan")
+      val cwd = Files.createTempDirectory("cncf-startup-import-config-url-data")
+      val configdir = Files.createDirectories(cwd.resolve(".textus"))
+      val server = _http_server(
+        "/data.yaml",
+        """datastore:
+          |  - collection: startup_people
+          |    records:
+          |      - id: p1
+          |        name: config-url-data
+          |""".stripMargin
+      )
+      server.start()
+      val runtime = new CncfRuntime()
+      try {
+        val url = s"http://127.0.0.1:${server.getAddress.getPort}/data.yaml"
+        Files.writeString(
+          configdir.resolve("config.json"),
+          s"""{"textus.import.data.file":"${url}"}"""
+        )
+        given ExecutionContext = ExecutionContext.create()
+
+        When("bootstrapping the runtime without an import URL CLI argument")
+        val subsystem = runtime.initializeForEmbedding(
+          cwd = cwd,
+          args = Array(
+            s"--cncf.datastore.sqlite.path=${cwd.resolve("startup-import.sqlite").toString}",
+            "--cncf.runtime.http.driver=real"
+          )
+        ) match {
+          case Consequence.Success(subsystem) => subsystem
+          case Consequence.Failure(conclusion) => fail(conclusion.show)
+        }
+
+        Then("the configured URL record is imported")
+        val space = subsystem.globalRuntimeContext.dataStoreSpace
+        val cid = DataStore.CollectionId("startup_people")
+        space.dataStore(cid).flatMap(_.load(cid, DataStore.StringEntryId("p1"))) shouldBe
+          Consequence.success(Some(Record.dataAuto("id" -> "p1", "name" -> "config-url-data")))
       } finally {
         runtime.closeEmbedding()
         server.stop(0)

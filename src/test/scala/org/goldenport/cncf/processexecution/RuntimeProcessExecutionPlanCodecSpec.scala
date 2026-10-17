@@ -1,0 +1,444 @@
+package org.goldenport.cncf.processexecution
+
+import io.circe.Json
+import io.circe.parser.parse
+import java.nio.file.{Files, Path, Paths}
+import org.goldenport.Consequence
+import org.goldenport.cncf.component.ComponentId
+import org.goldenport.cncf.observability.ConclusionDiagnostics
+import org.goldenport.cncf.workspace.*
+import org.goldenport.configuration.ConfigurationValue
+import org.scalatest.GivenWhenThen
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
+
+/*
+ * @since   Oct.  7, 2026
+ * @version Oct. 16, 2026
+ * @author  ASAMI, Tomoharu
+ */
+final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  private def _take[A](value: Consequence[A]): A = value match {
+    case Consequence.Success(result) => result
+    case failure => fail(s"Process configuration rejected: $failure")
+  }
+  private val _capability = _take(ProcessCapabilityId.parseC("selected-token"))
+  private val _owner = ComponentId("org.example.Workflow")
+  private val _limits = ProcessExecutionLimits(Some(100), Some(100), Some(100), Some(64), Some(64),
+    Some(64), Some(4), Some(512), Some(1), Some(64), Some(128))
+  private val _slots = Vector(ProcessArgumentSlot.Literal("show"), ProcessArgumentSlot.LowerHex(Set(40, 64)))
+  private val _definition = _take(ProcessProgramDefinition.fromRuntimeC(_capability, "selected-token", "/runtime/bin/selected-tool",
+    Vector("-C", "/runtime/selected"), ProcessArgumentPolicy(Vector("-C", "/runtime/selected"),
+      admission = ProcessArgumentAdmission.Template, permittedArgumentTemplates = Set(ProcessArgumentTemplate(_slots))),
+    _limits, Set.empty, environment = Map("PATH" -> "/runtime/bin")))
+  private val _plan = _take(RuntimeProcessExecutionPlan.createC(Vector(_definition),
+    Map(_owner -> Vector(ProcessExecutionGrant(_capability)))))
+  private val _encoded = _take(RuntimeProcessExecutionPlanCodec.encode(_plan)).asInstanceOf[ConfigurationValue.StringValue]
+  private val _root = parse(_encoded.value).toOption.get
+  private def _decode(value: Json) = RuntimeProcessExecutionPlanCodec.decode(ConfigurationValue.StringValue(value.noSpaces))
+  private def _changed_program(f: Json => Json): Json = _root.mapObject(_.add("programs",
+    Json.arr(f(_root.hcursor.downField("programs").downArray.focus.get))))
+  private def _v2_root(root: Path): Json = {
+    val workspace = _take(WorkspaceId.parseC("selected-checkout"))
+    val capability = _take(ProcessCapabilityId.parseC("selected-test"))
+    val plan = _take(RuntimeProcessExecutionPlan.createV2C(Vector(_definition),
+      Map(_owner -> Vector(ProcessExecutionGrant(_capability), ProcessExecutionGrant(capability))),
+      Vector(WorkspaceRuntimeDeclaration(workspace, root)), Vector(WorkspaceGrant(_owner, workspace, WorkspacePermission.Manage)),
+      Vector(SbtRuntimeDeclaration(workspace, SbtOperation.Test, capability, "selected-test",
+        Paths.get("/usr/bin/true"), _limits, Map("BUILD_PROFILE" -> "selected")))))
+    parse(_take(RuntimeProcessExecutionPlanCodec.encode(plan)).asInstanceOf[ConfigurationValue.StringValue].value).toOption.get
+  }
+  private def _directory(): Path = Files.createTempDirectory(
+    Files.createDirectories(Paths.get("target", "cncf", "work", "runtime-plan-codec").toAbsolutePath), "case-")
+  private def _changed_entry(root: Json, field: String, change: Json => Json): Json =
+    root.mapObject(_.add(field, Json.arr(change(root.hcursor.downField(field).downArray.focus.get))))
+
+  private def _v3_root(root: Path): Json = {
+    val id = GitExecutionSpecSupport.workspaceId
+    val sbtcapability = _take(ProcessCapabilityId.parseC("v3-test"))
+    val git = GitOperationKind.values.toVector.map(kind => GitExecutionSpecSupport.declaration(kind, root.resolve("fixed-remote.git").toString))
+    val plan = _take(RuntimeProcessExecutionPlan.createV3C(Vector(_definition),
+      Map(_owner -> (Vector(ProcessExecutionGrant(_capability), ProcessExecutionGrant(sbtcapability)) ++ git.map(x => ProcessExecutionGrant(x.capability)))),
+      Vector(WorkspaceRuntimeDeclaration(id, root)), Vector(WorkspaceGrant(_owner, id, WorkspacePermission.Manage)),
+      Vector(SbtRuntimeDeclaration(id, SbtOperation.Test, sbtcapability, "v3-test", Paths.get("/usr/bin/true"), _limits, Map.empty)), git))
+    parse(_take(RuntimeProcessExecutionPlanCodec.encode(plan)).asInstanceOf[ConfigurationValue.StringValue].value).toOption.get
+  }
+
+  private def _changed_git(root: Json, kind: GitOperationKind, change: Json => Json): Json = root.mapObject(_.add("gitPrograms",
+    Json.fromValues(root.hcursor.get[Vector[Json]]("gitPrograms").toOption.get.map { entry =>
+      if (entry.hcursor.get[String]("operation").toOption.contains(kind.wireName)) change(entry) else entry
+    })))
+
+  "Runtime process host wire contract" should {
+    "refuse ordinary shell and known capability laundering in V1, V2 and V3 despite exact declarations and grants" in {
+      Given("valid selected-tool wires for all three schemas, retaining separately tagged SBT and Git declarations")
+      val wires = Vector(_root, _v2_root(_directory()), _v3_root(_directory()))
+      val secret = "confidential-codec-effect-sentinel"
+      val expecteddiagnostic = ConclusionDiagnostics.classify(
+        Consequence.configurationInvalid("Invalid runtime process declaration").conclusion)
+      val names = Vector("bash" -> "external.effect.direct", "cat" -> "external.effect.capability-laundering",
+        "curl" -> "external.effect.capability-laundering", "git" -> "external.effect.capability-laundering")
+      val deniedwires = wires.flatMap(wire => names.map { case (name, policy) =>
+        _changed_entry(wire, "programs", _.mapObject(_.add("executable", Json.fromString(s"/runtime/$secret/$name")))) -> policy
+      })
+      When("natural host decoding receives the original exact tool and each forbidden generic replacement")
+      val accepted = wires.map(wire => _take(_decode(wire)))
+      val rejected = deniedwires.map { case (wire, policy) => _decode(wire) -> policy }
+      Then("generic selected-tool and separate semantic tools remain installable while recognized bypasses fail with redacted route policies")
+      accepted.foreach { plan =>
+        plan.programs.head._executable_location shouldBe "/runtime/bin/selected-tool"
+        plan.grants(_owner).map(_.capability) should contain (_capability)
+      }
+      accepted.map(_.sbtDeclarations.size) shouldBe Vector(0, 1, 1)
+      accepted.map(_.gitDeclarations.size) shouldBe Vector(0, 0, GitOperationKind.values.length)
+      rejected.foreach { case (result, _) =>
+        result match {
+          case Consequence.Failure(conclusion) =>
+            ConclusionDiagnostics.classify(conclusion) shouldBe expecteddiagnostic
+            conclusion.toString should include ("Invalid runtime process declaration")
+            conclusion.toString should not include secret
+          case _ => fail("Known ordinary effects must not install a host plan")
+        }
+      }
+    }
+
+    "round-trip exact TestOnly declarations through V2 and V3 without mixing generic programs" in {
+      Given("V2 and V3 host objects with a trusted exact two-class TestOnly selection")
+      val classes = Vector("org.example.SelectedSpec", "org.other.OtherSpec")
+      val wires = Vector(_v2_root(_directory()), _v3_root(_directory())).map(root =>
+        _changed_entry(root, "sbtPrograms", _.mapObject(_.add("operation", Json.fromString("test-only"))
+          .add("testClasses", Json.fromValues(classes.map(Json.fromString))))))
+      When("each strict host plan is decoded, encoded and decoded again")
+      val plans = wires.map { wire =>
+        val first = _take(_decode(wire))
+        val encoded = _take(RuntimeProcessExecutionPlanCodec.encode(first))
+        val restored = _take(RuntimeProcessExecutionPlanCodec.decode(encoded))
+        (first, restored, parse(encoded.asInstanceOf[ConfigurationValue.StringValue].value).toOption.get)
+      }
+      Then("the exact eight-field declaration and selected classes survive in private metadata with shared binding")
+      plans.foreach { case (first, restored, wire) =>
+        restored.sbtDeclarations shouldBe first.sbtDeclarations
+        restored.sbtDeclarations.head.operation shouldBe SbtOperation.TestOnly
+        restored.sbtDeclarations.head.testClasses shouldBe classes
+        wire.hcursor.downField("sbtPrograms").downArray.focus.get.asObject.get.keys.toSet shouldBe
+          Set("target", "operation", "capability", "identity", "sbtExecutable", "limits", "environment", "testClasses")
+        val binding = _take(restored.workspaceAdmissionOption.get.bindingC(restored.sbtDeclarations.head.target))
+        restored.programs should have size 1
+        restored.programs.foreach(_._sbt_metadata shouldBe None)
+        val declaration = restored.sbtDeclarations.head
+        val tagged = _take(SbtProgramDefinition.createC(binding, declaration.operation, declaration.capability,
+          declaration.identity, declaration.sbtExecutable, declaration.limits, declaration.environment, declaration.testClasses))
+        tagged._sbt_metadata.get.testClasses shouldBe classes
+        (tagged._sbt_metadata.get.binding eq binding) shouldBe true
+        tagged.fixedArguments.last shouldBe "testOnly org.example.SelectedSpec org.other.OtherSpec"
+      }
+    }
+
+    "retain exact seven-field Compile and Test declarations and reject even empty selection fields" in {
+      Given("existing V2 and V3 Compile/Test host declarations without TestOnly fields")
+      val wires = Vector(_v2_root(_directory()), _v3_root(_directory())).flatMap(root =>
+        Vector("compile", "test").map(operation => _changed_entry(root, "sbtPrograms",
+          _.mapObject(_.add("operation", Json.fromString(operation))))))
+      When("the decoder accepts existing shapes and receives an added empty or null testClasses field")
+      val accepted = wires.map(wire => _take(RuntimeProcessExecutionPlanCodec.encode(_take(_decode(wire)))))
+      val rejected = wires.flatMap(wire => Vector(Json.arr(), Json.Null).map(classes =>
+        _decode(_changed_entry(wire, "sbtPrograms", _.mapObject(_.add("testClasses", classes))))))
+      Then("existing declarations remain seven fields and conditional selection fields fail closed")
+      accepted.foreach { encoded =>
+        val entry = parse(encoded.asInstanceOf[ConfigurationValue.StringValue].value).toOption.get
+          .hcursor.downField("sbtPrograms").downArray.focus.get.asObject.get
+        entry.size shouldBe 7
+        entry.contains("testClasses") shouldBe false
+      }
+      rejected.foreach(_.isFaillure shouldBe true)
+    }
+
+    "refuse absent, malformed, oversized, ambiguous and duplicated TestOnly host declarations" in {
+      Given("both supported semantic schema versions and invalid conditional TestOnly fields or authority")
+      val invalidclasses = Vector(Json.Null, Json.arr(), Json.True, Json.arr(Json.True), Json.arr(Json.fromString("")),
+        Json.arr(Json.fromString("Simple")), Json.arr(Json.fromString("a.B*")), Json.arr(Json.fromString("a.B$")),
+        Json.arr(Json.fromString(" a.B")), Json.arr(Json.fromString("a.B ")), Json.arr(Json.fromString("a.Ü")),
+        Json.arr(Json.fromString("a.B;test")), Json.arr(Json.fromString("a/B")), Json.arr(Json.fromString("a.B-C")),
+        Json.arr(Json.fromString("a.B\n")), Json.arr(Json.fromString("a.B"), Json.fromString("a.B")),
+        Json.arr(Json.fromString("a.B"), Json.fromString("b.B")),
+        Json.arr(Json.fromString("a." + "B" * 255)), Json.fromValues((1 to 17).map(x => Json.fromString(s"a.Suite$x"))))
+      val wires = Vector(_v2_root(_directory()), _v3_root(_directory())).map(root =>
+        _changed_entry(root, "sbtPrograms", _.mapObject(_.add("operation", Json.fromString("test-only"))
+          .add("testClasses", Json.arr(Json.fromString("a.B"))))))
+      val malformed = wires.flatMap { wire =>
+        val entry = wire.hcursor.downField("sbtPrograms").downArray.focus.get
+        invalidclasses.map(classes => _changed_entry(wire, "sbtPrograms", _.mapObject(_.add("testClasses", classes)))) ++ Vector(
+          _changed_entry(wire, "sbtPrograms", _.mapObject(_.remove("testClasses"))),
+          _changed_entry(wire, "sbtPrograms", _.mapObject(_.add("extra", Json.True))),
+          wire.mapObject(_.add("sbtPrograms", Json.arr(entry, entry))),
+          wire.mapObject(_.add("programs", Json.arr(entry))),
+          wire.mapObject(_.add("workspaceGrants", Json.arr())),
+          _changed_entry(wire, "workspaceGrants", _.mapObject(_.add("access", Json.fromString("read-only")))),
+          _changed_entry(wire, "workspaceGrants", _.mapObject(_.add("componentId", Json.fromString("org.example.Other")))))
+      }
+      When("strict wire decoding receives these objects and a duplicate testClasses JSON key")
+      val results = malformed.map(_decode)
+      val duplicatekeys = wires.map(wire => RuntimeProcessExecutionPlanCodec.decode(ConfigurationValue.StringValue(
+        wire.noSpaces.replace("\"testClasses\":[\"a.B\"]", "\"testClasses\":[\"a.B\"],\"testClasses\":[\"a.C\"]"))))
+      Then("none installs a plan or widens TestOnly authority")
+      results.foreach(_.isFaillure shouldBe true)
+      duplicatekeys.foreach(_.isFaillure shouldBe true)
+    }
+
+    "round-trip V3 thirty Git declarations and SBT through one identical shared binding" in {
+      Given("one V3 host plan with all thirty Git operations, a Test declaration and generic templates")
+      val root = _directory()
+      val wire = _v3_root(root)
+      When("the strict host codec round-trips the plan and actual owning semantic admission resolves both tools")
+      val first = _take(_decode(wire))
+      val restored = _take(RuntimeProcessExecutionPlanCodec.decode(_take(RuntimeProcessExecutionPlanCodec.encode(first))))
+      val profile = ProcessExecutionTestProfile(Map.empty)
+      val context = GitExecutionSpecSupport.contextFor(root, restored.workspaceAdmissionOption, Some(restored.admission), profile.driver, _owner)
+      val target = GitExecutionSpecSupport.workspaceId
+      val git = _take(GitExecutionAdmission.resolveC(context, GitTarget(target), GitOperation.Head))
+      val sbt = _take(SbtExecutionAdmission.resolveC(context, SbtTarget(target), SbtOperation.Test))
+      val binding = _take(restored.workspaceAdmissionOption.get.bindingC(target))
+      Then("typed declarations remain separate from generic programs and both metadata tags retain that exact binding object")
+      restored.schemaVersion shouldBe RuntimeProcessExecutionPlanCodec.SCHEMA_V3
+      restored.programs.map(_.capability) shouldBe Vector(_capability)
+      restored.gitDeclarations shouldBe first.gitDeclarations
+      restored.gitDeclarations.map(_.operation) shouldBe GitOperationKind.values.toVector
+      (git.definition._git_metadata.get.binding eq binding) shouldBe true
+      (sbt.definition._sbt_metadata.get.binding eq binding) shouldBe true
+      restored.grants shouldBe first.grants
+      GitExecutionAdmission.validateGenericExecutionC(git).isFaillure shouldBe true
+    }
+
+    "reject V3 unknown fields, schema, duplicate keys, duplicate semantic capabilities and duplicate selections" in {
+      Given("a strict complete V3 object and ambiguous or widened declarations")
+      val wire = _v3_root(_directory())
+      val entries = wire.hcursor.get[Vector[Json]]("gitPrograms").toOption.get
+      val invalid = Vector(wire.mapObject(_.add("schema", Json.fromString("cncf.runtime-process-execution.v4"))),
+        wire.mapObject(_.add("unknown", Json.True)), wire.mapObject(_.remove("gitPrograms")),
+        _changed_git(wire, GitOperationKind.Head, _.mapObject(_.add("argv", Json.arr()))),
+        wire.mapObject(_.add("gitPrograms", Json.fromValues(entries :+ entries.head))),
+        _changed_git(wire, GitOperationKind.Head, _.mapObject(_.add("capability", Json.fromString("git-branch")))),
+        _changed_git(wire, GitOperationKind.Head, _.mapObject(_.add("operation", Json.fromString("merge")))),
+        _changed_git(wire, GitOperationKind.Head, _.mapObject(_.add("capability", Json.fromString("GIT-HEAD")))))
+      val duplicate = ConfigurationValue.StringValue(wire.noSpaces.replace("\"schema\":", "\"schema\":\"duplicate\",\"schema\":"))
+      When("the V3 decoder receives each malformed authority object")
+      val results = invalid.map(_decode) :+ RuntimeProcessExecutionPlanCodec.decode(duplicate)
+      Then("every unknown or ambiguous declaration fails before runtime installation")
+      results.foreach(_.isFaillure shouldBe true)
+    }
+
+    "reject malformed V3 references, selected paths, identity fields, environment and finite limits" in {
+      Given("a complete V3 plan and invalid fixed host-only inputs")
+      val root = _directory()
+      val wire = _v3_root(root)
+      val invalid = Vector(
+        _changed_git(wire, GitOperationKind.Head, _.mapObject(_.add("gitExecutable", Json.fromString("git")))),
+        _changed_git(wire, GitOperationKind.Head, _.mapObject(_.add("gitExecutable", Json.fromString(root.resolve("missing").toString)))),
+        _changed_git(wire, GitOperationKind.Head, _.mapObject(_.add("localBranch", Json.fromString("a..b")))),
+        _changed_git(wire, GitOperationKind.Head, _.mapObject(_.add("remote", Json.fromString("a/b")))),
+        _changed_git(wire, GitOperationKind.Head, _.mapObject(_.add("remoteBranch", Json.fromString("-x")))),
+        _changed_git(wire, GitOperationKind.Head, _.mapObject(_.add("endpoint", Json.fromString("--upload-pack=bad")))),
+        _changed_git(wire, GitOperationKind.Head, _.mapObject(_.add("identity", Json.fromString(" Bad identity ")))),
+        _changed_git(wire, GitOperationKind.Head, _.mapObject(_.add("environment", Json.obj("GIT_DIR" -> Json.fromString("/other"))))),
+        _changed_git(wire, GitOperationKind.Head, _.mapObject(_.add("environment", Json.obj("LC_ALL" -> Json.fromString("en_US"))))),
+        _changed_git(wire, GitOperationKind.Head, _.mapObject(_.add("environment", Json.obj("PATH" -> Json.fromString("bad\npath"))))),
+        _changed_git(wire, GitOperationKind.Head, _.mapObject(_.add("limits", Json.obj()))),
+        _changed_git(wire, GitOperationKind.Head, _.mapObject(_.add("selectionId", Json.fromString("irrelevant")))),
+        _changed_git(wire, GitOperationKind.StageSelected, _.mapObject(_.add("selectionId", Json.fromString("Bad/selector")))),
+        _changed_git(wire, GitOperationKind.StageSelected, _.mapObject(_.add("selectedPath", Json.fromString(".git/config")))),
+        _changed_git(wire, GitOperationKind.StageSelectedAll, _.mapObject(_.add("selectedPath", Json.Null))),
+        _changed_git(wire, GitOperationKind.CommitSelected, _.mapObject(_.add("commitMessage", Json.fromString("x" * 4097)))),
+        _changed_git(wire, GitOperationKind.CommitSelected, _.mapObject(_.add("commitMessage", Json.fromString("bad\u0000message")))),
+        _changed_git(wire, GitOperationKind.CommitPending, _.mapObject(_.add("commitIdentity", Json.Null))),
+        _changed_git(wire, GitOperationKind.PendingMerge, _.mapObject(_.add("commitIdentity", Json.obj("name" -> Json.fromString(" "), "email" -> Json.fromString("x"))))),
+        _changed_git(wire, GitOperationKind.CreateCheckpoint, _.mapObject(_.add("commitIdentity", Json.obj("name" -> Json.fromString("x"), "email" -> Json.fromString("x"), "extra" -> Json.True)))),
+        _changed_git(wire, GitOperationKind.Head, _.mapObject(_.add("commitIdentity", Json.obj("name" -> Json.fromString("x"), "email" -> Json.fromString("x"))))))
+      When("V3 validates the fixed declarations at bootstrap")
+      val results = invalid.map(_decode)
+      Then("none of the invalid host fields create authority or disclose host paths in failure text")
+      results.foreach(_.isFaillure shouldBe true)
+      results.mkString should not include root.toString
+    }
+
+    "require matching V3 component workspace authority independently of process grants and reject semantic generic spoofing" in {
+      Given("a V3 plan whose Git and SBT capabilities require the actual owner's Manage grant")
+      val root = _directory()
+      val wire = _v3_root(root)
+      val invalid = Vector(_changed_entry(wire, "workspaceGrants", _.mapObject(_.add("access", Json.fromString("read-only")))),
+        _changed_entry(wire, "workspaceGrants", _.mapObject(_.add("componentId", Json.fromString("org.example.Other")))),
+        wire.mapObject(_.add("workspaceGrants", Json.arr())),
+        _changed_entry(wire, "grants", _.mapObject(_.add("componentId", Json.fromString("bad owner!")))),
+        _changed_git(wire, GitOperationKind.Head, _.mapObject(_.add("target", Json.fromString("unknown")))))
+      val fixture = GitExecutionSpecSupport.create()
+      try {
+        When("the host sees mismatched authority or a tagged definition supplied as a generic program")
+        val results = invalid.map(_decode)
+        val spoof = RuntimeProcessExecutionPlan.createV3C(Vector(fixture.definitions.head), Map.empty,
+          Vector.empty, Vector.empty, Vector.empty, Vector.empty)
+        val withoutprocess = _decode(wire.mapObject(_.add("grants", Json.arr())))
+        Then("mismatches and generic semantic spoofing fail while workspace-only declarations create no process grant")
+        results.foreach(_.isFaillure shouldBe true)
+        spoof.isFaillure shouldBe true
+        withoutprocess.toOption.get.grants shouldBe empty
+      } finally fixture.close()
+    }
+
+    "enforce each fixed selected-declaration count per workspace without introducing a selector-family field" in {
+      Given("StageSelected, StageSelectedAll and CommitSelected declarations at and above their fixed bounds")
+      val root = _directory()
+      val id = GitExecutionSpecSupport.workspaceId
+      val cases = Vector(GitOperationKind.StageSelected -> 128, GitOperationKind.StageSelectedAll -> 256, GitOperationKind.CommitSelected -> 64)
+      When("V3 assembly receives unique declarations at each bound and one additional unique selection")
+      val results = cases.map { case (kind, bound) =>
+        val declarations = (0 to bound).toVector.map { n =>
+          GitExecutionSpecSupport.declaration(kind, root.resolve("remote.git").toString).copy(
+            capability = _take(ProcessCapabilityId.parseC(s"selected-$n")),
+            selectionId = Some(_take(GitSelectionId.parseC(s"choice-$n"))))
+        }
+        def _plan_(selected: Vector[GitRuntimeDeclaration]) = RuntimeProcessExecutionPlan.createV3C(Vector.empty, Map.empty,
+          Vector(WorkspaceRuntimeDeclaration(id, root)), Vector.empty, Vector.empty, selected)
+        _plan_(declarations.take(bound)).isSuccess -> _plan_(declarations).isFaillure
+      }
+      Then("each exact bound is admitted and each excess fails for that logical workspace")
+      results shouldBe Vector.fill(3)(true -> true)
+    }
+
+    "round-trip fixed programs, exact templates, finite limits and independently selected component grants" in {
+      Given("a trusted selected-tool plan with complete native-token argument shapes")
+      val wire = _encoded
+      When("the host codec decodes its wire representation")
+      val restored = _take(RuntimeProcessExecutionPlanCodec.decode(wire))
+      Then("no source executable, prefix, environment, bound or owner is lost")
+      restored.programs.head._executable_location shouldBe "/runtime/bin/selected-tool"
+      restored.programs.head.fixedArguments shouldBe Vector("-C", "/runtime/selected")
+      restored.programs.head._environment.values shouldBe Map("PATH" -> "/runtime/bin")
+      restored.programs.head.argumentPolicy.permittedArgumentTemplates shouldBe Set(ProcessArgumentTemplate(_slots))
+      restored.programs.head.maximumLimits shouldBe _limits
+      restored.grants.keySet shouldBe Set(_owner)
+      restored.admission.admitC(ProcessExecutionRequest(_capability, Vector("show", "a" * 40))).isSuccess shouldBe false
+    }
+
+    "refuse unknown grants and duplicate owners before any runtime installation" in {
+      Given("an encoded host plan and two invalid grant declarations")
+      val grant = _root.hcursor.downField("grants").downArray.focus.get
+      val unknown = _root.mapObject(_.add("grants", Json.arr(grant.mapObject(_.add("capabilities",
+        Json.arr(Json.fromString("undeclared")))))))
+      val duplicate = _root.mapObject(_.add("grants", Json.arr(grant, grant)))
+      When("the host decodes both declarations")
+      val results = Vector(_decode(unknown), _decode(duplicate))
+      Then("neither plan creates an admission with undeclared or ambiguous authority")
+      results.forall(_.isFaillure) shouldBe true
+    }
+
+    "refuse relative executables, free-text policy and absent or widened structural inputs" in {
+      Given("a valid plan and malformed program objects")
+      val invalid = Vector(_changed_program(_.mapObject(_.add("executable", Json.fromString("git")))),
+        _changed_program(_.mapObject(_.add("argumentAdmission", Json.fromString("bounded-text")))),
+        _changed_program(_.mapObject(_.add("argumentTemplates", Json.arr()))),
+        _changed_program(_.mapObject(_.add("limits", Json.obj()))),
+        _changed_program(_.mapObject(_.add("limits", _root.hcursor.downField("programs").downArray
+          .downField("limits").focus.get.mapObject(_.add("executionTimeoutMillis", Json.fromLong(0)))))))
+      When("each program is decoded at the natural host configuration boundary")
+      val results = invalid.map(_decode)
+      Then("incomplete templates or limits cannot grant arbitrary command selection")
+      results.forall(_.isFaillure) shouldBe true
+      results.mkString should not include "/runtime/selected"
+    }
+
+    "round-trip V2 generic programs separately from typed SBT declarations using one shared binding" in {
+      Given("a selected real checkout with one generic template and one typed Test declaration")
+      val root = _directory()
+      val wire = _v2_root(root)
+      When("V2 is decoded, encoded and decoded again")
+      val first = _take(_decode(wire))
+      val encoded = _take(RuntimeProcessExecutionPlanCodec.encode(first))
+      val restored = _take(RuntimeProcessExecutionPlanCodec.decode(encoded))
+      Then("only the generic program occupies programs and typed declarations retain host paths and independent grants")
+      restored.schemaVersion shouldBe RuntimeProcessExecutionPlanCodec.SCHEMA_V2
+      restored.programs.map(_.capability) shouldBe Vector(_capability)
+      restored.sbtDeclarations shouldBe first.sbtDeclarations
+      restored.workspaceDeclarations shouldBe first.workspaceDeclarations
+      restored.workspaceGrants shouldBe first.workspaceGrants
+      restored.grants shouldBe first.grants
+      restored.sbtDeclarations.head.sbtExecutable shouldBe Paths.get("/usr/bin/true")
+      val binding = _take(restored.workspaceAdmissionOption.get.bindingC(restored.sbtDeclarations.head.target))
+      _take(binding.workingDirectoryC) shouldBe root.toRealPath()
+      val tagged = _take(SbtProgramDefinition.createC(binding, SbtOperation.Test,
+        restored.sbtDeclarations.head.capability, "selected-test", Paths.get("/usr/bin/true"), _limits, Map.empty))
+      (tagged._sbt_metadata.get.binding eq binding) shouldBe true
+      encoded.asInstanceOf[ConfigurationValue.StringValue].value should not include "javaExecutable"
+      encoded.asInstanceOf[ConfigurationValue.StringValue].value should not include "launcher"
+    }
+
+    "reject unknown fields, duplicate keys, malformed identities and duplicate V2 declarations or grants" in {
+      Given("a strict V2 host object with several ambiguous or widened declarations")
+      val root = _directory()
+      val wire = _v2_root(root)
+      def _duplicate_(field: String): Json = wire.mapObject(_.add(field,
+        Json.arr(wire.hcursor.downField(field).downArray.focus.get, wire.hcursor.downField(field).downArray.focus.get)))
+      val invalid = Vector(
+        wire.mapObject(_.add("unknown", Json.True)),
+        _changed_entry(wire, "workspaces", _.mapObject(_.add("unknown", Json.True))),
+        _changed_entry(wire, "workspaceGrants", _.mapObject(_.add("unknown", Json.True))),
+        _changed_entry(wire, "sbtPrograms", _.mapObject(_.add("unknown", Json.True))),
+        _changed_entry(wire, "sbtPrograms", _.mapObject(_.add("javaExecutable", Json.fromString("/usr/bin/true")))),
+        _changed_entry(wire, "sbtPrograms", _.mapObject(_.add("launcher", Json.fromString("/host/sbt-launch.jar")))),
+        _changed_entry(wire, "workspaces", _.mapObject(_.add("identity", Json.fromString("../checkout")))),
+        _changed_entry(wire, "workspaceGrants", _.mapObject(_.add("componentId", Json.fromString("invalid owner!")))),
+        _changed_entry(wire, "grants", _.mapObject(_.add("componentId", Json.fromString("invalid owner!")))),
+        _changed_entry(wire, "sbtPrograms", _.mapObject(_.add("target", Json.fromString("unknown")))),
+        _changed_entry(wire, "sbtPrograms", _.mapObject(_.add("operation", Json.fromString("publish")))),
+        _changed_entry(wire, "sbtPrograms", _.mapObject(_.add("capability", Json.fromString("invalid capability!")))),
+        _changed_entry(wire, "sbtPrograms", _.mapObject(_.add("limits", Json.obj()))),
+        _changed_entry(wire, "sbtPrograms", _.mapObject(_.add("limits", wire.hcursor.downField("sbtPrograms").downArray
+          .downField("limits").focus.get.mapObject(_.add("executionTimeoutMillis", Json.fromLong(0)))))),
+        _changed_entry(wire, "sbtPrograms", _.mapObject(_.add("environment", Json.obj("PATH" -> Json.True)))),
+        _changed_entry(wire, "workspaceGrants", _.mapObject(_.add("workspaceId", Json.fromString("unknown")))),
+        _changed_entry(wire, "workspaceGrants", _.mapObject(_.add("access", Json.fromString("write")))),
+        _duplicate_("workspaces"), _duplicate_("workspaceGrants"), _duplicate_("sbtPrograms"), _duplicate_("grants"),
+        _changed_entry(wire, "grants", _.mapObject(_.add("capabilities", Json.arr(Json.fromString("selected-test"), Json.fromString("selected-test"))))),
+        _changed_entry(wire, "grants", _.mapObject(_.add("capabilities", Json.arr(Json.fromString("unknown"))))))
+      val duplicatekeys = ConfigurationValue.StringValue(wire.noSpaces.replace("\"schema\":", "\"schema\":\"duplicate\",\"schema\":"))
+      When("the host decoder receives every invalid wire object and the raw duplicate-key JSON")
+      val results = invalid.map(_decode) :+ RuntimeProcessExecutionPlanCodec.decode(duplicatekeys)
+      Then("no ambiguous authority or compatibility route is installed and failure text reveals no checkout")
+      results.foreach(_.isFaillure shouldBe true)
+      results.mkString should not include root.toString
+    }
+
+    "reject unavailable workspace roots and invalid normal sbt executables with safe failures" in {
+      Given("a real V2 checkout and a regular file with no executable permission")
+      val root = _directory()
+      val plainfile = Files.createFile(root.resolve("plain"))
+      val wire = _v2_root(root)
+      val invalid = Vector("relative", root.resolve("missing").toString, plainfile.toString).map(path =>
+        _changed_entry(wire, "workspaces", _.mapObject(_.add("root", Json.fromString(path))))) ++
+        Vector("sbt", root.resolve("missing-sbt").toString, root.toString, plainfile.toString).map(path =>
+          _changed_entry(wire, "sbtPrograms", _.mapObject(_.add("sbtExecutable", Json.fromString(path)))))
+      When("the selected host codec preflights each unavailable location")
+      val results = invalid.map(_decode)
+      Then("all locations fail without disclosing the host path")
+      results.foreach(_.isFaillure shouldBe true)
+      results.mkString should not include root.toString
+    }
+
+    "require same-owner Manage independently of process grants and allow ReadOnly declarations without build authority" in {
+      Given("one V2 Test capability and host configurations with independent workspace and process grants")
+      val wire = _v2_root(_directory())
+      val readonly = _changed_entry(wire, "workspaceGrants", _.mapObject(_.add("access", Json.fromString("read-only"))))
+      val wrongowner = _changed_entry(wire, "workspaceGrants", _.mapObject(_.add("componentId", Json.fromString("org.example.Other"))))
+      val withoutprocess = wire.mapObject(_.add("grants", Json.arr()))
+      val readonlyonly = readonly.mapObject(_.add("grants", Json.arr()))
+      When("the host preflights missing Manage, a different owner and workspace-only authority")
+      val denied = Vector(_decode(readonly), _decode(wrongowner), _decode(wire.mapObject(_.add("workspaceGrants", Json.arr()))))
+      val workspaceonly = _take(_decode(withoutprocess))
+      val readplan = _take(_decode(readonlyonly))
+      Then("a process grant cannot widen workspace access and workspace permission never creates a process grant")
+      denied.foreach(_.isFaillure shouldBe true)
+      workspaceonly.grants shouldBe empty
+      readplan.grants shouldBe empty
+      readplan.workspaceGrants.head.permission shouldBe WorkspacePermission.ReadOnly
+      readplan.workspaceAdmissionOption.isDefined shouldBe true
+    }
+  }
+}

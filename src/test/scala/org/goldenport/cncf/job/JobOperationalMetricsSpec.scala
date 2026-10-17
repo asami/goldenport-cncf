@@ -12,9 +12,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 3, 2026
- * @version Oct. 3, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobOperationalMetricsSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "E1 OM1 closed lifecycle fact matrix" must _scenario("E1", "R1,R2") {
     "count every fact in each persistence and run mode" in {

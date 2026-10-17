@@ -1,9 +1,13 @@
 # CAR Capability Sandbox Design
 
-Status: note
+Status: historical design note
 Date: 2026-05-25
+Updated: 2026-10-15
 
 ## Purpose
+
+This note records the original combined capability/sandbox design. The normative architecture is now split by viewpoint into [Capability-Oriented Execution Architecture](../design/capability-oriented-execution-architecture.md) and [Safety Sandbox Architecture](../design/safety-sandbox-architecture.md). Phase 110 owns implementation of the Safety Sandbox additions. The material below remains useful design history and candidate detail; where terminology differs, the normative design documents prevail.
+
 
 This note designs the CNCF-side CAR capability sandbox model based on
 `docs/journal/2026/05/car-capability-sandbox.md`.

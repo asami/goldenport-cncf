@@ -29,9 +29,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * B1 does not establish engine installation or real two-process acceptance.
  *
  * @since   Oct.  1, 2026
- * @version Oct.  2, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class DurableJobLifetimeQuotaSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _now = Instant.parse("2026-10-01T01:02:03Z")
   private val _access = DurableJobRecordAccess("tenant-a", "subject-a", Set("job.read"))

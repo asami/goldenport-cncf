@@ -62,6 +62,7 @@ private[component] trait ComponentFactoryEntityPlanPart { self: ComponentFactory
       _ <- _bootstrap_state_machine_provided_api_dispatcher_c(component)
       _ <- _bootstrap_state_machine_provider_resolver_c(component)
       _ <- _bootstrap_continuation_runtime_c(component)
+      _ <- _bootstrap_workflow_instance_persistence_c(component)
       _ <- _validate_entity_runtime_plan_names_c(component, rawplans)
       revisionbindings <- _resolve_revision_bindings_c(component, entitynames)
       concurrencypolicies <-

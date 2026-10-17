@@ -29,9 +29,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * not discharge the separate fresh-State recovery and cross-process gates.
  *
  * @since   Oct. 2, 2026
- * @version Oct. 3, 2026
+ * @version Oct. 13, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class JobDurableLifetimeRuntimeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _access = JobInputBoundsFixtures.access
   private val _now = JobInputBoundsFixtures.instant

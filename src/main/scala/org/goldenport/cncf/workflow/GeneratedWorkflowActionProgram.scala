@@ -10,6 +10,8 @@ import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWorkOp}
 
 /** Receives Cozy's Workflow and logical ActionProgram sidecars as one boundary.
   * The Workflow Action array is a declaration, never an execution sequence.
+  * @since   Sep. 25, 2026
+  * @version Oct. 12, 2026
   */
 object GeneratedWorkflowActionProgram {
   val workflowSchemaVersion = "cozy.cml.statemachine-workflow-abi.v1"
@@ -101,7 +103,7 @@ object GeneratedWorkflowActionProgram {
     definition: Definition,
     providedOperation: StateMachineOperationIdentity,
     bindings: Vector[Binding[StateMachineProvidedApiRequest, Unit]]
-  ): Consequence[StateMachineProvidedApiProgram] =
+  ): Consequence[StateMachineProvidedApiProgram] = {
     if (providedOperation == null || providedOperation.service == null || providedOperation.operation == null ||
         providedOperation.service.trim.isEmpty || providedOperation.operation.trim.isEmpty)
       Consequence.stateConflict("Generated Workflow ActionProgram: missing Provided Operation")
@@ -110,7 +112,7 @@ object GeneratedWorkflowActionProgram {
         val workflowIdentity: String = definition.workflowIdentity
         val operation: StateMachineOperationIdentity = providedOperation
 
-        def program(request: StateMachineProvidedApiRequest): ExecUowM[ActionExecution] =
+        def program(request: StateMachineProvidedApiRequest): ExecUowM[ActionExecution] = {
           if (request == null || request.workflowIdentity != definition.workflowIdentity ||
               request.workflowRevision != definition.workflowVersion ||
               request.operation != operation || request.context == null ||
@@ -120,10 +122,12 @@ object GeneratedWorkflowActionProgram {
               Consequence.stateConflict("Generated Workflow ActionProgram: Provided request provenance differs")
             )
           else ExecutionPlanExecutor.program(plan, request, ())
+        }
       }
     }
+  }
 
-  private def _decode(workflowabi: String, actionprogramabi: String): Either[String, Definition] =
+  private def _decode(workflowabi: String, actionprogramabi: String): Either[String, Definition] = {
     for {
       workflowjson <- parse(workflowabi).left.map(_ => "invalid Workflow ABI JSON")
       programjson <- parse(actionprogramabi).left.map(_ => "invalid ActionProgram JSON")
@@ -150,12 +154,14 @@ object GeneratedWorkflowActionProgram {
       produced <- _traverse(programactions)(_program_action)
       required <- _traverse(spi)(x => _get[String](x.hcursor, "actionIdentity"))
       placed <- _traverse(occurrences)(_occurrence)
-      _ <- _require(declared == produced.map(_.copy(metadata = None)),
-        "Workflow and ActionProgram Action descriptors differ")
+      _ <- _require(declared.map(action => (action.identity, action.operation, action.inputBinding)) ==
+        produced.map(action => (action.identity, action.operation, action.inputBinding)),
+        "Workflow and ActionProgram executable Action declarations differ")
       result = Definition(identity, version, _sha256(workflowabi), _sha256(actionprogramabi),
         produced, required, placed)
       _ <- _validate(result).toLeft(())
     } yield result
+  }
 
   private def _workflow_action(value: Json): Either[String, Action] = {
     val cursor = value.hcursor
@@ -256,28 +262,25 @@ object GeneratedWorkflowActionProgram {
         action.identity == occurrence.actionIdentity &&
         action.operation == occurrence.operation &&
         action.inputBinding == occurrence.inputBinding &&
-        action.sourceLine == occurrence.actionSourceLine &&
         action.metadata.contains(occurrence.metadata))
     })
       Some("occurrence does not match a declared Action")
-    else if (value.actions.exists(_.sourceLine <= 0) ||
-        value.occurrences.exists(x => x.actionSourceLine <= 0 ||
-          x.occurrenceSourceLine <= 0 || !_valid_metadata(x.metadata)))
-      Some("occurrence source or metadata is invalid")
+    else if (value.occurrences.exists(x => !_valid_metadata(x.metadata)))
+      Some("occurrence metadata is invalid")
     else None
   }
 
-  private def _valid_metadata(value: Metadata): Boolean =
+  private def _valid_metadata(value: Metadata): Boolean = {
     value != null && ((value.effectClass, value.transactionRequirement) match {
       case ("LOCAL", "REQUIRED") => !value.idempotencyRequired || value.idempotencyKeyRef.exists(_.nonEmpty)
       case ("EXTERNAL", "OUTSIDE_UNIT_OF_WORK") =>
         value.idempotencyRequired && value.idempotencyKeyRef.exists(_.nonEmpty)
       case _ => false
     })
+  }
 
   private def _source_line(cursor: HCursor, field: String): Either[String, Int] =
-    cursor.downField(field).success.toRight(s"missing $field source")
-      .flatMap(_get[Int](_, "line"))
+    Right(cursor.downField(field).get[Int]("line").getOrElse(0))
 
   private def _optional_string(cursor: HCursor, field: String): Either[String, Option[String]] =
     cursor.get[Option[String]](field).left.map(_ => s"invalid $field")
@@ -285,8 +288,9 @@ object GeneratedWorkflowActionProgram {
   private def _get[A: io.circe.Decoder](cursor: HCursor, field: String): Either[String, A] =
     cursor.get[A](field).left.map(_ => s"missing or invalid $field")
 
-  private def _require(condition: Boolean, message: String): Either[String, Unit] =
+  private def _require(condition: Boolean, message: String): Either[String, Unit] = {
     if (condition) Right(()) else Left(message)
+  }
 
   private def _traverse[A, B](values: Vector[A])(f: A => Either[String, B]): Either[String, Vector[B]] =
     values.foldLeft[Either[String, Vector[B]]](Right(Vector.empty)) { (acc, value) =>

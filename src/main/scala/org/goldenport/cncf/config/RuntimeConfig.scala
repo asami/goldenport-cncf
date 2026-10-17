@@ -16,7 +16,7 @@ import org.goldenport.cncf.action.CommandExecutionMode
 import org.goldenport.cncf.context.{ExecutionProfileResolver, IdGenerationContext, ResolvedExecutionProfile, RuntimeClock}
 import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizationConfig, ObservabilityEngine, OpenTelemetryExportConfig}
 import org.goldenport.cncf.blob.BlobStoreConfig
-import org.goldenport.cncf.resource.{ResourceTreePolicy, ResourceTreeQueryLimits, ResourceUrlPolicy, TextusUrnResourcePolicy, UrnResourceProvider, UrnResourceProviderConfig}
+import org.goldenport.cncf.resource.{ResourceReadLimits, ResourceTreePolicy, ResourceTreeQueryLimits, ResourceUrlPolicy, TextusUrnResourcePolicy, UrnResourceProvider, UrnResourceProviderConfig}
 
 /*
  * @since   Jan. 18, 2026
@@ -25,7 +25,8 @@ import org.goldenport.cncf.resource.{ResourceTreePolicy, ResourceTreeQueryLimits
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
  *  version Jun. 19, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -58,6 +59,7 @@ final case class RuntimeConfig(
   blobStoreConfig: BlobStoreConfig = BlobStoreConfig(),
   idNamespace: IdGenerationContext.IdNamespace = IdGenerationContext.DEFAULT_NAMESPACE,
   executionProfile: ResolvedExecutionProfile = RuntimeConfig.DEFAULT_EXECUTION_PROFILE,
+  resourceReadLimits: ResourceReadLimits = ResourceReadLimits.default,
   resourceUrlPolicy: ResourceUrlPolicy = ResourceUrlPolicy(),
   textusUrnResourcePolicy: TextusUrnResourcePolicy = TextusUrnResourcePolicy(),
   urnResourceProviders: Vector[UrnResourceProvider] = Vector.empty,
@@ -69,6 +71,78 @@ final case class RuntimeConfig(
 }
 
 object RuntimeConfig {
+  /** Parsed runtime settings, without owning any storage resources. */
+  private[cncf] final case class Settings(
+    logBackend: LogBackend,
+    logLevel: LogLevel,
+    serverEmulatorBaseUrl: String,
+    httpDriver: HttpDriver,
+    mode: RunMode,
+    operationMode: OperationMode,
+    webOperationDispatcher: String,
+    webOperationDispatcherRestBaseUrl: Option[String],
+    webDevelopAnonymousAdmin: Boolean,
+    webDemoAssistEnabled: Boolean,
+    webProductionAdminEnabled: Boolean,
+    webProductionAdminSystemRoles: Vector[String],
+    webProductionAdminComponentRoles: Vector[String],
+    webProductionAdminJobsRoles: Vector[String],
+    debugAuthConfig: DebugAuthConfig,
+    commandExecutionMode: Option[CommandExecutionMode],
+    executionHistoryConfig: ObservabilityEngine.ExecutionHistoryConfig,
+    diagnosticPayloadExternalizationConfig: DiagnosticPayloadExternalizationConfig,
+    openTelemetryExportConfig: OpenTelemetryExportConfig,
+    staticFormAppRendererConfig: StaticFormAppRendererConfig,
+    blobStoreConfig: BlobStoreConfig,
+    idNamespace: IdGenerationContext.IdNamespace,
+    executionProfile: ResolvedExecutionProfile,
+    resourceReadLimits: ResourceReadLimits,
+    resourceUrlPolicy: ResourceUrlPolicy,
+    textusUrnResourcePolicy: TextusUrnResourcePolicy,
+    urnResourceProviders: Vector[UrnResourceProvider],
+    resourceTreePolicy: ResourceTreePolicy,
+    mcpClientPolicyPath: Option[Path],
+    operationToolPolicyPath: Option[Path]
+  ) {
+    private[config] def withStores(
+      dataStoreSpace: DataStoreSpace,
+      entityStoreSpace: EntityStoreSpace
+    ): RuntimeConfig = RuntimeConfig(
+      logBackend = logBackend,
+      logLevel = logLevel,
+      serverEmulatorBaseUrl = serverEmulatorBaseUrl,
+      httpDriver = httpDriver,
+      dataStoreSpace = dataStoreSpace,
+      entityStoreSpace = entityStoreSpace,
+      mode = mode,
+      operationMode = operationMode,
+      webOperationDispatcher = webOperationDispatcher,
+      webOperationDispatcherRestBaseUrl = webOperationDispatcherRestBaseUrl,
+      webDevelopAnonymousAdmin = webDevelopAnonymousAdmin,
+      webDemoAssistEnabled = webDemoAssistEnabled,
+      webProductionAdminEnabled = webProductionAdminEnabled,
+      webProductionAdminSystemRoles = webProductionAdminSystemRoles,
+      webProductionAdminComponentRoles = webProductionAdminComponentRoles,
+      webProductionAdminJobsRoles = webProductionAdminJobsRoles,
+      debugAuthConfig = debugAuthConfig,
+      commandExecutionMode = commandExecutionMode,
+      executionHistoryConfig = executionHistoryConfig,
+      diagnosticPayloadExternalizationConfig = diagnosticPayloadExternalizationConfig,
+      openTelemetryExportConfig = openTelemetryExportConfig,
+      staticFormAppRendererConfig = staticFormAppRendererConfig,
+      blobStoreConfig = blobStoreConfig,
+      idNamespace = idNamespace,
+      executionProfile = executionProfile,
+      resourceReadLimits = resourceReadLimits,
+      resourceUrlPolicy = resourceUrlPolicy,
+      textusUrnResourcePolicy = textusUrnResourcePolicy,
+      urnResourceProviders = urnResourceProviders,
+      resourceTreePolicy = resourceTreePolicy,
+      mcpClientPolicyPath = mcpClientPolicyPath,
+      operationToolPolicyPath = operationToolPolicyPath
+    )
+  }
+
   final case class DebugAuthConfig(
     enabled: Boolean = false,
     seedAccountEnabled: Boolean = false,
@@ -317,6 +391,8 @@ object RuntimeConfig {
   val runtimeBlobStoreProviderClassKey = "textus.runtime.blob.store.provider-class"
   val blobMaxByteSizeKey = "textus.blob.max-byte-size"
   val runtimeBlobMaxByteSizeKey = "textus.runtime.blob.max-byte-size"
+  val RESOURCE_READ_MAX_BYTES_KEY = "textus.resource.read.max-bytes"
+  val RUNTIME_RESOURCE_READ_MAX_BYTES_KEY = "textus.runtime.resource.read.max-bytes"
   val resourceUrlFileRootsKey = "textus.resource.url.file.roots"
   val runtimeResourceUrlFileRootsKey = "textus.runtime.resource.url.file.roots"
   val resourceUrlHttpsHostsKey = "textus.resource.url.https.hosts"
@@ -385,6 +461,7 @@ object RuntimeConfig {
       blobStoreConfig = BlobStoreConfig(),
       idNamespace = DEFAULT_ID_NAMESPACE,
       executionProfile = DEFAULT_EXECUTION_PROFILE,
+      resourceReadLimits = ResourceReadLimits.default,
       resourceUrlPolicy = ResourceUrlPolicy(),
       textusUrnResourcePolicy = TextusUrnResourcePolicy(),
       urnResourceProviders = Vector.empty,
@@ -413,6 +490,27 @@ object RuntimeConfig {
     modeoverride: Option[RunMode],
     profileoverride: Option[ResolvedExecutionProfile]
   ): RuntimeConfig = {
+    // Validate settings before acquiring caller-owned physical stores.
+    val settings = _settings(configuration, modeoverride, profileoverride)
+    val config = settings.withStores(
+      DataStoreSpace.create(configuration),
+      EntityStoreSpace.create(configuration)
+    )
+    ObservabilityEngine.updateExecutionHistoryConfig(settings.executionHistoryConfig)
+    config
+  }
+
+  private[cncf] def settingsFrom(
+    configuration: ResolvedConfiguration,
+    modeOverride: Option[RunMode] = None
+  ): Settings =
+    _settings(configuration, modeOverride, None)
+
+  private def _settings(
+    configuration: ResolvedConfiguration,
+    modeoverride: Option[RunMode],
+    profileoverride: Option[ResolvedExecutionProfile]
+  ): Settings = {
     val baseurl =
       _get_string(configuration, serverEmulatorBaseUrlKey)
         .getOrElse(defaultServerEmulatorBaseUrl)
@@ -462,8 +560,6 @@ object RuntimeConfig {
         case None => RuntimeDefaults.defaultLogLevel(mode)
       }
     }
-    val datastorespace = DataStoreSpace.create(configuration)
-    val entitystorespace = EntityStoreSpace.create(configuration)
     val executionhistoryconfig = _execution_history_config(configuration)
     val diagnosticpayloadexternalizationconfig =
       _diagnostic_payload_externalization_config(configuration, operationmode)
@@ -472,6 +568,7 @@ object RuntimeConfig {
     val rendererconfig =
       _static_form_app_renderer_config(configuration)
     val blobstoreconfig = BlobStoreConfig.fromConfiguration(configuration)
+    val resourcereadlimits = _resource_read_limits(configuration)
     val resourceurlpolicy = _resource_url_policy(configuration)
     val textusurnresourcepolicy = _textus_urn_resource_policy(configuration)
     val urnresourceproviders = _urn_resource_providers(configuration)
@@ -521,14 +618,11 @@ object RuntimeConfig {
           case roles => roles
         }
     val debugauthconfig = _debug_auth_config(configuration)
-    ObservabilityEngine.updateExecutionHistoryConfig(executionhistoryconfig)
-    val config = RuntimeConfig(
+    val config = Settings(
       logbackend,
       loglevel,
       serverEmulatorBaseUrl = baseurl,
       httpDriver = httpdriver,
-      dataStoreSpace = datastorespace,
-      entityStoreSpace = entitystorespace,
       mode = mode,
       operationMode = operationmode,
       webOperationDispatcher = weboperationdispatcher,
@@ -548,6 +642,7 @@ object RuntimeConfig {
       blobStoreConfig = blobstoreconfig,
       idNamespace = idnamespace,
       executionProfile = executionprofile,
+      resourceReadLimits = resourcereadlimits,
       resourceUrlPolicy = resourceurlpolicy,
       textusUrnResourcePolicy = textusurnresourcepolicy,
       urnResourceProviders = urnresourceproviders,
@@ -585,7 +680,7 @@ object RuntimeConfig {
       .flatMap(OperationMode.from)
       .getOrElse(defaultOperationMode)
 
-  private def _validate(config: RuntimeConfig): Unit = {
+  private def _validate(config: Settings): Unit = {
     config.diagnosticPayloadExternalizationConfig.validationError.foreach { message =>
       throw new IllegalArgumentException(message)
     }
@@ -756,6 +851,15 @@ object RuntimeConfig {
       .getOrElse(DEFAULT_ID_NAMESPACE.minor)
     IdGenerationContext.IdNamespace.normalizeOrThrow(major, minor)
   }
+
+  private def _resource_read_limits(configuration: ResolvedConfiguration): ResourceReadLimits =
+    _get_string(configuration, RESOURCE_READ_MAX_BYTES_KEY).fold(ResourceReadLimits.default) { value =>
+      val parsed = if (value.matches("[0-9]+")) scala.util.Try(value.toInt).toOption else None
+      parsed.filter(number => number >= 1 && number <= 16777216)
+        .map(ResourceReadLimits(_)).getOrElse {
+          throw new IllegalArgumentException("textus.resource.read.max-bytes must be an integer between 1 and 16777216")
+        }
+    }
 
   private def _resource_url_policy(
     configuration: ResolvedConfiguration
@@ -976,6 +1080,7 @@ object RuntimeConfig {
         case `blobStorePublicBasePathKey` => Vector(runtimeBlobStorePublicBasePathKey)
         case `blobStoreProviderClassKey` => Vector(runtimeBlobStoreProviderClassKey)
         case `blobMaxByteSizeKey` => Vector(runtimeBlobMaxByteSizeKey)
+        case RESOURCE_READ_MAX_BYTES_KEY => Vector(RUNTIME_RESOURCE_READ_MAX_BYTES_KEY)
         case `resourceUrlFileRootsKey` => Vector(runtimeResourceUrlFileRootsKey)
         case `resourceUrlHttpsHostsKey` => Vector(runtimeResourceUrlHttpsHostsKey)
         case `resourceTextusUrnFileRootsKey` => Vector(runtimeResourceTextusUrnFileRootsKey)

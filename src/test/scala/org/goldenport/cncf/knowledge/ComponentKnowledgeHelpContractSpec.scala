@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * No HTTP endpoint, CLI parser, resolver, or raw-content projection is used.
  *
  * @since   Aug. 26, 2026
- * @version Aug. 26, 2026
+ * @version Oct. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentKnowledgeHelpContractSpec
@@ -55,8 +55,6 @@ final class ComponentKnowledgeHelpContractSpec
   private val _component_id = ComponentId("org.goldenport.cncf.phase595.Help")
   private val _release = "0.1.0-SNAPSHOT"
   private val _repository = "https://repo.example.invalid/private-phase58"
-  private val _signing_key = "phase595-help-signing-key"
-  private val _signature = "phase595-help-signature"
 
   "P595-DOC05-A-AC01 deterministic operator and Direct-AI discovery" should {
     "E1 expose one describedby manifest link and an identical canonical resource inventory" must _e1 {
@@ -363,7 +361,6 @@ final class ComponentKnowledgeHelpContractSpec
         sourceKind = ComponentResourceSourceKind.ExpandedCar,
         repository = _repository,
         artifactCoordinate = "org.goldenport.cncf:phase595-help:0.1.0",
-        sha256 = digest,
         normalizedRelativePath = s"private/phase58/resource-$index.md",
         logicalSource = s"urn:cncf:source:phase595:help:$index",
         physicalSource = s"expanded-car:private-phase58-resource-$index",
@@ -423,8 +420,6 @@ final class ComponentKnowledgeHelpContractSpec
           classification = "primary",
           artifact = ComponentSubcomponentArtifact(
             coordinate = resource.provenance.artifactCoordinate,
-            sha256 = resource.provenance.sha256,
-            signature = _signature,
             repository = resource.provenance.repository,
             physicalPath = "private/phase58/help.car"
           ),
@@ -442,13 +437,9 @@ final class ComponentKnowledgeHelpContractSpec
     ComponentResourceAccessRequest(
       resource = resource,
       content = _content(resource),
-      signature = _signature,
-      signingKeyId = _signing_key,
       grantedRoles = Set("parent"),
       admittedRepositories = Set(_repository),
-      trustedSignaturesByKeyId = Map(_signing_key -> Set(_signature)),
-      archiveEntries = Vector(ComponentResourceArchiveEntry(resource.provenance.normalizedRelativePath)),
-      managedCacheVerified = true
+      archiveEntries = Vector(ComponentResourceArchiveEntry(resource.provenance.normalizedRelativePath))
     )
 
   private def _content(resource: ResolvedComponentResource): Array[Byte] =

@@ -46,6 +46,86 @@ Example:
 - UnitOfWork and EventEngine delegate persistence to DataStore.
 - DataStore participates in an existing transaction via TransactionContext.
 
+### Application Types and Physical Values
+
+The application declares the logical type; the OR mapper owns the mapping
+between that type and the physical DataStore representation. For a database
+whose selected representation is text, DataStore writes and reads String.
+It MUST NOT infer an application type from JSON-looking text.
+
+The OR mapper performs these conversions:
+
+| Application type | Write conversion before DataStore | Read conversion after DataStore |
+| --- | --- | --- |
+| String | Preserve String | Preserve String |
+| Class X | X instance -> JSON value -> serialized JSON String | String -> JSON value -> X instance |
+| Semi-structured data | Record or admitted JSON value -> serialized JSON String | String -> JSON value -> Record |
+| JSON | JSON value -> serialized JSON String | String -> JSON value |
+| Array | Declared array -> JSON array -> serialized JSON String | String -> JSON array -> declared array values |
+
+A structured JSON value and serialized JSON text are different representations.
+The declared application type determines where decoding stops. JSON fields
+remain JSON; semi-structured fields become Record; X fields use a codec that
+constructs and validates X. String fields preserve their original text even
+when it is valid JSON. Accepted JSON shapes for Record and array element types
+are part of the declared mapping, not inferred from content.
+
+Mapping selection, JSON parsing/serialization, and application-value
+construction belong to the OR-mapping boundary. The physical provider owns DB
+access and physical type adaptation. A native JSON-capable backend may use a
+different physical mapping without changing the declared application meaning.
+Direct DataStore callers receive physical values and may explicitly perform
+application-owned conversions, including `toRecord`/`fromRecord`. Callers
+requiring automatic reconstruction use the admitted OR-mapping boundary.
+Missing mappings and failures at
+JSON parsing or application decoding MUST remain explicit structured outcomes.
+
+The canonical datatype names are `XSemiStructuredData` and `XJson`.
+`XSemiStructuredData` uses Record internally and supports JSON, YAML and HOCON
+as external representations through explicitly selected format codecs.
+`XJson` uses `io.circe.Json` internally and JSON as its external representation.
+External interchange format and physical DB storage format are independent.
+Normalization, accepted shapes and format-specific failures must be specified;
+format guessing and silent loss of unsupported values are not permitted. Model
+declarations and generated schema metadata MUST preserve those identities into
+the existing EntityStore/EntityPersistent OR-mapping boundary.
+`DataType.Named("record")` is a temporary workaround, not that canonical
+contract; the final route MUST NOT depend on it, an equivalent `Named("json")`
+substitute or ad hoc string-name dispatch. Phase 100 owns the transition of
+producers, generated artifacts and consumers to the formal datatype route.
+Supported behavior currently carried by `DataType.Named("record")` must be
+absorbed into the `XSemiStructuredData` declaration, normalization, generation
+and OR-mapping stages before the workaround is removed. Mere marker deletion
+or renaming does not satisfy the transition contract. The accepted route must
+have no active dependency on that legacy form, including compatibility readers.
+This does not prohibit unrelated legitimate uses of `DataType.Named`.
+
+Automatic encoding/decoding MUST select codecs using declared logical types
+and their storage mappings: `XJson` restores JSON; `XSemiStructuredData`
+restores Record. Runtime Record/Json values, `RecordPresentable`, or the
+availability of `toRecord`/`fromRecord` MUST NOT substitute for that declaration.
+An explicitly selected codec may use those methods internally. The outer
+Record used as a DataStore row carrier does not imply a semi-structured type
+declaration for any field.
+
+### EntityStore OR-Mapping Route
+
+The target automatic persistence route is EntityStore -> OR mapper ->
+DataStore on write, and DataStore -> OR mapper -> EntityStore on read.
+EntityStore supplies declarations and owns entity lifecycle, identity and
+concurrency policy. The OR mapper consumes those declarations, selects storage
+codecs and performs application/physical conversion. DataStore owns physical
+access. This is a responsibility boundary built on EntityPersistent, not a
+replacement ORM alongside it.
+
+The contract applies to creation, saves, partial updates, searches/projections,
+conditional/versioned mutations and authoritative mutation readback. Existing
+store/admission hooks require an explicit place in the conversion stages to
+avoid duplicate encoding/decoding. Integrating this route must preserve
+transaction participation, provider identity, revision checks and atomic side
+effects. Phase 100 is planned; these requirements do not assert implementation
+completion.
+
 ### Transaction Participation
 - UnitOfWork owns transaction boundaries (begin/commit/abort).
 - DataStore participates in the UnitOfWork transaction.

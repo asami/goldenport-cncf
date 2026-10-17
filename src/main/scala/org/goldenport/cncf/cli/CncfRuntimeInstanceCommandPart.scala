@@ -37,7 +37,8 @@ import org.goldenport.cncf.observability.global.GlobalObservable
  *  version May. 25, 2026
  *  version Jun. 29, 2026
  *  version Jul. 30, 2026
- * @version Aug. 19, 2026
+ *  version Aug. 19, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cli] trait CncfRuntimeInstanceCommandPart {
@@ -585,12 +586,12 @@ private[cli] trait CncfRuntimeInstanceCommandPart {
     val text =
       """Usage:
         |  cncf server
-        |  cncf client
+        |  cncf client <component.service.operation> <operation parameters>
         |  cncf command <cmd>
         |
         |Examples:
         |  cncf server
-        |  cncf client http get
+        |  cncf client org.goldenport.cncf.Admin.system.ping
         |  cncf command org.goldenport.cncf.Admin.system.ping
         |  cncf command org.goldenport.cncf.Admin.deployment.securityMermaid
         |  cncf command org.goldenport.cncf.Admin.deployment.securityMarkdown
