@@ -1,6 +1,12 @@
 package org.goldenport.cncf.config
 
 import java.time.Instant
+import java.nio.file.Files
+import org.goldenport.Consequence
+import org.goldenport.cncf.action.Behavior
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext}
+import org.goldenport.cncf.path.AliasResolver
+import org.goldenport.cncf.resource.{ResourceContent, ResourceReadLimits, ResourceReference}
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.blob.{BlobStoreConfig, BlobStoreFactory}
 import org.goldenport.cncf.context.IdGenerationContext
@@ -14,11 +20,116 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 18, 2026
  *  version Apr. 28, 2026
  *  version Jun. 19, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "RuntimeConfig" should {
+    "default ordinary resource reads to one MiB through parsed and direct settings" in {
+      Given("an empty runtime configuration and the standard direct runtime default")
+      val configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+
+      When("runtime settings construct their storage-owning configuration")
+      val parsed = RuntimeConfig.from(configuration)
+
+      Then("both paths retain the same finite default policy")
+      parsed.resourceReadLimits shouldBe ResourceReadLimits(1048576)
+      RuntimeConfig.default.resourceReadLimits shouldBe parsed.resourceReadLimits
+    }
+
+    "resolve canonical runtime and CNCF aliases for ordinary resource limits" in {
+      Given("each supported configuration spelling and a nondefault positive byte limit")
+      val keys = Vector(
+        "textus.resource.read.max-bytes", "textus.runtime.resource.read.max-bytes",
+        "cncf.resource.read.max-bytes", "cncf.runtime.resource.read.max-bytes"
+      )
+
+      When("each setting is resolved into a normal RuntimeConfig")
+      val configs = keys.map { key =>
+        RuntimeConfig.from(ResolvedConfiguration(
+          Configuration(Map(key -> ConfigurationValue.StringValue("7"))), ConfigurationTrace.empty
+        ))
+      }
+
+      Then("every alias selects the exact runtime-owned byte policy")
+      configs.map(_.resourceReadLimits.maximumBytes) shouldBe Vector.fill(4)(7)
+    }
+
+    "reject malformed zero negative excessive and overflowing resource limits" in {
+      Given("invalid numeric spellings for each admitted runtime configuration alias")
+      val keys = Vector(
+        "textus.resource.read.max-bytes", "textus.runtime.resource.read.max-bytes",
+        "cncf.resource.read.max-bytes", "cncf.runtime.resource.read.max-bytes"
+      )
+      val values = Vector("", "0", "-1", "16777217", "2147483648", "99999999999999999999", "1.5", "one", "+1", " 4 ")
+
+      When("runtime construction consumes each malformed or out-of-range setting")
+      val failures = for {
+        key <- keys
+        value <- values
+      } yield intercept[IllegalArgumentException] {
+        RuntimeConfig.from(ResolvedConfiguration(
+          Configuration(Map(key -> ConfigurationValue.StringValue(value))), ConfigurationTrace.empty
+        ))
+      }
+
+      Then("every invalid setting refuses construction instead of selecting a fallback policy")
+      failures should have size (keys.size * values.size)
+      failures.foreach(_.getMessage should include("textus.resource.read.max-bytes"))
+    }
+
+    "carry the configured limit through global runtime context and ordinary component helpers" in {
+      Given("a normal runtime configured with a canonical Textus file root and a three-byte cap")
+      val root = Files.createTempDirectory("ordinary-resource-runtime").toRealPath()
+      val equalpath = Files.writeString(root.resolve("equal.txt"), "日")
+      val excesspath = Files.writeString(root.resolve("excess.txt"), "日本")
+      val configuration = ResolvedConfiguration(Configuration(Map(
+        RuntimeConfig.resourceTextusUrnFileRootsKey -> ConfigurationValue.StringValue(s"book=$root"),
+        RuntimeConfig.RESOURCE_READ_MAX_BYTES_KEY -> ConfigurationValue.StringValue("3")
+      )), ConfigurationTrace.empty)
+      val base = ExecutionContext.create()
+      val global = GlobalRuntimeContext.create(
+        "ordinary-resource-runtime", RuntimeConfig.from(configuration), configuration,
+        base.observability, AliasResolver.empty
+      )
+      val runtime = new RuntimeContext(
+        core = RuntimeContext.core(
+          name = "ordinary-resource-runtime", parent = Some(global), observabilitycontext = base.observability
+        ),
+        unitofworksupplier = () => base.unitOfWork,
+        unitofworkinterpreterfn = base.runtime.unitOfWorkInterpreter,
+        commitaction = _ => (), abortaction = _ => (), disposeaction = _ => (),
+        token = "ordinary-resource-runtime"
+      )
+      try {
+        val context = ExecutionContext.create(runtime)
+        val behavior = new ResourceBehavior(Behavior.Core(context, None, None))
+        val equal = ResourceReference.parseC("urn:textus:book:equal.txt").toOption.get
+        val excess = ResourceReference.parseC("urn:textus:book:excess.txt").toOption.get
+
+        When("ordinary protected byte and text helpers run through the normal context assembly")
+        val bytes = behavior.read(equal)
+        val text = behavior.readText(equal)
+        val excessbytes = behavior.read(excess)
+        val excesstext = behavior.readText(excess)
+
+        Then("equality succeeds and overflow returns no partial bytes or text under the actual configured policy")
+        bytes.toOption.map(_.bytes) shouldBe Some("日".getBytes(java.nio.charset.StandardCharsets.UTF_8).toVector)
+        text.toOption shouldBe Some("日")
+        excessbytes.isFaillure shouldBe true
+        excessbytes.toOption shouldBe None
+        excesstext.isFaillure shouldBe true
+        excesstext.toOption shouldBe None
+        Files.readString(equalpath) shouldBe "日"
+        Files.readString(excesspath) shouldBe "日本"
+      } finally {
+        Files.deleteIfExists(equalpath)
+        Files.deleteIfExists(excesspath)
+        Files.deleteIfExists(root)
+      }
+    }
+
     "use develop operation mode and anonymous admin enabled by default" in {
       val config = RuntimeConfig.from(ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty))
 
@@ -703,4 +814,9 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
       }
     }
   }
+  private final class ResourceBehavior(val behaviorCore: Behavior.Core) extends Behavior {
+    def read(reference: ResourceReference): Consequence[ResourceContent] = read_resource(reference)
+    def readText(reference: ResourceReference): Consequence[String] = read_resource_text(reference)
+  }
+
 }

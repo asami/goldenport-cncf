@@ -13,7 +13,9 @@ import org.scalatest.wordspec.AnyWordSpec
 /** Real Component bootstrap for operational mapping; contract tables do not
   * claim that a concrete AI provider has executed semantic application work.
   * @since   Oct.  8, 2026
-  * @version Oct.  8, 2026
+  *  version Oct.  8, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 final class WorkflowExecutionProfileMappingSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _identity = ComponentId("org.goldenport.fixture.ExecutionMapping")
@@ -60,6 +62,33 @@ final class WorkflowExecutionProfileMappingSpec extends AnyWordSpec with Matcher
     afterWord(s"in spec:workflow-execution-disposition, example:$example, rules:$rules, phase:80")
 
   "Workflow execution profile mapping" should {
+    "E9 bootstrap an optional explicitly configured distinct alternate" in {
+      Given("Spec: docs/spec/workflow-execution-disposition.md; Example: E9; Rules: R6,R9; canonical Component settings without fallbacks and with a ReviewStandard alternate")
+      val binding = Json.obj("reasoningClass" -> Json.fromString("ReviewStandard"), "profile" -> Json.fromString("programming"))
+      val configured = _settings().mapObject(_.add("fallbacks", Json.arr(binding)))
+      When("the actual Component Factory decodes both snapshots")
+      val absent = _bootstrap(Some(_settings())).toOption.get.mapping.get
+      val present = _bootstrap(Some(configured)).toOption.get.mapping.get
+      Then("absence stays empty and the one configured alternate resolves by the existing semantic class")
+      absent.fallbackClassC(ReasoningClassReference("ReviewStandard")).toOption.get shouldBe None
+      present.fallbackClassC(ReasoningClassReference("ReviewStandard")).toOption.get shouldBe Some(_programming)
+      present.resolveClassC(ReasoningClassReference("ReviewStandard")).toOption.get shouldBe _engineering
+    }
+    "E10 reject duplicate dangling and concrete-alias alternates at bootstrap" in {
+      Given("Spec: docs/spec/workflow-execution-disposition.md; Example: E10; Rules: R6,R9; invalid fallback declarations and an identity alias of the same provider/model/controls")
+      def _binding_(name: String, profile: String) = Json.obj("reasoningClass" -> Json.fromString(name), "profile" -> Json.fromString(profile))
+      val binding = _binding_("ReviewStandard", "programming")
+      val alias = _engineering.copy(identity = "engineering-alias")
+      val configurations = Vector(Json.arr(binding, binding), Json.arr(_binding_("AbsentClass", "programming")),
+        Json.arr(_binding_("ReviewStandard", "absent-profile")), Json.arr(_binding_("ReviewStandard", "engineering")))
+        .map(value => _settings().mapObject(_.add("fallbacks", value))) :+
+        _settings().mapObject(_.add("profiles", Json.arr(_profile(_programming), _profile(_engineering), _profile(alias)))
+          .add("fallbacks", Json.arr(_binding_("ReviewStandard", alias.identity))))
+      When("the normal Factory initializes each invalid canonical snapshot")
+      val results = configurations.map(value => _bootstrap(Some(value)))
+      Then("each contradiction fails without a default or a same-executor alias fallback")
+      results.foreach(_ shouldBe a[Consequence.Failure[?]])
+    }
     "E5 consume canonical Component parameters and changed instance configuration" must _metadata("E5", "R6") {
       "through the normal Factory initialization hook" in {
         Given("Spec: docs/spec/workflow-execution-disposition.md; Rule: R6; Example: E5; packaged mapping plus an instance override")

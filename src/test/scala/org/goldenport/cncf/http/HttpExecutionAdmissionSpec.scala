@@ -1,0 +1,222 @@
+package org.goldenport.cncf.http
+
+import java.util.Locale
+import org.goldenport.Consequence
+import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId, ComponentOrigin}
+import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.effect.{ExternalEffectClassification, ExternalEffectKind, ExternalEffectRoute}
+import org.goldenport.cncf.observability.ConclusionDiagnostics
+import org.goldenport.protocol.{Property, Protocol}
+import org.scalacheck.{Gen, Prop, Test}
+import org.scalatest.GivenWhenThen
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
+
+/*
+ * @since   Oct. 16, 2026
+ * @version Oct. 16, 2026
+ * @author  ASAMI, Tomoharu
+ */
+final class HttpExecutionAdmissionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  private val _owner = ComponentId("org.example.HttpOwner")
+  private val _other = ComponentId("org.example.OtherHttpOwner")
+  private val _limits = HttpExecutionLimits(5000, 7000, 4096)
+  private val _secret = "confidential-http-sentinel"
+
+  private def _take[A](value: Consequence[A]): A =
+    value.getOrElse(fail("HTTP fixture admission failed"))
+
+  private def _admission(
+    base: String = "https://example.test/api/",
+    origins: Vector[String] = Vector("https://example.test"),
+    methods: Set[HttpExecutionMethod] = Set(HttpExecutionMethod.Get)
+  ): HttpExecutionAdmission =
+    _take(HttpExecutionAdmission.fromRuntimeC(base, _limits, Map(_owner -> HttpExecutionGrant(origins, methods))))
+
+  private def _context(
+    admission: Option[HttpExecutionAdmission],
+    owner: ComponentId = _owner,
+    actual: Boolean = true
+  ): ExecutionContext = {
+    val base = ExecutionContext.create()
+    val root = ScopeContext.Instance(base.cncfCore.scope.core.copy(httpExecutionAdmissionOption = admission))
+    val component = Component.create(owner.name, owner, ComponentInstanceId.default(owner), Protocol.empty)
+    val scope = if (actual) Component.Context("same-display-label", root, component, ComponentOrigin.Embed)
+      else root.createChildScope(ScopeKind.Component, _owner.name)
+    base.withScope(scope.createChildScope(ScopeKind.Service, "http").createChildScope(ScopeKind.Action, "fetch"))
+  }
+
+  private def _policy[A](value: Consequence[A]): Option[String] = value match {
+    case Consequence.Failure(conclusion) => ConclusionDiagnostics.classify(conclusion).policy
+    case _ => None
+  }
+
+  private def _resolve(
+    context: ExecutionContext,
+    path: String,
+    method: HttpExecutionMethod = HttpExecutionMethod.Get,
+    properties: Vector[Property] = Vector.empty
+  ): Consequence[AdmittedHttpExecution] = HttpExecutionAdmission.resolveC(context, method, path, properties)
+
+  "Current Component HTTP authority" should {
+    "resolve relative paths and queries once against the host base while retaining encoded bytes" in {
+      Given("an actual owner beneath the configured host base path")
+      val context = _context(Some(_admission()))
+      val paths = Vector("item%2Fpart?q=a%26b", "/root?q=%2B", "?q=selected")
+      When("the current UoW context resolves each ordinary URI reference")
+      val outcomes = paths.map(path => _take(_resolve(context, path)))
+      Then("URI.resolve semantics preserve raw encoded path and query in absolute destinations")
+      outcomes.map(_.absoluteUrl) shouldBe Vector("https://example.test/api/item%2Fpart?q=a%26b",
+        "https://example.test/root?q=%2B", "https://example.test/api/?q=selected")
+      HttpExecutionAdmission.classification shouldBe ExternalEffectClassification(Set(ExternalEffectKind.Http), ExternalEffectRoute.Managed)
+    }
+
+    "distinguish absence, scope labels, actual identities and method grants in fixed order" in {
+      Given("configured owner authority and same-label scopes carrying a different or absent actual Component")
+      val admission = _admission()
+      val contexts = Vector(_context(None), _context(Some(admission), actual = false),
+        _context(Some(admission), owner = _other), _context(Some(admission)))
+      val metadata = Vector(Property("componentId", _owner.name, None),
+        Property("http.execution.grant", _secret, None), Property("origin", "https://example.test", None))
+      When("the contexts request POST with purported request grants")
+      val outcomes = contexts.map(context => _resolve(context, "/selected", HttpExecutionMethod.Post, metadata))
+      Then("metadata and display labels confer no authority and diagnostics retain only fixed safe policy facts")
+      outcomes.map(_policy) shouldBe Vector("unconfigured", "component", "grant", "method").map(x => Some(s"http.execution.$x"))
+      outcomes.foreach { result =>
+        result.isFaillure shouldBe true
+        result.toString should not include _secret
+        result.toString should not include _owner.name
+      }
+    }
+
+    "use the nearest actual Component even when an owner exists farther up the ancestry" in {
+      Given("a wrong Component nested below an admitted Component")
+      val outer = _context(Some(_admission()))
+      val component = Component.create(_other.name, _other, ComponentInstanceId.default(_other), Protocol.empty)
+      val current = outer.withScope(Component.Context("same-display-label", outer.cncfCore.scope, component, ComponentOrigin.Embed))
+      When("the nested Component requests the otherwise authorized destination")
+      val outcome = _resolve(current, "/selected")
+      Then("the enclosing owner's grant is not borrowed")
+      _policy(outcome) shouldBe Some("http.execution.grant")
+    }
+
+    "canonicalize generated scheme and host case and effective default ports without merging distinct ports" in {
+      Given("bounded generated HTTP and HTTPS case/default-port spellings and a finite host grant")
+      val variants = for {
+        secure <- Gen.oneOf(true, false)
+        upper <- Gen.oneOf(true, false)
+        explicit <- Gen.oneOf(true, false)
+      } yield (secure, upper, explicit)
+      When("each generated absolute URL is compared by canonical origin")
+      val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(40), Prop.forAll(variants) {
+        case (secure, upper, explicit) =>
+          val scheme = if (secure) "https" else "http"
+          val port = if (secure) 443 else 80
+          val origin = s"$scheme://example.test"
+          val admission = _admission(s"$origin/", Vector(origin))
+          val prefix = if (upper) origin.toUpperCase(Locale.ROOT) else origin
+          val url = prefix + (if (explicit) s":$port" else "") + "/item%2Fpart?q=%2B"
+          val accepted = _resolve(_context(Some(admission)), url)
+          val distinct = _resolve(_context(Some(admission)), s"$origin:${port + 1}/selected")
+          accepted.toOption.exists(_.absoluteUrl.startsWith(s"$scheme://")) &&
+            accepted.toOption.exists(_.absoluteUrl.endsWith("/item%2Fpart?q=%2B")) &&
+            _policy(distinct).contains("http.execution.destination")
+      })
+      Then("case and standard ports are equivalent while each other port remains separately denied")
+      checked.passed shouldBe true
+    }
+
+    "refuse malformed and alternate destinations without disclosing confidential URL contents" in {
+      Given("an exact origin grant and confidential disallowed or malformed URI references")
+      val context = _context(Some(_admission()))
+      val paths = Vector(s"https://other.test/$_secret", s"https://example.test.evil/$_secret", s"//example.test/$_secret",
+        s"https://user:$_secret@example.test/", s"https://example.test/#$_secret", s"file:/$_secret",
+        s"https://example.test:0/$_secret", s"https://example.test:/$_secret", s"/$_secret\\path", s"/$_secret\npath", s"/$_secret%xx")
+      When("each reference reaches pure destination admission")
+      val outcomes = paths.map(path => _resolve(context, path))
+      Then("every outcome is the same safe destination policy failure")
+      outcomes.foreach { outcome =>
+        _policy(outcome) shouldBe Some("http.execution.destination")
+        outcome.toString should not include _secret
+        outcome.toString should not include "example.test"
+      }
+    }
+
+    "validate host base, exact root origins and finite positive bounds before compiling authority" in {
+      Given("invalid host bases, non-origin grants and nonpositive host ceilings")
+      val bases = Vector("relative/", "ftp://example.test/", "https://example.test/?secret", "https://example.test/#secret", "https://example.test:65536/")
+      val origins = Vector("https://*.example.test", "https://example.test/path", "https://example.test/?secret",
+        "https://example.test#secret", "https://example.test:0", "https://user:secret@example.test")
+      val bounds = Vector(HttpExecutionLimits(0, 1, 1), HttpExecutionLimits(1, -1, 1), HttpExecutionLimits(1, 1, 0))
+      When("the host factory compiles these declarations and duplicate canonical origins")
+      val outcomes = bases.map(base => HttpExecutionAdmission.fromRuntimeC(base, _limits, Map.empty)) ++
+        origins.map(origin => HttpExecutionAdmission.fromRuntimeC("https://example.test/", _limits,
+          Map(_owner -> HttpExecutionGrant(Vector(origin), Set(HttpExecutionMethod.Get))))) ++
+        bounds.map(limits => HttpExecutionAdmission.fromRuntimeC("https://example.test/", limits, Map.empty)) ++
+        Vector(HttpExecutionAdmission.fromRuntimeC("https://example.test/", _limits,
+          Map(_owner -> HttpExecutionGrant(Vector("https://example.test", "HTTPS://EXAMPLE.TEST:443/"), Set(HttpExecutionMethod.Get)))))
+      Then("no invalid raw declaration becomes runtime admission")
+      outcomes.foreach(_.isFaillure shouldBe true)
+    }
+  }
+
+  "Finite request controls" should {
+    "combine distinct timeout aliases by minimum and preserve unrelated properties in order" in {
+      Given("host limits and case-insensitive caller controls with both ms and second aliases")
+      val context = _context(Some(_admission()))
+      val first = Property("application.first", "keep-1", None)
+      val last = Property("http.public-network-only", "true", None)
+      val properties = Vector(first, Property("HTTP.CONNECT-TIMEOUT-MS", "4000", None),
+        Property("http.connect-timeout-seconds", "2", None), Property("http.timeout-seconds", "3", None),
+        Property("http.read-timeout-ms", "6000", None), Property("http.max-response-bytes", "0", None),
+        Property("HTTP.FOLLOW-REDIRECTS", "false", None), last)
+      When("the caller requests tighter time and response controls")
+      val admitted = _take(_resolve(context, "/selected", properties = properties))
+      Then("exactly one finite canonical value is emitted for each control and redirects stay disabled")
+      admitted.properties shouldBe Vector(first, last, Property("http.connect-timeout-ms", "2000", None),
+        Property("http.read-timeout-ms", "3000", None), Property("http.max-response-bytes", "0", None),
+        Property("http.follow-redirects", "false", None))
+    }
+
+    "never widen generated valid caller limits above the host ceilings" in {
+      Given("generated positive finite caller limits both below and above each host ceiling")
+      val context = _context(Some(_admission()))
+      val values = for { connect <- Gen.choose(1, 10000); read <- Gen.choose(1, 10000); bytes <- Gen.choose(0L, 8192L) } yield (connect, read, bytes)
+      When("the finite controls are compiled for every generated request")
+      val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(60), Prop.forAll(values) {
+        case (connect, read, bytes) =>
+          val outcome = _resolve(context, "/selected", properties = Vector(
+            Property("http.connect-timeout-ms", connect.toString, None), Property("http.read-timeout-ms", read.toString, None),
+            Property("http.max-response-bytes", bytes.toString, None)))
+          outcome.toOption.exists { admitted =>
+            val controls = admitted.properties.map(x => x.name -> x.value.toString).toMap
+            controls("http.connect-timeout-ms") == math.min(connect, _limits.connectTimeoutMillis).toString &&
+              controls("http.read-timeout-ms") == math.min(read, _limits.readTimeoutMillis).toString &&
+              controls("http.max-response-bytes") == math.min(bytes, _limits.responseBytes).toString &&
+              controls("http.follow-redirects") == "false"
+          }
+      })
+      Then("all admitted limits tighten by minimum and every route disables redirects")
+      checked.passed shouldBe true
+    }
+
+    "refuse redirect opt-in, ambiguous controls and malformed or overflowing values" in {
+      Given("a configured owner and caller controls that cannot define an unambiguous finite request")
+      val context = _context(Some(_admission()))
+      val invalid = Vector(
+        Vector(Property("http.connect-timeout-ms", "1", None), Property("HTTP.CONNECT-TIMEOUT-MS", "2", None)),
+        Vector(Property("http.read-timeout-ms", "0", None)), Vector(Property("http.timeout-seconds", "2147484", None)),
+        Vector(Property("http.max-response-bytes", "-1", None)), Vector(Property("http.read-timeout-ms", _secret, None)),
+        Vector(Property("http.follow-redirects", "maybe", None)))
+      When("the request policy compiles these controls and an explicit redirect opt-in")
+      val outcomes = invalid.map(properties => _resolve(context, "/selected", properties = properties))
+      val redirect = _resolve(context, "/selected", properties = Vector(Property("http.follow-redirects", "true", None)))
+      Then("invalid controls are refused with safe limits diagnostics and redirect opt-in has its own refusal")
+      outcomes.foreach { outcome =>
+        _policy(outcome) shouldBe Some("http.execution.limits")
+        outcome.toString should not include _secret
+      }
+      _policy(redirect) shouldBe Some("http.execution.redirect")
+    }
+  }
+}

@@ -1,6 +1,6 @@
 package org.goldenport.cncf.resource
 
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, LinkOption, Path, StandardOpenOption}
 import java.util.Locale
 import scala.util.Try
 import scala.util.control.NonFatal
@@ -8,7 +8,8 @@ import org.goldenport.Consequence
 
 /*
  * @since   Jul. 16, 2026
- * @version Jul. 16, 2026
+ *  version Jul. 16, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class TextusUrnReference private[resource] (
@@ -114,7 +115,7 @@ object TextusUrnResourcePolicy {
 
 trait TextusUrnResourceProvider {
   def namespace: String
-  def read(reference: TextusUrnReference): Consequence[ResourceContent]
+  def read(reference: TextusUrnReference, limits: ResourceReadLimits): Consequence[ResourceContent]
 }
 
 final class FileTextusUrnResourceProvider(
@@ -123,43 +124,59 @@ final class FileTextusUrnResourceProvider(
 ) extends TextusUrnResourceProvider {
   private val _root = root.toAbsolutePath.normalize
 
-  def read(reference: TextusUrnReference): Consequence[ResourceContent] =
+  def read(reference: TextusUrnReference, limits: ResourceReadLimits): Consequence[ResourceContent] =
     if (reference.namespace != namespace)
       Consequence.resourceUnsupported("Textus URN namespace is not configured")
     else {
       val path = _root.resolve(reference.resourceId).normalize
-      if (!path.startsWith(_root))
-        Consequence.resourceUnsupported("Textus URN resource is outside configured read-only root")
-      else if (!Files.isRegularFile(path))
-        Consequence.resourceNotFound("configured Textus URN resource is not available")
-      else
-        _authorized_path_c(path).flatMap(_read_c(reference, _))
+      _authorized_path_c(path).flatMap { admitted =>
+        _read_c(reference, admitted, limits)
+      }
     }
 
-  private def _authorized_path_c(path: Path): Consequence[Path] =
-    (Try(_root.toRealPath()).toOption, Try(path.toRealPath()).toOption) match {
-      case (Some(root), Some(realpath)) if realpath.startsWith(root) =>
-        Consequence.success(realpath)
-      case _ =>
-        Consequence.resourceUnsupported("Textus URN resource is outside configured read-only root")
-    }
-
-  private def _read_c(
-    reference: TextusUrnReference,
-    path: Path
-  ): Consequence[ResourceContent] =
+  private def _authorized_path_c(path: Path): Consequence[Path] = {
     try {
-      val bytes = Files.readAllBytes(path).toVector
-      val media = Option(Files.probeContentType(path))
-      Consequence.success(ResourceContent(reference.reference, bytes, media))
+      if (!path.startsWith(_root) || _has_symbolic_link(_root) || _has_symbolic_link(path))
+        Consequence.resourceUnsupported("Textus URN resource path is not admitted")
+      else if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+        Consequence.resourceNotFound("configured Textus URN resource is not available")
+      else {
+        val realroot = _root.toRealPath()
+        val realpath = path.toRealPath()
+        if (realpath.startsWith(realroot))
+          Consequence.success(path)
+        else
+          Consequence.resourceUnsupported("Textus URN resource path is not admitted")
+      }
     } catch {
       case NonFatal(_) =>
         Consequence.resourceInvalid("configured Textus URN resource cannot be read")
     }
+  }
+
+  private def _has_symbolic_link(path: Path): Boolean = {
+    Iterator.iterate(path)(_.getParent).takeWhile(_ != null).exists(Files.isSymbolicLink(_))
+  }
+
+  private def _read_c(
+    reference: TextusUrnReference,
+    path: Path,
+    limits: ResourceReadLimits
+  ): Consequence[ResourceContent] =
+    try {
+      ResourceReadAcquisition.readC(
+        Files.newInputStream(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS), limits
+      ).map { bytes =>
+        ResourceContent(reference.reference, bytes, Option(Files.probeContentType(path)))
+      }
+    } catch {
+      case NonFatal(_) => Consequence.resourceInvalid("configured Textus URN resource cannot be read")
+    }
 }
 
 private final class TextusUrnResourceAccess(
-  providers: Vector[TextusUrnResourceProvider]
+  providers: Vector[TextusUrnResourceProvider],
+  limits: ResourceReadLimits
 ) extends ResourceAccess {
   private val _providers = providers.map { provider =>
     provider.namespace.toLowerCase(Locale.ROOT) -> provider
@@ -168,11 +185,14 @@ private final class TextusUrnResourceAccess(
   def read(reference: ResourceReference): Consequence[ResourceContent] =
     reference match {
       case urn: ResourceReference.Urn =>
-        TextusUrnReference.parseC(urn).flatMap { textusurn =>
-          _providers.get(textusurn.namespace) match {
-            case Some(provider) => provider.read(textusurn)
-            case None => Consequence.resourceUnsupported("Textus URN namespace is not configured")
-          }
+        TextusUrnReference.parseC(urn) match {
+          case Consequence.Success(textusurn) =>
+            _providers.get(textusurn.namespace) match {
+              case Some(provider) => provider.read(textusurn, limits)
+              case None => Consequence.resourceUnsupported("Textus URN namespace is not configured")
+            }
+          case Consequence.Failure(_) =>
+            Consequence.argumentInvalid("Textus URN reference requires a safe namespace and resource id")
         }
       case _ =>
         Consequence.resourceUnsupported("Textus URN resource access requires a URN reference")

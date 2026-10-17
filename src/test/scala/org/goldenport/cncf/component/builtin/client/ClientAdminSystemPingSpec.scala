@@ -3,7 +3,10 @@ package org.goldenport.cncf.component.builtin.client
 import cats.~>
 
 import java.io.{ByteArrayOutputStream, PrintStream}
+import java.net.{InetSocketAddress, URLDecoder}
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.ConcurrentLinkedQueue
+import com.sun.net.httpserver.{HttpExchange, HttpHandler, HttpServer}
 import org.goldenport.bag.Bag
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
@@ -11,7 +14,7 @@ import org.goldenport.cncf.cli.{ClientOperation, CncfRuntime}
 import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig}
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.component.ComponentCreate
-import org.goldenport.cncf.http.HttpDriver
+import org.goldenport.cncf.http.{HttpDriver, HttpExecutionAdmission, HttpExecutionGrant, HttpExecutionLimits, HttpExecutionMethod, UrlConnectionHttpDriver}
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.cncf.component.builtin.client.ClientComponent
@@ -41,7 +44,8 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Mar. 29, 2026
  *  version Apr. 11, 2026
  *  version May.  2, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Oct. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientAdminSystemPingSpec
@@ -67,7 +71,7 @@ class ClientAdminSystemPingSpec
       Then("the UnitOfWork interpreter invokes the HTTP driver")
       result should be_success
       driver.calls shouldBe Vector(
-        HttpCall("GET", "/admin/system/ping", None, Map.empty)
+        HttpCall("GET", s"${ClientConfig.DefaultBaseUrl}/admin/system/ping", None, Map.empty)
       )
       result match {
         case org.goldenport.Consequence.Success(OperationResponse.Http(res)) =>
@@ -152,6 +156,75 @@ class ClientAdminSystemPingSpec
           Map.empty
         )
       )
+    }
+
+    "transport named JSON input through the normal POST CLI and real HTTP driver" in {
+      Given("a test-owned loopback endpoint capturing the existing REST-shaped Start route")
+      val route = "/rest/v1/org-simplemodeling-textus-sm-workflow/goal-phase-service/start-goal-phase"
+      val inputs = Vector(
+        """{"phaseIdentity":"phase-2","repositoryIdentity":"sm-workflow"}""",
+        """{"phaseIdentity":"phase-2","repositoryIdentity":"sm-workflow","note":"日本語 空白+%&=#?"}"""
+      )
+      val captures = new ConcurrentLinkedQueue[(String, String, String)]()
+      val server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0)
+      try {
+        val _ = server.createContext(route, new HttpHandler {
+          override def handle(exchange: HttpExchange): Unit = {
+            try {
+              val _ = captures.add((
+                exchange.getRequestMethod,
+                exchange.getRequestURI.getPath,
+                exchange.getRequestURI.getRawQuery
+              ))
+              val body = "ok".getBytes(StandardCharsets.UTF_8)
+              exchange.getResponseHeaders.set("Content-Type", "text/plain; charset=utf-8")
+              exchange.sendResponseHeaders(200, body.length.toLong)
+              exchange.getResponseBody.write(body)
+            } finally {
+              exchange.close()
+            }
+          }
+        })
+        server.start()
+        val baseurl = s"http://127.0.0.1:${server.getAddress.getPort}"
+        val driver = new UrlConnectionHttpDriver(baseurl)
+        val harness = _build_harness(driver, baseurl)
+        val _ = harness.component.withApplicationConfig(
+          Component.ApplicationConfig(httpDriver = Some(driver))
+        )
+
+        inputs.foreach { input =>
+          Given("the original JSON as a normal named CLI input parameter")
+          val out = new ByteArrayOutputStream()
+          val err = new ByteArrayOutputStream()
+
+          When("the native client executes the POST command")
+          val exit = Console.withOut(new PrintStream(out)) {
+            Console.withErr(new PrintStream(err)) {
+              new CncfRuntime().executeClient(
+                harness.subsystem,
+                Array("http", "post", route, s"input=${input}", s"baseurl=${baseurl}")
+              )
+            }
+          }
+
+          Then("the receiver sees POST at the Start route and the exact original JSON")
+          exit shouldBe 0
+          val captured = Option(captures.poll()).getOrElse(fail("the loopback endpoint received no request"))
+          captured._1 shouldBe "POST"
+          captured._2 shouldBe route
+          val decoded = captured._3.split("&").toVector.map { pair =>
+            val parts = pair.split("=", 2)
+            URLDecoder.decode(parts(0), StandardCharsets.UTF_8) ->
+              URLDecoder.decode(parts(1), StandardCharsets.UTF_8)
+          }
+          decoded.filter(_._1 == "input") shouldBe Vector("input" -> input)
+          out.toString(StandardCharsets.UTF_8) should include ("ok")
+          captures.isEmpty shouldBe true
+        }
+      } finally {
+        server.stop(0)
+      }
     }
 
     "print debug job reference to stderr only when trace-job is requested" in {
@@ -260,7 +333,8 @@ class ClientAdminSystemPingSpec
           org.goldenport.configuration.ConfigurationTrace.empty
         ),
         ExecutionContext.create().observability,
-        AliasResolver.empty
+        AliasResolver.empty,
+        httpAdmission = Some(_http_admission(harness.component.componentId, ClientConfig.DefaultBaseUrl))
       )
       val previous = GlobalRuntimeContext.current
       val exit =
@@ -478,21 +552,21 @@ class ClientAdminSystemPingSpec
       name != "http.data" &&
       name != "-d"
 
-  private final case class TestHarness(
-    subsystem: Subsystem,
-    component: ClientComponent,
-    runtime: RuntimeContext,
-    interpreter: UnitOfWorkInterpreter
+  private final class TestHarness(
+    val subsystem: Subsystem,
+    val component: ClientComponent,
+    val runtime: RuntimeContext,
+    val interpreter: UnitOfWorkInterpreter
   ) {
     def executeAction(action: org.goldenport.cncf.action.Action): Consequence[OperationResponse] = {
-      val ctx = _execution_context(runtime)
+      val ctx = _execution_context(runtime).withScope(component.scopeContext)
       val core = ActionCall.Core(action, ctx, None, None)
       val call = action.createCall(core)
       component.logic.execute(call)
     }
 
     def executeRequest(request: Request): Consequence[Response] = {
-      val ctx = _execution_context(runtime)
+      val ctx = _execution_context(runtime).withScope(component.scopeContext)
       component.logic.makeOperationRequest(request).flatMap {
         case action: org.goldenport.cncf.action.Action =>
           val core = ActionCall.Core(action, ctx, None, None)
@@ -504,23 +578,31 @@ class ClientAdminSystemPingSpec
     }
   }
 
-  private def _build_harness(driver: FakeHttpDriver): TestHarness = {
+  private def _build_harness(driver: HttpDriver, baseurl: String = ClientConfig.DefaultBaseUrl): TestHarness = {
     val subsystem = TestComponentFactory.emptySubsystem("cncf-client-test")
     val component = _client_component()
     subsystem.add(Seq(component))
     val base = org.goldenport.cncf.context.ExecutionContext.create()
     val bootstrap = _bootstrap_runtime_context(driver, base.cncfCore.observability)
+    val hostscope = ScopeContext.Instance(bootstrap.core.copy(
+      httpExecutionAdmissionOption = Some(_http_admission(component.componentId, baseurl))))
+    component.withScopeContext(hostscope)
     val uowcontext = org.goldenport.cncf.context.ExecutionContext.withRuntimeContext(
       base,
       bootstrap
-    )
+    ).withScope(component.scopeContext)
     val datastore = org.goldenport.cncf.datastore.DataStore.noop()
     val eventengine = org.goldenport.cncf.event.EventEngine.noop(datastore)
     val uow = new UnitOfWork(uowcontext, eventengine, CommitRecorder.noop)
     val interpreter = new UnitOfWorkInterpreter(uow)
     val runtime = _test_runtime_context(driver, base.cncfCore.observability, uow, interpreter)
-    TestHarness(subsystem, component, runtime, interpreter)
+    new TestHarness(subsystem, component, runtime, interpreter)
   }
+
+  private def _http_admission(owner: ComponentId, baseurl: String): HttpExecutionAdmission =
+    HttpExecutionAdmission.fromRuntimeC(baseurl, HttpExecutionLimits(10000, 10000, 1048576),
+      Map(owner -> HttpExecutionGrant(Vector(baseurl), Set(HttpExecutionMethod.Get, HttpExecutionMethod.Post))))
+      .getOrElse(fail("client host HTTP setup failed"))
 
   private def _execution_context(
     runtime: RuntimeContext

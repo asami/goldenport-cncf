@@ -7,7 +7,8 @@ import org.goldenport.Consequence
 
 /*
  * @since   Jul. 16, 2026
- * @version Jul. 21, 2026
+ *  version Jul. 21, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResourceContent(
@@ -70,36 +71,54 @@ object ResourceAccess {
   def url(
     policy: ResourceUrlPolicy,
     httpdriver: org.goldenport.cncf.http.HttpDriver
+  ): ResourceAccess = url(policy, httpdriver, ResourceReadLimits.default)
+
+  def url(
+    policy: ResourceUrlPolicy,
+    httpDriver: org.goldenport.cncf.http.HttpDriver,
+    readLimits: ResourceReadLimits
   ): ResourceAccess = {
     val providers = Vector.newBuilder[UrlResourceProvider]
     if (policy.normalizedFileRoots.nonEmpty)
       providers += FileUrlResourceProvider(policy)
     if (policy.normalizedHttpsHosts.nonEmpty)
-      providers += HttpsUrlResourceProvider(policy, httpdriver)
-    url(policy, providers.result())
+      providers += HttpsUrlResourceProvider(policy, httpDriver)
+    url(policy, providers.result(), readLimits)
   }
+
+  def url(policy: ResourceUrlPolicy, providers: Vector[UrlResourceProvider]): ResourceAccess =
+    url(policy, providers, ResourceReadLimits.default)
 
   def url(
     policy: ResourceUrlPolicy,
-    providers: Vector[UrlResourceProvider]
-  ): ResourceAccess =
-    new UrlResourceAccess(policy, providers)
+    providers: Vector[UrlResourceProvider],
+    readLimits: ResourceReadLimits
+  ): ResourceAccess = new UrlResourceAccess(policy, providers, readLimits)
 
   def textus(policy: TextusUrnResourcePolicy): ResourceAccess =
-    textus(policy.fileProviders)
+    textus(policy, ResourceReadLimits.default)
+
+  def textus(policy: TextusUrnResourcePolicy, readLimits: ResourceReadLimits): ResourceAccess =
+    textus(policy.fileProviders, readLimits)
 
   def textus(providers: Vector[TextusUrnResourceProvider]): ResourceAccess =
-    new TextusUrnResourceAccess(providers)
+    textus(providers, ResourceReadLimits.default)
+
+  def textus(providers: Vector[TextusUrnResourceProvider], readLimits: ResourceReadLimits): ResourceAccess =
+    new TextusUrnResourceAccess(providers, readLimits)
 
   def urn(providers: Vector[UrnResourceProvider]): ResourceAccess =
-    new UrnResourceAccess(providers)
+    urn(providers, ResourceReadLimits.default)
+
+  def urn(providers: Vector[UrnResourceProvider], readLimits: ResourceReadLimits): ResourceAccess =
+    new UrnResourceAccess(providers, readLimits)
 
   /** Explicit in-memory provider profile for executable specifications. */
   def testProfile(profile: ResourceAccessTestProfile): ResourceAccess =
     _composite(
-      url(profile.urlPolicy, profile.urlProviders),
-      textus(profile.textusUrnProviders),
-      urn(profile.urnProviders)
+      url(profile.urlPolicy, profile.urlProviders, profile.readLimits),
+      textus(profile.textusUrnProviders, profile.readLimits),
+      urn(profile.urnProviders, profile.readLimits)
     )
 
   def standard(
@@ -107,7 +126,14 @@ object ResourceAccess {
     textuspolicy: TextusUrnResourcePolicy,
     httpdriver: org.goldenport.cncf.http.HttpDriver
   ): ResourceAccess =
-    standard(urlpolicy, textuspolicy, Vector.empty, httpdriver)
+    standard(urlpolicy, textuspolicy, Vector.empty, httpdriver, ResourceReadLimits.default)
+
+  def standard(
+    urlPolicy: ResourceUrlPolicy,
+    textusPolicy: TextusUrnResourcePolicy,
+    httpDriver: org.goldenport.cncf.http.HttpDriver,
+    readLimits: ResourceReadLimits
+  ): ResourceAccess = standard(urlPolicy, textusPolicy, Vector.empty, httpDriver, readLimits)
 
   def standard(
     urlpolicy: ResourceUrlPolicy,
@@ -115,7 +141,16 @@ object ResourceAccess {
     urnproviders: Vector[UrnResourceProvider],
     httpdriver: org.goldenport.cncf.http.HttpDriver
   ): ResourceAccess =
-    _composite(url(urlpolicy, httpdriver), textus(textuspolicy), urn(urnproviders))
+    standard(urlpolicy, textuspolicy, urnproviders, httpdriver, ResourceReadLimits.default)
+
+  def standard(
+    urlPolicy: ResourceUrlPolicy,
+    textusPolicy: TextusUrnResourcePolicy,
+    urnProviders: Vector[UrnResourceProvider],
+    httpDriver: org.goldenport.cncf.http.HttpDriver,
+    readLimits: ResourceReadLimits
+  ): ResourceAccess =
+    _composite(url(urlPolicy, httpDriver, readLimits), textus(textusPolicy, readLimits), urn(urnProviders, readLimits))
 
   private def _composite(
     urlaccess: ResourceAccess,

@@ -62,6 +62,14 @@ code does not construct `ProcessProgramDefinition`, select a driver, or receive
 an executable location. Scope inheritance may supply an admission service, and
 a child scope may explicitly replace it only as trusted runtime/test wiring.
 
+Semantic build intent uses the [protected typed SBT route](typed-sbt-execution.md).
+CNCF internally creates its empty process request only after selecting the
+shared Manage workspace, the immutable runtime Compile/Test definition and
+the actual component's independent capability grant. Generic request admission
+cannot select a tagged SBT definition. The current policy owns both kinds of
+definition and shares their validation; no tool executor or second root
+registry is added. Public Process request/resolved/result shapes are preserved.
+
 The initial downstream pattern is a Textus AI provider requesting a logical
 `codex-cli` capability. Its fixed CLI invocation, sandbox policy, executable
 location, environment policy, and limits belong to runtime assembly; the
@@ -117,7 +125,7 @@ request a narrower tree limit, but cannot name a host root or materialize the
 tree itself. Program admission and the component/provider grant both restrict
 the tree before the UnitOfWork interpreter copies it into the WorkArea.
 
-Callers may select only normalized relative paths under that WorkArea. A
+Ordinary generic callers may select only normalized relative paths under that WorkArea. A
 declared output path is relative to the selected working directory, or the
 WorkArea root when no working directory is selected. Path traversal, symlink
 escape, undeclared output projection, and quota overflow are rejected. The
@@ -125,6 +133,14 @@ caller receives declared bounded artifacts with logical identities, not
 unrestricted host `Path` values. Cleanup is finally-safe for success, ordinary
 failure, timeout, and cancellation; diagnostic retention is an explicit future
 policy, not accidental failed cleanup.
+
+For runtime-tagged SBT, cwd comes from the same admitted canonical checkout
+binding used by semantic admission, with a recheck at both local-driver
+entry points. Component argv/cwd/stdin, WorkArea input files/resource trees,
+outputs and request limit overrides are prohibited for this tool. The existing
+UnitOfWork still owns the WorkArea and handle; no WorkArea projection is
+materialized into the checkout. Root checks do not claim race-proof containment
+or isolation of arbitrary build code, and checkout writes are not rollbackable.
 
 ## Driver Lifecycle
 
@@ -226,6 +242,14 @@ driver for admission, inheritance, cancellation, and confidentiality behavior.
 Controlled local-program tests cover stream draining, timeout, and process-tree
 termination. Normal tests do not require a live external CLI, network access,
 or account credentials.
+
+Typed SBT unit scenarios use only deterministic profiles or controlled
+launchers and start no SBT. Host bootstrap and primary protected-DSL consumer
+wiring remain the next connected Slice. Actual SBT acceptance belongs to one
+child SBT under the existing registered serialized `runtimeScripted` owner;
+machine validation uses the registered runner with fresh permission. This
+source foundation does not promote V1 host configuration to deployed V2,
+complete SBX01, establish Phase acceptance or publish artifacts.
 
 ## Deferred Scope
 

@@ -13,7 +13,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for Phase 33 RR-03 Textus URN resource resolution.
  *
  * @since   Jul. 16, 2026
- * @version Jul. 16, 2026
+ *  version Jul. 16, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class TextusUrnResourceAccessSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -24,25 +25,31 @@ final class TextusUrnResourceAccessSpec extends AnyWordSpec with Matchers with G
     "resolve the same logical URN through in-memory and configured file providers" in {
       Given("a logical Textus URN, an in-memory provider, and a configured namespace root")
       val reference = ResourceReference.parseC("urn:textus:book:catalog-1.txt").toOption.get
+      var observed = Vector.empty[ResourceReadLimits]
+      val limits = ResourceReadLimits(11)
       val memory = new TextusUrnResourceProvider {
         val namespace: String = "book"
 
-        def read(value: TextusUrnReference): Consequence[ResourceContent] =
-          Consequence.success(ResourceContent(value.reference, "in-memory".getBytes(StandardCharsets.UTF_8).toVector))
+        def read(reference: TextusUrnReference, limits: ResourceReadLimits): Consequence[ResourceContent] = {
+          observed = observed :+ limits
+          ResourceReadAcquisition.utf8C("in-memory", limits).map(ResourceContent(reference.reference, _))
+        }
       }
-      val root = Files.createTempDirectory("textus-urn-resource")
+      val root = Files.createTempDirectory("textus-urn-resource").toRealPath()
       Files.writeString(root.resolve("catalog-1.txt"), "configured", StandardCharsets.UTF_8)
       val configured = ResourceAccess.standard(
         ResourceUrlPolicy(),
         TextusUrnResourcePolicy(Map("book" -> root)),
-        FakeHttpDriver.okText("unused")
+        FakeHttpDriver.okText("unused"),
+        limits
       )
 
-      When("unchanged component-side resource reads use each runtime binding")
-      val inmemory = ResourceAccess.textus(Vector(memory)).readText(reference)
+      When("ordinary component-side resource reads use each runtime binding")
+      val inmemory = ResourceAccess.textus(Vector(memory), limits).readText(reference)
       val fromfile = configured.readText(reference)
 
       Then("provider selection is runtime-owned and the physical root is absent from the logical reference")
+      observed shouldBe Vector(limits)
       inmemory.toOption shouldBe Some("in-memory")
       fromfile.toOption shouldBe Some("configured")
       reference.print shouldBe "urn:textus:book:catalog-1.txt"
@@ -92,7 +99,7 @@ final class TextusUrnResourceAccessSpec extends AnyWordSpec with Matchers with G
 
     "reject unknown namespaces and unsafe resource identifiers before a file provider can read" in {
       Given("a runtime that binds only the book namespace")
-      val root = Files.createTempDirectory("textus-urn-policy")
+      val root = Files.createTempDirectory("textus-urn-policy").toRealPath()
       val access = ResourceAccess.standard(
         ResourceUrlPolicy(),
         TextusUrnResourcePolicy(Map("book" -> root)),
@@ -114,8 +121,8 @@ final class TextusUrnResourceAccessSpec extends AnyWordSpec with Matchers with G
 
     "reject a logical resource whose symbolic link escapes its configured root" in {
       Given("a configured namespace root with a symbolic link to a foreign file")
-      val root = Files.createTempDirectory("textus-urn-root")
-      val foreignroot = Files.createTempDirectory("textus-urn-foreign")
+      val root = Files.createTempDirectory("textus-urn-root").toRealPath()
+      val foreignroot = Files.createTempDirectory("textus-urn-foreign").toRealPath()
       val foreign = foreignroot.resolve("foreign.txt")
       Files.writeString(foreign, "foreign", StandardCharsets.UTF_8)
       Files.createSymbolicLink(root.resolve("escape.txt"), foreign)

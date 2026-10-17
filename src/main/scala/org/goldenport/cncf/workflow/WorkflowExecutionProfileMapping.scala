@@ -7,7 +7,9 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.*
   * Executor descriptors must be observed by the owning runtime, not supplied
   * by an AI semantic result. Resolution is not execution or permission.
   * @since   Oct.  8, 2026
-  * @version Oct.  8, 2026
+  *  version Oct.  8, 2026
+  * @version Oct. 16, 2026
+  * @author  ASAMI, Tomoharu
   */
 final case class WorkflowConcreteExecutionProfile(
   identity: String, provider: String, model: String, controls: Map[String, String]
@@ -54,8 +56,12 @@ final class WorkflowExecutionProfileMapping private (
   val identity: String,
   val revision: String,
   private val _profiles: Map[String, WorkflowConcreteExecutionProfile],
-  private val _classes: Map[String, String]
+  private val _classes: Map[String, String],
+  private val _fallbacks: Map[String, String]
 ) {
+  def fallbackClassC(reasoningClass: ReasoningClassReference): Consequence[Option[WorkflowConcreteExecutionProfile]] =
+    resolveClassC(reasoningClass).map(_ => _fallbacks.get(reasoningClass.value).flatMap(_profiles.get))
+
   def resolveClassC(reasoningClass: ReasoningClassReference): Consequence[WorkflowConcreteExecutionProfile] =
     if (reasoningClass == null || !WorkflowExecutionProfileMapping.name(reasoningClass.value))
       Consequence.configurationInvalid("Workflow execution requires a semantic ReasoningClass")
@@ -90,16 +96,23 @@ object WorkflowExecutionProfileMapping {
   final case class ClassBinding(reasoningClass: String, profile: String)
 
   def createC(identity: String, revision: String, profiles: Vector[WorkflowConcreteExecutionProfile],
-    classes: Vector[ClassBinding]): Consequence[WorkflowExecutionProfileMapping] =
+    classes: Vector[ClassBinding], fallbacks: Vector[ClassBinding] = Vector.empty): Consequence[WorkflowExecutionProfileMapping] =
     if (!name(identity) || !name(revision) || profiles == null || profiles.isEmpty || classes == null || classes.isEmpty ||
         profiles.exists(value => value == null || value.validateC.toOption.isEmpty) ||
         classes.exists(value => value == null || !name(value.reasoningClass) || !name(value.profile)) ||
         profiles.map(_.identity).distinct.size != profiles.size ||
         classes.map(_.reasoningClass).distinct.size != classes.size ||
-        !classes.forall(value => profiles.exists(_.identity == value.profile)))
+        !classes.forall(value => profiles.exists(_.identity == value.profile)) || fallbacks == null ||
+        fallbacks.exists(value => value == null || !name(value.reasoningClass) || !name(value.profile)) ||
+        fallbacks.map(_.reasoningClass).distinct.size != fallbacks.size ||
+        !fallbacks.forall(value => classes.exists(_.reasoningClass == value.reasoningClass) &&
+          profiles.exists(_.identity == value.profile)) ||
+        fallbacks.exists(value => profiles.find(_.identity == value.profile).get.matches(
+          profiles.find(_.identity == classes.find(_.reasoningClass == value.reasoningClass).get.profile).get)))
       Consequence.configurationInvalid("Workflow execution profile mapping is missing, ambiguous or references an absent profile")
     else Consequence.success(new WorkflowExecutionProfileMapping(identity, revision,
-      profiles.map(value => value.identity -> value).toMap, classes.map(value => value.reasoningClass -> value.profile).toMap))
+      profiles.map(value => value.identity -> value).toMap, classes.map(value => value.reasoningClass -> value.profile).toMap,
+      fallbacks.map(value => value.reasoningClass -> value.profile).toMap))
 
   private[workflow] def name(value: String): Boolean =
     value != null && value.nonEmpty && value.trim == value && !value.exists(_.isControl)

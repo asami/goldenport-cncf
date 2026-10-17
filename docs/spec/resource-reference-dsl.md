@@ -49,6 +49,119 @@ The model has no write, delete, list, scan, cache, credential, provider,
 filesystem, network, or classpath operation. Components must use this boundary
 for managed-resource reads rather than calling Java filesystem or network APIs.
 
+## Ordinary Single-resource Read Limits
+
+Ordinary `read(reference)` and `readText(reference, charset)` acquire complete
+content under one runtime-owned `ResourceReadLimits(maximumBytes)` policy.
+Components retain their logical references and existing method signatures;
+they neither choose a safety variant nor pass a per-call maximum:
+
+```scala
+val content = read_resource(reference)
+val text = read_resource_text(reference)
+```
+
+The default maximum is **1,048,576 bytes (1 MiB)**. The admitted range is
+**1 through 16,777,216 bytes (16 MiB)**, inclusive. There is no unlimited or
+zero sentinel. Invalid direct construction fails before provider use;
+`ResourceReadLimits.createC` provides structured construction validation.
+Runtime configuration accepts an exact positive integer in that range through:
+
+- `textus.resource.read.max-bytes`;
+- `textus.runtime.resource.read.max-bytes`;
+- `cncf.resource.read.max-bytes`; and
+- `cncf.runtime.resource.read.max-bytes`.
+
+Malformed, zero, negative, excessive and overflowing values refuse runtime
+construction. `RuntimeConfig.Settings`, storage assembly and the normal
+`GlobalRuntimeContext` -> `ExecutionContext` binding retain the actual policy.
+Runtime `ResourceAccess` factories pass that same selected value to the
+existing URL, dedicated Textus URN and external NID routes. Existing factory
+arities select the finite default; explicit runtime assembly overloads accept
+the runtime policy. Test profiles may explicitly select `readLimits`; they do
+not override production settings.
+
+The runtime-only provider acquisition SPI is:
+
+```scala
+// UrlResourceProvider
+def read(reference: ResourceReference.Url, limits: ResourceReadLimits): Consequence[ResourceContent]
+// TextusUrnResourceProvider
+def read(reference: TextusUrnReference, limits: ResourceReadLimits): Consequence[ResourceContent]
+// UrnResourceProvider
+def read(reference: ResourceReference.Urn, limits: ResourceReadLimits): Consequence[ResourceContent]
+// StaticWebUrlResourceProvider
+def readStaticWeb(reference: ResourceReference.Url, limits: ResourceReadLimits): Consequence[ResourceContent]
+```
+
+Configured providers are trusted framework extension code responsible for
+honoring the supplied cap during acquisition. This contract does not contain
+malicious plugin code. Extensions must rebuild for the changed SPI; there is
+no old single-argument provider fallback or binary compatibility claim.
+Reflection NID bindings, public no-argument provider constructors and reserved
+Textus routing remain unchanged. Explicit test-only `ResourceAccess` injection
+remains a test capability, never a production fallback.
+
+The limit counts encoded bytes, including a final newline. Equality succeeds;
+overflow returns only a structured failure, never truncated or partial content.
+The package-private acquisition helper reads at most `maximumBytes + 1` bytes
+from an owned stream and closes it on success, overflow and I/O exception.
+It detects excess independently of metadata or source growth. Acquiring a whole
+resource and checking size afterward is forbidden. In-memory providers count
+UTF-8 bytes before allocating an encoded copy that could exceed the cap.
+
+Standard Textus and file URL providers require normalized and real-root
+containment. They reject symbolic links throughout configured-root and target
+ancestor chains, including final links and in-root links, require ordinary
+regular files with `NOFOLLOW_LINKS`, and open only with `READ` plus
+`NOFOLLOW_LINKS`. This is cooperative path admission; it does not promise an
+adversarial race-proof snapshot, a writable lock or mutation authority.
+
+Ordinary HTTPS passes `http.max-response-bytes` equal to the runtime cap into
+the existing `HttpDriver` before transport acquisition, keeps exact-host and
+user-info denial and disables redirects. Response-bag consumption uses the
+same finite stream helper at the provider boundary. Static Web keeps
+`WebTargetAdmission`, public-network-only access, fixed timeouts and required
+Content-Type. Its effective maximum is the smaller of the runtime maximum and
+its existing 1,048,576-byte ceiling. No new host, protocol or provider-discovery
+route is introduced.
+
+`readText` calls ordinary `read` once, then uses unchanged strict
+`ResourceContent.textC` decoding. Malformed UTF-8 can succeed as complete bytes
+and fail as text without replacement characters. One observed ordinary call
+emits one `resource` / `read` chokepoint and one `Resolve` phase; text does not
+add another read. Attributes contain only safe scheme, provider family,
+logical provider identity and configured state. Generic failures and diagnostic
+displays omit cap settings, host roots, full URL/NSS and private content.
+Custom providers own the privacy of their returned failures.
+
+This is partial producer integration for sm-workflow Phase 6 / P6-SBX03 under
+the existing [File Workspace handoff](../../../sm-workflow/docs/journal/2026/10/2026-10-15-phase-6-file-workspace-dsl-handoff.md)
+and [security review profile](../../../sm-workflow/docs/phase/phase-6-security-review-profile.md).
+It establishes no CNCF Phase 33/107/110 completion or deployed-artifact claim.
+File Workspace writes, the primary five-purpose migration, eight remaining
+main and launcher retirements, and installed command acceptance remain
+unresolved. Read access grants no file writes, Git, SBT, remote or process
+authority. The existing resource effect composition and separate tree contract
+remain unchanged; this adds no resource UoW algebra.
+
+Executable contracts:
+[`ResourceReadLimitsSpec`](../../src/test/scala/org/goldenport/cncf/resource/ResourceReadLimitsSpec.scala),
+[`ResourceAccessBoundedReadSpec`](../../src/test/scala/org/goldenport/cncf/resource/ResourceAccessBoundedReadSpec.scala)
+(the historical file/class identity is retained), and the config, URL, Textus,
+external URN, component DSL and builtin-tool specifications. Historical bounded
+API qualification does not qualify this changed ordinary API.
+
+| Contract | Given | When | Then |
+| --- | --- | --- | --- |
+| BR1 | Canonical namespace files and generated Unicode content | Ordinary component reads use runtime assembly | Exact bytes, identity, strict text and final newline survive with one safe observation |
+| BR2 | Files at and above runtime-selected caps and generated lengths | Ordinary reads acquire complete content | Equality succeeds; excess has no partial value |
+| BR3 | Malformed UTF-8 within the cap | Ordinary acquisition precedes strict decoding | Complete bytes survive and text fails structurally |
+| BR4 | Final, ancestor and configured-root links | Ordinary reads attempt linked paths | All links are denied without mutation |
+| BR5 | Unknown namespace, traversal, missing and nonregular inputs | Standard ordinary dispatch consumes each request | Structured failures omit roots, full references and contents |
+| BR6 | Three explicit in-memory routes and Unicode values at and above one runtime cap | Ordinary composite reads dispatch by existing URL, Textus and external routes | Every route returns complete equality content or structured overflow |
+| BR7 | A cap-aware provider returning success or failure | Observed ordinary DSL forwards one request | The same runtime cap and consequence cross exactly one read/Resolve path |
+
 ## Separate Resource Tree Contract
 
 `ResourceReference` is a single-resource identity and does not model a
@@ -96,7 +209,7 @@ their corresponding policy is non-empty:
 
 - `file:` uses `FileUrlResourceProvider` and is limited to configured,
   read-only roots; the resolved real path must remain under a configured real
-  root, so a symlink cannot escape the policy boundary.
+  root, and every symlink in the admitted root/target ancestor chains is rejected.
 - `https:` uses `HttpsUrlResourceProvider` and the existing CNCF `HttpDriver`;
   it is limited to configured exact host names, rejects user-info URLs, and
   disables automatic redirects before transport execution.
@@ -155,8 +268,8 @@ The usual aliases are accepted: `textus.runtime.resource.urn.textus.file-roots`,
 `cncf.runtime.resource.urn.textus.file-roots`. Each binding is exactly one
 `<namespace>=<absolute filesystem path>` pair. Duplicate namespaces, invalid
 namespaces, and relative roots fail during runtime configuration. A configured
-file provider verifies the resolved real path remains below its configured real
-root before reading.
+file provider verifies normalized and real-root containment and rejects every
+symbolic link in the configured-root and target ancestor chains before finite acquisition.
 
 An unknown namespace, invalid logical resource identifier, absent resource, or
 policy denial remains a structured `Consequence` failure. Generic URN providers

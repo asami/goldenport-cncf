@@ -14,7 +14,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for Phase 33 RR-04 generic external URN resolution.
  *
  * @since   Jul. 16, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UrnResourceAccessSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -49,18 +50,47 @@ final class UrnResourceAccessSpec extends AnyWordSpec with Matchers with GivenWh
       reference.print shouldBe "urn:example:catalog-1"
     }
 
+    "forward the selected runtime cap once to the configured external provider" in {
+      Given("one explicit external provider with a preowned three-byte Unicode value")
+      var observed = Vector.empty[ResourceReadLimits]
+      val provider = new UrnResourceProvider {
+        val nid: String = "example"
+        def read(reference: ResourceReference.Urn, limits: ResourceReadLimits): Consequence[ResourceContent] = {
+          observed = observed :+ limits
+          ResourceReadAcquisition.utf8C("日", limits).map(ResourceContent(reference, _))
+        }
+      }
+      val reference = ResourceReference.parseC("urn:example:private-item").toOption.get
+      val equalaccess = ResourceAccess.urn(Vector(provider), ResourceReadLimits(3))
+      val excessaccess = ResourceAccess.urn(Vector(provider), ResourceReadLimits(2))
+
+      When("ordinary external reads use their runtime-selected limits")
+      val equal = equalaccess.readText(reference)
+      val excess = excessaccess.read(reference)
+
+      Then("the provider sees each cap once and returns complete content or a structured overflow")
+      observed shouldBe Vector(ResourceReadLimits(3), ResourceReadLimits(2))
+      equal.toOption shouldBe Some("日")
+      excess.isFaillure shouldBe true
+      excess.toOption shouldBe None
+    }
+
     "normalize each generated provider NID before generic URN dispatch" in {
       Given("generated valid external NIDs and provider implementations")
       val property = Prop.forAll(_nids) { nid =>
         val rawnid = nid
+        var observed = Vector.empty[ResourceReadLimits]
         val provider = new UrnResourceProvider {
           val nid: String = rawnid.toUpperCase
 
-          def read(reference: ResourceReference.Urn): Consequence[ResourceContent] =
+          def read(reference: ResourceReference.Urn, limits: ResourceReadLimits): Consequence[ResourceContent] = {
+            observed = observed :+ limits
             Consequence.success(ResourceContent(reference, Vector.empty))
+          }
         }
         val reference = ResourceReference.parseC(s"urn:${nid}:catalog-1").toOption.get
-        ResourceAccess.urn(Vector(provider)).read(reference).isSuccess
+        ResourceAccess.urn(Vector(provider)).read(reference).isSuccess &&
+          observed == Vector(ResourceReadLimits.default)
       }
 
       When("the generic providers and URNs are normalized")
@@ -136,18 +166,16 @@ final class UrnResourceAccessSpec extends AnyWordSpec with Matchers with GivenWh
 final class ExampleUrnResourceProvider extends UrnResourceProvider {
   val nid: String = "example"
 
-  def read(reference: ResourceReference.Urn): Consequence[ResourceContent] =
-    Consequence.success(ResourceContent(
-      reference,
-      s"external:${reference.nss}".getBytes(StandardCharsets.UTF_8).toVector
-    ))
+  def read(reference: ResourceReference.Urn, limits: ResourceReadLimits): Consequence[ResourceContent] =
+    ResourceReadAcquisition.utf8C(s"external:${reference.nss}", limits)
+      .map(ResourceContent(reference, _))
 }
 
 final class ShadowTextusUrnResourceProvider extends UrnResourceProvider {
   val nid: String = "textus"
   var called: Boolean = false
 
-  def read(reference: ResourceReference.Urn): Consequence[ResourceContent] = {
+  def read(reference: ResourceReference.Urn, limits: ResourceReadLimits): Consequence[ResourceContent] = {
     called = true
     Consequence.success(ResourceContent(reference, Vector.empty))
   }

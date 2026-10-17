@@ -1,7 +1,9 @@
 package org.goldenport.cncf.resource
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
+import scala.jdk.CollectionConverters.*
+import scala.util.Using
 import org.goldenport.bag.Bag
 import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
 import org.goldenport.datatype.ContentType
@@ -17,7 +19,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for Phase 33 RR-02 URL provider policy.
  *
  * @since   Jul. 16, 2026
- * @version Jul. 21, 2026
+ *  version Jul. 21, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UrlResourceAccessSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -27,9 +30,9 @@ final class UrlResourceAccessSpec extends AnyWordSpec with Matchers with GivenWh
   "ResourceAccess URL providers" should {
     "read a regular file only below its configured root" in {
       Given("a configured root containing an allowed file and a separate foreign file")
-      val root = Files.createTempDirectory("resource-access-root")
+      val root = Files.createTempDirectory("resource-access-root").toRealPath()
       val allowed = root.resolve("message.txt")
-      val foreignroot = Files.createTempDirectory("resource-access-foreign")
+      val foreignroot = Files.createTempDirectory("resource-access-foreign").toRealPath()
       val foreign = foreignroot.resolve("message.txt")
       Files.writeString(allowed, "allowed", StandardCharsets.UTF_8)
       Files.writeString(foreign, "foreign", StandardCharsets.UTF_8)
@@ -45,6 +48,103 @@ final class UrlResourceAccessSpec extends AnyWordSpec with Matchers with GivenWh
       Then("only the configured-root content is returned")
       accepted.toOption.flatMap(_.textC().toOption) shouldBe Some("allowed")
       rejected.isFaillure shouldBe true
+    }
+
+    "enforce the ordinary file URL cap and reject symbolic-link paths privately" in {
+      Given("a canonical configured root with exact, excessive, nonregular and linked file resources")
+      _with_fixture { root =>
+        val equalpath = Files.writeString(root.resolve("equal.txt"), "日", StandardCharsets.UTF_8)
+        Files.writeString(root.resolve("excess.txt"), "日本", StandardCharsets.UTF_8)
+        val directory = Files.createDirectory(root.resolve("directory"))
+        Files.writeString(directory.resolve("nested.txt"), "日", StandardCharsets.UTF_8)
+        Files.createSymbolicLink(root.resolve("inside.txt"), equalpath)
+        Files.createSymbolicLink(root.resolve("linked-directory"), directory)
+        val linkedroot = Files.createSymbolicLink(root.resolve("linked-root"), directory)
+        val access = ResourceAccess.url(
+          ResourceUrlPolicy(fileRoots = Vector(root)), FakeHttpDriver.okText("unused"), ResourceReadLimits(3)
+        )
+        val paths = Vector("excess.txt", "inside.txt", "linked-directory/nested.txt", "directory", "missing.txt")
+          .map(root.resolve(_))
+        val references = paths.map(path => ResourceReference.parseC(path.toUri.toString).toOption.get)
+
+        When("ordinary file URL reads attempt equality, overflow, final links, linked ancestors and missing resources")
+        val equal = access.readText(ResourceReference.parseC(equalpath.toUri.toString).toOption.get)
+        val refused = references.map(access.read)
+        val rootaccess = ResourceAccess.url(
+          ResourceUrlPolicy(fileRoots = Vector(linkedroot)), FakeHttpDriver.okText("unused"), ResourceReadLimits(3)
+        )
+        val rootresult = rootaccess.read(ResourceReference.parseC(linkedroot.resolve("nested.txt").toUri.toString).toOption.get)
+
+        Then("only complete equality content is returned and failures omit paths and private content")
+        equal.toOption shouldBe Some("日")
+        (refused :+ rootresult).foreach { result =>
+          result.isFaillure shouldBe true
+          result.toOption shouldBe None
+          result match {
+            case org.goldenport.Consequence.Failure(conclusion) =>
+              conclusion.display should not include root.toString
+              conclusion.display should not include "日本"
+            case _ => fail("expected a private resource failure")
+          }
+        }
+        Files.readString(equalpath) shouldBe "日"
+      }
+    }
+
+    "send the runtime HTTPS cap to the driver and bound its actual response body" in {
+      Given("a configured exact HTTPS host and a recording driver with a preowned four-byte body")
+      val driver = new RecordingHttpDriver("abcd")
+      val policy = ResourceUrlPolicy(httpsHosts = Vector("catalog.example.test"))
+      val reference = ResourceReference.parseC("https://catalog.example.test/private-content").toOption.get
+      val equalaccess = ResourceAccess.url(policy, driver, ResourceReadLimits(4))
+      val excessaccess = ResourceAccess.url(policy, driver, ResourceReadLimits(3))
+      val userinfo = ResourceReference.parseC("https://user:secret@catalog.example.test/private-content").toOption.get
+
+      When("ordinary reads consume equality, overflow and a user-info target")
+      val equal = equalaccess.readText(reference)
+      val excess = excessaccess.read(reference)
+      val denied = equalaccess.read(userinfo)
+
+      Then("the driver receives each runtime cap without redirects and cannot return a partial oversized body")
+      equal.toOption shouldBe Some("abcd")
+      excess.isFaillure shouldBe true
+      excess.toOption shouldBe None
+      denied.isFaillure shouldBe true
+      driver.requests.map(_.map(property => property.name -> property.value.toString).toMap) shouldBe Vector(
+        Map("http.follow-redirects" -> "false", "http.max-response-bytes" -> "4"),
+        Map("http.follow-redirects" -> "false", "http.max-response-bytes" -> "3")
+      )
+    }
+
+    "tighten static Web acquisition to the smaller runtime cap or existing ceiling" in {
+      Given("an admitted public literal target and recording transports with exact and oversized preowned bodies")
+      val reference = ResourceReference.parseC("https://8.8.8.8/private-content").toOption.get
+      val policy = ResourceUrlPolicy(httpsHosts = Vector("8.8.8.8"))
+      val small = new RecordingHttpDriver("abcd")
+      val large = new RecordingHttpDriver("x" * 1048577)
+      val smallaccess = ResourceAccess.url(policy, small, ResourceReadLimits(3))
+      val ceilingaccess = ResourceAccess.url(policy, large, ResourceReadLimits(2097152))
+      val exact = new RecordingHttpDriver("abc")
+
+      When("static Web reads consume bodies under smaller and larger runtime limits")
+      val smallresult = smallaccess.readStaticWeb(reference)
+      val ceilingresult = ceilingaccess.readStaticWeb(reference)
+      val exactresult = ResourceAccess.url(policy, exact, ResourceReadLimits(3)).readStaticWeb(reference)
+
+      Then("each effective cap bounds the actual body while public-network and timeout policy stay enforced")
+      smallresult.isFaillure shouldBe true
+      smallresult.toOption shouldBe None
+      ceilingresult.isFaillure shouldBe true
+      ceilingresult.toOption shouldBe None
+      exactresult.toOption.flatMap(_.textC().toOption) shouldBe Some("abc")
+      Vector(small -> "3", large -> "1048576", exact -> "3").foreach { case (driver, maximum) =>
+        driver.requests should have size 1
+        driver.requests.head.map(property => property.name -> property.value.toString).toMap shouldBe Map(
+          "http.follow-redirects" -> "false", "http.max-response-bytes" -> maximum,
+          "http.connect-timeout-ms" -> "5000", "http.read-timeout-ms" -> "5000",
+          "http.public-network-only" -> "true"
+        )
+      }
     }
 
     "dispatch configured HTTPS reads through the CNCF HttpDriver and reject other hosts" in {
@@ -155,7 +255,7 @@ final class UrlResourceAccessSpec extends AnyWordSpec with Matchers with GivenWh
         ResourceUrlPolicy(httpsHosts = Vector("8.8.8.8")),
         Vector(new UrlResourceProvider {
           val scheme = "https"
-          def read(reference: ResourceReference.Url): org.goldenport.Consequence[ResourceContent] = {
+          def read(reference: ResourceReference.Url, limits: ResourceReadLimits): org.goldenport.Consequence[ResourceContent] = {
             reads += 1
             org.goldenport.Consequence.success(ResourceContent(reference, Vector.empty))
           }
@@ -212,4 +312,26 @@ final class UrlResourceAccessSpec extends AnyWordSpec with Matchers with GivenWh
       checked.passed shouldBe true
     }
   }
+  private def _with_fixture(body: Path => Unit): Unit = {
+    val work = Files.createDirectories(Path.of("target/resource-url-read/work")).toRealPath()
+    val root = Files.createTempDirectory(work, "case-").toRealPath()
+    try body(root)
+    finally Using.resource(Files.walk(root)) { stream =>
+      stream.iterator().asScala.toVector.sortBy(_.getNameCount).reverse.foreach(Files.delete(_))
+    }
+  }
+
+  private final class RecordingHttpDriver(body: String) extends HttpDriver {
+    private var _requests = Vector.empty[Vector[Property]]
+    def requests: Vector[Vector[Property]] = _requests
+    def get(path: String, headers: Map[String, String], properties: Vector[Property]): HttpResponse = {
+      _requests = _requests :+ properties
+      HttpResponse.text(HttpStatus.Ok, body).withHeader(Record.dataAuto("Content-Type" -> "text/plain"))
+    }
+    def post(path: String, body: Option[String], headers: Map[String, String], properties: Vector[Property]): HttpResponse =
+      throw new UnsupportedOperationException("unused")
+    def put(path: String, body: Option[String], headers: Map[String, String], properties: Vector[Property]): HttpResponse =
+      throw new UnsupportedOperationException("unused")
+  }
+
 }

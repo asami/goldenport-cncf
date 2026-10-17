@@ -10,7 +10,8 @@ import org.goldenport.Consequence
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 18, 2026
+ *  version Jul. 18, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -24,8 +25,8 @@ final class LocalProcessExecutionDriver(
 ) extends ProcessExecutionDriver with AutoCloseable {
   private val _active_processes: java.util.Set[Process] =
     ConcurrentHashMap.newKeySet[Process]()
-  private val _active_handles: java.util.Set[_local_process_execution_handle] =
-    ConcurrentHashMap.newKeySet[_local_process_execution_handle]()
+  private val _active_handles: java.util.Set[LocalProcessExecutionHandle] =
+    ConcurrentHashMap.newKeySet[LocalProcessExecutionHandle]()
   private val _closed = new AtomicBoolean(false)
   private val _lifecycle_lock = new AnyRef
 
@@ -33,9 +34,11 @@ final class LocalProcessExecutionDriver(
     if (_closed.get)
       Consequence.serviceUnavailable("Local Process Execution driver is closed")
     else
-      _validate_prelaunch_c(execution).flatMap { _ =>
-        _launch_c(execution)
-      }
+      for {
+        _ <- _validate_sbt_c(execution)
+        _ <- _validate_prelaunch_c(execution)
+        handle <- _launch_c(execution)
+      } yield handle
 
   override def startC(
     execution: ResolvedProcessExecution,
@@ -45,10 +48,34 @@ final class LocalProcessExecutionDriver(
       Consequence.serviceUnavailable("Local Process Execution driver is closed")
     else
       for {
-        workingDirectory <- workArea.workingDirectoryC(execution.request.workingDirectory)
-        inputFile <- _input_file_c(execution, workArea)
-        handle <- _launch_c(execution, Some(workingDirectory), inputFile, Some(workArea))
+        _ <- _validate_sbt_c(execution)
+        workingdirectory <- _working_directory_c(execution, Some(workArea))
+        inputfile <- _input_file_c(execution, workArea)
+        handle <- _launch_c(execution, workingdirectory, inputfile, Some(workArea))
       } yield handle
+
+  private def _validate_sbt_c(execution: ResolvedProcessExecution): Consequence[Unit] =
+    execution.definition._sbt_metadata.fold(Consequence.unit)(_ =>
+      SbtExecutionAdmission.validateRequestC(execution.request)).flatMap { _ =>
+      execution.definition._git_metadata.fold(Consequence.unit)(_ =>
+        GitExecutionAdmission.validateRequestC(execution.request).flatMap(_ =>
+          execution.definition.argumentPolicy.validateC(execution.request.arguments, execution.effectiveLimits)))
+    }
+
+  private def _working_directory_c(
+    execution: ResolvedProcessExecution,
+    workarea: Option[ProcessExecutionWorkArea]
+  ): Consequence[Option[Path]] =
+    execution.definition._sbt_metadata match {
+      case Some(metadata) => metadata.binding.workingDirectoryC.map(Some(_))
+      case None => execution.definition._git_metadata match {
+        case Some(metadata) => metadata.binding.workingDirectoryC.map(Some(_))
+        case None => workarea match {
+          case Some(value) => value.workingDirectoryC(execution.request.workingDirectory).map(Some(_))
+          case None => Consequence.success(None)
+        }
+      }
+    }
 
   /** Package-visible diagnostic seam for controlled local-driver specifications. */
   private[processexecution] def activeProcessCount: Int = _active_processes.size
@@ -104,7 +131,7 @@ final class LocalProcessExecutionDriver(
   private def _launch_c(
     execution: ResolvedProcessExecution
   ): Consequence[ProcessExecutionHandle] =
-    _launch_c(execution, None, None, None)
+    _working_directory_c(execution, None).flatMap(directory => _launch_c(execution, directory, None, None))
 
   private def _launch_c(
     execution: ResolvedProcessExecution,
@@ -124,7 +151,7 @@ final class LocalProcessExecutionDriver(
         }
         launched.set(process)
         if (abandoned.get) {
-          _local_process_execution_handle._destroy_process_tree(process, force = true)
+          LocalProcessExecutionHandle._destroy_process_tree(process, force = true)
           throw new InterruptedException("Process launch timed out")
         }
         process
@@ -132,8 +159,8 @@ final class LocalProcessExecutionDriver(
     })
     try {
       val process = task.get(execution.effectiveLimits.launchTimeoutMillis.get, TimeUnit.MILLISECONDS)
-      val reference = new AtomicReference[_local_process_execution_handle](null)
-      val handle = new _local_process_execution_handle(
+      val reference = new AtomicReference[LocalProcessExecutionHandle](null)
+      val handle = new LocalProcessExecutionHandle(
         process,
         execution,
         startedat,
@@ -194,7 +221,7 @@ final class LocalProcessExecutionDriver(
   ): Unit = {
     abandoned.set(true)
     Option(launched.get).foreach { process =>
-      _local_process_execution_handle._destroy_process_tree(process, force = true)
+      LocalProcessExecutionHandle._destroy_process_tree(process, force = true)
     }
     task.cancel(true)
   }
@@ -206,7 +233,7 @@ final class LocalProcessExecutionDriver(
   ): ProcessExecutionHandle = {
     val elapsed = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedat)
     val capture = ProcessExecutionCapture(Vector.empty, 0L, truncated = false)
-    new _completed_process_execution_handle(ProcessExecutionResult(
+    new CompletedProcessExecutionHandle(ProcessExecutionResult(
       termination,
       capture,
       capture,
@@ -221,7 +248,7 @@ object LocalProcessExecutionDriver {
   // The local driver is component-scoped, while launch workers are process-scoped
   // daemon infrastructure. Closing one component driver must not disable another.
   private val _launch_executor: ExecutorService =
-    Executors.newCachedThreadPool(new _daemon_thread_factory("cncf-process-launch"))
+    Executors.newCachedThreadPool(new DaemonThreadFactory("cncf-process-launch"))
 }
 
 private[processexecution] trait LocalProcessLauncher {
@@ -293,14 +320,14 @@ private[processexecution] object LocalProcessLauncher {
   }
 }
 
-private final class _completed_process_execution_handle(
+private final class CompletedProcessExecutionHandle(
   result: ProcessExecutionResult
 ) extends ProcessExecutionHandle {
   def awaitC: Consequence[ProcessExecutionResult] = Consequence.success(result)
   def cancelC: Consequence[Unit] = Consequence.unit
 }
 
-private final class _local_process_execution_handle(
+private final class LocalProcessExecutionHandle(
   process: Process,
   execution: ResolvedProcessExecution,
   startedat: Long,
@@ -308,7 +335,7 @@ private final class _local_process_execution_handle(
   workarea: Option[ProcessExecutionWorkArea],
   onterminal: () => Unit
 ) extends ProcessExecutionHandle {
-  private val _io_executor = Executors.newFixedThreadPool(3, new _daemon_thread_factory("cncf-process-io"))
+  private val _io_executor = Executors.newFixedThreadPool(3, new DaemonThreadFactory("cncf-process-io"))
   private val _cancelled = new AtomicBoolean(false)
   private val _finished = new AtomicBoolean(false)
   private val _termination_started = new AtomicBoolean(false)
@@ -534,19 +561,19 @@ private final class _local_process_execution_handle(
 
   private def _terminate_process(): Unit =
     if (_termination_started.compareAndSet(false, true)) {
-      _local_process_execution_handle._destroy_process_tree(process, force = false)
+      LocalProcessExecutionHandle._destroy_process_tree(process, force = false)
       try {
         if (!process.waitFor(execution.effectiveLimits.terminationGraceMillis.get, TimeUnit.MILLISECONDS))
-          _local_process_execution_handle._destroy_process_tree(process, force = true)
+          LocalProcessExecutionHandle._destroy_process_tree(process, force = true)
       } catch {
         case _: InterruptedException =>
           Thread.currentThread().interrupt()
-          _local_process_execution_handle._destroy_process_tree(process, force = true)
+          LocalProcessExecutionHandle._destroy_process_tree(process, force = true)
       }
     }
 }
 
-private object _local_process_execution_handle {
+private object LocalProcessExecutionHandle {
   def _destroy_process_tree(process: Process, force: Boolean): Unit = {
     val descendants = process.toHandle.descendants().iterator().asScala.toVector.reverse
     descendants.foreach { handle =>
@@ -556,7 +583,7 @@ private object _local_process_execution_handle {
   }
 }
 
-private final class _daemon_thread_factory(
+private final class DaemonThreadFactory(
   prefix: String
 ) extends java.util.concurrent.ThreadFactory {
   private val _counter = new AtomicInteger(0)

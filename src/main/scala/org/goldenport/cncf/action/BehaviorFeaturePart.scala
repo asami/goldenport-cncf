@@ -142,7 +142,8 @@ import org.goldenport.cncf.processexecution.{
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorFeaturePart { self: Behavior.Core.Holder =>

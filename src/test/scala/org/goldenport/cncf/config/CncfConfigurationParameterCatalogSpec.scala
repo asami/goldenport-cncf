@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Aug.  3, 2026
  *  version Aug. 11, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfConfigurationParameterCatalogSpec
@@ -63,7 +63,7 @@ final class CncfConfigurationParameterCatalogSpec
           val parameter = CncfConfigurationParameterCatalog.subsystemUserMode
 
           Then("the canonical spelling and exact witness remain coupled")
-          CncfConfigurationParameterCatalog.closed.definitions.size shouldBe 57
+          CncfConfigurationParameterCatalog.closed.definitions.size shouldBe 58
           definition.canonicalSpelling shouldBe SubsystemUserMode.CONFIGURATION_KEY
           definition.decodeOnlyAliases shouldBe Vector(
             "textus.runtime.subsystem.user-mode",

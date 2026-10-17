@@ -1,14 +1,15 @@
 package org.goldenport.cncf.resource
 
 import java.net.URI
-import java.nio.file.{Files, Path}
-import scala.util.{Try, Using}
+import java.nio.file.{Files, LinkOption, Path, StandardOpenOption}
+import scala.util.Try
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
 
 /*
  * @since   Jul. 16, 2026
- * @version Jul. 21, 2026
+ *  version Jul. 21, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResourceUrlPolicy(
@@ -80,11 +81,11 @@ object ResourceUrlPolicy {
 
 trait UrlResourceProvider {
   def scheme: String
-  def read(reference: ResourceReference.Url): Consequence[ResourceContent]
+  def read(reference: ResourceReference.Url, limits: ResourceReadLimits): Consequence[ResourceContent]
 }
 
 trait StaticWebUrlResourceProvider extends UrlResourceProvider {
-  def readStaticWeb(reference: ResourceReference.Url): Consequence[ResourceContent]
+  def readStaticWeb(reference: ResourceReference.Url, limits: ResourceReadLimits): Consequence[ResourceContent]
 }
 
 final class FileUrlResourceProvider(
@@ -92,14 +93,14 @@ final class FileUrlResourceProvider(
 ) extends UrlResourceProvider {
   val scheme: String = "file"
 
-  def read(reference: ResourceReference.Url): Consequence[ResourceContent] =
+  def read(reference: ResourceReference.Url, limits: ResourceReadLimits): Consequence[ResourceContent] =
     _path_c(reference.uri).flatMap { path =>
       if (!policy.permitsFile(path))
         Consequence.resourceUnsupported("file resource is outside configured read-only roots")
-      else if (!Files.isRegularFile(path))
+      else if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
         Consequence.resourceNotFound("configured file resource is not available")
       else
-        _authorized_path_c(path).flatMap(_read_c(reference, _))
+        _authorized_path_c(path).flatMap(_read_c(reference, _, limits))
     }
 
   private def _path_c(uri: URI): Consequence[Path] =
@@ -109,28 +110,37 @@ final class FileUrlResourceProvider(
     }
 
   private def _authorized_path_c(path: Path): Consequence[Path] =
-    Try(path.toRealPath()).toOption match {
-      case Some(realpath) if _permits_real_path(realpath) =>
-        Consequence.success(realpath)
-      case _ =>
-        Consequence.resourceUnsupported("file resource is outside configured read-only roots")
+    try {
+      val roots = policy.normalizedFileRoots.filter(path.startsWith)
+      if (_has_symbolic_link(path) || roots.forall(_has_symbolic_link))
+        Consequence.resourceUnsupported("file resource path is not admitted")
+      else {
+        val realpath = path.toRealPath()
+        if (roots.filterNot(_has_symbolic_link).exists(root => realpath.startsWith(root.toRealPath())))
+          Consequence.success(path)
+        else
+          Consequence.resourceUnsupported("file resource path is not admitted")
+      }
+    } catch {
+      case NonFatal(_) => Consequence.resourceInvalid("configured file resource cannot be read")
     }
 
-  private def _permits_real_path(path: Path): Boolean =
-    policy.normalizedFileRoots.flatMap(root => Try(root.toRealPath()).toOption)
-      .exists(path.startsWith)
+  private def _has_symbolic_link(path: Path): Boolean =
+    Iterator.iterate(path)(_.getParent).takeWhile(_ != null).exists(Files.isSymbolicLink(_))
 
   private def _read_c(
     reference: ResourceReference.Url,
-    path: Path
+    path: Path,
+    limits: ResourceReadLimits
   ): Consequence[ResourceContent] =
     try {
-      val bytes = Files.readAllBytes(path).toVector
-      val media = Option(Files.probeContentType(path))
-      Consequence.success(ResourceContent(reference, bytes, media))
+      ResourceReadAcquisition.readC(
+        Files.newInputStream(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS), limits
+      ).map { bytes =>
+        ResourceContent(reference, bytes, Option(Files.probeContentType(path)))
+      }
     } catch {
-      case NonFatal(_) =>
-        Consequence.resourceInvalid("configured file resource cannot be read")
+      case NonFatal(_) => Consequence.resourceInvalid("configured file resource cannot be read")
     }
 }
 
@@ -140,31 +150,34 @@ final class HttpsUrlResourceProvider(
 ) extends StaticWebUrlResourceProvider {
   val scheme: String = "https"
 
-  def read(reference: ResourceReference.Url): Consequence[ResourceContent] =
+  def read(reference: ResourceReference.Url, limits: ResourceReadLimits): Consequence[ResourceContent] =
     _authorize_c(reference.uri).flatMap { _ =>
-      _response_c(reference, staticweb = false).flatMap { response =>
-        _content_response_c(reference, response, requirecontenttype = false)
+      _response_c(reference, limits, staticweb = false).flatMap { response =>
+        _content_response_c(reference, response, limits, requirecontenttype = false)
       }
     }
 
-  def readStaticWeb(reference: ResourceReference.Url): Consequence[ResourceContent] =
+  def readStaticWeb(reference: ResourceReference.Url, limits: ResourceReadLimits): Consequence[ResourceContent] = {
+    val effective = ResourceReadLimits(math.min(limits.maximumBytes, 1048576))
     WebTargetAdmission.admitC(reference).flatMap { admitted =>
       _authorize_c(admitted.uri).flatMap { _ =>
-        _response_c(admitted, staticweb = true).flatMap { response =>
-          _content_response_c(admitted, response, requirecontenttype = true)
+        _response_c(admitted, effective, staticweb = true).flatMap { response =>
+          _content_response_c(admitted, response, effective, requirecontenttype = true)
         }
       }
     }
+  }
 
   private def _content_response_c(
     reference: ResourceReference.Url,
     response: org.goldenport.http.HttpResponse,
+    limits: ResourceReadLimits,
     requirecontenttype: Boolean
   ): Consequence[ResourceContent] =
     if (response.isSuccess && requirecontenttype && response.headerValue("Content-Type").isEmpty)
       Consequence.resourceInvalid("static Web resource does not declare a Content-Type")
     else if (response.isSuccess)
-      _content_c(reference, response)
+      _content_c(reference, response, limits)
     else if (response.isNotFound)
       Consequence.resourceNotFound("configured HTTPS resource is not available")
     else
@@ -179,27 +192,28 @@ final class HttpsUrlResourceProvider(
 
   private def _response_c(
     reference: ResourceReference.Url,
+    limits: ResourceReadLimits,
     staticweb: Boolean
   ): Consequence[org.goldenport.http.HttpResponse] =
     try {
       Consequence.success(httpdriver.get(
         reference.print,
-        properties = _request_properties(staticweb)
+        properties = _request_properties(limits, staticweb)
       ))
     } catch {
       case NonFatal(_) =>
         Consequence.resourceInvalid("configured HTTPS resource cannot be read")
     }
 
-  private def _request_properties(staticweb: Boolean): Vector[org.goldenport.protocol.Property] = {
+  private def _request_properties(limits: ResourceReadLimits, staticweb: Boolean): Vector[org.goldenport.protocol.Property] = {
     val base = Vector(
-      org.goldenport.protocol.Property("http.follow-redirects", "false", None)
+      org.goldenport.protocol.Property("http.follow-redirects", "false", None),
+      org.goldenport.protocol.Property("http.max-response-bytes", limits.maximumBytes.toString, None)
     )
     if (staticweb)
       base ++ Vector(
         org.goldenport.protocol.Property("http.connect-timeout-ms", "5000", None),
         org.goldenport.protocol.Property("http.read-timeout-ms", "5000", None),
-        org.goldenport.protocol.Property("http.max-response-bytes", "1048576", None),
         org.goldenport.protocol.Property("http.public-network-only", "true", None)
       )
     else
@@ -208,16 +222,16 @@ final class HttpsUrlResourceProvider(
 
   private def _content_c(
     reference: ResourceReference.Url,
-    response: org.goldenport.http.HttpResponse
+    response: org.goldenport.http.HttpResponse,
+    limits: ResourceReadLimits
   ): Consequence[ResourceContent] =
     try {
-      val bytes = Using.resource(response.bag.openInputStream())(_.readAllBytes()).toVector
-      Consequence.success(ResourceContent(
+      ResourceReadAcquisition.readC(response.bag.openInputStream(), limits).map { bytes => ResourceContent(
         reference,
         bytes,
         mediaType = Some(response.mime.toString),
         declaredCharset = response.charset
-      ))
+      ) }
     } catch {
       case NonFatal(_) =>
         Consequence.resourceInvalid("configured HTTPS resource body cannot be read")
@@ -226,7 +240,8 @@ final class HttpsUrlResourceProvider(
 
 private final class UrlResourceAccess(
   policy: ResourceUrlPolicy,
-  providers: Vector[UrlResourceProvider]
+  providers: Vector[UrlResourceProvider],
+  limits: ResourceReadLimits
 ) extends ResourceAccess {
   private val _providers = providers.map { provider =>
     provider.scheme.toLowerCase(java.util.Locale.ROOT) -> provider
@@ -237,7 +252,7 @@ private final class UrlResourceAccess(
       case url: ResourceReference.Url =>
         _authorize_c(url).flatMap { _ =>
           _providers.get(url.scheme) match {
-            case Some(provider) => provider.read(url)
+            case Some(provider) => provider.read(url, limits)
             case None => _unconfigured_scheme(url.scheme)
           }
         }
@@ -250,7 +265,7 @@ private final class UrlResourceAccess(
       case url: ResourceReference.Url if url.scheme == "https" =>
         _authorize_c(url).flatMap { _ =>
           _providers.get("https") match {
-            case Some(provider: StaticWebUrlResourceProvider) => provider.readStaticWeb(url)
+            case Some(provider: StaticWebUrlResourceProvider) => provider.readStaticWeb(url, limits)
             case Some(_) =>
               Consequence.resourceUnsupported(
                 "configured HTTPS provider does not support static Web admission"

@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "generatedAbiVersion": "cncf.component-capability.v1",
+  "producer": {"id": "hand-authored-conformance", "version": "producer-9"},
+  "component": {"namespace": "org.example", "id": "Payments", "version": "3.7.0-SNAPSHOT"},
+  "package": {"coordinate": "package:payments", "version": "package-21"},
+  "source": {"modelAuthority": "model:shop", "path": "models/shop.cml", "sourceRevision": "snapshot-r42", "line": null},
+  "capabilities": [
+    {
+      "kind": "COMPONENT",
+      "identity": {"modelId": "model:shop", "elementId": "cap:pay"},
+      "contractVersion": "cap-new",
+      "name": "Fulfil order",
+      "summary": {"state": "PRESENT", "value": "Accept payment"},
+      "description": {"state": "ABSENT", "reason": "NotRepresented", "detail": "Description was not represented."},
+      "source": {"modelAuthority": "model:shop", "path": "models/shop.cml", "sourceRevision": "def-pay-r7", "line": 11},
+      "discoveryReferences": {
+        "state": "PRESENT",
+        "value": [
+          {
+            "role": "SPECIFICATION",
+            "target": {"identity": {"modelId": "model:proof", "elementId": "spec:payment"}, "boundary": "LOCAL"},
+            "source": {"modelAuthority": "model:shop", "path": "models/shop.cml", "sourceRevision": "discovery-spec-r2", "line": 13},
+            "origin": {"kind": "DECLARED"}
+          },
+          {
+            "role": "EVIDENCE",
+            "target": {"identity": {"modelId": "model:proof", "elementId": "evidence:claim"}, "boundary": "EXTERNAL"},
+            "source": {"modelAuthority": "model:shop", "path": "models/shop.cml", "sourceRevision": "discovery-evidence-r3", "line": null},
+            "origin": {"kind": "DECLARED"}
+          },
+          {
+            "role": "GOAL",
+            "target": {"identity": {"modelId": "model:unseen", "elementId": "goal:checkout"}, "boundary": "EXTERNAL"},
+            "source": {"modelAuthority": "model:shop", "path": "models/shop.cml", "sourceRevision": "discovery-goal-r4", "line": 14},
+            "origin": {"kind": "DECLARED"}
+          }
+        ]
+      },
+      "grounding": {
+        "state": "PRESENT",
+        "value": [
+          {
+            "target": {"kind": "TERM", "identity": {"vocabularyId": "vocab:commerce", "termId": "term:Pay"}},
+            "boundary": "LOCAL",
+            "relation": {"state": "PRESENT", "value": {"vocabularyId": "vocab:commerce", "relationId": "relation:denotes"}},
+            "profile": {"state": "PRESENT", "value": {"vocabularyId": "vocab:commerce", "profileId": "profile:public"}},
+            "context": {"state": "PRESENT", "value": "Checkout context"},
+            "preferredLabel": {"state": "PRESENT", "value": {"text": "支払い", "language": null}},
+            "source": {"modelAuthority": "model:shop", "path": "models/shop.cml", "sourceRevision": "ground-term-r11", "line": 17},
+            "origin": {
+              "kind": "DERIVED",
+              "ruleId": "rule:term-grounding",
+              "inputs": [
+                {"modelAuthority": "vocab:commerce", "path": "vocab/commerce.cml", "sourceRevision": "vocab-ref-r5", "line": 5},
+                {"modelAuthority": "model:domain", "path": "models/domain.cml", "sourceRevision": "domain-input-r2", "line": null}
+              ]
+            }
+          },
+          {
+            "target": {"kind": "MODEL", "identity": {"modelId": "model:domain", "elementId": "concept:payment"}},
+            "boundary": "LOCAL",
+            "relation": {"state": "ABSENT", "reason": "NotDeclared", "detail": "No relation was declared."},
+            "profile": {"state": "ABSENT", "reason": "NotRepresented", "detail": "No profile was represented."},
+            "context": {"state": "ABSENT", "reason": "NotApplicable", "detail": "Context is not applicable."},
+            "preferredLabel": {"state": "ABSENT", "reason": "Unsupported", "detail": "No supported label projection."},
+            "source": {"modelAuthority": "model:shop", "path": "models/shop.cml", "sourceRevision": "ground-model-r12", "line": null},
+            "origin": {"kind": "DECLARED"}
+          },
+          {
+            "target": {"kind": "TERM", "identity": {"vocabularyId": "vocab:external", "termId": "term:unavailable"}},
+            "boundary": "EXTERNAL",
+            "relation": {"state": "PRESENT", "value": {"vocabularyId": "vocab:external", "relationId": "relation:unavailable"}},
+            "profile": {"state": "PRESENT", "value": {"vocabularyId": "vocab:external", "profileId": "profile:unavailable"}},
+            "context": {"state": "ABSENT", "reason": "NotDeclared", "detail": "No external context was declared."},
+            "preferredLabel": {"state": "PRESENT", "value": {"text": "Payment", "language": "en"}},
+            "source": {"modelAuthority": "model:shop", "path": "models/shop.cml", "sourceRevision": "ground-external-r13", "line": 18},
+            "origin": {"kind": "DECLARED"}
+          }
+        ]
+      },
+      "traceability": {
+        "state": "PRESENT",
+        "value": [
+          {
+            "role": "SPECIFICATION",
+            "target": {"identity": {"modelId": "model:proof", "elementId": "spec:payment"}, "boundary": "LOCAL"},
+            "source": {"modelAuthority": "model:shop", "path": "models/shop.cml", "sourceRevision": "trace-spec-r6", "line": 21},
+            "origin": {"kind": "DECLARED"}
+          },
+          {
+            "role": "EVIDENCE",
+            "target": {"identity": {"modelId": "model:proof", "elementId": "evidence:claim"}, "boundary": "LOCAL"},
+            "source": {"modelAuthority": "model:shop", "path": "models/shop.cml", "sourceRevision": "trace-evidence-r8", "line": null},
+            "origin": {"kind": "DECLARED"}
+          }
+        ]
+      }
+    },
+    {
+      "kind": "COMPONENT",
+      "identity": {"modelId": "model:shop", "elementId": "cap:reserve"},
+      "contractVersion": "cap-reserve-4",
+      "name": "Fulfil order",
+      "summary": {"state": "ABSENT", "reason": "NotDeclared", "detail": "No summary was declared."},
+      "description": {"state": "PRESENT", "value": "Reserve an order"},
+      "source": {"modelAuthority": "model:shop", "path": "models/shop.cml", "sourceRevision": "def-reserve-r9", "line": 24},
+      "discoveryReferences": {"state": "PRESENT", "value": []},
+      "grounding": {"state": "ABSENT", "reason": "Unsupported", "detail": "Grounding is unsupported for this input."},
+      "traceability": {"state": "ABSENT", "reason": "NotDeclared", "detail": "No traceability was declared."}
+    }
+  ],
+  "declarations": [
+    {
+      "component": {"namespace": "org.example", "id": "Payments"},
+      "direction": "PROVIDED",
+      "capability": {"kind": "COMPONENT", "identity": {"modelId": "model:shop", "elementId": "cap:pay"}, "contractVersion": "cap-new"},
+      "source": {"modelAuthority": "model:shop", "path": "models/shop.cml", "sourceRevision": "provided-r10", "line": 28},
+      "realizations": {
+        "state": "PRESENT",
+        "value": [
+          {
+            "declarationKey": {"component": {"namespace": "org.example", "id": "Payments"}, "direction": "PROVIDED", "capability": {"kind": "COMPONENT", "identity": {"modelId": "model:shop", "elementId": "cap:pay"}, "contractVersion": "cap-new"}},
+            "targetKind": "OPERATION",
+            "target": {"identity": {"modelId": "model:targets", "elementId": "operation:charge"}, "boundary": "LOCAL"},
+            "targetComponent": {"namespace": "org.example", "id": "Payments"},
+            "targetContractVersion": "operation-contract-2",
+            "generatedAbiVersion": "operation-abi-5",
+            "source": {"modelAuthority": "model:shop", "path": "models/shop.cml", "sourceRevision": "operation-edge-r14", "line": 30},
+            "origin": {"kind": "DECLARED"}
+          },
+          {
+            "declarationKey": {"component": {"namespace": "org.example", "id": "Payments"}, "direction": "PROVIDED", "capability": {"kind": "COMPONENT", "identity": {"modelId": "model:shop", "elementId": "cap:pay"}, "contractVersion": "cap-new"}},
+            "targetKind": "WORKFLOW",
+            "target": {"identity": {"modelId": "model:targets", "elementId": "workflow:checkout"}, "boundary": "EXTERNAL"},
+            "targetComponent": {"namespace": "org.example", "id": "Orchestrator"},
+            "targetContractVersion": "workflow-contract-6",
+            "generatedAbiVersion": "workflow-abi-8",
+            "source": {"modelAuthority": "model:shop", "path": "models/shop.cml", "sourceRevision": "workflow-edge-r15", "line": null},
+            "origin": {"kind": "DERIVED", "ruleId": "rule:workflow-binding", "inputs": [{"modelAuthority": "model:targets", "path": "models/targets.cml", "sourceRevision": "workflow-input-r16", "line": 7}]}
+          },
+          {
+            "declarationKey": {"component": {"namespace": "org.example", "id": "Payments"}, "direction": "PROVIDED", "capability": {"kind": "COMPONENT", "identity": {"modelId": "model:shop", "elementId": "cap:pay"}, "contractVersion": "cap-new"}},
+            "targetKind": "STATE_MACHINE",
+            "target": {"identity": {"modelId": "model:targets", "elementId": "machine:payment"}, "boundary": "LOCAL"},
+            "targetComponent": {"namespace": "org.example", "id": "Payments"},
+            "targetContractVersion": "machine-contract-3",
+            "generatedAbiVersion": "machine-abi-10",
+            "source": {"modelAuthority": "model:shop", "path": "models/shop.cml", "sourceRevision": "machine-edge-r17", "line": 32},
+            "origin": {"kind": "DECLARED"}
+          }
+        ]
+      },
+      "traceability": {"state": "PRESENT", "value": []}
+    },
+    {
+      "component": {"namespace": "org.example", "id": "Payments"},
+      "direction": "REQUIRED",
+      "capability": {"kind": "COMPONENT", "identity": {"modelId": "model:shop", "elementId": "cap:pay"}, "contractVersion": "cap-old"},
+      "source": {"modelAuthority": "model:shop", "path": "models/shop.cml", "sourceRevision": "required-r18", "line": null},
+      "realizations": {"state": "PRESENT", "value": []},
+      "traceability": {"state": "ABSENT", "reason": "NotApplicable", "detail": "No applicable declaration traceability."}
+    },
+    {
+      "component": {"namespace": "org.example", "id": "Payments"},
+      "direction": "PROVIDED",
+      "capability": {"kind": "COMPONENT", "identity": {"modelId": "model:shop", "elementId": "cap:reserve"}, "contractVersion": "cap-reserve-4"},
+      "source": {"modelAuthority": "model:shop", "path": "models/shop.cml", "sourceRevision": "reserve-declaration-r19", "line": 35},
+      "realizations": {"state": "ABSENT", "reason": "Unsupported", "detail": "No supported realization projection."},
+      "traceability": {"state": "ABSENT", "reason": "NotDeclared", "detail": "No declaration traceability was authored."}
+    }
+  ],
+  "compatibility": {
+    "state": "PRESENT",
+    "value": [
+      {
+        "identity": {"modelId": "model:shop", "elementId": "cap:pay"},
+        "requiredVersion": "cap-old",
+        "providedVersion": "cap-new",
+        "source": {"modelAuthority": "model:shop", "path": "models/shop.cml", "sourceRevision": "compatibility-r20", "line": null},
+        "origin": {"kind": "DERIVED", "ruleId": "rule:explicit-compatibility", "inputs": [{"modelAuthority": "model:contracts", "path": "models/contracts.cml", "sourceRevision": "compatibility-input-r21", "line": 9}]}
+      }
+    ]
+  }
+}

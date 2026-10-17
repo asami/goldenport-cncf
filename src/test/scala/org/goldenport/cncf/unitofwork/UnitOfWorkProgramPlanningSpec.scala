@@ -1,6 +1,8 @@
 package org.goldenport.cncf.unitofwork
 
 import org.scalacheck.{Gen, Prop, Test}
+import org.goldenport.cncf.processexecution.{GitOperation, GitTarget, SbtOperation, SbtTarget}
+import org.goldenport.cncf.workspace.{FileTarget, FileWriteMode, WorkspaceFilePath, WorkspaceId}
 import org.goldenport.cncf.workflow.{CompletionContract, ContextBundle, ContextContract, ContextSnapshot, EvidenceContract, ProviderExecutionRequest, StateMachineOperationIdentity, StateMachineProvidedApiRequest, StateMachineRequiredOperation, StateMachineRequiredOperationIdentity, StateMachineRequiredOperationMetadata, StateMachineRunIdentity}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -10,7 +12,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for metadata-independent UnitOfWork planning.
  *
  * @since   Sep.  8, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkProgramPlanningSpec
@@ -24,6 +27,9 @@ final class UnitOfWorkProgramPlanningSpec
   private val _control = UnitOfWorkOp.Authorize(_authorization)
   private val _local = UnitOfWorkOp.LocalDataDir("component")
   private val _external = UnitOfWorkOp.HttpGet("/external")
+  private val _sbt_target = SbtTarget(WorkspaceId.parseC("planning").toOption.get)
+  private val _sbt_compile = UnitOfWorkOp.SbtExec(_sbt_target, SbtOperation.Compile)
+  private val _sbt_test = UnitOfWorkOp.SbtExec(_sbt_target, SbtOperation.Test)
   private val _context = ContextBundle(
     "planning context",
     Vector.empty,
@@ -65,6 +71,76 @@ final class UnitOfWorkProgramPlanningSpec
   )
 
   "UnitOfWorkProgramPlanner" should {
+    "retain File reads and repeated writes in order beside local, control, Git and SBT intents" in {
+      Given("logical File read and write intents mixed with existing control, local, Git and SBT operations")
+      val id = WorkspaceId.parseC("planning").toOption.get
+      val target = FileTarget(id)
+      val path = WorkspaceFilePath.parseC("literal\n\\name").toOption.get
+      val read = UnitOfWorkOp.FileReadText(target, path)
+      val write = UnitOfWorkOp.FileWriteText(target, path, "replacement\n", FileWriteMode.UpdateExisting("expected\n"))
+      val git = UnitOfWorkOp.GitExec(GitTarget(id), GitOperation.Status)
+      val operations = Vector(_local, _control, read, write, write, _local, git, _sbt_test, read, _control)
+
+      When("the original mixed sequence is planned without interpreting or lowering File intents")
+      val plan = UnitOfWorkProgramPlanner.plan(operations)
+
+      Then("every File occurrence is External at its own ordinal and equal writes remain distinct boundaries")
+      plan.occurrences.map(_.operation) shouldBe operations
+      plan.occurrences.map(_.ordinal) shouldBe operations.indices.toVector
+      plan.occurrences.map(_.effectClass) shouldBe Vector(
+        UnitOfWorkEffectClass.Local, UnitOfWorkEffectClass.Control,
+        UnitOfWorkEffectClass.External, UnitOfWorkEffectClass.External, UnitOfWorkEffectClass.External,
+        UnitOfWorkEffectClass.Local, UnitOfWorkEffectClass.External, UnitOfWorkEffectClass.External,
+        UnitOfWorkEffectClass.External, UnitOfWorkEffectClass.Control)
+      plan.segments shouldBe Vector(
+        UnitOfWorkPlanSegment.LocalAtomic(plan.occurrences.take(2)),
+        UnitOfWorkPlanSegment.ExternalBoundary(plan.occurrences(2)),
+        UnitOfWorkPlanSegment.ExternalBoundary(plan.occurrences(3)),
+        UnitOfWorkPlanSegment.ExternalBoundary(plan.occurrences(4)),
+        UnitOfWorkPlanSegment.LocalAtomic(plan.occurrences.slice(5, 6)),
+        UnitOfWorkPlanSegment.ExternalBoundary(plan.occurrences(6)),
+        UnitOfWorkPlanSegment.ExternalBoundary(plan.occurrences(7)),
+        UnitOfWorkPlanSegment.ExternalBoundary(plan.occurrences(8)),
+        UnitOfWorkPlanSegment.LocalAtomic(plan.occurrences.drop(9)))
+    }
+
+    "retain one declarative Git intent as one External boundary without runtime services" in {
+      Given("a logical Git target and Status intent without process or workspace admission")
+      val intent = UnitOfWorkOp.GitExec(GitTarget(WorkspaceId.parseC("planning").toOption.get), GitOperation.Status)
+      When("the intent is planned between two local operations")
+      val plan = UnitOfWorkProgramPlanner.plan(Vector(_local, intent, _local))
+      Then("the original intent occupies exactly one external segment at its own ordinal")
+      plan.occurrences.map(_.operation) shouldBe Vector(_local, intent, _local)
+      plan.occurrences.map(_.effectClass) shouldBe Vector(UnitOfWorkEffectClass.Local, UnitOfWorkEffectClass.External, UnitOfWorkEffectClass.Local)
+      plan.segments(1) shouldBe UnitOfWorkPlanSegment.ExternalBoundary(plan.occurrences(1))
+    }
+
+    "retain Compile and Test as single external occurrences between local runs including equal repeated intents" in {
+      Given("typed Compile and Test intents mixed with local, control and HTTP operations")
+      val operations = Vector(_local, _control, _sbt_compile, _local, _sbt_test, _sbt_test, _external, _control, _local)
+
+      When("the mixed sequence is planned without lowering its typed SBT intents")
+      val plan = UnitOfWorkProgramPlanner.plan(operations)
+
+      Then("each typed SBT occurrence retains its order and distinct ordinal in an isolated external segment")
+      plan.occurrences.map(_.operation) shouldBe operations
+      plan.occurrences.map(_.ordinal) shouldBe operations.indices.toVector
+      plan.occurrences.map(_.effectClass) shouldBe Vector(
+        UnitOfWorkEffectClass.Local, UnitOfWorkEffectClass.Control, UnitOfWorkEffectClass.External,
+        UnitOfWorkEffectClass.Local, UnitOfWorkEffectClass.External, UnitOfWorkEffectClass.External,
+        UnitOfWorkEffectClass.External, UnitOfWorkEffectClass.Control, UnitOfWorkEffectClass.Local
+      )
+      plan.segments shouldBe Vector(
+        UnitOfWorkPlanSegment.LocalAtomic(plan.occurrences.take(2)),
+        UnitOfWorkPlanSegment.ExternalBoundary(plan.occurrences(2)),
+        UnitOfWorkPlanSegment.LocalAtomic(plan.occurrences.slice(3, 4)),
+        UnitOfWorkPlanSegment.ExternalBoundary(plan.occurrences(4)),
+        UnitOfWorkPlanSegment.ExternalBoundary(plan.occurrences(5)),
+        UnitOfWorkPlanSegment.ExternalBoundary(plan.occurrences(6)),
+        UnitOfWorkPlanSegment.LocalAtomic(plan.occurrences.drop(7))
+      )
+    }
+
     "classify representative control, local, and external operations" in {
       Given("one representative operation from each base effect category")
       val operations = Vector(_control, _local, _external)
@@ -176,12 +252,14 @@ final class UnitOfWorkProgramPlanningSpec
     }
 
     "preserve arbitrary safe category order without merging across external occurrences" in {
-      Given("generated sequences made from all bounded control, local, external, and state-machine representatives")
+      Given("generated sequences made from bounded control, local, HTTP, typed SBT and state-machine representatives")
       val operations = Gen.listOf(
         Gen.oneOf(
           _control,
           _local,
           _external,
+          _sbt_compile,
+          _sbt_test,
           _provider_operation,
           _provided_api_operation
         )

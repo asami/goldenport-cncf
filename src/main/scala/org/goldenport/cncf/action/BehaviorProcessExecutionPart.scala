@@ -134,18 +134,129 @@ import org.goldenport.cncf.config.{
   ComponentConfigurationSources
 }
 import org.goldenport.cncf.processexecution.{
+  GitTarget, GitOperation, GitExecutionResult, GitObjectId, GitPath, GitBranchName, GitSelectionId,
+  GitRemoteTip, GitHistoryCounts, GitCommitMetadata, GitStatusEntry, GitIndexEntry, GitBlobContent, GitDiff, GitIndexCheck,
   ProcessExecutionAdmission,
   ProcessExecutionRequest,
   ProcessExecutionResult,
-  ResolvedProcessExecution
+  ResolvedProcessExecution,
+  SbtExecutionResult,
+  SbtOperation,
+  SbtTarget
 }
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.Core.Holder =>
+
+  protected final def git_branch(target: GitTarget): ExecUowM[GitExecutionResult[String]] =
+    _git_exec(target, GitOperation.Branch)
+
+  protected final def git_root(target: GitTarget): ExecUowM[GitExecutionResult[String]] =
+    _git_exec(target, GitOperation.Root)
+
+  protected final def git_remote_tip(target: GitTarget): ExecUowM[GitExecutionResult[GitRemoteTip]] =
+    _git_exec(target, GitOperation.RemoteTip)
+
+  protected final def git_head(target: GitTarget): ExecUowM[GitExecutionResult[GitObjectId]] =
+    _git_exec(target, GitOperation.Head)
+
+  protected final def git_tree(target: GitTarget): ExecUowM[GitExecutionResult[GitObjectId]] =
+    _git_exec(target, GitOperation.Tree)
+
+  protected final def git_status(target: GitTarget): ExecUowM[GitExecutionResult[Vector[GitStatusEntry]]] =
+    _git_exec(target, GitOperation.Status)
+
+  protected final def git_shallow(target: GitTarget): ExecUowM[GitExecutionResult[Boolean]] =
+    _git_exec(target, GitOperation.Shallow)
+
+  protected final def git_replacements(target: GitTarget): ExecUowM[GitExecutionResult[Vector[GitObjectId]]] =
+    _git_exec(target, GitOperation.Replacements)
+
+  protected final def git_merge_head(target: GitTarget): ExecUowM[GitExecutionResult[Option[GitObjectId]]] =
+    _git_exec(target, GitOperation.MergeHead)
+
+  protected final def git_tracking_tip(target: GitTarget): ExecUowM[GitExecutionResult[Option[GitObjectId]]] =
+    _git_exec(target, GitOperation.TrackingTip)
+
+  protected final def git_relation(target: GitTarget): ExecUowM[GitExecutionResult[GitHistoryCounts]] =
+    _git_exec(target, GitOperation.Relation)
+
+  protected final def git_merge_base(target: GitTarget): ExecUowM[GitExecutionResult[Option[GitObjectId]]] =
+    _git_exec(target, GitOperation.MergeBase)
+
+  protected final def git_stage_full_state(target: GitTarget): ExecUowM[GitExecutionResult[Unit]] =
+    _git_exec(target, GitOperation.StageFullState)
+
+  protected final def git_index_tree(target: GitTarget): ExecUowM[GitExecutionResult[GitObjectId]] =
+    _git_exec(target, GitOperation.IndexTree)
+
+  protected final def git_unmerged_index(target: GitTarget): ExecUowM[GitExecutionResult[Vector[GitIndexEntry]]] =
+    _git_exec(target, GitOperation.UnmergedIndex)
+
+  protected final def git_fetch(target: GitTarget): ExecUowM[GitExecutionResult[Unit]] =
+    _git_exec(target, GitOperation.Fetch)
+
+  protected final def git_fast_forward(target: GitTarget, tip: GitObjectId): ExecUowM[GitExecutionResult[Unit]] =
+    _git_exec(target, GitOperation.FastForward(tip))
+
+  protected final def git_pending_merge(target: GitTarget, tip: GitObjectId): ExecUowM[GitExecutionResult[Unit]] =
+    _git_exec(target, GitOperation.PendingMerge(tip))
+
+  protected final def git_commit_pending(target: GitTarget): ExecUowM[GitExecutionResult[Unit]] =
+    _git_exec(target, GitOperation.CommitPending)
+
+  protected final def git_push(target: GitTarget, tip: GitObjectId, branch: GitBranchName): ExecUowM[GitExecutionResult[Unit]] =
+    _git_exec(target, GitOperation.Push(tip, branch))
+
+  protected final def git_create_checkpoint(target: GitTarget, tree: GitObjectId, parent: GitObjectId): ExecUowM[GitExecutionResult[GitObjectId]] =
+    _git_exec(target, GitOperation.CreateCheckpoint(tree, parent))
+
+  protected final def git_install_checkpoint(target: GitTarget, commit: GitObjectId, parent: GitObjectId): ExecUowM[GitExecutionResult[Unit]] =
+    _git_exec(target, GitOperation.InstallCheckpoint(commit, parent))
+
+  protected final def git_commit_metadata(target: GitTarget, commit: GitObjectId): ExecUowM[GitExecutionResult[GitCommitMetadata]] =
+    _git_exec(target, GitOperation.CommitMetadata(commit))
+
+  protected final def git_blob_content(target: GitTarget, blob: GitObjectId): ExecUowM[GitExecutionResult[GitBlobContent]] =
+    _git_exec(target, GitOperation.BlobContent(blob))
+
+  protected final def git_check_pending_index(target: GitTarget, parent: GitObjectId): ExecUowM[GitExecutionResult[GitIndexCheck]] =
+    _git_exec(target, GitOperation.CheckPendingIndex(parent))
+
+  protected final def git_pending_diff(target: GitTarget, parent: GitObjectId): ExecUowM[GitExecutionResult[GitDiff]] =
+    _git_exec(target, GitOperation.PendingDiff(parent))
+
+  protected final def git_pending_paths(target: GitTarget, parent: GitObjectId): ExecUowM[GitExecutionResult[Vector[GitPath]]] =
+    _git_exec(target, GitOperation.PendingPaths(parent))
+
+  protected final def git_stage_selected(target: GitTarget, selectionId: GitSelectionId): ExecUowM[GitExecutionResult[Unit]] =
+    _git_exec(target, GitOperation.StageSelected(selectionId))
+
+  protected final def git_stage_selected_all(target: GitTarget, selectionId: GitSelectionId): ExecUowM[GitExecutionResult[Unit]] =
+    _git_exec(target, GitOperation.StageSelectedAll(selectionId))
+
+  protected final def git_commit_selected(target: GitTarget, selectionId: GitSelectionId): ExecUowM[GitExecutionResult[Unit]] =
+    _git_exec(target, GitOperation.CommitSelected(selectionId))
+
+  private def _git_exec[A](target: GitTarget, operation: GitOperation[A]): ExecUowM[GitExecutionResult[A]] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.GitExec(target, operation)))
+
+
+  protected final def sbt_compile(target: SbtTarget): ExecUowM[SbtExecutionResult] =
+    _sbt_exec(target, SbtOperation.Compile)
+
+  protected final def sbt_test(target: SbtTarget): ExecUowM[SbtExecutionResult] =
+    _sbt_exec(target, SbtOperation.Test)
+
+  protected final def sbt_test_only(target: SbtTarget): ExecUowM[SbtExecutionResult] =
+    _sbt_exec(target, SbtOperation.TestOnly)
+
+  private def _sbt_exec(target: SbtTarget, operation: SbtOperation): ExecUowM[SbtExecutionResult] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.SbtExec(target, operation)))
 
   /** Resolves a provider's logical request through the runtime-owned admission service before
     * creating the resolved-only UnitOfWork operation.
