@@ -7,13 +7,15 @@ Original base: 6cbe877c53c116639feb11fa80546e79c051804c.
 Branch: codex/phase-96-display-service. P96-05 local Step commit is
 4898201d5679408d6e44510024a6feaea442a66c. PLAN epoch 1 and ledger 29 retained.
 
-Current status (2026-10-06): complete P96-06 A+B is independently accepted on all
+Current status (2026-10-16): complete P96-06 A+B is independently accepted on all
 five unchanged criteria through original whole-Step review and descriptor-focused
 PASS admitted in ledger revision 31. Current subject4 passed 5/5 representative
 tests and 98/98 accumulator tests. The [Step acceptance record](#p96-06-step-acceptance)
 supersedes the pending-status chronology below. The ledger has 33 checked and
 21 pending outcomes across 54 unchanged criteria, current_entry=P96-07;
-P96-06 is a CLOSED candidate and its local Step commit is PREPARED/PENDING.
+P96-06 is CLOSED at actual local Step commit
+`1356e41cdee41dd40bc2212c1ef0297ab8875206`, recorded in the
+[post-commit chronology](#p96-06-post-commit-status-reconciliation-2026-10-16).
 P96-07..11 remain OPEN; Phase 96 remains in-progress with zero full Phase reviews.
 
 ## Source-witness decision history
@@ -467,3 +469,23 @@ proofs and ordinary mutation route/descriptor exposure. Final repository release
 validation, the single Phase full review, release/closure and separate Cozy,
 server and app aggregate/E2E acceptance gates remain pending. This entry claims
 no runtime/server/app or final Phase acceptance.
+
+## P96-06 post-commit status reconciliation, 2026-10-16
+
+The local P96-06 Step commit completed as
+`1356e41cdee41dd40bc2212c1ef0297ab8875206`, containing the 26 admitted paths,
+with parent `4898201d5679408d6e44510024a6feaea442a66c`. It is already an ancestor
+of the current branch; no duplicate commit or new acceptance is required. The
+completed record is `phase96-p96-06-step-commit-execution-001@6` in the active
+ignored workflow execution directory. The [Step acceptance entry](#p96-06-step-acceptance)
+above retains its acceptance-time CLOSED-candidate/PREPARED/PENDING wording as
+historical chronology, superseded for current commit status by this note.
+
+P96-06 is independently accepted and CLOSED. Its commit does not replace the
+original Phase base `6cbe877c53c116639feb11fa80546e79c051804c`. All 54 criterion
+texts, 33 checked/21 pending outcomes, current_entry=P96-07, original Goal
+binding/authority, PLAN epoch 1 and review/repair history remain retained.
+P96-07's four criteria and P96-08..11 remain OPEN; full Phase reviews remain
+zero. Final validation/review/release/closure and separate Cozy/server/app
+aggregate gates remain with their existing owners. This factual reconciliation
+adds no execution evidence or acceptance boundary.

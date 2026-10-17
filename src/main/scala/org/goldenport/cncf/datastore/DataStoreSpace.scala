@@ -2,6 +2,7 @@ package org.goldenport.cncf.datastore
 
 import java.nio.file.{Files, Paths}
 import java.util.concurrent.atomic.AtomicLong
+import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.observation.Descriptor
 import org.goldenport.id.UniversalId
@@ -20,7 +21,7 @@ import org.goldenport.record.io.RecordEncoder
  *  version Apr. 15, 2026
  *  version May. 11, 2026
  *  version Aug. 11, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class DataStoreSpace private (
@@ -192,8 +193,40 @@ class DataStoreSpace private (
     dataStore(cid).map {
       case provider: EntityVersionedMutationDataStore =>
         provider.entityMutationProviderCapabilities
+      case provider: EntityCreateDataStore =>
+        provider.entityMutationProviderCapabilities
       case _ =>
         EntityMutationProviderCapabilities.empty
+    }
+
+  def createEntity(plan: EntityCreatePlan)(using ctx: ExecutionContext): Consequence[EntityCreateResult] =
+    EntityCreateSupport.validate(plan).flatMap { _ =>
+      _with_calltree_c(
+        "space:datastore:entity-create",
+        _datastore_space_attributes("entity-create", plan.collection),
+        "space"
+      ) {
+        for {
+          datastore <- dataStore(plan.collection)
+          result <- datastore match {
+            case provider: EntityCreateDataStore => for {
+              _ <- EntityCreateSupport.requireCapabilities(provider.entityMutationProviderCapabilities, plan.sideEffects.nonEmpty)
+              _ <- _ensure_same_provider(datastore, plan.sideEffects)
+              response <- {
+                try {
+                  val outcome = provider.createEntity(plan)
+                  if (outcome == null) EntityCreateSupport.invalidResult[EntityCreateResult] else outcome
+                } catch {
+                  case NonFatal(_) => EntityVersionedMutationFailure.transactionIndeterminate(
+                    "Entity create provider escaped without publication acknowledgement")
+                }
+              }
+            } yield response
+            case _ => EntityNativeMutationSupport.unsupported("entity-create", EntityMutationProviderFeature.AtomicCreate)
+          }
+          admitted <- EntityCreateSupport.validateResult(plan, result)
+        } yield admitted
+      }
     }
 
   def selectEntityMutationPath(

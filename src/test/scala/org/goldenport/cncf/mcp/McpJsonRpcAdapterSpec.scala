@@ -2,13 +2,22 @@ package org.goldenport.cncf.mcp
 
 import java.time.Instant
 
+import cats.data.NonEmptyVector
 import io.circe.Json
 import org.goldenport.{Conclusion, Consequence}
+import org.goldenport.cncf.action.{ActionCall, QueryAction}
 import org.goldenport.cncf.component.Component
-import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
+import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
+import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.configuration.{Configuration, ConfigurationValue}
 import org.goldenport.conclusion.{Disposition, Interpretation}
 import org.goldenport.observation.{Cause, Descriptor, Observation, Phenomenon, Taxonomy}
+import org.goldenport.protocol.{Property, Protocol, Request}
+import org.goldenport.protocol.handler.ProtocolHandler
+import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
+import org.goldenport.protocol.spec
+import org.goldenport.schema.{ValueDomain, XString}
+import org.goldenport.value.BaseContent
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -16,7 +25,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 19, 2026
  *  version May. 18, 2026
- * @version Aug. 19, 2026
+ *  version Aug. 19, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -178,6 +188,67 @@ final class McpJsonRpcAdapterSpec extends AnyWordSpec with Matchers with GivenWh
     }
 
     "invocation and policy" which {
+    "retain legacy JSON-kind conversion through a real unmarked display.update Operation" in {
+      Given("a normally admitted primary component with the default ProtocolHandler and an ordinary unmarked display.update QueryAction")
+      val subsystem = TestComponentFactory.admittedEmptySubsystem("mcp-unmarked-display")
+      try {
+        var received = Vector.empty[List[Property]]
+        val operation = new spec.OperationDefinition {
+          val specification: spec.OperationDefinition.Specification = spec.OperationDefinition.Specification(
+            name = "update",
+            request = spec.RequestDefinition(List(spec.ParameterDefinition(
+              content = BaseContent.simple("payload"), kind = spec.ParameterDefinition.Kind.Property,
+              domain = ValueDomain(XString)))),
+            response = spec.ResponseDefinition.void)
+          def createOperationRequest(request: Request): Consequence[OperationRequest] = {
+            val selected = request
+            Consequence.success(new QueryAction {
+              val request: Request = selected
+              def createCall(core: ActionCall.Core): ActionCall = {
+                val captured = core
+                new ActionCall {
+                  val core: ActionCall.Core = captured
+                  def execute(): Consequence[OperationResponse] = {
+                    received :+= selected.properties
+                    Consequence.success(OperationResponse.Scalar("ok"))
+                  }
+                }
+              }
+            })
+          }
+        }
+        val service = spec.ServiceDefinition("display", spec.OperationDefinitionGroup(NonEmptyVector.of(operation)))
+        val protocol = Protocol(services = spec.ServiceDefinitionGroup(Vector(service)), handler = ProtocolHandler.default)
+        val component = TestComponentFactory.create("McpUnmarkedDisplay", protocol, subsystem = subsystem)
+          .withMcpReadyServices(Set("display"))
+        subsystem.add(Vector(component))
+        val adapter = new McpJsonRpcAdapter(subsystem)
+        val toolname = component.componentId.name + ".display.update"
+        val cases = Vector(
+          Json.obj("key" -> Json.fromString("value")) -> "{\"key\":\"value\"}",
+          Json.arr(Json.fromString("value"), Json.fromInt(2)) -> "[\"value\",2]",
+          Json.fromInt(17) -> "17", Json.True -> "true", Json.Null -> "null",
+          Json.fromString(" raw { value } 日本 Ω ") -> " raw { value } 日本 Ω ")
+        cases.foreach { case (input, expected) =>
+          Given(s"the published unmarked Operation and the independently declared legacy payload String $expected")
+          val before = received.size
+          val request = Json.obj("jsonrpc" -> Json.fromString("2.0"), "id" -> Json.fromString("legacy"),
+            "method" -> Json.fromString("tools/call"), "params" -> Json.obj(
+              "name" -> Json.fromString(toolname), "arguments" -> Json.obj("payload" -> input)))
+          When("actual MCP tools/call dispatches the original JSON kind through normal Subsystem execution")
+          val outcome = adapter.handle(request.noSpaces, _protocol_header)
+          val response = _response_json(outcome)
+          Then("normal ActionCall execution receives exactly the legacy String and returns successful content without a protocol error")
+          outcome shouldBe a[McpJsonRpcOutcome.Response]
+          response.hcursor.downField("error").succeeded shouldBe false
+          response.hcursor.downField("result").get[Boolean]("isError").toOption should not be Some(true)
+          response.hcursor.downField("result").downField("content").downN(0).get[String]("text").toOption shouldBe defined
+          received.size shouldBe before + 1
+          received.last.filter(_.name == "payload").map(_.value) shouldBe List(expected)
+        }
+      } finally Subsystem.shutdownOwned(subsystem)
+    }
+
     "handle tools/call request through subsystem execution path" in {
       Given("a ready admin ping operation")
       val subsystem = DefaultSubsystemFactory.default(Some("server"))

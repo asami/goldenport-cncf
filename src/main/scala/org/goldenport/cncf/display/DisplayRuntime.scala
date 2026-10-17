@@ -10,7 +10,7 @@ import scala.util.control.NonFatal
 
 /*
  * @since   Oct.  3, 2026
- * @version Oct.  3, 2026
+ * @version Oct. 17, 2026
  */
 /** Component-owned contextual sources joined to their matching typed projectors. */
 object DisplayRuntime {
@@ -114,7 +114,8 @@ object DisplayRuntime {
       _lookup_c(screenId).flatMap { entry =>
         if (resourceId == null) _failure("ELEMENT_INVALID", "resourceId", "expected resource identity")
         else if (ctx == null) _failure("ELEMENT_INVALID", "context", "expected execution context")
-        else entry.readC(resourceId)
+        else entry.readC(resourceId).flatMap(display =>
+          Display.withPresentationContextC(display, PresentationContextRuntime.project(ctx)))
       }
     }
 
@@ -122,7 +123,8 @@ object DisplayRuntime {
       _lookup_c(screenId).flatMap { entry =>
         if (query == null) _failure("ELEMENT_INVALID", "query", "expected semantic query")
         else if (ctx == null) _failure("ELEMENT_INVALID", "context", "expected execution context")
-        else entry.queryC(query)
+        else entry.queryC(query).flatMap(display =>
+          Display.withPresentationContextC(display, PresentationContextRuntime.project(ctx)))
       }
     }
 

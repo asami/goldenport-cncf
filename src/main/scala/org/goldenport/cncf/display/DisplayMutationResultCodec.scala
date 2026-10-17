@@ -6,7 +6,7 @@ import org.simplemodeling.model.datatype.EntityRevision
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct.  5, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 /** Supplied receipts and projections only; this codec performs no writes or reloads. */
@@ -18,13 +18,20 @@ private[display] object DisplayMutationResultCodec {
 
   def _encode(result: Result): Consequence[Json] = {
     if (result == null) inputInvalidC("ELEMENT_INVALID", "result")
-    else _projection_json(result.projection).map { projection =>
+    else for {
+      projection <- _projection_json(result.projection)
+      context <- result.presentationContext match {
+        case None => Consequence.success(Vector.empty[(String, Json)])
+        case Some(value) => PresentationContextCodec.encodeJsonC(value)
+          .map(json => Vector("presentationContext" -> json))
+      }
+    } yield {
       val receipt = result.receipt
       Json.fromFields(_prefix(DisplayMutationProtocol.resultSchema) ++ _selection_json(receipt.selection, true) ++
         Vector("outcome" -> _text(_outcome_tag(receipt.kind)),
           "resource" -> _obj("entityId" -> _text(receipt.resource.entityId.value),
             "revision" -> Json.fromLong(receipt.resource.revision.value)),
-          "projection" -> projection, "retryCommand" -> Json.fromBoolean(false)))
+          "projection" -> projection, "retryCommand" -> Json.fromBoolean(false)) ++ context)
     }
   }
   def _decode(expected: Selection, definitions: AdmittedDefinitions, request: Request,
@@ -34,7 +41,7 @@ private[display] object DisplayMutationResultCodec {
     else for {
       parsed <- _parse(json)
       root <- _object(parsed, "$", Vector("schema", "version", "componentId", "resourceType", "definition", "provenance",
-        "outcome", "resource", "projection", "retryCommand"))
+        "outcome", "resource", "projection", "retryCommand"), Vector("presentationContext"))
       _ <- _protocol(root, DisplayMutationProtocol.resultSchema)
       _ <- _selection(root, expected, true)
       kind <- _string(root, "outcome", "$").flatMap {
@@ -52,7 +59,11 @@ private[display] object DisplayMutationResultCodec {
       _ <- if (!retry) Consequence.success(()) else inputInvalidC("VALUE_INVALID", "$.retryCommand")
       receipt <- receiptC(expected, request, kind, DisplayModel.Resource(id, revision), observed)
       projection <- _projection(_member(root, "projection"), receipt, definitions)
-      result <- createC(receipt, projection)
+      context <- root("presentationContext") match {
+        case None => Consequence.success(None)
+        case Some(value) => PresentationContextCodec.decodeJsonC(value).map(Some(_))
+      }
+      result <- createC(receipt, projection, context)
     } yield result
   }
   private def _projection(json: Json, receipt: Receipt, definitions: AdmittedDefinitions): Consequence[Option[ProjectionState]] = {

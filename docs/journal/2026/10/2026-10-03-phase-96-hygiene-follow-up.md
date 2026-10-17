@@ -112,3 +112,63 @@ HYG-P96-02-001 — Static ABI executable-specification display traceability. Own
 - Nonblocking reason: the operational current-status documents correctly distinguish successful validation from still-pending independent acceptance; the selected normative behavior agrees with the implementation and executed specifications. No false closure or invalid behavioral evidence is created.
 - Maintenance boundary: reconcile only undated current execution-status projections with the actual successful receipts, while preserving dated authoring/failure/planned history and leaving independent acceptance, commit and Phase closure to their owners. Do not change contract text, criteria or historical results.
 <!-- cncf-phase-finding:HYG-P96-05-VALIDATION-PROJECTION-001:end -->
+
+<!-- cncf-phase-finding:HYG-P96-07-REMAINING-BASELINE-001:begin -->
+HYG-P96-07-REMAINING-BASELINE-001 OPEN. Owner: CNCF execution/specification maintenance. ObservabilityContext.scala:92,98,107 retains trailing-underscore private members; Subsystem.scala:92,97,110 retains class-owned result models; Subsystem.scala and UnitOfWorkInterpreter.scala remain 2587/2444-line responsibility concentrations; ContentBodyStoragePolicySpec.scala:115 retains clearRecord local naming. These are pre-existing, nonblocking maintenance risks with no established current behavior failure. Admit a separate compatibility-preserving maintenance boundary; exclude already recorded HTTP, ActionCall, datastore and consumer-fixture debt.
+<!-- cncf-phase-finding:HYG-P96-07-REMAINING-BASELINE-001:end -->
+
+<!-- cncf-phase-finding:HYG-P96-C4A-BASELINE-MAINTENANCE-001:begin -->
+HYG-P96-C4A-BASELINE-MAINTENANCE-001 OPEN. Owner: CNCF. ActionCallRepositoryPart.scala:154,789 retains a 1857-line trait, broad imports, legacy conventions and instance-owned AggregateRootState. This pre-existing responsibility/type-ownership debt risks maintenance and compatibility, but no current behavior defect was established. Follow up through a separately admitted compatibility-preserving maintenance boundary; do not extract unrelated responsibilities during P96-07 repair.
+<!-- cncf-phase-finding:HYG-P96-C4A-BASELINE-MAINTENANCE-001:end -->
+
+<!-- cncf-phase-finding:HYG-P96-C4A-SPEC-DISPLAY-001:begin -->
+HYG-P96-C4A-SPEC-DISPLAY-001 OPEN. Owner: CNCF executable specifications. AggregateLifecycleMutationCaptureSpec.scala:31, AggregateLifecycleMutationCapturePropertySpec.scala:14 and PostgresqlAggregateLifecycleMutationCaptureAcceptanceSpec.scala:24 have meaningful ALC identities and behavioral GWT but omit canonical afterWord/Given contract metadata. This is nonblocking traceability presentation debt, distinct from missing semantic GWT. Align metadata separately without changing scenarios, generators, assertions or thresholds.
+<!-- cncf-phase-finding:HYG-P96-C4A-SPEC-DISPLAY-001:end -->
+
+<!-- cncf-phase-finding:HYG-P96-C4B-FIXTURE-SIZE-001:begin -->
+HYG-P96-C4B-FIXTURE-SIZE-001 remains OPEN. C4C auxiliary assurance observed DisplayMutationServiceFixture.scala at 1620 lines, retaining the previously recorded expected-state/provider/assembly/session/adapter/vocabulary responsibility debt. The bounded List additions remain reviewable and introduce no demonstrated behavior failure. Address decomposition in a separately admitted maintenance task with the affected fixture consumers; do not extract unrelated responsibilities during C4C repair.
+<!-- cncf-phase-finding:HYG-P96-C4B-FIXTURE-SIZE-001:end -->
+
+<!-- cncf-phase-finding:HYG-P96-C4B-HTTP-DECLARATIONS-001:begin -->
+HYG-P96-C4B-HTTP-DECLARATIONS-001 OPEN. Owner: CNCF HTTP. Http4sHttpServer.scala retains pre-existing instance-owned concrete models and tuple/local naming debt. These are compatibility-sensitive maintenance concerns, not newly introduced declaration violations or demonstrated P96-07 behavior failures. Address in a separately admitted naming/type-ownership task preserving route and nested API contracts.
+<!-- cncf-phase-finding:HYG-P96-C4B-HTTP-DECLARATIONS-001:end -->
+
+<!-- cncf-phase-finding:HYG-P96-C4B-HTTP-SIZE-001:begin -->
+HYG-P96-C4B-HTTP-SIZE-001 OPEN. Owner: CNCF HTTP. Http4sHttpServer.scala has 8154 lines combining routes, forms, jobs, assets, authentication, rendering and transport. The pre-existing responsibility concentration exceeds size thresholds and increases maintenance risk; the bounded ingress change remains reviewable and no resulting behavior defect was established. Plan a separate responsibility-based decomposition with affected consumers; no incidental extraction in P96-07.
+<!-- cncf-phase-finding:HYG-P96-C4B-HTTP-SIZE-001:end -->
+
+<!-- cncf-phase-finding:HYG-P96-C4C-DATASTORE-MAINTENANCE-001:begin -->
+HYG-P96-C4C-DATASTORE-MAINTENANCE-001 OPEN: DataStore.scala is 1125 lines, above the ordinary 1000-line source-debt threshold, and retains datastore/identifier/memory-provider/query responsibilities plus commented legacy code. Whole-file C4C assurance found no resulting current behavior defect. Plan a separate compatibility-preserving maintenance boundary covering nested public identities and affected consumers; preserve existing provider synchronization and mutation semantics.
+<!-- cncf-phase-finding:HYG-P96-C4C-DATASTORE-MAINTENANCE-001:end -->
+
+<!-- cncf-phase-finding:HYG-P96-C4C-SPEC-DISPLAY-001:begin -->
+HYG-P96-C4C-SPEC-DISPLAY-001 OPEN: the four C4C List suites have meaningful LST scenario identities, visible governing-document references, adjacent GWT and behavioral assertions, but their afterWord/Given metadata does not follow the canonical spec/example/rules/phase display format. This is nonblocking traceability maintenance. Align presentation in a separate maintenance task without changing scenarios, generators, thresholds or production contracts.
+<!-- cncf-phase-finding:HYG-P96-C4C-SPEC-DISPLAY-001:end -->
+
+<!-- cncf-phase-finding:HYG-P96-CONSUMER-LEGACY-FIXTURE-001:begin -->
+HYG-P96-CONSUMER-LEGACY-FIXTURE-001 OPEN. Owner: CNCF executable specifications. DisplayMutationUpdateBridgeFixture.scala retains historical helper/local naming; EntityMutationProviderContractSpec retains its historical policy-parameter convention; UnitOfWorkVersionedMutationSpec.scala:1026,1248 retains instance-owned fixture models. These predate the admitted changes and require a separate consumer-aware maintenance boundary. They do not excuse the newly introduced Sample violation or authorize fixture redesign.
+<!-- cncf-phase-finding:HYG-P96-CONSUMER-LEGACY-FIXTURE-001:end -->
+
+<!-- cncf-phase-finding:HYG-P96-CREATE-001:begin -->
+P96-CREATE-HYG-001 OPEN. Owner: CNCF datastore binding. DataStoreSpace.scala:29 retains the pre-existing class-owned Binding data model. Stable type ownership requires a compatibility-aware change involving its consumers; no new P96-07 behavior defect was established. Preserve the existing candidate and address it in a separately admitted maintenance task, not the observed-delete Sample repair.
+<!-- cncf-phase-finding:HYG-P96-CREATE-001:end -->
+
+<!-- cncf-phase-finding:HYG-P96-CREATE-003:begin -->
+P96-CREATE-HYG-003 OPEN. Owner: CNCF SQL provider. SqlDataStore.scala retains historical protected-hook naming/API debt and now has 3177 lines of provider, schema, comparison, transaction and lifecycle responsibilities. This requires compatibility-preserving maintenance across provider subclasses; no current behavioral failure or new hook-role naming violation was established. Preserve existing hooks during P96-07 repair and plan decomposition separately.
+<!-- cncf-phase-finding:HYG-P96-CREATE-003:end -->
+
+<!-- cncf-phase-finding:HYG-P96-08A-HEADER-COMPRESSION-001:begin -->
+HYG-P96-08A-HEADER-COMPRESSION-001 OPEN. Owner: CNCF source-header maintenance. ComponentFactoryDisplayPart.scala:11 and DisplayService.scala:19 introduce history entries for Oct. 15, 2026 immediately before the Oct. 16, 2026 latest version. Shared RULE.md Scala Header Version Update Rules and the referenced version-update-instruction.md require compression of history entries in the latest version's month/year. This is nonblocking comment-only header maintenance; no behavioral, API, validation or protected-contract impact was found. Maintenance boundary: normalize only these two version blocks under the existing month-compression rule, preserving @since, latest actual source-update date and any history from other months. No product refactoring is admitted.
+<!-- cncf-phase-finding:HYG-P96-08A-HEADER-COMPRESSION-001:end -->
+
+<!-- cncf-phase-finding:HYG-P96-08A-SPEC-TRACEABILITY-001:begin -->
+HYG-P96-08A-SPEC-TRACEABILITY-001 OPEN. Owner: CNCF executable-specification presentation. DisplayBusinessOperationSpec.scala:19, DisplayBusinessOperationCodecSpec.scala:28, DisplayBusinessOperationPropertySpec.scala:67 and DisplayBusinessOperationIngressSpec.scala:22 expose meaningful BA scenario/law identities and behavior grouping, but omit canonical afterWord spec/example/rules/phase metadata and Given governing-document/rule references described by executable-spec-display-and-tagging-rules.md A.1/A.3 and 4.2. Semantic Given/When/Then, observable should expectations and non-vacuous property coverage remain present. This is nonblocking traceability presentation maintenance, distinct from missing semantic scenarios or misplaced front-loaded GWT. Align descriptive metadata in a separately admitted maintenance boundary without changing scenarios, assertions, generators, shrinkers, thresholds or production contracts.
+<!-- cncf-phase-finding:HYG-P96-08A-SPEC-TRACEABILITY-001:end -->
+
+<!-- cncf-phase-finding:HYG-P96-10-CONTEXT-BASELINE-MAINTENANCE-001:begin -->
+HYG-P96-10-CONTEXT-BASELINE-MAINTENANCE-001 OPEN. Owner: CNCF context maintenance. ExecutionContext.scala is 1098 lines versus 1081 at accepted P09 HEAD, already above the ordinary 1000-line source-debt threshold. Its existing context construction, runtime rebinding, response transport and evaluation responsibilities plus public flatcase parameter conventions remain compatibility-sensitive maintenance debt. ScopeContext.scala:242-253 likewise retains pre-existing deprecatedName-backed canonical flatcase parameters. P10's newly introduced declarations follow the naming gate; no current behavior failure is attributed to this historical debt. Plan a separate compatibility-preserving context maintenance boundary involving affected callers and nested API ownership. Do not rename historical parameters or extract unrelated context responsibilities during P96-10 repair.
+<!-- cncf-phase-finding:HYG-P96-10-CONTEXT-BASELINE-MAINTENANCE-001:end -->
+
+<!-- cncf-phase-finding:HYG-P96-10-SPEC-TRACEABILITY-001:begin -->
+HYG-P96-10-SPEC-TRACEABILITY-001 OPEN. Owner: CNCF executable-specification presentation. PresentationContextCodecSpec.scala:22 and PresentationContextCodecPropertySpec.scala:20 omit example/rules fields from canonical afterWord metadata. The seven new P10 scenario/property suites have meaningful grouped behavior and governing R references, but Given descriptions generally omit the full specification path and scenario identity required by executable-spec-display-and-tagging-rules.md A.1/A.3/4.2. This is nonblocking traceability presentation maintenance, separate from CPB-P96-10-CODEC-GWT-001's misplaced semantic action. Align descriptive metadata in a separate maintenance boundary without changing scenarios, assertions, generators, shrinkers or execution thresholds.
+<!-- cncf-phase-finding:HYG-P96-10-SPEC-TRACEABILITY-001:end -->

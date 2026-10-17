@@ -137,9 +137,21 @@ The following authorization cases MUST remain observably distinct:
    admission rejection occurs before `ComponentLogic._execute_action`; no
    ActionCall starts and the admission/evaluation failure is structured (R1).
 2. **Normal `ActionCall.authorize` rejection.** `ActionEngine.execute` performs
-   authorization in its pre-execution `authresult`
-   (`ActionEngine.scala:68-88`, `404-412`). The rejection MUST be returned as
-   a structured failure and recorded at the failure calltree boundary. It MUST
+   authorization through the existing protected `security_authorize` hook
+   exactly once in its pre-execution `authresult`. The default hook MUST call
+   `ActionCall.authorize` once. A supplied `Consequence.Failure(conclusion)`
+   MUST return the exact original Conclusion object, preserving its complete
+   observation, taxonomy, cause/facets, attached Throwable, source position,
+   previous Conclusions, status/application status, interpretation and
+   disposition. The structured exception carrier MUST retain that Conclusion
+   even when it has an attached Throwable; rebuilding from the carrier or
+   throwing the attached Throwable loses the supplied failure contract.
+   Protected-hook overrides retain their dynamic delegation and success
+   behavior. Unexpected NonFatal hook exceptions and structured carriers that
+   contain no Failure retain the existing `Conclusion.from(exception)` failure
+   conversion; fatal errors and InterruptedException are not captured by this
+   authorization adapter. The rejection MUST be recorded at the failure
+   calltree boundary before action/provider execution or finalization. It MUST
    NOT commit `ActionEvent.authorizationFailed` and MUST NOT emit normal
    `observe_enter`/`observe_leave` for an action that did not start.
 3. **Isolated `ActionEngine.executeAuthorized` rejection.** Its denied branch
@@ -342,3 +354,8 @@ exercise portions of these rules:
   and the isolated `executeAuthorized` cases in
   `ActionEngineObservationSpec.scala` cover isolated authorization event-commit
   and observation behavior only (R8, R11).
+* [ActionEngineNormalAuthorizationSpec](../../src/test/scala/org/goldenport/cncf/action/ActionEngineNormalAuthorizationSpec.scala)
+  covers E7 exact supplied-Conclusion preservation, full structured causes and
+  previous Conclusions, protected-hook compatibility, no-start effects and
+  failure calltree behavior, including a total reducing ScalaCheck law with at
+  least one hundred successes and zero discards (R8, R11).

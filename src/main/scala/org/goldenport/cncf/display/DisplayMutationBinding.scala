@@ -8,7 +8,7 @@ import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct.  5, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 /** Explicit pure typed canonical-input preparation; never an atomic write authority. */
@@ -35,6 +35,8 @@ object DisplayMutationBinding {
     private val _declared: Vector[(FieldLocator, FieldDefinition)],
     private val _bindings: Vector[FieldBinding[P]], private val _managed: Set[UpdateTarget],
     private val _validate_domain: P => Consequence[P]) {
+
+    private[cncf] def _field_registrations: Vector[FieldBinding[P]] = _bindings
 
     def descriptorC(availability: Availability): Consequence[Descriptor] = {
       _availability(availability, _declared.map(_._1).toSet).map { _ =>

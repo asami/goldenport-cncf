@@ -22,7 +22,8 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Aug. 23, 2026
+ *  version Aug. 23, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -114,7 +115,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       val ctx0 = ExecutionContext.withSecurityContext(ExecutionContext.create(p), _security_context(p, attributes))
       val ctx1 = _production_runtime_context(ctx0)
       val ctx2 = _restore_formatting_context(ctx0.security, attributes, ctx1)
-      val ctx = _bind_context(attributes, ctx2)
+      val ctx = _rebind_runtime_unit_of_work(_bind_context(attributes, ctx2), "ingress-security")
       if (caps.isEmpty || ctx.security.hasAnyCapability(caps))
         Consequence.success(ResolvedIngressSecurity(ctx, p, caps))
       else
@@ -217,9 +218,8 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     val privilege = _resolve_privilege_from_security(security)
     val ctx0 = ExecutionContext.withSecurityContext(base, security)
     val ctx1 = _production_runtime_context_from_base(ctx0)
-    val ctx1a = _rebind_runtime_unit_of_work(ctx1, "ingress-security")
-    val ctx2 = _restore_formatting_context(security, attributes, ctx1a)
-    val ctx = _bind_context(attributes, ctx2)
+    val ctx2 = _restore_formatting_context(security, attributes, ctx1)
+    val ctx = _rebind_runtime_unit_of_work(_bind_context(attributes, ctx2), "ingress-security")
     if (caps.isEmpty || ctx.security.hasAnyCapability(caps))
       Consequence.success(ResolvedIngressSecurity(ctx, privilege, caps))
     else
@@ -734,7 +734,9 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     _read_universal_id(attributes, Vector(
       EventReception.StandardAttribute.TraceId,
       EventReception.StandardAttribute.LegacyTraceId
-    ), "trace").map(parts => TraceId(parts.major, parts.minor))
+    ), "trace").filter(_.subkind.isEmpty).map(parts =>
+      TraceId(parts.major, parts.minor, Some(parts.timestamp), Some(parts.entropy))
+    )
 
   private def _read_span_id(
     attributes: Map[String, String]
@@ -742,7 +744,9 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     _read_universal_id(attributes, Vector(
       EventReception.StandardAttribute.SpanId
     ), "span").flatMap { parts =>
-      parts.subkind.map(sk => SpanId(parts.major, parts.minor, sk))
+      parts.subkind.map(sk =>
+        SpanId(parts.major, parts.minor, sk, Some(parts.timestamp), Some(parts.entropy))
+      )
     }
 
   private def _read_correlation_id(
@@ -751,7 +755,9 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     _read_universal_id(attributes, Vector(
       EventReception.StandardAttribute.CorrelationId,
       EventReception.StandardAttribute.LegacyCorrelationId
-    ), "correlation").map(parts => CorrelationId(parts.major, parts.minor))
+    ), "correlation").filter(_.subkind.isEmpty).map(parts =>
+      CorrelationId(parts.major, parts.minor, Some(parts.timestamp), Some(parts.entropy))
+    )
 
   private def _read_job_id(
     attributes: Map[String, String]

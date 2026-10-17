@@ -25,7 +25,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
  *  version Apr. 14, 2026
  *  version May. 11, 2026
  *  version Jul. 29, 2026
- * @version Oct.  6, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class EntityStoreSpace {
@@ -49,6 +49,108 @@ class EntityStoreSpace {
     Consequence.successOrServiceProviderByKeyNotFound(
       _entity_stores.find(_.isAccept(cid))
     )("entitystore", cid.print)
+
+  private[cncf] def _save_snapshot_outcome_c[T](
+    entity: T,
+    persistent: EntityPersistent[T],
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy
+  )(using ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntitySnapshot[T]]] =
+    if (entity == null)
+      Consequence.argumentMissing("entity")
+    else if (persistent == null)
+      Consequence.argumentMissing("persistent")
+    else {
+      given EntityPersistent[T] = persistent
+      for {
+        id <- Consequence(persistent.id(entity))
+        _ <- EntityStore._admit_versioned_outcome_c(id, expectedrevision, executionpolicy)
+        outcome <- _with_calltree(
+          "space:entitystore:save-snapshot-outcome",
+          _entitystore_space_attributes("save-snapshot-outcome", id.collection) + ("entity_id" -> id.print)
+        ) {
+          _by_collection(id.collection).flatMap(
+            _._save_snapshot_outcome_c(entity, expectedrevision, executionpolicy)
+          )
+        }
+      } yield outcome
+    }
+
+  private[cncf] def _save_detached_outcome_c[T](
+    entity: T,
+    persistent: EntityPersistent[T],
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy
+  )(using ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntityRevisionCarrier[T]]] =
+    if (entity == null)
+      Consequence.argumentMissing("entity")
+    else if (persistent == null)
+      Consequence.argumentMissing("persistent")
+    else {
+      given EntityPersistent[T] = persistent
+      for {
+        id <- Consequence(persistent.id(entity))
+        _ <- EntityStore._admit_versioned_outcome_c(id, expectedrevision, executionpolicy)
+        outcome <- _with_calltree(
+          "space:entitystore:save-detached-outcome",
+          _entitystore_space_attributes("save-detached-outcome", id.collection) + ("entity_id" -> id.print)
+        ) {
+          _by_collection(id.collection).flatMap(
+            _._save_detached_outcome_c(entity, expectedrevision, executionpolicy)
+          )
+        }
+      } yield outcome
+    }
+
+  private[cncf] def _update_record_snapshot_outcome_c[P](
+    id: EntityId,
+    patch: P,
+    persistent: EntityPersistentUpdate[P],
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy
+  )(using ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntityRecordSnapshot]] =
+    if (patch == null)
+      Consequence.argumentMissing("patch")
+    else if (persistent == null)
+      Consequence.argumentMissing("persistent")
+    else {
+      given EntityPersistentUpdate[P] = persistent
+      EntityStore._admit_versioned_outcome_c(id, expectedrevision, executionpolicy).flatMap { _ =>
+        _with_calltree(
+          "space:entitystore:update-record-snapshot-outcome",
+          _entitystore_space_attributes("update-record-snapshot-outcome", id.collection) + ("entity_id" -> id.print)
+        ) {
+          _by_collection(id.collection).flatMap(
+            _._update_record_snapshot_outcome_c(id, patch, expectedrevision, executionpolicy)
+          )
+        }
+      }
+    }
+
+  private[cncf] def _update_record_detached_outcome_c[P](
+    id: EntityId,
+    patch: P,
+    persistent: EntityPersistentUpdate[P],
+    expectedrevision: Option[EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy
+  )(using ctx: ExecutionContext): Consequence[EntityVersionedMutationOutcome[EntityRevisionCarrier[Record]]] =
+    if (patch == null)
+      Consequence.argumentMissing("patch")
+    else if (persistent == null)
+      Consequence.argumentMissing("persistent")
+    else {
+      given EntityPersistentUpdate[P] = persistent
+      EntityStore._admit_versioned_outcome_c(id, expectedrevision, executionpolicy).flatMap { _ =>
+        _with_calltree(
+          "space:entitystore:update-record-detached-outcome",
+          _entitystore_space_attributes("update-record-detached-outcome", id.collection) + ("entity_id" -> id.print)
+        ) {
+          _by_collection(id.collection).flatMap(
+            _._update_record_detached_outcome_c(id, patch, expectedrevision, executionpolicy)
+          )
+        }
+      }
+    }
 
   def create[T](op: EntityStoreCreate[T])(using
       ctx: ExecutionContext

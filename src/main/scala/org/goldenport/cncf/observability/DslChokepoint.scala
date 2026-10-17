@@ -4,10 +4,11 @@ import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.record.Record
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
+import scala.util.control.NonFatal
 
 /*
  * @since   Apr. 15, 2026
- * @version Apr. 15, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class DslChokepointContext(
@@ -235,6 +236,65 @@ object DslChokepointRunner {
       }
     activeHooks.reverse.foreach(_.phaseLeave(context, phase, _outcome(result)))
     result
+  }
+
+  private[cncf] def _run_preserving_c[A](
+    context: DslChokepointContext,
+    hooks: Option[Vector[DslChokepointHook]]
+  )(body: => Consequence[A])(using ec: ExecutionContext): Consequence[A] =
+    _preserving_c(_hooks(hooks), _.enter(context),
+      (hook, outcome) => hook.leave(context, outcome))(body)
+
+  private[cncf] def _phase_preserving_c[A](
+    context: DslChokepointContext,
+    phase: DslChokepointPhase,
+    hooks: Option[Vector[DslChokepointHook]]
+  )(body: => Consequence[A])(using ec: ExecutionContext): Consequence[A] =
+    _preserving_c(_hooks(hooks), _.phaseEnter(context, phase),
+      (hook, outcome) => hook.phaseLeave(context, phase, outcome))(body)
+
+  private def _preserving_c[A](
+    hooks: Vector[DslChokepointHook],
+    enter: DslChokepointHook => Unit,
+    leave: (DslChokepointHook, DslChokepointOutcome) => Unit
+  )(body: => Consequence[A]): Consequence[A] = {
+    var entered = Vector.empty[DslChokepointHook]
+    var primary = Option.empty[Throwable]
+    var result = Option.empty[Consequence[A]]
+    val iterator = hooks.iterator
+    while (iterator.hasNext && primary.isEmpty) {
+      val hook = iterator.next()
+      entered :+= hook
+      try enter(hook) catch {
+        case NonFatal(_) => ()
+        case signal: Throwable => primary = Some(signal)
+      }
+    }
+    if (primary.isEmpty) {
+      try {
+        val value = try body catch {
+          case NonFatal(error) => Consequence.Failure(Conclusion.from(error))
+        }
+        result = Some(value match {
+          case null | Consequence.Success(null) | Consequence.Failure(null) =>
+            Consequence.operationInvalid("dsl-chokepoint",
+              org.goldenport.observation.Cause.Kind.Inconsistency,
+              Vector(org.goldenport.observation.Descriptor.Facet.Reason("dsl-chokepoint-outcome-invalid")), None)
+          case valid => valid
+        })
+      } catch {
+        case signal: Throwable => primary = Some(signal)
+      }
+    }
+    val outcome = result.map(_outcome).getOrElse(DslChokepointOutcome.Failure)
+    entered.reverseIterator.foreach { hook =>
+      try leave(hook, outcome) catch {
+        case NonFatal(_) => ()
+        case signal: Throwable => if (primary.isEmpty) primary = Some(signal)
+      }
+    }
+    primary.foreach(signal => throw signal)
+    result.get
   }
 
   private def _hooks(

@@ -16,21 +16,25 @@ import org.simplemodeling.model.datatype.EntityId
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct.  5, 2026
+ *  version Oct. 15, 2026
+ * @version Oct. 16, 2026
  */
 /** Complete admitted bindings used only by ordinary component Operations. */
 final class DisplayService private[DisplayService] (
   private val _component_id: ComponentId,
   private val _runtime: DisplayRuntime.Registry,
-  private val _entries: Vector[DisplayService.Entry]
+  private val _entries: Vector[DisplayService.Entry],
+  private val _mutations: Option[DisplayMutationRuntimeEntry.Registry],
+  private val _business: Option[DisplayBusinessOperation.Registry]
 ) {
   import DisplayService.*
 
   private[cncf] val _service_definition: ServiceDefinition = ServiceDefinition(
     name = "display",
-    operations = OperationDefinitionGroup(NonEmptyVector.of(
+    operations = OperationDefinitionGroup(NonEmptyVector.of[OperationDefinition](
       new BoundOperation("query"), new BoundOperation("read")
-    ))
+    ).concat(_mutations.toVector.flatMap(registry => DisplayMutationIngress.operations(_component_id, registry)))
+      .concat(_business.toVector.flatMap(registry => DisplayBusinessOperationIngress.operations(_component_id, registry))))
   )
 
   private final class BoundOperation(opname: String) extends OperationDefinition {
@@ -86,12 +90,14 @@ final class DisplayService private[DisplayService] (
     private val _resource_id: Option[EntityId]
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] = {
-      val display = _resource_id match {
-        case Some(id) => _runtime.readC(_entry.definition.screenId, id)(using executionContext)
-        case None => _runtime.queryC(_entry.definition.screenId, Query.fromRecord(Record.empty))(using executionContext)
+      bind_component_application_datastore_c().flatMap { _ =>
+        val display = _resource_id match {
+          case Some(id) => _runtime.readC(_entry.definition.screenId, id)(using executionContext)
+          case None => _runtime.queryC(_entry.definition.screenId, Query.fromRecord(Record.empty))(using executionContext)
+        }
+        display.flatMap(value => DisplayProtocolCodec.encodeJsonC(_entry.source, value))
+          .map(OperationResponse.Json.apply)
       }
-      display.flatMap(value => DisplayProtocolCodec.encodeJsonC(_entry.source, value))
-        .map(OperationResponse.Json.apply)
     }
   }
 }
@@ -108,6 +114,21 @@ object DisplayService {
   private[cncf] def _bind_c(componentid: ComponentId,
     definitions: GeneratedLogicalUiAbi.AdmittedDefinitions,
     runtime: DisplayRuntime.Registry, bindings: Vector[ResourceBinding]): Consequence[DisplayService] = {
+    _bind_c(componentid, definitions, runtime, bindings, None)
+  }
+
+  private[cncf] def _bind_c(componentid: ComponentId,
+    definitions: GeneratedLogicalUiAbi.AdmittedDefinitions,
+    runtime: DisplayRuntime.Registry, bindings: Vector[ResourceBinding],
+    mutations: Option[DisplayMutationRuntimeEntry.Registry]): Consequence[DisplayService] = {
+    _bind_c(componentid, definitions, runtime, bindings, mutations, None)
+  }
+
+  private[cncf] def _bind_c(componentid: ComponentId,
+    definitions: GeneratedLogicalUiAbi.AdmittedDefinitions,
+    runtime: DisplayRuntime.Registry, bindings: Vector[ResourceBinding],
+    mutations: Option[DisplayMutationRuntimeEntry.Registry],
+    business: Option[DisplayBusinessOperation.Registry]): Consequence[DisplayService] = {
     val problem = if (componentid == null) _error("ELEMENT_INVALID", "componentId")
       else if (definitions == null) _error("ELEMENT_INVALID", "definitions")
       else if (runtime == null) _error("ELEMENT_INVALID", "runtime")
@@ -154,7 +175,7 @@ object DisplayService {
             case None => _failure("SCREEN_MISSING", "bindings")
           }
         }
-      }.map(entries => new DisplayService(componentid, runtime, entries))
+      }.map(entries => new DisplayService(componentid, runtime, entries, mutations, business))
     }
   }
 

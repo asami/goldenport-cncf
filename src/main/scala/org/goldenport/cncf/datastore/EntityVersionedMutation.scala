@@ -20,7 +20,7 @@ import org.simplemodeling.model.value.NominalScalar
  * @since   Jul. 24, 2026
  *  version Jul. 26, 2026
  *  version Sep. 29, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class EntityVersionedRootMutation
@@ -88,6 +88,7 @@ enum EntityMutationProviderFeature {
   case AuthoritativeRecordResult
   case OptimisticCompareAndDelete
   case AuthoritativeDeleteResult
+  case AtomicCreate
 }
 
 final case class EntityMutationProviderCapabilities(

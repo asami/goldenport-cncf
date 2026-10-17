@@ -33,7 +33,8 @@ import org.goldenport.schema.DataConfidentiality
  *  version Apr. 25, 2026
  *  version May. 17, 2026
  *  version Jun. 18, 2026
- * @version Aug. 12, 2026
+ *  version Aug. 12, 2026
+ * @version Oct. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -77,9 +78,17 @@ class ActionEngine(
     var executionoutcome: Option[Either[org.goldenport.Conclusion, OperationResponse]] = None
 
     val authresult: Consequence[Unit] =
-      Consequence {
+      try {
         security_authorize(call, ec)
-        ()
+        Consequence.unit
+      } catch {
+        case exception: org.goldenport.ConsequenceException =>
+          exception.consequence match {
+            case Consequence.Failure(conclusion) => Consequence.Failure(conclusion)
+            case _ => Consequence.Failure(org.goldenport.Conclusion.from(exception))
+          }
+        case NonFatal(exception) =>
+          Consequence.Failure(org.goldenport.Conclusion.from(exception))
       }
 
     authresult.recoverWith { conclusion =>
@@ -408,7 +417,7 @@ class ActionEngine(
     call.authorize()(using ec) match {
       case Consequence.Success(_) => ()
       case Consequence.Failure(conclusion) =>
-        throw conclusion.getException.getOrElse(new org.goldenport.ConsequenceException(Consequence.Failure(conclusion)))
+        conclusion.RAISEC
     }
   }
 

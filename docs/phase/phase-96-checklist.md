@@ -1,11 +1,173 @@
 # Phase 96 Checklist: Display Model Projection and Protocol
 
-status=in-progress
+status=closed
+closed_at=2026-10-17
 phase=[Phase 96](phase-96.md)
 development_branch=codex/phase-96-display-service
 execution_baseline=6cbe877c53c116639feb11fa80546e79c051804c
-current_entry=P96-07
+current_entry=none
 development_plan=[Development plan proposal](../journal/2026/10/2026-10-03-phase-96-development-plan-proposal.md)
+
+## Current final Phase acceptance — 2026-10-17
+
+Phase 96 and all eleven Stage ledgers are CLOSED; all original 54 checklist
+outcomes and thirteen Phase acceptance criteria are reconciled without changing
+their text. P01–P10 and P11A have eleven actual ordinary delivery commits;
+P11A is `a9dc024dac9aeaaf69ed541c4c0a0bfa6ef029c5`. P11B is final Phase
+validation/release bookkeeping, not another implementation Step or review.
+
+PLAN epoch 1 retains exactly one comprehensive Phase review,
+`phase96-full-review-001@1` (Sol high, PASS). Two focused Phase closure reviews
+retain the first narrowing finding and final
+`phase96-final-repair-focused-review-002@1` PASS with zero blockers. Phase
+repair 2 is accepted, nonconverging 0; current typed review ledger is revision 45.
+
+Actual final CNCF repository-full validation: **638 suites / 5,670 succeeded / 0 failed / 0 aborted; 5 canceled, 1 ignored, 46 pending**.
+SBT and wrapper exited 0, with serialized lock released. All seventeen mandatory
+native PostgreSQL suites passed 424 positive cases in this run, using the
+pinned 17.11 server/durability contract; canceled/ignored/pending cases are
+not substitutes for required PostgreSQL proof. The original full run's 23
+failures, failed focused run, and historical evidence limitations are retained.
+Goldenport full validation (47 suites/383 passed/6 ignored) and separately
+accepted Cozy Phase 76 full validation (179 suites/2,484 passed/9 canceled)
+are reused on their actual relevant program contexts. The unchanged core
+producer received exactly one approved local SNAPSHOT refresh, no source edit.
+
+The [final acceptance journal](../journal/2026/10/2026-10-17-phase-96-final-acceptance.md)
+maps the original criteria and delivery history. All 25 accepted Hygiene records
+and one Development Candidate remain once in their original canonical journals;
+both unpersisted ledgers are empty. These are nonblocking follow-ups, not fixes
+silently included in this release.
+
+This is local release content under `Phase-Closure-Binding: phase96-final-closure-20261017-001@1`.
+It establishes committed closure only when that exact release commit and native
+committed-document receipt succeed; authored status alone does not complete the
+Goal. No main integration, push, publication or successor execution is included.
+Editing Studio Phase 2 owns application semantics; app Phase 4 owns prototype
+feedback and app Phase 5 owns real-server aggregate/E2E acceptance. That consumer
+acceptance remains separate; CNCF has not deferred its own full validation.
+
+The dated sections below preserve earlier snapshots and their then-pending
+statements. This current record supersedes their status, not their history.
+
+## Historical P96-11A Step acceptance — 2026-10-17
+
+P96-11 remains IN_PROGRESS, current step P96-11A accepted; exact local delivery
+Step commit pending. The first three original P96-11 outcomes are accepted,
+and P96-11B's final two remain open. All 54 criterion texts and original 13
+Phase acceptance criteria remain unchanged: 52 checked/2 pending,
+current_entry=P96-11.
+
+Fresh independent Sol medium ordinary review
+`phase96-p96-11a-step-review-001@1` returned PASS with zero Current Boundary
+Blockers, Hygiene or Development Candidates; parent admission advanced typed
+review ledger 40 to 41. Actual focused attempt
+`phase96-p96-11a-consumer-handoff-focused-001` passed one suite/8 tests, zero
+failed, aborted, canceled, ignored or pending, with Test compilation/generation
+covered, SBT0/wrapper0 and serial lock released. CHP1 passed 100 generated cases
+(minimum 100, zero discards, one worker) with lawful reducing shrinkers. One
+unspecified deprecation warning is nonblocking.
+
+P01..10 accepted history and P10 commit
+`53ecdfadb00003b995b81ab9548a54b0a4880cab` remain intact. P10's actual focused
+2-suite/21-test and same 50-suite/407-test evidence, including all five native
+PostgreSQL 17.11 suites, durability and SQL NULL logical omission, was
+independently assessed for reuse for unchanged product scope; it was not rerun
+for new fixtures/docs. Supplied-value/codec examples do not establish native
+persistence, live continuation authority or consumer app completion. P10 repair
+6/nonconverging 0 remains historical; P11A Step repair 0/nonconverging 0,
+Phase repair 0 and full Phase review count 0 remain unchanged.
+
+Original authority, Goal binding, baseline and PLAN epoch 1 are retained.
+After actual ordinary local P11A delivery commit, the epoch's sole full Phase
+review is frozen Sol high across original base through all Step commits;
+final repository-full validation and distinct Phase release/ledger closure
+follow. P11B's final two gates remain owed; Stage and Phase cannot close yet.
+
+## Historical P96-11 consumer handoff authoring — 2026-10-17
+
+The following initial authoring snapshot is superseded by current P11A
+acceptance above; its pending statements describe that earlier checkpoint.
+
+P96-11 is IN_PROGRESS. Current step: P96-11A, ordinary consumer handoff
+delivery. The [consumer index](../spec/display-consumer-handoff.md) and
+[sample/provenance journal](../journal/2026/10/2026-10-17-phase-96-consumer-handoff.md)
+reference accepted P96-01 through P96-10 contracts. Sub-Step A references
+the first three original P96-11 outcomes: reproducible artifacts, consumer
+ownership and focused validation/Step acceptance correspondence. Authoring is
+unvalidated, unreviewed and uncommitted; none of those outcomes is checked yet.
+
+Sub-Step P96-11B references the last two original outcomes: repository-full
+release validation and the single Phase full review, then all-criterion
+reconciliation and consistent release/closure records. P96-11 remains open
+until all five original outcomes have accepted evidence. All 54 criterion
+texts remain unchanged, with 49 checked/5 pending. Original authority, Goal
+binding, baseline, PLAN epoch 1 and review ledger revision 40 are retained.
+Full Phase review count is 0; final full-suite validation and release have not
+run. The accepted P96-10 local commit is now verified as
+`53ecdfadb00003b995b81ab9548a54b0a4880cab`.
+
+## Historical P96-10 Step acceptance — 2026-10-17
+
+Connected P96-10 A+B is independently accepted on all four original criteria.
+Original whole-Step review `phase96-p96-10-step-review-001@1` and fresh focused
+closure `phase96-p10-step-repair-focused-result-001@1`, admitted in review
+ledger revision 40, resolve both Current Boundary Blockers. Step repair 6 is
+closed accepted; nonconverging count 0. The
+[acceptance record](../journal/2026/10/2026-10-17-phase-96-presentation-context.md#p96-10-step-acceptance-2026-10-17)
+maps the unchanged criteria to the existing spec/design and executable suites.
+Current focused validation passed 21/21 tests in two suites; the unchanged
+accumulator passed 407/407 in 50 suites, including five actual native
+PostgreSQL 17.11 suites with fsync=on and synchronous_commit=on. Both completed
+with SBT0/wrapper0, released serial locks and zero failed, aborted, canceled,
+ignored or pending tests. Prior B 5-suite/32-test evidence remains distinct.
+
+P96-10 is CLOSED; all 54 criterion texts remain unchanged, with 49 checked/5
+pending and current_entry=P96-11. P96-11 remains OPEN with its five outcomes
+unchecked. P96-09's actual local Step commit is
+`4209af1ec5098985623c5693b5618ea661f70a63`; P96-10's local Step commit is next,
+not completed. Original Goal/authority, base and PLAN epoch remain unchanged.
+Both P96-10 Hygiene items remain separate and nonblocking. No full Phase review
+has been consumed (count 0); repository-full validation, the single full Phase
+review, release, P96-11 and consumer acceptance remain owed. This Step
+acceptance does not accept the whole Phase or a consumer.
+
+## Historical P96-09 Step acceptance — 2026-10-17
+
+P96-09A's [reference contract](../spec/display-editing-studio-reference.md),
+[design](../design/display-editing-studio-reference.md) and
+[sample/provenance record](../journal/2026/10/2026-10-17-phase-96-editing-studio-reference.md)
+have 13 executable scenarios: REF-E1..E8, REF-P1/P2 and mandatory REF-PG1..PG3.
+Focused validation passed: the representative passed 10/10 tests in two suites,
+and the accumulator passed 345/345 tests in 43 suites, including REF-PG1..PG3
+with real PostgreSQL 17.11, fsync=on and synchronous_commit=on. Both completed
+with SBT0/wrapper0, released serial locks and zero failed, aborted, canceled,
+ignored or pending tests. Independent whole-Step review
+`phase96-p96-09-step-review-001@1`, admitted in review ledger revision 38,
+accepts all four original P96-09 criteria with no Current Boundary Blocker.
+P96-09 is CLOSED on that acceptance; its local Step commit is the next operation.
+All 54 criterion texts remain unchanged, with 45 checked/9 pending. P08 history
+is retained and P96-10/P96-11 remain OPEN. Existing fixture-size Hygiene remains
+separate. This is no Phase, consumer or production application acceptance.
+
+## Historical P96-08 acceptance — 2026-10-16
+
+P96-08 is independently accepted on all four original criteria. The complete
+Step review `phase96-p96-08-step-review-001@1` and independent focused
+closure `phase96-p96-08-step-title-focused-result-001@1`, admitted in review
+ledger revision 37, resolve `CPB-P96-08-TITLE-CORRESPONDENCE-001`.
+The corrected property check passed 2/2 tests in one suite; the same focused
+40-suite accumulator passed 332/332, with terminal SBT0/wrapper0 and released
+serial locks. Formal Step repair 1 is closed accepted; nonconverging count 0.
+Known nonblocking Hygiene remains separately recorded, with no new finding.
+
+The checklist now has 41 checked/13 pending outcomes with all 54 criterion
+texts unchanged. P96-09 through P96-11 remain OPEN/not started. Phase 96
+remains in-progress: its sole full Phase review, final validation or admitted
+aggregate handoff, consumer acceptance and release are not established here.
+Step acceptance does not itself prove a completed Git commit. Earlier P96-08
+authoring/validation checkpoints below retain their historical pending status;
+this current acceptance record supersedes those pending-status projections.
 
 ## Ledger boundary
 
@@ -19,16 +181,54 @@ binary-consumption assumptions. The [reconciliation record](../journal/2026/10/2
 retains the original 47 obligations and adds explicit generated-ABI handoff proof.
 The original execution baseline above is preserved; this import is not a rebaseline.
 
+### Historical ledger checkpoint before P96-08 acceptance
+
 P96-01 is CLOSED on documentary contract evidence; P96-02 is CLOSED on
 static ABI admission and pure Display construction evidence. P96-03 is CLOSED
 on all seven criteria after independent whole-Step review and parent admission;
 P96-04 is CLOSED at accepted local Step commit `625d533` after focused 151/151 tests in
 18 suites, independent whole-Step PASS and parent admission. The ledger has
-33 checked and 21 pending outcomes with all 54 criterion texts unchanged;
-current_entry=P96-07. P96-05 is independently accepted and CLOSED at local
+37 checked and 17 pending outcomes with all 54 criterion texts unchanged;
+current_entry=P96-08. P96-05 is independently accepted and CLOSED at local
 Step commit `4898201d5679408d6e44510024a6feaea442a66c`; P96-06 is independently
-accepted and a CLOSED candidate, with its local Step commit PREPARED/PENDING,
-and P96-07 through P96-11 remain OPEN.
+accepted and CLOSED at local Step commit
+`1356e41cdee41dd40bc2212c1ef0297ab8875206`. P96-07 is independently accepted
+and CLOSED on all four criteria through whole-Step review and focused repair
+closure in ledger revision 34, at local Step commit
+`3436aef7ae5bb2b3a12000c064159e11791b5282`.
+P96-08 is in-progress with A independently accepted through
+`phase96-p96-08a-protected-review-001@1` and original 23-suite/168-test PASS.
+B's direct canonical Business/explicit Detail specifications are authored;
+B representative001 failed Test compilation; representative002 compiled and
+completed with 2 passes and 8 failures; representative003 completed with 9
+passes and 1 failure. Representative004 then passed 10/10 tests in two suites,
+resolving the POST form-carrier cause. Accumulator001 completed 40 suites/332
+tests with 331 passes and one BRP1 trim-empty Title failure before mutation.
+Unit 4's lawful-title source repair passed property001 (1 suite/2 tests) and
+the same accumulator002 (40 suites/332 tests). Both completed with all tests
+passing, zero failed/aborted/canceled/ignored/pending, SBT0/wrapper0 and released
+serial lock; parent typed result readers accepted the prior assertions.
+Independent whole-Step review `phase96-p96-08-step-review-001@1` returned
+FINDINGS for `CPB-P96-08-TITLE-CORRESPONDENCE-001`, missing exact initial/reloaded
+semantic Title comparisons; no production corruption is alleged. First formal
+Step repair 1's first property attempt completed 1 suite/2 tests with 1 PASS/
+1 FAIL (SBT1/wrapper1, serial lock released): BRP1 failed before Business at
+the first newline/NUL revision-16 raw-store/decoded-title mismatch; BRP2 passed.
+The same consumed repair's decoded-View correction is now focused-validated.
+`phase96-p96-08-step-title-property-002` passed 1 suite/2 tests and
+`phase96-p96-08-step-title-accumulator-001` passed the same 40 suites/332 tests.
+Both had zero failed/aborted/canceled/ignored/pending, SBT0/wrapper0 and released
+serial lock; parent typed result readers accepted both results. Fresh independent
+focused M2 closure and exact Step acceptance/commit remain pending; the earlier
+B passes remain evidence of the prior assertions.
+All four Step criteria are unchecked. P96-09 through P96-11
+remain OPEN and are not started by this handoff. The
+[P96-07 acceptance entry](../journal/2026/10/2026-10-16-phase-96-display-list-lifecycle-integration.md#p96-07-step-acceptance-2026-10-16)
+records the criterion and PG1–PG12 correspondence, retained validation and
+single accepted Step repair. Stage acceptance is not a completed commit or
+Phase closure.
+The [P96-06 post-commit chronology](../journal/2026/10/2026-10-05-phase-96-display-mutation.md#p96-06-post-commit-status-reconciliation-2026-10-16)
+reconciles the earlier acceptance-time pending status.
 The [P96-06 acceptance entry](../journal/2026/10/2026-10-05-phase-96-display-mutation.md#p96-06-step-acceptance)
 records complete A+B acceptance of all five criteria through the original whole-Step
 review and independent descriptor-focused PASS in ledger revision 31. Current
@@ -405,10 +605,14 @@ Current `phase96-p96-06b-validation-subject-001@4` passed 5/5 tests in one suite
 and 98/98 in fourteen suites with SBT/wrapper exit 0 and serial lock released.
 Historical A readiness 8/8 plus 57/57 and B subject3 8/8 plus 97/97 retain their
 distinct subjects; A alone was not Step acceptance. Completed repairs
-6/nonconverging 0/accepted are retained. P96-06 is an independently accepted
-CLOSED candidate; its local Step commit is PREPARED/PENDING. P96-07 canonical
-write, strict deletion, ordinary route/descriptor exposure and actual contextual
-reload/positive lifecycle proof remain pending. Existing read-v1 is unchanged.
+6/nonconverging 0/accepted are retained. P96-06 is independently accepted and
+CLOSED at local Step commit `1356e41cdee41dd40bc2212c1ef0297ab8875206`; the
+[post-commit chronology](../journal/2026/10/2026-10-05-phase-96-display-mutation.md#p96-06-post-commit-status-reconciliation-2026-10-16)
+records the completed commit without changing the original Phase base. At
+P96-06 acceptance, P96-07 canonical write, strict deletion, ordinary route
+exposure and actual contextual reload/positive lifecycle proof remained
+pending; the separate P96-07 acceptance below now establishes those outcomes.
+Existing read-v1 is unchanged.
 
 - [x] Typed create/update/delete inputs/results identify admitted resource/projection definitions, explicit capability/availability, scoped editable fields, accepted values and constraints; Business Operations are excluded.
 - [x] Every editable field has an explicit registered converter and Entity/Aggregate update target; derived/combined/unbound fields have no inferred inverse mapping and metadata cannot weaken domain validation.
@@ -420,67 +624,228 @@ reload/positive lifecycle proof remain pending. Existing read-v1 is unchanged.
 
 Stage Status:
 
-- Current status: OPEN
+- Current status: CLOSED
 - Owner: CNCF Entity/Aggregate and Display service owners
 - Update rule: Advance only from canonical mutation delegation and executable lifecycle evidence; the checklist below is the closure basis.
 
-- [ ] The bridge deterministically resolves admitted field bindings into canonical Entity/Aggregate mutation input, reusing authorization, revision, domain validation, UnitOfWork/transaction and structured failure mechanisms without direct Display datastore writes.
-- [ ] Update-first specifications prove Detail/Edit/Save/refreshed Detail, current-revision no-op policy, stale-before-equality conflict and source revision correspondence under the admitted policy.
-- [ ] Positive create-to-Detail/List and delete-to-List paths are proven for a development fixture that admits them; ESS2-01's unsupported create/delete results alone do not satisfy these paths.
-- [ ] Authorization/validation/conflict/capability failures leave the resource unchanged, and a successful committed mutation followed by projection delay/failure preserves its committed outcome without replay.
+- [x] The bridge deterministically resolves admitted field bindings into canonical Entity/Aggregate mutation input, reusing authorization, revision, domain validation, UnitOfWork/transaction and structured failure mechanisms without direct Display datastore writes.
+- [x] Update-first specifications prove Detail/Edit/Save/refreshed Detail, current-revision no-op policy, stale-before-equality conflict and source revision correspondence under the admitted policy.
+- [x] Positive create-to-Detail/List and delete-to-List paths are proven for a development fixture that admits them; ESS2-01's unsupported create/delete results alone do not satisfy these paths.
+- [x] Authorization/validation/conflict/capability failures leave the resource unchanged, and a successful committed mutation followed by projection delay/failure preserves its committed outcome without replay.
+
+### Required native PostgreSQL evidence within P96-07
+
+The [PostgreSQL persistence specification](../spec/postgresql-phase-96-persistence.md)
+applies the [primary Knowledge Store decision](../design/postgresql-primary-knowledge-store.md)
+to these four existing criteria; the
+[adoption journal](../journal/2026/10/2026-10-14-postgresql-primary-knowledge-store.md)
+records provenance and current gaps. These are subordinate evidence
+obligations, not additional checklist criteria or an accepted Step.
+
+| Existing P96-07 criterion | Mandatory PostgreSQL correspondence |
+| --- | --- |
+| 1: canonical delegation | PG1/PG2/PG5–PG8/PG11/PG12: normal ComponentDataStore and SystemNode-managed selection, registered Entity AND Aggregate, ordinary routes, canonical authorization/domain/revision/transaction ownership. |
+| 2: update-first lifecycle | PG2/PG5/PG7/PG10/PG12: native changed/no-op/stale-before-equality update, body/revision correspondence and actual selected contextual committed Detail reload. |
+| 3: positive create/delete | PG3/PG4/PG6/PG8/PG9/PG11/PG12: real positive canonical create-to-Detail/List and physical/logical delete-to-List, independently durable root/body results and native duplicate/race/rollback evidence. |
+| 4: failure and committed outcome | PG4–PG12: complete selected/unrelated state preservation, rollback and explicit/escaped/null post-real-commit ACK distinctions, authorization/capability failures and actual committed-pending/projection-failure outcome without replay. |
+
+Real positive native PostgreSQL CUD, body/revision, concurrency, rollback and
+ACK evidence is required, together with normal Component/SystemNode lifecycle,
+registered Entity AND Aggregate and ordinary-route selected contextual
+`afterCommitResponseC` reload. PostgreSQL identity grammar, unsupported-only
+results, test-only JDBC or MySQL proxy evidence do not satisfy this gate.
+MySQL, SQLite and memory retain their required regression coverage.
+
+Earlier C4C readiness snapshot (2026-10-16, before whole-Step acceptance):
+all four original criteria were OPEN, with 33 checked/21 pending outcomes
+across the unchanged 54-criterion ledger. Focused C4C representative and expanded
+accumulator validation, including native PostgreSQL evidence, and fresh
+independent whole-twelve-path auxiliary assurance have completed with no current
+auxiliary boundary blocker. The
+[C4C management chronology](../journal/2026/10/2026-10-16-phase-96-display-list-lifecycle-integration.md#c4c-current-readiness-and-candidate-reconciliation-2026-10-16)
+supersedes the earlier unvalidated atomic-create draft/no-PostgreSQL-result
+checkpoint for current readiness only. Whole-P96-07 criterion/PG1–PG12
+correspondence and independent protected whole-Step acceptance remain required;
+all four checkboxes stayed OPEN at that auxiliary checkpoint. That snapshot
+retained current_entry=P96-07, PLAN epoch 1, zero full Phase reviews and the original
+authority, Goal binding, base and repair/review history. P96-08 through P96-11,
+separate Cozy/server/app acceptance and the original aggregate handoff, Step
+review, single full Phase review, final validation and release gates remain required.
+
+Current P96-07 acceptance (2026-10-16): independent protected whole-Step
+review `phase96-p96-07-step-review-001@1` covered all 181 owned paths and
+125 target programs, supporting the four criteria and PG1–PG12 while finding
+three bounded test-conformance blockers. Independent focused PASS
+`phase96-p96-07-step-focused-review-001@1` resolved all three after the exact
+four-test repair. Parent admission in ledger revision 34 accepts all four
+criteria. Current focused 4-suite/21-test success supplements earlier
+39-suite/529-test and 138-suite/2127-test evidence; the latter retains five
+historical pending cases. Step repair 1 is accepted, nonconverging 0.
+The exact local Step commit subsequently completed at
+`3436aef7ae5bb2b3a12000c064159e11791b5282`; the preceding acceptance-time
+preparation status remains historical.
+Historical post-P96-07/pre-P96-08 checkpoint (superseded by Current acceptance):
+The ledger then had 37 checked/17 pending criteria and current_entry=P96-08;
+P96-08 is in-progress with A independently accepted through
+`phase96-p96-08a-protected-review-001@1`, original 23-suite/168-test PASS,
+and B's representative001 Test compilation failure and representative002
+compiled result of 2 passes/8 failures retained. Representative003 completed
+with 9 passes/1 failure; its missing-resource owner positive was not a Business
+success, and preceding production negatives are not yet accepted proof.
+Representative004 subsequently passed 10/10 tests in two suites, resolving the
+form-carrier cause. Accumulator001 completed 40 suites/332 tests with 331
+passes and one BRP1 trim-empty Title failure before mutation. Unit 4's
+lawful-title source repair passed property001 (1 suite/2 tests) and the same
+accumulator002 (40 suites/332 tests) on the prior assertions. Independent
+whole-Step review `phase96-p96-08-step-review-001@1` returned FINDINGS for
+`CPB-P96-08-TITLE-CORRESPONDENCE-001`, missing exact initial/reloaded semantic
+Title comparisons; no production corruption is alleged. First formal Step
+repair 1's first property attempt completed 1 suite/2 tests with 1 PASS/1 FAIL
+(SBT1/wrapper1, serial lock released): BRP1 failed before Business at the first
+newline/NUL revision-16 raw-store/decoded-title mismatch; BRP2 passed. The same
+consumed repair's decoded-View correction is now focused-validated.
+`phase96-p96-08-step-title-property-002` passed 1 suite/2 tests and
+`phase96-p96-08-step-title-accumulator-001` passed the same 40 suites/332 tests.
+Both had zero failed/aborted/canceled/ignored/pending, SBT0/wrapper0 and released
+serial lock; parent typed result readers accepted both results. Fresh independent
+focused M2 closure and exact Step acceptance/commit remain pending. Earlier B
+passes remain evidence of the prior assertions;
+P96-09..11 remain OPEN. Phase 96 stays in-progress, with zero full Phase
+reviews and no final validation, release or aggregate acceptance claim.
+See the [acceptance entry](../journal/2026/10/2026-10-16-phase-96-display-list-lifecycle-integration.md#p96-07-step-acceptance-2026-10-16).
 
 ## P96-08: Business Operation Action descriptors
 
 Stage Status:
 
-- Current status: OPEN
+- Current status: CLOSED
 - Owner: CNCF Operation/Display boundary owners
 - Update rule: Advance only from descriptor separation and direct Operation/reload proof; the checklist below is the closure basis.
 
-- [ ] Descriptive action bindings reference existing admitted CNCF Operation identities/input metadata and remain distinct from standard Display Mutation, arbitrary URLs and executable Cozy callbacks.
-- [ ] One reference Business Operation executes through the ordinary CNCF Operation/REST authorization/input boundary, never through a DisplayService proxy or generic action tunnel.
-- [ ] Successful direct invocation followed by explicit DisplayService reload yields the corresponding fresh Display state; a successful Business response alone is not treated as refreshed Display.
-- [ ] Boundary specifications verify that displayed actions grant no capability and add no push/subscription, Service Bus refresh or second Operation protocol.
+All four outcomes below are accepted through the complete Step review plus
+independent focused closure in ledger revision 37. The canonical
+[acceptance record](../journal/2026/10/2026-10-16-phase-96-business-operation-descriptor.md#p96-08-step-acceptance-2026-10-16)
+maps each original criterion to its accepted evidence. This is Step acceptance,
+not Phase/consumer release or proof of a completed Git operation.
+
+### Historical P96-08 authoring and validation checkpoints
+
+P96-08A's [descriptor specification](../spec/display-business-operation-descriptor.md),
+[decided design](../design/display-business-operation-descriptor.md), code and
+BA1–BA7 executable scenarios/laws are independently accepted through
+`phase96-p96-08a-protected-review-001@1`, retaining the original 23-suite/168-test
+PASS. The optional ordinary `display.describeBusiness` Operation is metadata
+only. P96-08B's BR1–BR7/BRP1–BRP2/BRH1–BRH3/BRPG1–BRPG3 specifications are
+authored for ordinary direct Business, canonical stage-only mutation and
+explicit fresh Detail. Their development provenance is
+`cncf.development.display-business` / `canonical-review-<token>` / `fixture-1`,
+not an ESS2 `workflowState` mapping. Representative001 failed Test compilation;
+representative002 compiled and ran BR1–BR7/BRPG1–BRPG3 with 2 passes and 8
+failures. Representative003 completed with 9 passes and 1 failure: legitimate
+owner POST returned 400 for missing `resourceId` before Business execution.
+That positive is not a Business success, and preceding production negatives
+are not yet accepted proof. Prior repairs prepared declared schema before
+baseline, added existing typed Aggregate UserPermission authorization, recorded
+actual accepted provider PrincipalIds and observed native/full-save attempts.
+The current repair uses a standard UrlForm body for exact supplied ordinary
+Business POST selectors and omits them from query, preserving supplied missing,
+duplicate and invalid values. GET/non-Business query behavior, framework/test/
+forged query facts and the actual session header remain unchanged.
+Representative004 subsequently passed 10/10 tests in two suites, resolving
+the form-carrier cause. Accumulator001 completed 40 suites/332 tests: 331
+passed, one BRP1 failure, zero aborted/canceled/ignored/pending. A generated
+trim-empty Title failed before mutation with `DSP96_ROLE_INVALID`, not at
+permission or persistence; unchanged `Display.scala` requires nonblank Title.
+Unit 4 (`VAL-P96-08B-LAWFUL-TITLE-DOMAIN-004`) already authors a fixed `T`
+prefix retaining the exact raw Unicode/control payload through every shrink,
+including empty payload. The original newline/NUL payload at revision 16 uses
+the same complete commit/reload oracle across all six target/representation
+combinations. Exact independent pre-state/reloaded-title and complete state
+oracles, at least 100 successes per law and zero discards remain required.
+This source repair passed `phase96-p96-08b-business-review-property-001`
+(1 suite/2 tests) and `phase96-p96-08b-business-review-accumulator-002`
+(the same 40 suites/332 tests). Both completed with all tests passing, zero
+failed/aborted/canceled/ignored/pending, SBT0/wrapper0 and released serial lock;
+parent typed result readers accepted the results for the prior assertions.
+Independent whole-Step review `phase96-p96-08-step-review-001@1` returned
+FINDINGS for `CPB-P96-08-TITLE-CORRESPONDENCE-001`: missing comparison of initial
+logical, initial Display and reloaded Display semantic Title to the independently
+supplied `sample.title`. No production corruption is alleged. First formal
+Step repair 1's `phase96-p96-08-step-title-property-001` completed 1 suite/2
+tests with 1 PASS/1 FAIL, SBT1/wrapper1 and serial lock released. BRP1 failed
+before Business at the first newline/NUL revision-16 initial assertion; BRP2
+passed. The parent-prescribed observation was raw DataStore
+`utf16:0054000a0000`, not the decoded semantic View. This test observation-layer
+error does not demonstrate production corruption. The same consumed repair's
+correction is now focused-validated: use already captured
+`before.resident.views.selected.record` against independent `sample.title`.
+Initial Display and the already fetched reload JSON retain their exact
+comparisons without another read. Earlier B passes remain evidence of the prior
+assertions. `phase96-p96-08-step-title-property-002` passed 1 suite/2 tests and
+`phase96-p96-08-step-title-accumulator-001` passed the same 40 suites/332 tests.
+Both had zero failed/aborted/canceled/ignored/pending, SBT0/wrapper0 and released
+serial lock; parent typed result readers accepted both results. Fresh independent
+focused M2 closure remains pending before exact Step acceptance/commit. All four unchanged criteria below
+remain unchecked. The ledger retains all 54 criterion texts, 37 checked/17
+pending outcomes and zero full Phase reviews. No whole-Step
+commit, Phase acceptance or closure is claimed.
+
+### Accepted P96-08 criteria
+
+- [x] Descriptive action bindings reference existing admitted CNCF Operation identities/input metadata and remain distinct from standard Display Mutation, arbitrary URLs and executable Cozy callbacks.
+- [x] One reference Business Operation executes through the ordinary CNCF Operation/REST authorization/input boundary, never through a DisplayService proxy or generic action tunnel.
+- [x] Successful direct invocation followed by explicit DisplayService reload yields the corresponding fresh Display state; a successful Business response alone is not treated as refreshed Display.
+- [x] Boundary specifications verify that displayed actions grant no capability and add no push/subscription, Service Bus refresh or second Operation protocol.
 
 ## P96-09: Editing Studio reference fixture
 
 Stage Status:
 
-- Current status: OPEN
+- Current status: CLOSED
 - Owner: CNCF and Editing Studio server integration owners
 - Update rule: Advance only from reproducible server-side reference traces and fixtures; the checklist below is the closure basis.
 
-- [ ] A declared development-only resource fixture records IDs, semantic state, source revisions, display/input values, readonly/editable bindings, constraints and Operation availability; any difference from ESS2-01 has explicit provenance.
-- [ ] The semantic List to DisplayService to List/select/Detail to standard update to canonical mutation to refreshed Detail path has deterministic request/response/state-transition evidence.
-- [ ] Create/Detail/List, delete/List and ordinary Business Operation/direct invocation/reload traces use admitted fixture capabilities and include structured failure cases.
-- [ ] Focused scenario specifications demonstrate the generic server contract without production Knowledge Candidate/KnowledgeHub admission, Flutter UI completion or app Phase 5 aggregate acceptance claims.
+- [x] A declared development-only resource fixture records IDs, semantic state, source revisions, display/input values, readonly/editable bindings, constraints and Operation availability; any difference from ESS2-01 has explicit provenance.
+- [x] The semantic List to DisplayService to List/select/Detail to standard update to canonical mutation to refreshed Detail path has deterministic request/response/state-transition evidence.
+- [x] Create/Detail/List, delete/List and ordinary Business Operation/direct invocation/reload traces use admitted fixture capabilities and include structured failure cases.
+- [x] Focused scenario specifications demonstrate the generic server contract without production Knowledge Candidate/KnowledgeHub admission, Flutter UI completion or app Phase 5 aggregate acceptance claims.
 
 ## P96-10: Presentation Context and Phase 98 compatibility hook
 
 Stage Status:
 
-- Current status: OPEN
+- Current status: CLOSED
 - Owner: CNCF context/protocol owners
 - Update rule: Advance only from reconciled context admission/continuation scope and compatibility evidence; the checklist below is the closure basis.
 
-- [ ] The existing Presentation Context proposal is reconciled with the journal's optional variant/opaque Display Instance correlation hook; each admitted family maps to its ExecutionContext source, permitted readers/updaters, version, lifetime and propagation scope.
-- [ ] Physical context binding, strict known-family validation, bounded unknown-family policy and continuation across read/mutation/direct Business Operation/reload/retry are recorded against existing immutable evaluation/admission contracts.
-- [ ] Focused fixtures cover admitted optional context preservation, absent/unsupported/expired context, flow isolation and retry/reload behavior without serializing RuntimeContext, security capabilities or UnitOfWork.
-- [ ] Phase 98 retains Experiment/Run/Arm allocation, observation and reward ownership; receiving client context cannot assign an arm, create authority or bypass admission, and the core P96-01 through P96-09 slice works without Phase 98 implementation.
+- [x] The existing Presentation Context proposal is reconciled with the journal's optional variant/opaque Display Instance correlation hook; each admitted family maps to its ExecutionContext source, permitted readers/updaters, version, lifetime and propagation scope.
+- [x] Physical context binding, strict known-family validation, bounded unknown-family policy and continuation across read/mutation/direct Business Operation/reload/retry are recorded against existing immutable evaluation/admission contracts.
+- [x] Focused fixtures cover admitted optional context preservation, absent/unsupported/expired context, flow isolation and retry/reload behavior without serializing RuntimeContext, security capabilities or UnitOfWork.
+- [x] Phase 98 retains Experiment/Run/Arm allocation, observation and reward ownership; receiving client context cannot assign an arm, create authority or bypass admission, and the core P96-01 through P96-09 slice works without Phase 98 implementation.
 
 ## P96-11: Consumer handoff and Phase closure
 
 Stage Status:
 
-- Current status: OPEN
+- Current status: CLOSED
+- Current step: P96-11B closed (final Phase release bookkeeping)
 - Owner: CNCF Phase 96 release and integration owners
 - Update rule: Advance only when the checklist below and all preceding stage ledgers have complete evidence or explicit admitted dispositions; this checklist is the closure basis.
 
-- [ ] Consumer artifacts freeze the admitted schema/version, DisplayService Operation identities, List/Detail and mutation JSON examples, Business Operation descriptor, context compatibility, unsupported subset and non-goals with reproducible fixture provenance.
-- [ ] TFC/TFAF handoff states transport/runtime versus visual-realization ownership; Editing Studio Phase 2 owns application semantics, app Phase 4 prototype feedback and app Phase 5 real-server aggregate/E2E acceptance.
-- [ ] Focused validation and Step acceptance evidence cover the ABI/admission/provider/generated-fixture/model/projection/value/codec/read/mutation/security/conflict/Business/separation/platform/context specification matrix.
-- [ ] CNCF repository-level full-suite release validation and the single required Phase full review for the admitted PLAN epoch are recorded, with any admitted fixes closed by focused re-review and no extra full review invented for checkpoints.
-- [ ] Every Phase 96 acceptance criterion is reconciled against P96-01 through P96-10; all remaining items have explicit accepted evidence or candidate/relocation records, and the release commit, journal and Phase/strategy closure records agree.
+Sub-Step A (P96-11A) references original outcomes 1–3 below and delivers the
+consumer handoff, focused validation and independent ordinary Step acceptance.
+It is independently accepted and committed as
+`a9dc024dac9aeaaf69ed541c4c0a0bfa6ef029c5`. Outcomes 1–3 are checked.
+Final closure sub-Step B (P96-11B) closes outcomes 4–5 through the sole full
+Phase review, converged focused closure, actual successful final full validation
+and distinct bound release. This complete Stage closes with the committed
+release/closure receipt; P11A delivery alone did not close it.
+
+- [x] Consumer artifacts freeze the admitted schema/version, DisplayService Operation identities, List/Detail and mutation JSON examples, Business Operation descriptor, context compatibility, unsupported subset and non-goals with reproducible fixture provenance.
+- [x] TFC/TFAF handoff states transport/runtime versus visual-realization ownership; Editing Studio Phase 2 owns application semantics, app Phase 4 prototype feedback and app Phase 5 real-server aggregate/E2E acceptance.
+- [x] Focused validation and Step acceptance evidence cover the ABI/admission/provider/generated-fixture/model/projection/value/codec/read/mutation/security/conflict/Business/separation/platform/context specification matrix.
+- [x] CNCF repository-level full-suite release validation and the single required Phase full review for the admitted PLAN epoch are recorded, with any admitted fixes closed by focused re-review and no extra full review invented for checkpoints.
+- [x] Every Phase 96 acceptance criterion is reconciled against P96-01 through P96-10; all remaining items have explicit accepted evidence or candidate/relocation records, and the release commit, journal and Phase/strategy closure records agree.
 
 ## Existing Phase acceptance coverage
 

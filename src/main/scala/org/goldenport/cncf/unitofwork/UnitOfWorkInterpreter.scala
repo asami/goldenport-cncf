@@ -199,8 +199,59 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       case null => Consequence.argumentMissing("operation")
       case deletion: UnitOfWorkOp.EntityStoreDeleteObserved =>
         EntityStore._admit_observed_delete(deletion.id, deletion.expectedRevision)
+      case deletion: UnitOfWorkOp.EntityStoreDeleteObservedOutcome =>
+        _admit_capture_authorization(deletion.authorization).flatMap { _ =>
+          EntityStore._admit_observed_delete(deletion.id, deletion.expectedrevision)
+        }
+      case creation: UnitOfWorkOp.EntityStoreCreateOutcome[?] =>
+        if (creation.entity == null) Consequence.argumentMissing("entity")
+        else if (creation.tc == null) Consequence.argumentMissing("persistent")
+        else if (creation.options == null) Consequence.argumentMissing("options")
+        else if (creation.options.defaultProfiles == null) Consequence.argumentMissing("options.defaultProfiles")
+        else if (creation.options.defaultValues == null) Consequence.argumentMissing("options.defaultValues")
+        else _admit_capture_authorization(creation.authorization)
+      case mutation: UnitOfWorkOp.EntityStoreSaveSnapshotOutcome[?] =>
+        _admit_versioned_save_capture(mutation.entity, mutation.tc, mutation.expectedrevision,
+          mutation.executionpolicy, mutation.authorization)
+      case mutation: UnitOfWorkOp.EntityStoreSaveDetachedOutcome[?] =>
+        _admit_versioned_save_capture(mutation.entity, mutation.tc, mutation.expectedrevision,
+          mutation.executionpolicy, mutation.authorization)
+      case mutation: UnitOfWorkOp.EntityStoreUpdateRecordSnapshotOutcome[?] =>
+        _admit_versioned_patch_capture(mutation.id, mutation.patch, mutation.tc, mutation.expectedrevision,
+          mutation.executionpolicy, mutation.authorization)
+      case mutation: UnitOfWorkOp.EntityStoreUpdateRecordDetachedOutcome[?] =>
+        _admit_versioned_patch_capture(mutation.id, mutation.patch, mutation.tc, mutation.expectedrevision,
+          mutation.executionpolicy, mutation.authorization)
       case _ => Consequence.unit
     }
+
+  private def _admit_versioned_save_capture[T](
+    entity: T, persistent: EntityPersistent[T], expectedrevision: Option[org.simplemodeling.model.datatype.EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy, authorization: Option[UnitOfWorkAuthorization]
+  ): Consequence[Unit] =
+    if (entity == null) Consequence.argumentMissing("entity")
+    else if (persistent == null) Consequence.argumentMissing("persistent")
+    else for {
+      id <- Consequence(persistent.id(entity))
+      _ <- EntityStore._admit_versioned_outcome_c(id, expectedrevision, executionpolicy)
+      _ <- _admit_capture_authorization(authorization)
+    } yield ()
+
+  private def _admit_versioned_patch_capture[P](
+    id: EntityId, patch: P, persistent: EntityPersistentUpdate[P],
+    expectedrevision: Option[org.simplemodeling.model.datatype.EntityRevision],
+    executionpolicy: EntityMutationExecutionPolicy, authorization: Option[UnitOfWorkAuthorization]
+  ): Consequence[Unit] =
+    if (patch == null) Consequence.argumentMissing("patch")
+    else if (persistent == null) Consequence.argumentMissing("persistent")
+    else EntityStore._admit_versioned_outcome_c(id, expectedrevision, executionpolicy)
+      .flatMap(_ => _admit_capture_authorization(authorization))
+
+  private def _admit_capture_authorization(authorization: Option[UnitOfWorkAuthorization]): Consequence[Unit] =
+    if (authorization == null) Consequence.argumentMissing("authorization")
+    else if (authorization.exists(_ == null))
+      Consequence.argumentInvalid("authorization", "nonnull authorization", "null authorization")
+    else Consequence.unit
 
   private def _execute_validated[A](
     op: UnitOfWorkOp[A]
@@ -322,6 +373,38 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         )
       ) {
         EmbeddedDataStoreRunner.migrate(store, statements)
+      }
+
+    case m: (UnitOfWorkOp.EntityStoreCreateOutcome[t] @unchecked) =>
+      _with_calltree("uow:entitystore:create-outcome") {
+        _authorize(m.authorization).flatMap { _ =>
+          for {
+            collection <- Consequence(m.tc.collection(m.entity))
+            _ <- if (collection == null) Consequence.argumentMissing("collection") else Consequence.unit
+            expectedid <- Consequence(m.tc.id(m.entity))
+            _ <- if (expectedid == null) Consequence.argumentMissing("id")
+              else if (expectedid.exists(_ == null)) Consequence.argumentInvalid("id", "nonnull identity", "null identity")
+              else if (expectedid.exists(_.collection == null)) Consequence.argumentMissing("id.collection")
+              else expectedid match {
+                case Some(id) if id.collection != collection => EntityPersistent._collection_mismatch(id.collection, collection)
+                case _ => Consequence.unit
+              }
+            binding <- uow.executionContext.entitySpace.entityOption(collection)
+              .flatMap(_.descriptor.revisionBinding).filter(binding => binding != null && binding.representation != null) match {
+                case Some(binding) => Consequence.success(binding)
+                case None => Consequence.operationInvalid("entity-revision-representation", Vector(
+                  org.goldenport.observation.Descriptor.Facet.Policy("entity.revision.representation"),
+                  org.goldenport.observation.Descriptor.Facet.Expected("embedded-or-detached"),
+                  org.goldenport.observation.Descriptor.Facet.Actual("unmanaged")))
+              }
+            created <- _entity_store_space.create(UnitOfWorkOp.EntityStoreCreate(m.entity, m.tc, m.options, m.authorization))
+            outcome <- EntityCreateMutationOutcome._from_created_c(collection, expectedid, created, binding) { () =>
+              _view_space_invalidate_all()
+              _entity_space_evict(created.id)
+              _entity_space_put_persisted_record(created.id, created.record, capturecoherence = true)
+            }
+          } yield outcome
+        }
       }
 
     case m: (UnitOfWorkOp.EntityStoreCreate[t] @unchecked) =>
@@ -564,6 +647,40 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
                   carrier
                 }
             )
+        _reconcile_versioned_failure(id, result)
+      }
+
+    case m: (UnitOfWorkOp.EntityStoreSaveSnapshotOutcome[t] @unchecked) =>
+      Consequence(m.tc.id(m.entity)).flatMap { id =>
+        val result = _with_calltree("uow:entitystore:save-snapshot-outcome",
+          _entity_calltree_attributes(id, "entity-store", realio = true)) {
+          _authorize_and_validate_versioned_save_capture(id, m.entity, m.tc,
+            _rebind_capture_authorization(id, m.authorization)).flatMap { _ =>
+            _entity_store_space._save_snapshot_outcome_c(m.entity, m.tc, m.expectedrevision, m.executionpolicy)
+          }.flatMap { outcome =>
+            _capture_versioned_outcome_c(id, outcome) { snapshot =>
+              _entity_space_put(snapshot.entity, m.tc)
+              Consequence.unit
+            }
+          }
+        }
+        _reconcile_versioned_failure(id, result)
+      }
+
+    case m: (UnitOfWorkOp.EntityStoreSaveDetachedOutcome[t] @unchecked) =>
+      Consequence(m.tc.id(m.entity)).flatMap { id =>
+        val result = _with_calltree("uow:entitystore:save-detached-outcome",
+          _entity_calltree_attributes(id, "entity-store", realio = true)) {
+          _authorize_and_validate_versioned_save_capture(id, m.entity, m.tc,
+            _rebind_capture_authorization(id, m.authorization)).flatMap { _ =>
+            _entity_store_space._save_detached_outcome_c(m.entity, m.tc, m.expectedrevision, m.executionpolicy)
+          }.flatMap { outcome =>
+            _capture_versioned_outcome_c(id, outcome) { carrier =>
+              _entity_space_put(carrier.entity, m.tc)
+              Consequence.unit
+            }
+          }
+        }
         _reconcile_versioned_failure(id, result)
       }
 
@@ -834,6 +951,36 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
       _reconcile_versioned_failure(id, result)
 
+    case m: (UnitOfWorkOp.EntityStoreUpdateRecordSnapshotOutcome[p] @unchecked) =>
+      val id = m.id
+      val result = _with_calltree("uow:entitystore:update-record-snapshot-outcome",
+        _entity_calltree_attributes(id, "entity-store", realio = true)) {
+        _authorize_and_validate_patch(id, m.patch, m.tc,
+          _rebind_capture_authorization(id, m.authorization)).flatMap { _ =>
+          _entity_store_space._update_record_snapshot_outcome_c(id, m.patch, m.tc, m.expectedrevision, m.executionpolicy)
+        }.flatMap { outcome =>
+          _capture_versioned_outcome_c(id, outcome) { snapshot =>
+            _entity_space_put_persisted_record(id, Some(snapshot.record), capturecoherence = true)
+          }
+        }
+      }
+      _reconcile_versioned_failure(id, result)
+
+    case m: (UnitOfWorkOp.EntityStoreUpdateRecordDetachedOutcome[p] @unchecked) =>
+      val id = m.id
+      val result = _with_calltree("uow:entitystore:update-record-detached-outcome",
+        _entity_calltree_attributes(id, "entity-store", realio = true)) {
+        _authorize_and_validate_patch(id, m.patch, m.tc,
+          _rebind_capture_authorization(id, m.authorization)).flatMap { _ =>
+          _entity_store_space._update_record_detached_outcome_c(id, m.patch, m.tc, m.expectedrevision, m.executionpolicy)
+        }.flatMap { outcome =>
+          _capture_versioned_outcome_c(id, outcome) { carrier =>
+            _entity_space_put_domain_record(id, Some(carrier.entity), capturecoherence = true)
+          }
+        }
+      }
+      _reconcile_versioned_failure(id, result)
+
     case m: (UnitOfWorkOp.EntityStoreConditionalTransition[r, p, s] @unchecked) =>
       val rootid = m.request.rootId
       val successorintent = m.request.successor match {
@@ -967,6 +1114,30 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
           }
         }
       }
+
+    case m: UnitOfWorkOp.EntityStoreDeleteObservedOutcome =>
+      val id = m.id
+      val authorization = m.authorization.map(_.copy(
+        targetId = Some(id),
+        collectionName = Some(id.collection.name),
+        accessKind = "delete"
+      ))
+      val op = UnitOfWorkOp.EntityStoreDeleteObserved(id, m.expectedrevision, authorization)
+      val result = _with_calltree(
+        "uow:entitystore:delete-observed-outcome",
+        _entity_calltree_attributes(id, "entity-store", realio = true)
+      ) {
+        _authorize(authorization, Some(() => _load_record(id))).flatMap { _ =>
+          _entity_store_space.deleteObserved(op).flatMap { deleted =>
+            EntityDeleteMutationOutcome._from_deleted_c(id, m.expectedrevision, deleted) { () =>
+              _view_space_invalidate_all()
+              _entity_space_evict(id)
+              Consequence.unit
+            }
+          }
+        }
+      }
+      _reconcile_versioned_failure(id, result)
 
     case m: UnitOfWorkOp.EntityStoreDeleteObserved =>
       val id = m.id
@@ -1407,6 +1578,10 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         Vector(m.id.collection)
       case m: UnitOfWorkOp.EntityStoreUpdateByIdDetached[?] =>
         Vector(m.id.collection)
+      case m: UnitOfWorkOp.EntityStoreUpdateRecordSnapshotOutcome[?] =>
+        Vector(m.id.collection)
+      case m: UnitOfWorkOp.EntityStoreUpdateRecordDetachedOutcome[?] =>
+        Vector(m.id.collection)
       case m: UnitOfWorkOp.EntityStoreConditionalTransition[?, ?, ?] =>
         val successorids =
           m.request.successor match {
@@ -1421,6 +1596,8 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       case m: UnitOfWorkOp.EntityStoreDelete =>
         Vector(m.id.collection)
       case m: UnitOfWorkOp.EntityStoreDeleteObserved =>
+        Vector(m.id.collection)
+      case m: UnitOfWorkOp.EntityStoreDeleteObservedOutcome =>
         Vector(m.id.collection)
       case m: UnitOfWorkOp.EntityStoreRestore =>
         Vector(m.id.collection)
@@ -1636,20 +1813,23 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
   private def _entity_space_put_persisted_record(
     id: EntityId,
-    record: Option[org.goldenport.record.Record]
+    record: Option[org.goldenport.record.Record],
+    capturecoherence: Boolean = false
   ): Consequence[Unit] =
-    _entity_space_put_record(id, record, persistedrecord = true)
+    _entity_space_put_record(id, record, persistedrecord = true, capturecoherence = capturecoherence)
 
   private def _entity_space_put_domain_record(
     id: EntityId,
-    record: Option[org.goldenport.record.Record]
+    record: Option[org.goldenport.record.Record],
+    capturecoherence: Boolean = false
   ): Consequence[Unit] =
-    _entity_space_put_record(id, record, persistedrecord = false)
+    _entity_space_put_record(id, record, persistedrecord = false, capturecoherence = capturecoherence)
 
   private def _entity_space_put_record(
     id: EntityId,
     record: Option[org.goldenport.record.Record],
-    persistedrecord: Boolean
+    persistedrecord: Boolean,
+    capturecoherence: Boolean = false
   ): Consequence[Unit] = {
     (for {
       r <- record
@@ -1685,11 +1865,13 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
             collection.descriptor.collectionId,
             r
           )
-      decoded
-      .map(collection.putScoped(_)(using uow.executionContext))
-      .recoverWith {
-        case c if _is_not_implemented(c) => Consequence.unit
-        case c => Consequence.Failure[Unit](c)
+      val result = decoded.map(collection.putScoped(_)(using uow.executionContext))
+      result match {
+        case Consequence.Failure(null) if capturecoherence => result
+        case _ => result.recoverWith {
+          case c if _is_not_implemented(c) => Consequence.unit
+          case c => Consequence.Failure[Unit](c)
+        }
       }
     }).getOrElse(Consequence.unit)
   }
@@ -1865,6 +2047,46 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
           Consequence.success(None)
         else
           Consequence.Failure(conclusion)
+    }
+
+  private def _rebind_capture_authorization(
+    id: EntityId, authorization: Option[UnitOfWorkAuthorization]
+  ): Option[UnitOfWorkAuthorization] =
+    authorization.map(_.copy(targetId = Some(id), collectionName = Some(id.collection.name)))
+
+  private def _authorize_and_validate_versioned_save_capture[T](
+    id: EntityId, entity: T, persistent: EntityPersistent[T], authorization: Option[UnitOfWorkAuthorization]
+  ): Consequence[Unit] = {
+    val loadrecord = () => _load_record(id).map { existing =>
+      Some(existing.map(record => persistent.authorizationRecord(entity, record))
+        .getOrElse(persistent.authorizationRecord(entity)))
+    }
+    if (_transition_validation_hook ne TransitionValidationHook.noop)
+      for {
+        current <- _load_record(id)
+        currentloadrecord = () => Consequence.success(Some(
+          current.map(record => persistent.authorizationRecord(entity, record))
+            .getOrElse(persistent.authorizationRecord(entity))))
+        _ <- _authorize(authorization, Some(currentloadrecord))
+        _ <- current match {
+          case Some(record) => _transition_validation_hook.beforeSave(entity, persistent, record, persistent.toStoreRecord(entity))
+          case None => _transition_validation_hook.beforeSave(entity, persistent)
+        }
+      } yield ()
+    else _authorize(authorization, Some(loadrecord))
+      .flatMap(_ => _transition_validation_hook.beforeSave(entity, persistent))
+  }
+
+  private def _capture_versioned_outcome_c[A](
+    id: EntityId, outcome: EntityVersionedMutationOutcome[A]
+  )(put: A => Consequence[Unit]): Consequence[EntityVersionedMutationCaptureOutcome[A]] =
+    EntityVersionedMutationCaptureOutcome._from_outcome_c(id, outcome) { () =>
+      _view_space_invalidate_all()
+      _entity_space_evict(id)
+      outcome.projection match {
+        case Consequence.Success(value) => put(value)
+        case Consequence.Failure(_) => Consequence.unit
+      }
     }
 
   private def _authorize_and_validate_patch[P](

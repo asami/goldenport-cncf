@@ -11,7 +11,7 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Oct.  6, 2026
- * @version Oct.  6, 2026
+ * @version Oct. 15, 2026
  */
 /** Internal typed program construction; the canonical interpreter owns effects. */
 private[cncf] object DisplayMutationUpdateBridge {
@@ -27,6 +27,34 @@ private[cncf] object DisplayMutationUpdateBridge {
   ) {
     def programC(prepared: Prepared[P], authorization: UnitOfWorkAuthorization)
         : Consequence[ExecUowM[EntityRecordSnapshot]] = {
+      _admit_c(prepared, authorization).map { policy =>
+        val op: UnitOfWorkOp[EntityRecordSnapshot] = UnitOfWorkOp.EntityStoreUpdateByIdObserved(
+          prepared.resourceId.get, prepared.input, prepared.observedRevision.get,
+          _persistent, Some(authorization), policy)
+        ConsequenceT.liftF(Free.liftF(op))
+      }
+    }
+
+    private[cncf] def _capture_program_c(prepared: Prepared[P], authorization: UnitOfWorkAuthorization,
+      representation: EntityRevisionRepresentation): Consequence[ExecUowM[EntityVersionedMutationCaptureOutcome[?]]] = {
+      _admit_c(prepared, authorization).flatMap { policy =>
+        val operation: Consequence[UnitOfWorkOp[EntityVersionedMutationCaptureOutcome[?]]] = representation match {
+          case EntityRevisionRepresentation.Embedded => Consequence.success(
+            UnitOfWorkOp.EntityStoreUpdateRecordSnapshotOutcome(prepared.resourceId.get, prepared.input,
+              prepared.observedRevision, _persistent, Some(authorization), policy)
+              .asInstanceOf[UnitOfWorkOp[EntityVersionedMutationCaptureOutcome[?]]])
+          case EntityRevisionRepresentation.Detached => Consequence.success(
+            UnitOfWorkOp.EntityStoreUpdateRecordDetachedOutcome(prepared.resourceId.get, prepared.input,
+              prepared.observedRevision, _persistent, Some(authorization), policy)
+              .asInstanceOf[UnitOfWorkOp[EntityVersionedMutationCaptureOutcome[?]]])
+          case _ => inputInvalidC("SELECTION_MISMATCH", "representation")
+        }
+        operation.map(op => ConsequenceT.liftF(Free.liftF(op)))
+      }
+    }
+
+    private def _admit_c(prepared: Prepared[P], authorization: UnitOfWorkAuthorization)
+        : Consequence[EntityMutationExecutionPolicy] = {
       for {
         _ <- _prepared_shape(prepared)
         _ <- _correspondence(prepared)
@@ -36,12 +64,7 @@ private[cncf] object DisplayMutationUpdateBridge {
         _ <- if (prepared.resourceId.get.collection == _collection_id && collection == _collection_id)
           Consequence.unit else inputInvalidC[Unit]("SELECTION_MISMATCH", "prepared.collection")
         _ <- _patch_scope(prepared)
-      } yield {
-        val op: UnitOfWorkOp[EntityRecordSnapshot] = UnitOfWorkOp.EntityStoreUpdateByIdObserved(
-          prepared.resourceId.get, prepared.input, prepared.observedRevision.get,
-          _persistent, Some(authorization), policy)
-        ConsequenceT.liftF(Free.liftF(op))
-      }
+      } yield policy
     }
 
     private def _correspondence(prepared: Prepared[P]): Consequence[Unit] = {

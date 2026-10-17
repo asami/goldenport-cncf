@@ -45,6 +45,7 @@ private[cncf] object UnitOfWorkOperationClassifier {
           UnitOfWorkOp.EmbeddedDataStoreUpdate(_, _) |
           UnitOfWorkOp.EmbeddedDataStoreMigrate(_, _) |
           UnitOfWorkOp.EntityStoreCreate(_, _, _, _) |
+          UnitOfWorkOp.EntityStoreCreateOutcome(_, _, _, _) |
           UnitOfWorkOp.EntityStoreClaimOrLoad(_, _, _, _, _, _) |
           UnitOfWorkOp.EntityStoreUpsert(_, _, _, _, _, _, _) |
           UnitOfWorkOp.EntityStoreLoad(_, _, _, _, _) |
@@ -53,6 +54,8 @@ private[cncf] object UnitOfWorkOperationClassifier {
           UnitOfWorkOp.EntityStoreLoadDirect(_, _) |
           UnitOfWorkOp.EntityStoreSave(_, _, _, _, _) |
           UnitOfWorkOp.EntityStoreSaveDetached(_, _, _, _, _) |
+          UnitOfWorkOp.EntityStoreSaveSnapshotOutcome(_, _, _, _, _) |
+          UnitOfWorkOp.EntityStoreSaveDetachedOutcome(_, _, _, _, _) |
           UnitOfWorkOp.EntityStoreSaveManaged(_, _, _, _) |
           UnitOfWorkOp.EntityStoreSaveUnversioned(_, _, _, _) |
           UnitOfWorkOp.EntityStoreUpsertUnversioned(_, _, _, _, _, _, _) |
@@ -61,11 +64,14 @@ private[cncf] object UnitOfWorkOperationClassifier {
           UnitOfWorkOp.EntityStoreUpdateById(_, _, _, _, _) |
           UnitOfWorkOp.EntityStoreUpdateByIdObserved(_, _, _, _, _, _) |
           UnitOfWorkOp.EntityStoreUpdateByIdDetached(_, _, _, _, _, _) |
+          UnitOfWorkOp.EntityStoreUpdateRecordSnapshotOutcome(_, _, _, _, _, _) |
+          UnitOfWorkOp.EntityStoreUpdateRecordDetachedOutcome(_, _, _, _, _, _) |
           UnitOfWorkOp.EntityStoreConditionalTransition(_, _, _, _, _) |
           UnitOfWorkOp.EntityStoreUpdateUnversioned(_, _, _, _) |
           UnitOfWorkOp.EntityStoreUpdateByIdUnversioned(_, _, _, _, _) |
           UnitOfWorkOp.EntityStoreDelete(_, _) |
           UnitOfWorkOp.EntityStoreDeleteObserved(_, _, _) |
+          UnitOfWorkOp.EntityStoreDeleteObservedOutcome(_, _, _) |
           UnitOfWorkOp.EntityStoreRestore(_, _) |
           UnitOfWorkOp.EntityStoreDeleteHard(_) |
           UnitOfWorkOp.EntityStoreSearch(_, _, _) |

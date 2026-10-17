@@ -27,7 +27,7 @@ import org.simplemodeling.model.datatype.EntityId
  * @since   May.  4, 2026
  *  version Jul. 24, 2026
  *  version Sep. 29, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 object ContentBodyStoragePolicy {
@@ -79,6 +79,7 @@ object ContentBodyStoragePolicy {
         val charset = _charset(record)
         val bytes = text.getBytes(charset)
         val digest = _sha256(bytes)
+        val bodyrecord = _without_body_metadata(record)
         val metadata = Record.dataAuto(
           "content_byte_size" -> bytes.length,
           "content_digest" -> digest,
@@ -87,7 +88,7 @@ object ContentBodyStoragePolicy {
         if (bytes.length <= config.inlineByteThreshold)
           Consequence.success(
             VersionedPreparation(
-              _without_overflow_fields(record) ++ metadata ++ Record.dataAuto(
+              bodyrecord ++ metadata ++ Record.dataAuto(
                 "content_storage" -> "inline"
               ),
               Vector(_delete_effect(id))
@@ -106,7 +107,7 @@ object ContentBodyStoragePolicy {
           )
           Consequence.success(
             VersionedPreparation(
-              _without_content(record) ++ metadata ++ Record.dataAuto(
+              _without_content(bodyrecord) ++ metadata ++ Record.dataAuto(
                 "content_storage" -> "overflow",
                 "content_ref" -> ref
               ),
@@ -143,9 +144,9 @@ object ContentBodyStoragePolicy {
     id: EntityId,
     record: Record
   )(using ctx: ExecutionContext): Consequence[Record] =
-    _string(record, "content_storage") match {
+    _string(record, "content_storage", "contentStorage") match {
       case Some("overflow") =>
-        val ref = _string(record, "content_ref").getOrElse(_overflow_ref(id))
+        val ref = _string(record, "content_ref", "contentRef").getOrElse(_overflow_ref(id))
         for {
           ds <- ctx.dataStoreSpace.dataStore(_overflow_collection)
           loaded <- ds.load(
@@ -153,7 +154,7 @@ object ContentBodyStoragePolicy {
             DataStore.StringEntryId(ref)
           )
         } yield loaded.flatMap(_content) match {
-          case Some(text) => record ++ Record.dataAuto("content" -> text)
+          case Some(text) => _without_content(record) ++ Record.dataAuto("content" -> text)
           case None => record
         }
       case _ =>
@@ -221,7 +222,12 @@ object ContentBodyStoragePolicy {
     }
 
   private def _content(record: Record): Option[String] =
-    _string(record, "content")
+    record.getAny("content").map {
+      case null => ""
+      case Update.SetNull => ""
+      case Some(v) => v.toString
+      case v => v.toString
+    }.filter(_.trim.nonEmpty)
 
   private def _is_set_null(record: Record, name: String): Boolean =
     record.getAny(name).exists {
@@ -231,12 +237,13 @@ object ContentBodyStoragePolicy {
     }
 
   private def _charset(record: Record): Charset =
-    _string(record, "content_charset", "charset")
+    _string(record, "content_charset", "contentCharset", "charset")
       .flatMap(x => scala.util.Try(Charset.forName(x)).toOption)
       .getOrElse(StandardCharsets.UTF_8)
 
   private def _has_overflow_reference(record: Record): Boolean =
-    _string(record, "content_storage").contains("overflow") || _string(record, "content_ref").nonEmpty
+    _string(record, "content_storage", "contentStorage").contains("overflow") ||
+      _string(record, "content_ref", "contentRef").nonEmpty
 
   private def _overflow_ref(id: EntityId): String =
     s"${id.value}:content"
@@ -247,6 +254,12 @@ object ContentBodyStoragePolicy {
   private def _without_overflow_fields(record: Record): Record =
     Record(record.fields.filterNot { field =>
       Set("contentstorage", "contentref").contains(_normalize(field.key))
+    })
+
+  private def _without_body_metadata(record: Record): Record =
+    Record(record.fields.filterNot { field =>
+      Set("contentbytesize", "contentdigest", "contentcharset", "contentstorage", "contentref")
+        .contains(_normalize(field.key))
     })
 
   private def _string(record: Record, names: String*): Option[String] =

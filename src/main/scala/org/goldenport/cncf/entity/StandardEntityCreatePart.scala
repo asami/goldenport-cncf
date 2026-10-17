@@ -17,6 +17,7 @@ import org.simplemodeling.model.datatype.{
 import org.goldenport.cncf.directive.{Query as EntityDirectiveQuery, SearchResult}
 import org.goldenport.cncf.datastore.{
   DataStore,
+  EntityCreatePlan,
   DataStoreConditionalExpectedField,
   DataStoreConditionalRoot,
   DataStoreConditionalSuccessor,
@@ -49,7 +50,7 @@ import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 private[entity] trait StandardEntityCreatePart extends EntityStore { self: StandardEntityStore =>
@@ -74,7 +75,6 @@ private[entity] trait StandardEntityCreatePart extends EntityStore { self: Stand
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
-      ds <- ctx.dataStoreSpace.dataStore(cid)
       initialized <- revisionbinding match {
         case Some(binding) =>
           for {
@@ -92,11 +92,11 @@ private[entity] trait StandardEntityCreatePart extends EntityStore { self: Stand
             "entity"
           ).map(_complement_create_record(_, id, options))
       }
-      rec <- ContentBodyStoragePolicy.prepareForSave(id, initialized)
-      _ <- _with_datastore_calltree("create", cid, Some(dsid)) {
-        ds.create(cid, dsid, rec)
+      preparation <- ContentBodyStoragePolicy.planForVersionedSave(id, initialized)
+      created <- _with_datastore_calltree("create", cid, Some(dsid)) {
+        ctx.dataStoreSpace.createEntity(EntityCreatePlan(cid, dsid, preparation.record, preparation.sideEffects))
       }
-    } yield CreateResult(id, Some(rec))
+    } yield CreateResult(id, Some(created.record))
   }
 
   private[cncf] override def upsert[T](

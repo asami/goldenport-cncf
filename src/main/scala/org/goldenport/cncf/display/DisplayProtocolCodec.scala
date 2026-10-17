@@ -10,7 +10,7 @@ import scala.util.control.NonFatal
 
 /*
  * @since   Oct.  4, 2026
- * @version Oct.  5, 2026
+ * @version Oct. 17, 2026
  */
 /** Pure strict read codec; trusted definitions remain the sole semantic admission source. */
 object DisplayProtocolCodec {
@@ -27,7 +27,11 @@ object DisplayProtocolCodec {
   def encodeJsonC(source: Source, display: Display): Consequence[Json] = {
     if (source == null) _failure("INPUT_INVALID", "source")
     else if (display == null) _failure("INPUT_INVALID", "display")
-    else Consequence.success(_payload(source, display))
+    else display.presentationContext match {
+      case None => Consequence.success(_payload(source, display))
+      case Some(context) => PresentationContextCodec.encodeJsonC(context)
+        .map(value => _payload(source, display).mapObject(_.add("presentationContext", value)))
+    }
   }
 
   def decodeC(expectedSource: Source, definitions: AdmittedDefinitions, json: String): Consequence[Display] = {
@@ -112,7 +116,7 @@ object DisplayProtocolCodec {
 
   private def _decode(source: Source, definitions: AdmittedDefinitions, json: Json): Consequence[Display] = {
     for {
-      root <- _object(json, "$", Vector("schema", "version", "componentId", "resourceType", "abi", "semanticContract", "provenance", "definition", "model"))
+      root <- _object(json, "$", Vector("schema", "version", "componentId", "resourceType", "abi", "semanticContract", "provenance", "definition", "model"), Vector("presentationContext"))
       _ <- _expected_string(root, "schema", DisplayProtocol.schema, "$", "PROTOCOL_INCOMPATIBLE")
       _ <- _version(root, DisplayProtocol.version, "$", "PROTOCOL_INCOMPATIBLE")
       _ <- _expected_string(root, "componentId", source.componentId.name, "$", "SOURCE_MISMATCH")
@@ -130,7 +134,9 @@ object DisplayProtocolCodec {
       model <- _model(_member(root, "model"), "$.model")
       _ <- if (model.screenId == screenid) Consequence.success(()) else _failure("DEFINITION_MISMATCH", "$.model.screenId")
       display <- Display.createC(definitions, model)
-    } yield display
+      context <- _optional(root, "presentationContext", "$")((value, _) => PresentationContextCodec.decodeJsonC(value))
+      contextual <- Display.withPresentationContextC(display, context)
+    } yield contextual
   }
   private def _contract(json: Json): Consequence[Unit] = {
     val expected = GeneratedLogicalUiAbi.semanticContract

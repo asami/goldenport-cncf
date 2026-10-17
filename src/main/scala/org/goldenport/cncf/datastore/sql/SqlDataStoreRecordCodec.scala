@@ -3,40 +3,44 @@ package org.goldenport.cncf.datastore.sql
 import java.sql.ResultSet
 import io.circe.Json
 import io.circe.parser.parse
+import org.goldenport.Consequence
 import org.goldenport.convert.StringEncodable
 import org.goldenport.text.Presentable
-import org.goldenport.record.{Record, RecordKeyNaming, RecordPresentable}
+import org.goldenport.record.{Field, Record, RecordKeyNaming, RecordPresentable}
 import org.goldenport.cncf.datastore.DataStore.CollectionId
 import org.goldenport.cncf.entity.SimpleEntityStorageShapePolicy
 import org.simplemodeling.model.datatype.EntityCollectionId
 
 /*
  * @since   Oct.  1, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
-private[sql] final class SqlDataStoreRecordCodec(config: SqlDataStore.Config) {
+private[sql] final class SqlDataStoreRecordCodec(config: SqlDataStore.Config, postgresql: Boolean) {
   def recordColumns(
     record: Record
-  ): Vector[(String, Any)] =
-    record.fields.collect {
+  ): Vector[(String, Any)] = {
+    val columns = record.fields.collect {
       case field if field.key != "id" =>
         val k = field.key
         val v = field.value.single
         val key = columnName(k)
         key -> columnValue(v)
     }
-      .foldLeft(Vector.empty[(String, Any)]) { case (z, (k, v)) =>
+    if (postgresql) columns
+    else columns.foldLeft(Vector.empty[(String, Any)]) { case (z, (k, v)) =>
         z.indexWhere(_._1 == k) match {
           case -1 => z :+ (k -> v)
           case i => z.updated(i, k -> v)
         }
       }
+  }
 
   def columnValue(
     value: Any
   ): Any =
     value match {
+      case null if postgresql => null
       case org.simplemodeling.model.directive.Update.SetNull =>
         null
       case m: StringEncodable =>
@@ -88,7 +92,7 @@ private[sql] final class SqlDataStoreRecordCodec(config: SqlDataStore.Config) {
       case other => Json.fromString(Presentable.print(other))
     }
 
-  private def _decode_column_value(
+  def decodeColumnValue(
     value: Any
   ): Any = {
     value match {
@@ -118,28 +122,38 @@ private[sql] final class SqlDataStoreRecordCodec(config: SqlDataStore.Config) {
       jsonObject = obj => Record.createFull(obj.toVector.map { case (k, v) => k -> _json_to_value(v, numberdecoder) })
     )
 
-  def recordFromResultSet(collection: CollectionId, resultSet: ResultSet): Record = {
-    val md = resultSet.getMetaData
-    val count = md.getColumnCount
-    val values = (1 to count).toVector.map { i =>
-      val rawname = md.getColumnLabel(i)
-      val name =
-        if (SimpleEntityStorageShapePolicy.isConcurrencyRevisionStorageField(rawname))
-          rawname
-        else if (config.normalizeColumnNames)
-          RecordKeyNaming.toCanonicalCamelName(rawname)
-        else
-          rawname
-      val rawvalue = resultSet.getObject(i)
-      val value =
-        if (_preserve_native_text(collection, name))
-          rawvalue
-        else
-          _decode_column_value(rawvalue)
-      name -> value
+  def recordFromResultSetC(collection: CollectionId, resultSet: ResultSet): Consequence[Record] =
+    Consequence {
+      val md = resultSet.getMetaData
+      val count = md.getColumnCount
+      (1 to count).toVector.map { i =>
+        val rawname = md.getColumnLabel(i)
+        val name =
+          if (SimpleEntityStorageShapePolicy.isConcurrencyRevisionStorageField(rawname))
+            rawname
+          else if (config.normalizeColumnNames)
+            RecordKeyNaming.toCanonicalCamelName(rawname)
+          else
+            rawname
+        val rawvalue = resultSet.getObject(i)
+        val value =
+          if (_preserve_native_text(collection, name))
+            rawvalue
+          else
+            decodeColumnValue(rawvalue)
+        name -> value
+      }
+    }.flatMap { values =>
+      if (postgresql && values.map(_._1).distinct.size != values.size)
+        Consequence.configurationInvalid("PostgreSQL readback has ambiguous decoded Record keys")
+      else Consequence {
+        val ordered = if (postgresql) values.sortBy { case (name, _) =>
+          if (name == "id") 0 else if (name == "revision" || name == "cncf_revision") 1 else 2
+        } else values
+        Record(ordered.filterNot { case (_, value) => java.util.Objects.isNull(value) }
+          .map { case (name, value) => Field(name, Field.Value.Single(value)) })
+      }
     }
-    Record.createFull(values.filterNot { case (_, value) => java.util.Objects.isNull(value) })
-  }
 
   def columnName(name: String): String =
     if (config.normalizeColumnNames) RecordKeyNaming.toSnakeColumnName(name) else name
