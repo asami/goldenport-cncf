@@ -6,6 +6,12 @@
 - Consumers: sm-workflow, textus-cbd-support, Cozy/CML projection
 - Related: Phase 99 Finding Disposition ABI, Executable Specification tagging rules
 
+Declaration interpretation semantics are promoted to the normative
+[V1 specification](../spec/validation-test-metadata.md) and
+[design](../design/validation-test-metadata.md) in Phase 103 Step S1. This note
+remains planning history; annotation/discovery/invocation and consumer delivery
+remain Phase obligations tracked by the [checklist](../phase/phase-103-checklist.md).
+
 ## Purpose
 
 Define one CNCF-owned semantic ABI for validation/test metadata attached directly to executable specifications and test programs. The metadata is the source-level declaration of what a validation operation proves and when it should participate in validation. Separate TestSuite registry/YAML files are not the source of truth.

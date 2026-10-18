@@ -22,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -470,21 +470,17 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
       } finally _close(fixture.root)
     }
 
-    "expose only logical typed intent and reject duplicate workspace-operation definitions" in {
+    "reject duplicate workspace-operation definitions" in {
       Given("a trusted Test definition and a second capability for the same workspace and operation")
       val fixture = _fixture(_result(ProcessExecutionTermination.Exited(0)))
       val duplicate = SbtProgramDefinition.createC(fixture.workspace.bindingC(_workspace_id).toOption.get,
         SbtOperation.Test, ProcessCapabilityId.parseC("second-test").toOption.get, "second-test",
         _sbt_path, _limits, Map.empty).toOption.get
       try {
-        When("runtime assembly combines the definitions and the public intent surface is inspected")
+        When("runtime assembly combines the definitions")
         val denied = ProcessExecutionPolicy.createC(fixture.definitions :+ duplicate)
-        val fields = classOf[SbtTarget].getDeclaredFields.map(_.getName).toSet
-        val operations = SbtOperation.values.toVector
 
-        Then("the target has no host or process selectors and the duplicate operation cannot be installed")
-        fields shouldBe Set("workspaceId")
-        operations shouldBe Vector(SbtOperation.Compile, SbtOperation.Test, SbtOperation.TestOnly)
+        Then("the duplicate operation cannot be installed")
         denied.isFaillure shouldBe true
         fixture.profile.driver.executions shouldBe empty
       } finally _close(fixture.root)

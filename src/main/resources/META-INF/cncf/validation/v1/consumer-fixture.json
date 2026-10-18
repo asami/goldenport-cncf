@@ -1,0 +1,99 @@
+{
+  "exampleContract": "cncf.validation.consumer-example.v1",
+  "syntheticStaticAnalysisInput": true,
+  "description": "Portable synthetic metadata comparison; not actual discovery, a suite registry, runtime evidence or an inventory wire codec.",
+  "comparison": {
+    "scopeIdentity": "example:orders-tests",
+    "populationRevision": "orders-flat-population-1",
+    "baseline": "baseline",
+    "candidate": "candidate"
+  },
+  "featurePopulation": {
+    "identity": "example:orders-features",
+    "revision": "features-1",
+    "features": [
+      {"scope": "component:orders", "identity": "approval"},
+      {"scope": "slice:orders", "identity": "review"},
+      {"scope": "component:orders", "identity": "uncovered-export"}
+    ]
+  },
+  "featureMappings": [
+    {"identity": "example:approval-mapping", "revision": "mapping-1", "feature": {"scope": "component:orders", "identity": "approval"}, "targetIdentity": "example:orders-component", "targetRevision": "component-7"},
+    {"identity": "example:review-mapping", "revision": "mapping-2", "feature": {"scope": "slice:orders", "identity": "review"}, "targetIdentity": "example:review-slice", "targetRevision": "slice-3"}
+  ],
+  "snapshots": [
+    {
+      "name": "baseline",
+      "scope": {
+        "identity": "example:orders-tests",
+        "revision": "scope-baseline-1",
+        "populationRevision": "orders-flat-population-1",
+        "artifacts": [{"componentIdentity": "example:orders", "artifactIdentity": "example:orders-tests", "artifactRevision": "artifact-1", "sourceRevision": "source-1", "artifactLocator": "example-artifact:orders-tests", "packagePrefix": "example.orders"}]
+      },
+      "completeness": "COMPLETE",
+      "operations": [
+        {
+          "reference": {"component": "example:orders", "specification": "orders:approval", "operation": "admission:approval"},
+          "provenance": {"artifactIdentity": "example:orders-tests", "artifactRevision": "artifact-1", "sourceRevision": "source-1", "operationRevision": "approval-1", "abiVersion": 1},
+          "selector": {"suiteClassName": "example.orders.ApprovalSpec", "testName": "approve order"},
+          "specification": {"purposes": ["ADMISSION", "FULL"], "features": [{"scope": "component:orders", "identity": "approval"}], "expectedDuration": {"amount": 2, "unit": "SECONDS"}, "durationClass": "NORMAL", "executionRequirement": {"capabilities": ["build"], "risk": "example-risk", "reasoning": "STANDARD", "reviewRequired": false}, "requiredSemantics": ["purposes", "features"]},
+          "operation": null
+        },
+        {
+          "reference": {"component": "example:orders", "specification": "orders:focused", "operation": "focused:review"},
+          "provenance": {"artifactIdentity": "example:orders-tests", "artifactRevision": "artifact-1", "sourceRevision": "source-1", "operationRevision": "focused-1", "abiVersion": 1},
+          "selector": {"suiteClassName": "example.orders.ReviewSpec", "testName": "review selected order"},
+          "specification": {"features": [{"scope": "component:orders", "identity": "approval"}]},
+          "operation": {"purposes": ["FOCUSED"], "features": [{"scope": "slice:orders", "identity": "review"}], "expectedDuration": {"amount": 250, "unit": "MILLISECONDS"}}
+        },
+        {
+          "reference": {"component": "example:orders", "specification": "orders:plain", "operation": "plain:registration"},
+          "provenance": {"artifactIdentity": "example:orders-tests", "artifactRevision": "artifact-1", "sourceRevision": "source-1", "operationRevision": "plain-1", "abiVersion": 1},
+          "selector": {"suiteClassName": "example.orders.PlainSpec", "testName": "ordinary unannotated registration"},
+          "specification": null,
+          "operation": null
+        }
+      ],
+      "diagnostics": []
+    },
+    {
+      "name": "candidate",
+      "scope": {
+        "identity": "example:orders-tests",
+        "revision": "scope-candidate-2",
+        "populationRevision": "orders-flat-population-1",
+        "artifacts": [{"componentIdentity": "example:orders", "artifactIdentity": "example:orders-tests", "artifactRevision": "artifact-2", "sourceRevision": "source-2", "artifactLocator": "example-artifact:orders-tests", "packagePrefix": "example.orders"}]
+      },
+      "completeness": "COMPLETE",
+      "operations": [
+        {
+          "reference": {"component": "example:orders", "specification": "orders:approval", "operation": "admission:approval"},
+          "provenance": {"artifactIdentity": "example:orders-tests", "artifactRevision": "artifact-2", "sourceRevision": "source-2", "operationRevision": "approval-2", "abiVersion": 1},
+          "selector": {"suiteClassName": "example.orders.ApprovalSpec", "testName": "approve order"},
+          "specification": {"purposes": ["FULL"], "features": [{"scope": "component:orders", "identity": "approval"}], "expectedDuration": {"amount": 2, "unit": "SECONDS"}, "durationClass": "NORMAL", "executionRequirement": {"capabilities": ["build"], "risk": "example-risk", "reasoning": "STANDARD", "reviewRequired": false}, "requiredSemantics": ["purposes", "features"]},
+          "operation": null
+        },
+        {
+          "reference": {"component": "example:orders", "specification": "orders:focused", "operation": "focused:review"},
+          "provenance": {"artifactIdentity": "example:orders-tests", "artifactRevision": "artifact-2", "sourceRevision": "source-2", "operationRevision": "focused-1", "abiVersion": 1},
+          "selector": {"suiteClassName": "example.orders.ReviewSpec", "testName": "review selected order"},
+          "specification": {"features": [{"scope": "component:orders", "identity": "approval"}]},
+          "operation": {"purposes": ["FOCUSED"], "features": [{"scope": "slice:orders", "identity": "review"}], "expectedDuration": {"amount": 250, "unit": "MILLISECONDS"}}
+        },
+        {
+          "reference": {"component": "example:orders", "specification": "orders:plain", "operation": "plain:registration"},
+          "provenance": {"artifactIdentity": "example:orders-tests", "artifactRevision": "artifact-2", "sourceRevision": "source-2", "operationRevision": "plain-1", "abiVersion": 1},
+          "selector": {"suiteClassName": "example.orders.PlainSpec", "testName": "ordinary unannotated registration"},
+          "specification": null,
+          "operation": null
+        }
+      ],
+      "diagnostics": []
+    }
+  ],
+  "variants": [
+    {"name": "candidate-partial", "snapshot": "candidate", "scopeRevision": "scope-partial-2", "completeness": "PARTIAL", "includedOperations": ["focused:review", "plain:registration"], "diagnostics": [{"code": "enumeration", "source": "example:orders-tests", "message": "Synthetic gap in the admitted namespace"}]},
+    {"name": "candidate-unknown", "snapshot": "candidate", "scopeRevision": "scope-unknown-2", "completeness": "UNKNOWN", "includedOperations": [], "diagnostics": [{"code": "enumeration", "source": "example:orders-tests", "message": "Synthetic artifact unavailable for enumeration"}]}
+  ],
+  "runtimeEvidence": []
+}

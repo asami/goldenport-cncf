@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SbtTestSelectionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -52,6 +52,76 @@ final class SbtTestSelectionSpec extends AnyWordSpec with Matchers with GivenWhe
   }
 
   "Selected ScalaTest report interpretation" should {
+    "require one exact selected class and exactly one successful scenario" in {
+      Given("an exact scenario and supported reports for one, zero or multiple successful tests")
+      val classes = _classes.take(1)
+      val scenario = Some(SbtScenarioSelection(classes.head, "parameter case 1"))
+      val reports = Vector(1L, 0L, 2L).map(x => _process(_report(classes, x, false)))
+      When("scenario-aware interpretation checks actual counts and selected class agreement")
+      val decoded = reports.map(SbtTestSelectionDecoder.decode(classes, _, scenario))
+      val mismatch = SbtTestSelectionDecoder.decode(_classes, reports.head, scenario)
+      Then("only the complete one-test report verifies and class or count disagreement stays unverified")
+      decoded shouldBe Vector(SbtTestSelectionResult.Verified(classes, 1, 1L),
+        SbtTestSelectionResult.Rejected(SbtTestSelectionFailure.ScenarioMismatch),
+        SbtTestSelectionResult.Rejected(SbtTestSelectionFailure.ScenarioMismatch))
+      mismatch shouldBe SbtTestSelectionResult.Rejected(SbtTestSelectionFailure.ScenarioMismatch)
+    }
+
+    "retain conservative failures for incomplete, wrong-class and failed scenario reports" in {
+      Given("an exact scenario and a valid ordinary one-test report")
+      val classes = _classes.take(1)
+      val scenario = Some(SbtScenarioSelection(classes.head, "parameter case 1"))
+      val report = _report(classes, 1L, false)
+      val cases = Vector(
+        _process(report).copy(stdout = _process(report).stdout.copy(truncated = true)) -> SbtTestSelectionFailure.IncompleteCapture,
+        _process(report.replace(classes.head, "org.other.WrongSpec")) -> SbtTestSelectionFailure.SuiteMismatch,
+        _process(report.replace("failed 0", "failed 1")) -> SbtTestSelectionFailure.FailedTests,
+        _process(report.replace("[info] All tests passed.", "")) -> SbtTestSelectionFailure.InvalidReport)
+      When("each captured report is interpreted with the exact scenario")
+      val decoded = cases.map { case (process, reason) =>
+        SbtTestSelectionDecoder.decode(classes, process, scenario) -> reason
+      }
+      Then("an exact request cannot turn incomplete or contradictory output into success")
+      decoded.foreach { case (result, reason) => result shouldBe SbtTestSelectionResult.Rejected(reason) }
+    }
+
+    "retain every host authority and projection fact when deriving a narrower definition" in {
+      Given("one trusted TestOnly definition with two allowed classes, fixed environment and finite limits")
+      val root = java.nio.file.Files.createTempDirectory("sbt-scenario-policy-")
+      val workspaceid = WorkspaceId.parseC("selected").toOption.get
+      val workspace = org.goldenport.cncf.workspace.WorkspaceExecutionAdmission.createC(
+        Vector(workspaceid -> root), Vector.empty).toOption.get
+      val binding = workspace.bindingC(workspaceid).toOption.get
+      val limits = ProcessExecutionLimits(Some(10L), Some(20L), Some(5L), Some(1000L), Some(1000L),
+        Some(1000L), Some(16L), Some(4096L), Some(2L), Some(1000L), Some(2000L))
+      val definition = SbtProgramDefinition.createC(binding, SbtOperation.TestOnly,
+        ProcessCapabilityId.parseC("selected").toOption.get, "selected", java.nio.file.Path.of("/usr/bin/true"),
+        limits, Map("BUILD_PROFILE" -> "scenario"), _classes).toOption.get
+      val selection = SbtScenarioSelection(_classes.head, "parameter case 1")
+      try {
+        When("the admitted class narrows the immutable definition")
+        val narrowed = ProcessProgramDefinition.narrowSbtScenarioC(definition, Some(selection)).toOption.get
+        Then("binding, capability, executable, environment, limits and allowed projections remain identical")
+        (narrowed._sbt_metadata.get.binding eq binding) shouldBe true
+        narrowed.capability shouldBe definition.capability
+        narrowed.safeProgramIdentity shouldBe definition.safeProgramIdentity
+        narrowed._executable_location shouldBe definition._executable_location
+        (narrowed._environment eq definition._environment) shouldBe true
+        narrowed.maximumLimits shouldBe definition.maximumLimits
+        narrowed.allowedArtifacts shouldBe definition.allowedArtifacts
+        narrowed.allowsWorkingDirectory shouldBe definition.allowsWorkingDirectory
+        narrowed.allowedInputFiles shouldBe definition.allowedInputFiles
+        narrowed.allowedInputFilePaths shouldBe definition.allowedInputFilePaths
+        narrowed.allowedResourceTrees shouldBe definition.allowedResourceTrees
+        narrowed._sbt_metadata.get.testClasses shouldBe Vector(selection.suiteClassName)
+        narrowed._sbt_metadata.get.scenario shouldBe Some(selection)
+        definition._sbt_metadata.get.testClasses shouldBe _classes
+        definition._sbt_metadata.get.scenario shouldBe None
+        narrowed.argumentPolicy shouldBe ProcessArgumentPolicy(narrowed.fixedArguments)
+        narrowed.fixedArguments.last shouldBe "testOnly org.example.SelectedSpec -- -t \"parameter case 1\""
+      } finally java.nio.file.Files.deleteIfExists(root)
+    }
+
     "verify positive single and multiple suites through exact or unique simple headers" in {
       Given("one selected class or multiple classes, each with complete strict UTF8 captures and a positive report")
       val selections = Vector(_classes.take(1), _classes)

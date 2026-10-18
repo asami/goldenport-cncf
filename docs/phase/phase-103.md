@@ -1,6 +1,6 @@
 # Phase 103: Validation/Test Metadata ABI and Discovery
 
-status=planned
+status=in-progress
 planned_at=2026-10-06
 driver=sm-workflow Phase 5
 consumer=sm-workflow, textus-cbd-support, Cozy/CML projection
@@ -14,7 +14,9 @@ operation-level discovery interface. Executable Specifications/test operations
 carry the declarations; consumers query the same normalized metadata without
 maintaining separate authoritative TestSuite membership files.
 
-Canonical input: [ABI proposal](../notes/validation-test-metadata-abi-proposal.md).
+Canonical declaration semantics: [V1 specification](../spec/validation-test-metadata.md)
+and [design](../design/validation-test-metadata.md).
+Planning input: [ABI proposal](../notes/validation-test-metadata-abi-proposal.md).
 Decision and planning history: [producer journal](../journal/2026/10/2026-10-06-validation-test-metadata-abi.md).
 Promote the proposal into the normal spec/design/Executable Specification layers
 as implementation starts; this Phase is the work plan, not a competing ABI spec.
@@ -30,7 +32,9 @@ as implementation starts; this Phase is the work plan, not a competing ABI spec.
 - textus-cbd-support owns static Test Architecture analysis, lint, KPI and human
   review. Its implementation runs on Mac mini as separate consumer work. Publish
   the same ABI/fixtures for it; completion of its UI/KPI work is not a producer
-  or sm-workflow initial-runtime gate.
+  or sm-workflow initial-runtime gate. The owner is its
+  [October 6 metadata static-analysis journal](https://github.com/asami/textus-cbd-support/blob/main/docs/journal/2026/10/2026-10-06-validation-test-metadata-static-analysis.md);
+  its closed Phase 14 concerns native Job integration and is not reopened.
 - Cozy owns CML property syntax and generation. CNCF supplies normalized mapping
   semantics and fixtures; this phase does not implement a Cozy parser.
 - [Phase 99](https://github.com/asami/goldenport-cncf/blob/main/docs/phase/phase-99.md)
@@ -42,9 +46,61 @@ as implementation starts; this Phase is the work plan, not a competing ABI spec.
 
 ## Work status
 
-All items are PLANNED; implementation and executable acceptance have not started.
-Next work: VM-01, followed by a connected ABI/discovery implementation and specs.
-No currently running phase or Goal is changed by creating this plan.
+Step P103-S1 passed focused validation and independent protected conformance
+review: 17 declaration scenarios and 16 existing execution-contract regressions
+passed across three suites, with no review findings. Its public declaration ABI,
+callable normalization, Executable Specifications and normative declaration docs
+are accepted in local Step commit `ac443ed353cc682251e4d17bf4e64a1285955798`.
+Full Phase validation and acceptance remain pending.
+The [implementation journal](../journal/2026/10/2026-10-18-phase-103-validation-metadata.md)
+records the current handoff. The checklist remains the completion ledger.
+
+S1 progresses VM-01 and the interpretation portion of VM-02/VM-03. It delivers
+no annotations, framework discovery, inventory or invocation.
+
+Step P103-S2 authors Java runtime annotations usable from Scala, admitted typed
+declaration providers, real ScalaTest artifact/package discovery, scoped logical
+references and revision provenance, COMPLETE/PARTIAL/UNKNOWN inventory, typed
+framework selectors and pure query/reference resolution. Actual passing
+FunSuite/WordSpec fixtures and behavior specifications are authored, including
+one in-process parameter-case selector execution. S2 focused validation passed
+36 discovery/selection scenarios and 17 S1 declaration regressions across three
+suites, with zero failures or aborts and successful serialized SBT terminal
+completion and lock release. Initial independent protected-focused review found
+one descendant-symlink completeness defect. The bounded correction reports
+skipped links without following them and adds directory-link and class-link
+regressions. Fresh independent focused review accepted closure with no remaining
+blocker, Hygiene or Development Candidate findings. S2 is
+accepted in local Step commit `2ec6da1265d14430cf522443869a0b9b2647ea00`.
+
+Step P103-S3 authors exact typed scenario selection, the public operation binder,
+current-context grant/host-allowlist narrowing through the existing execution
+path, and conservative exactly-one-test result interpretation. It also authors
+normalized CML mapping equivalence and one packaged synthetic portable
+static-consumer fixture with complete comparable baseline/candidate and
+PARTIAL/UNKNOWN variants. The [shared guide](../fixtures/validation-test-metadata/README.md)
+and [consumer handoff](../notes/validation-test-metadata-consumer-handoff.md)
+map consumer responsibilities. Focused validation passed 79 tests across eight
+suites; separate real top-level literal parameter selection passed one test in
+one suite (total 80 tests across nine suites, zero failures or aborts).
+SBT/wrapper exit codes were 0 and the shared lock was released. Independent
+protected-focused S3 Step review returned PASS with zero Current Boundary
+Blockers, Hygiene or Development Candidate findings and no evidence gaps.
+S3 is accepted in local Step commit `1df07da9be8716edf0e0462bcba221ca8d020c60`. No runtime consumer
+acceptance is inferred.
+
+Broader producer repository-full validation has not passed. Targeted non-DB
+reproduction also failed; the connection to the prior Action context/UnitOfWork
+ownership change has no accepted repair. Required PostgreSQL/MySQL flags were
+absent from the first full invocation, and the property/JUnit harness failure
+remains unresolved. Full Phase validation, review and release acceptance remain open.
+
+Actual sm-workflow source fixture/dependency refresh remains required separate
+Step P103-S4 under explicit source admission after producer acceptance. Its
+concrete discovery -> query -> exact binding -> typed invocation consumer is
+not replaced by the synthetic fixture or deterministic driver specifications.
+VM-01..04 and all full Phase checks remain obligations; internal Step handoffs
+do not split the Phase.
 
 ## Development items
 
@@ -63,8 +119,9 @@ evidence and static analysis. Executable Specifications verify the declared
 merge rules and invalid/unsupported input behavior. sm-workflow's concrete
 runtime consumer demonstrates discovery -> purpose/feature query -> typed
 operation binding; CNCF records its handoff without claiming all of sm-workflow
-Phase 5 complete. A shared static-consumer fixture is delivered for [cbd-support Phase 14](https://github.com/asami/textus-cbd-support/blob/main/docs/phase/phase-14.md) on Mac mini
-without waiting for the cbd-support application implementation.
+Phase 5 complete. A shared static-consumer fixture is supplied to the
+[cbd-support metadata static-analysis workstream](https://github.com/asami/textus-cbd-support/blob/main/docs/journal/2026/10/2026-10-06-validation-test-metadata-static-analysis.md)
+on Mac mini without waiting for the cbd-support application implementation.
 
 Discovery scope/completeness, unannotated operations, feature references and
 operation revision provenance are part of the shared consumer contract. Declared

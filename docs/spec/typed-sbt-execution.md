@@ -6,10 +6,22 @@ Status: normative normal-command producer, host and typed consumer connection co
 
 Behavior exposes protected `sbt_compile(target)`, `sbt_test(target)` and
 `sbt_test_only(target)`, each
-returning `ExecUowM[SbtExecutionResult]`. `SbtTarget` contains only a
-`WorkspaceId`; `SbtOperation` contains only `Compile`, `Test` and `TestOnly`. There is no
-task expression, extra argv, test selector, main, executable, host cwd,
+returning `ExecUowM[SbtExecutionResult]`. `SbtTarget(workspaceId, scenario = None)`
+contains a `WorkspaceId` and an optional public
+`SbtScenarioSelection(suiteClassName, testName)`; `SbtOperation` contains only
+`Compile`, `Test` and `TestOnly`. There is no
+task expression, extra argv, main, executable, host cwd,
 launcher, environment or capability selector in this component API.
+
+The trailing default preserves ordinary `SbtTarget(workspaceId)` source calls.
+Its case-class extractor arity changes from one to two, so extractor consumers
+must update. There is no binary-compatibility claim for precompiled SNAPSHOT
+callers. Scenario `validateC` reuses the host class grammar below and requires
+an exact nonempty already-trimmed control-free test name of at most 512
+characters. Double quote, backslash and semicolon are explicitly unsupported
+literal rendering. There is no trimming, escaping or fuzzy fallback. Null
+options, selections or fields fail structurally; Compile/Test reject every
+scenario. TestOnly with `None` preserves existing class-only behavior.
 
 These methods only construct immutable `UnitOfWorkOp.SbtExec(target, operation)`
 intent. Construction performs no context lookup, service or permission check,
@@ -74,7 +86,22 @@ The runtime renders this fixed vector with one literal final command:
 
 TestOnly retains those same four flags and uses one final argv item containing
 literal `testOnly ` followed by the trusted names joined with one space.
-Components supply no classes, tasks, options or additional arguments.
+Class-only intent supplies no classes, tasks, options or additional arguments.
+An exact typed scenario may select only one class already admitted by the
+current host TestOnly allowlist. After binding/definition and actual component
+grant resolution, the runtime derives an immutable narrowed tagged definition
+with one final argv item:
+
+```text
+testOnly <host-admitted class> -- -t "<literal accepted exact name>"
+```
+
+The derived definition retains the identical binding, capability, safe identity,
+executable, fixed environment, limits and all allowed projections. Only its
+fixed arguments/argument policy and private class/scenario selection metadata
+narrow. No request override, new request construction site or host-codec field
+is added. The existing policy resolves the same empty request and checks actual
+grant and finite limits. Generic tagged execution remains forbidden.
 
 No Java-launcher compatibility route, shell or component main is used. The existing local launcher clears ambient
 environment before installing validated fixed bindings. No per-task cache,
@@ -186,13 +213,13 @@ For TestOnly `Exited(0)`, success additionally requires
 `UnverifiedTests(MissingSelection)`; `Rejected(reason)` yields
 `UnverifiedTests(reason)`. The closed failures are `MissingSelection`,
 `IncompleteCapture`, `InvalidReport`, `ZeroTests`, `SuiteMismatch` and
-`FailedTests`. Nonzero and incomplete terminals retain the existing meanings
+`FailedTests`, plus `ScenarioMismatch`. Nonzero and incomplete terminals retain the existing meanings
 without inferring report success. The raw Process result is always retained.
 No result serialization is added by this producer.
 
 Pure decoding runs inside the existing SbtExec callback after exactly one
 execution and uses only the expected classes from the actual resolved private
-metadata. Both captures must be untruncated with nonnegative byte counts equal
+metadata, including its defaulted optional scenario. Both captures must be untruncated with nonnegative byte counts equal
 to captured bytes and strict UTF8 decoded with REPORT. Stdout `[info]` records
 must contain exactly one complete ordinary ScalaTest terminal report: positive
 Long `Total number of tests run: N`; `Suites: completed K, aborted 0` with K
@@ -206,6 +233,15 @@ Unrelated log lines are ignored. Unsupported formats remain unverified.
 This trusted build-output interpretation is not an integrity certificate or
 hostile-code authenticity claim. Decode refusals are typed result data and
 retain the external receipt without automatic replay.
+
+With a scenario, its class must agree with the single exact selected class and
+the conservative successful summary must have `testsRun == 1`. Class-selection
+or parsed test-count disagreement produces `ScenarioMismatch`; malformed,
+truncated, failed or wrong-suite reports retain their existing conservative
+rejection. `Verified(testClasses, completedSuites, testsRun)` keeps its existing
+shape. `SbtExecutionResult.target` retains the exact scenario. A suite-only
+receipt does not independently name an operation: the typed producer intent
+requests the exact name, and parsing cannot authenticate forged build logs.
 
 The adapter starts the normal tool directly once through the existing managed
 lifecycle. SBT may start its legitimate JVM/tool children. Its own native locks
@@ -251,3 +287,12 @@ receipt and progression logic. Existing primary Test behavior and all historical
 delivery status and counts remain unchanged. `SbtTestSelectionSpec` authors the
 strict selection/report profile; DSL, codec and recording specs author the
 corresponding current-context, conditional wire and External-boundary behavior.
+
+`SbtScenarioExecutionDslSpec` authors the narrower scenario/current-context
+path with `ProcessExecutionTestProfile`, without launching SBT. The public
+`ValidationOperationBindingV1.bindC` connects actual discovery references to
+that same typed `SbtExec`; see the [metadata contract](validation-test-metadata.md).
+The parent-selected real top-level parameter-fixture test is separate literal
+ScalaTest selection evidence. The actual sm-workflow adapter/fixture remains
+separately admitted S4 work; authored producer specifications do not establish
+consumer or Phase acceptance.

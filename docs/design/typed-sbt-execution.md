@@ -51,7 +51,9 @@ implements no File/find or streaming operation.
 
 ## Protected intent and tagged policy
 
-Protected Behavior methods expose only a logical target and Compile/Test/TestOnly.
+Protected Behavior methods expose a logical target, optional exact scenario
+coordinates and Compile/Test/TestOnly. Scenario coordinates are typed intent;
+the current host retains the allowed class population and execution authority.
 The trusted definition factory validates a real absolute executable normal sbt
 path, finite limits and fixed environment, and renders `--batch`,
 server/supershell/color disabling flags and one literal compile/test command.
@@ -66,8 +68,29 @@ dollar, dash, semicolon, slash, controls, duplicates, empty elements or
 normalization are admitted. The private metadata/declaration/factory append a
 defaulted `testClasses` vector; Compile/Test require it empty. The existing four
 flags remain exact. The final single argv item is `testOnly ` plus the admitted
-classes joined with one space. No caller class selector, task, option or argv
-is introduced.
+classes joined with one space for ordinary targets. A target with
+`Some(SbtScenarioSelection(suiteClassName, testName))` narrows only an exact
+class already in that host allowlist and requests one literal name. The class
+grammar is reused unchanged; the test name is exact trimmed nonempty,
+control-free, at most 512 characters, and excludes double quote, backslash and
+semicolon. There is no escaping or fuzzy interpretation. Compile/Test reject
+scenario selection. Explicit null options/selections/fields fail structurally.
+
+Actual admission resolves the identical shared binding, current host TestOnly
+definition and actual owner capability grant before deriving a narrower
+immutable definition in `ProcessProgramDefinition`. Binding, capability, safe
+identity, executable, fixed environment, limits and allowed projections are
+retained exactly; only fixed arguments/argument policy and private selection
+metadata narrow. The final single command item is
+`testOnly <class> -- -t "<exact name>"`. The existing `resolveSbtC` constructs the
+same empty request and validates grant/finite limits. No request site, caller
+override or host-codec field is introduced. Generic tagged denial still applies.
+
+The trailing defaulted `SbtTarget.scenario` preserves ordinary source
+construction. The case-class extractor changes from one field to two. There is
+no precompiled SNAPSHOT binary-compatibility claim. Existing host declarations
+and codec remain class-only, while the defaulted private metadata/decoder
+scenario field preserves ordinary class-only behavior.
 
 The process policy remains the sole program registry and rejects duplicate
 workspace/operation pairs. Typed admission selects an unambiguous tagged
@@ -153,6 +176,15 @@ Unknown or duplicate canonical suite headers yield SuiteMismatch. Unsupported
 formats are never guessed successful. Closed failures also include
 MissingSelection, IncompleteCapture and InvalidReport.
 
+An exact scenario must agree with the single selected class and the ordinary
+successful summary must report exactly one test. Parsed class-selection/count
+disagreement yields the added `ScenarioMismatch`; existing malformed capture,
+wrong suite and failed-report refusals remain. `Verified` retains its existing
+three fields. The result's exact target retains operation selection intent;
+the suite-only report does not independently identify the operation, and a
+forged log is not authenticated by parsing. Binding/declarations contain no
+runtime success evidence.
+
 This pure result interpretation preserves every raw Process fact and returns
 typed failure data without dropping the external receipt or retrying. Nonzero,
 launch-failed, timed-out, cancelled and output/artifact-limit terminals keep
@@ -201,3 +233,12 @@ normal-tool TestOnly connection. A later primary change must explicitly consume
 the typed `outcome`, including UnverifiedTests, before enabling TestOnly in
 receipt/progression logic. Existing primary Test consumption, historical
 delivery status and counts remain unchanged.
+
+The public `ValidationOperationBindingV1` binds actual discovery/query or
+supplemental references to this same typed path without installing authority.
+`SbtScenarioExecutionDslSpec` uses a deterministic existing process profile to
+author actual-context narrowing and single dispatch. Real top-level literal
+parameter selection is a separate parent validation obligation. The actual
+sm-workflow source adapter/fixture requires separate S4 admission; the
+[consumer handoff](../notes/validation-test-metadata-consumer-handoff.md)
+records that boundary and remaining Phase acceptance gates.

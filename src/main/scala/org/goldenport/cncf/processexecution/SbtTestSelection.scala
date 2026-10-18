@@ -6,11 +6,11 @@ import org.goldenport.Consequence
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 enum SbtTestSelectionFailure {
-  case MissingSelection, IncompleteCapture, InvalidReport, ZeroTests, SuiteMismatch, FailedTests
+  case MissingSelection, IncompleteCapture, InvalidReport, ZeroTests, SuiteMismatch, FailedTests, ScenarioMismatch
 }
 
 enum SbtTestSelectionResult {
@@ -18,7 +18,7 @@ enum SbtTestSelectionResult {
   case Rejected(reason: SbtTestSelectionFailure)
 }
 
-/** Exact names belong to the trusted host declaration, never to component input. */
+/** The host owns the allowed classes; typed scenarios may only narrow that set. */
 private[cncf] object SbtTestSelectionPolicy {
   def validClasses(testClasses: Vector[String]): Boolean =
     testClasses != null && testClasses.nonEmpty && testClasses.size <= 16 &&
@@ -43,13 +43,19 @@ private[cncf] object SbtTestSelectionDecoder {
   private val _tests = "Tests: succeeded ([0-9]+), failed ([0-9]+), canceled ([0-9]+), ignored ([0-9]+), pending ([0-9]+)".r
   private val _header = "([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*):".r
 
-  def decode(testClasses: Vector[String], result: ProcessExecutionResult): SbtTestSelectionResult = {
+  def decode(
+    testClasses: Vector[String],
+    result: ProcessExecutionResult,
+    scenario: Option[SbtScenarioSelection] = None
+  ): SbtTestSelectionResult = {
     import SbtTestSelectionFailure.*
     val decoded = for {
+      _ <- Either.cond(scenario != null && scenario.forall(x => x != null && x.validateC.isSuccess &&
+        testClasses == Vector(x.suiteClassName)), (), ScenarioMismatch)
       _ <- Either.cond(SbtTestSelectionPolicy.validClasses(testClasses), (), MissingSelection)
       stdout <- _capture(result.stdout)
       _ <- _capture(result.stderr)
-      verified <- _report(testClasses, stdout)
+      verified <- _report(testClasses, stdout, scenario)
     } yield verified
     decoded.fold(SbtTestSelectionResult.Rejected.apply, identity)
   }
@@ -66,7 +72,11 @@ private[cncf] object SbtTestSelectionDecoder {
     }
   }
 
-  private def _report(classes: Vector[String], stdout: String): Either[SbtTestSelectionFailure, SbtTestSelectionResult] = {
+  private def _report(
+    classes: Vector[String],
+    stdout: String,
+    scenario: Option[SbtScenarioSelection]
+  ): Either[SbtTestSelectionFailure, SbtTestSelectionResult] = {
     import SbtTestSelectionFailure.*
     val lines = stdout.linesIterator.collect { case line if line.startsWith("[info] ") => line.substring(7) }.toVector
     val totals = lines.filter(_.startsWith("Total number of tests run"))
@@ -94,6 +104,7 @@ private[cncf] object SbtTestSelectionDecoder {
         case _ => Left(InvalidReport)
       }
       _ <- Either.cond(suitecounts._2 == 0 && testcounts._2 == 0 && testcounts._3 == 0, (), FailedTests)
+      _ <- Either.cond(scenario.isEmpty || total == 1L, (), ScenarioMismatch)
       _ <- Either.cond(total > 0, (), ZeroTests)
       _ <- Either.cond(testcounts._1 == total, (), InvalidReport)
       _ <- Either.cond(passed == 1 &&
