@@ -1,12 +1,18 @@
 package org.goldenport.cncf.entity
 
+import java.nio.file.Files
+import java.sql.DriverManager
 import scala.reflect.ClassTag
 import io.circe.{Codec, Decoder, DecodingFailure, Encoder, Json, parser}
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.datatype.Name
+import org.goldenport.convert.NumericCodeCodec
+import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.datastore.DataStore
+import org.goldenport.cncf.datastore.sql.SqlDataStore
 import org.goldenport.observation.{Descriptor, Taxonomy}
 import org.goldenport.record.{Field, Record}
-import org.goldenport.schema.{DataType, Multiplicity, ValueDomain, XBoolean, XDecimal, XInt, XInteger, XLong, XString}
+import org.goldenport.schema.{DataType, Multiplicity, ValueDomain, XBoolean, XDecimal, XInt, XInteger, XLong, XShort, XString}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.simplemodeling.model.directive.Update
 import org.scalacheck.{Gen, Prop, Test}
@@ -18,10 +24,11 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification of docs/spec/entity-store-native-scalar-mapping.md.
  *
  * @since   Oct.  5, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreNativeScalarMappingSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  import EntityStoreNativeScalarMappingSpec.*
   "Declared native scalar storage" should {
     "canonical types and strict stages" which {
       "NATIVE-01 retain the Core Name domain and plaintext representation" in {
@@ -106,16 +113,17 @@ final class EntityStoreNativeScalarMappingSpec extends AnyWordSpec with Matchers
         When("public strict stages write and reconstruct the primitive logical record")
         val physical = persistent.toStoreRecordC(_collection, logical)
         val restored = physical.flatMap(persistent.fromStoreRecordC(_collection, _))
-        Then("typed values, One multiplicity and exact storage names use Number BigDecimal and Boolean scalars")
+        Then("typed values, One multiplicity and exact storage names use declared Int, exact BigDecimal and Boolean scalars")
         restored shouldBe Consequence.success(logical)
         mapping.fields.map(_.domain.datatype) shouldBe Vector(XInt, XLong, XBoolean, XDecimal)
         mapping.fields.map(_.domain.multiplicity) shouldBe Vector.fill(4)(Multiplicity.One)
         physical.get.get.fields.map(_.key) shouldBe names.map("stored_" + _)
-        _value(physical.get.get, "stored_count") shouldBe BigDecimal(7)
+        _value(physical.get.get, "stored_count") shouldBe 7
+        _value(physical.get.get, "stored_count").isInstanceOf[Int] shouldBe true
         _value(physical.get.get, "stored_sequence") shouldBe BigDecimal(Long.MaxValue)
         _value(physical.get.get, "stored_approved") shouldBe true
         _value(physical.get.get, "stored_amount") shouldBe _value(logical, "amount")
-        Vector("stored_count", "stored_sequence", "stored_amount").foreach { key =>
+        Vector("stored_sequence", "stored_amount").foreach { key =>
           _value(physical.get.get, key).isInstanceOf[BigDecimal] shouldBe true
         }
         encodes shouldBe Vector.fill(4)(1)
@@ -175,7 +183,7 @@ final class EntityStoreNativeScalarMappingSpec extends AnyWordSpec with Matchers
         unsupportedrecords.head.fields.exists(_.key == "stored") shouldBe false
         admitted.foreach(_ shouldBe Consequence.success(_record("value" -> 7)))
         finite.foreach(_ shouldBe Consequence.success(_record("value" -> BigDecimal("1.25"))))
-        fractional.foreach(_expect_reason(_, "application-codec-failure"))
+        fractional.foreach(_expect_reason(_, "wrong-physical-value"))
         _expect_reason(rejected.head, "missing-required-field")
         rejected.tail.foreach(_expect_reason(_, "wrong-physical-value"))
         (nonfiniteresults :+ unrepresentable).foreach(_expect_reason(_, "unsupported-external-value"))
@@ -470,7 +478,7 @@ final class EntityStoreNativeScalarMappingSpec extends AnyWordSpec with Matchers
         _value(restored(3).get.get, "optional") shouldBe ""
         restored.foreach(result => _value(result.get.get, "revision") shouldBe 3L)
         patches(0) shouldBe Consequence.success(_record("stored_optional" -> " {broken} ", "revision" -> 4L))
-        patches(1) shouldBe Consequence.success(_record("stored_required" -> BigDecimal(8), "stored_optional" -> Update.SetNull))
+        patches(1) shouldBe Consequence.success(_record("stored_required" -> 8, "stored_optional" -> Update.SetNull))
         patches(2) shouldBe Consequence.success(Record.empty)
         barenullpatch shouldBe Record.empty
         barenullchanges shouldBe Consequence.success(Record.empty)
@@ -484,6 +492,422 @@ final class EntityStoreNativeScalarMappingSpec extends AnyWordSpec with Matchers
         Vector(unknownfull, unknownread).foreach(_expect_reason(_, "missing-mapping"))
         _expect_reason(readabsence, "missing-required-field")
         mapping.physicalFields shouldBe Set("id", "revision", "permission", "contentBody")
+      }
+    }
+
+    "declared integer physical mapping" which {
+      "NATIVE-13 share exact Int storage across ordinary and code-bearing values for at least 100 samples" in {
+        Given("ordinary Int and generic NumericCodeCodec bindings both declared as XInt with Number")
+        val generator = Gen.listOfN(8, Gen.choose(Int.MinValue, Int.MaxValue)).map { generated =>
+          Vector(Int.MinValue, -1, 0, 1, Int.MaxValue) ++ generated
+        }
+        val property = Prop.forAll(generator) { values =>
+          var encodes = Vector(0, 0)
+          var decodes = Vector(0, 0)
+          val codecodec = _code_codec.jsonCodec
+          val ordinary = EntityStoreFieldBinding.nativeScalar[Int](XInt, EntityStoreScalarRepresentation.Number,
+            "ordinary-int")(using summon[ClassTag[Int]],
+            Encoder.instance { value => encodes = encodes.updated(0, encodes(0) + 1); Json.fromInt(value) },
+            Decoder.instance { cursor => decodes = decodes.updated(0, decodes(0) + 1); Decoder.decodeInt(cursor) })
+          val coded = EntityStoreFieldBinding.nativeScalar[CodedValue](XInt, EntityStoreScalarRepresentation.Number,
+            "generic-code")(using summon[ClassTag[CodedValue]],
+            Encoder.instance { value => encodes = encodes.updated(1, encodes(1) + 1); codecodec(value) },
+            Decoder.instance { cursor => decodes = decodes.updated(1, decodes(1) + 1); codecodec(cursor) })
+          val mapping = EntityStoreRowMapping(Vector(_field("ordinary", "stored_ordinary", ordinary),
+            _field("coded", "stored_code", coded)))
+          val roundtrips = values.forall { value =>
+            val logical = _record("ordinary" -> value, "coded" -> CodedValue(value))
+            val encoded = mapping.encode(_collection, logical)
+            val decoded = encoded.flatMap(mapping.decode(_collection, _))
+            encoded.get.exists { row =>
+              Vector("stored_ordinary", "stored_code").forall { key =>
+                val stored = _value(row, key)
+                stored.isInstanceOf[Int] && stored == value
+              }
+            } && decoded.get.contains(logical)
+          }
+          roundtrips && encodes == Vector.fill(2)(values.size) && decodes == Vector.fill(2)(values.size)
+        }
+        When("ScalaCheck interprets the common declared integer write/read contract including both Int boundaries and zero")
+        val result = Test.check(Test.Parameters.default.withMinSuccessfulTests(100), property)
+        Then("every physical value is Scala Int and each captured encoder and decoder is invoked exactly once")
+        withClue(result.toString) { result.passed shouldBe true }
+        result.succeeded should be >= 100
+        result.discarded shouldBe 0
+      }
+
+      "NATIVE-14 reject fractional and overflow XInt numbers before decoder admission for at least 100 samples" in {
+        Given("a declared XInt field with a decimal encoder and an intentionally permissive captured decoder")
+        val generator = for {
+          whole <- Gen.choose(-100000, 100000)
+          excess <- Gen.choose(1, 100000)
+        } yield Vector(BigDecimal(whole) + BigDecimal("0.5"),
+          BigDecimal(BigInt(Int.MaxValue) + excess), BigDecimal(BigInt(Int.MinValue) - excess))
+        val property = Prop.forAll(generator) { values =>
+          var encodes = 0
+          var decodes = 0
+          val binding = EntityStoreFieldBinding.nativeScalar[BigDecimal](XInt, EntityStoreScalarRepresentation.Number,
+            "permissive-decimal")(using summon[ClassTag[BigDecimal]],
+            Encoder.instance { value => encodes += 1; Json.fromBigDecimal(value) },
+            Decoder.instance { _ => decodes += 1; Right(BigDecimal(0)) })
+          val mapping = _single_mapping(binding)
+          val writes = values.map(value => mapping.encode(_collection, _record("value" -> value)))
+          val reads = values.flatMap(value => Vector[Any](value, value.toString)).map { value =>
+            mapping.decode(_collection, _record("stored" -> value))
+          }
+          writes.foreach(_expect_reason(_, "wrong-structured-shape"))
+          reads.foreach(_expect_reason(_, "wrong-physical-value"))
+          encodes == values.size && decodes == 0
+        }
+        val coded = _single_mapping(_coded_binding)
+        val notation = Vector("0.000", "1e2", "-2147483648.0", "2147483647.000")
+        When("generated invalid numbers are written or read as native numbers and numeric text, and valid integral notation is decoded")
+        val result = Test.check(Test.Parameters.default.withMinSuccessfulTests(100), property)
+        val decoded = notation.map(text => coded.decode(_collection, _record("stored" -> text)))
+        Then("no invalid number is truncated or admitted by the decoder while exact integral notation retains its code")
+        withClue(result.toString) { result.passed shouldBe true }
+        result.succeeded should be >= 100
+        result.discarded shouldBe 0
+        decoded shouldBe Vector(0, 100, Int.MinValue, Int.MaxValue).map(value =>
+          Consequence.success(_record("value" -> CodedValue(value))))
+      }
+
+      "NATIVE-15 persist ordinary Int and captured integer codes as SQLite integers without changing arbitrary precision" in {
+        Given("public SQLite storage and a row mapping with ordinary XInt, generic code XInt, XInteger and XDecimal fields")
+        val path = Files.createTempFile("cncf-declared-integer-mapping", ".db")
+        val datastore = SqlDataStore.sqlite(path.toString)
+        val collection = DataStore.CollectionId("declared_integer_mapping")
+        given ExecutionContext = ExecutionContext.create()
+        val integer = BigInt("123456789012345678901234567890123456789012345678901234567890")
+        val decimal = BigDecimal("987654321098765432109876543210.123456789012345678901234567890123456789")
+        val mapping = EntityStoreRowMapping(Vector(
+          _field("ordinary", "stored_ordinary", _native[Int](XInt, EntityStoreScalarRepresentation.Number)),
+          _field("coded", "stored_code", _coded_binding),
+          _field("integer", "stored_integer", _native[BigInt](XInteger, EntityStoreScalarRepresentation.Number)),
+          _field("decimal", "stored_decimal", _native[BigDecimal](XDecimal, EntityStoreScalarRepresentation.Number))), Set("id"))
+        val values = Vector(Int.MinValue, -1, 0, 1, Int.MaxValue)
+        try {
+          When("mapped rows cross public datastore save/load and are inspected with a read-only JDBC query")
+          val roundtrips = values.zipWithIndex.map { case (value, index) =>
+            val entryid = DataStore.StringEntryId(s"integer-$index")
+            val logical = _record("ordinary" -> value, "coded" -> CodedValue(value),
+              "integer" -> integer, "decimal" -> decimal)
+            val encoded = mapping.encode(_collection, logical)
+            val written = encoded.flatMap(datastore.save(collection, entryid, _))
+            val loaded = written.flatMap(_ => datastore.load(collection, entryid))
+            val decoded = loaded.flatMap {
+              case Some(row) => mapping.decode(_collection, row)
+              case None => fail("Expected the saved declared integer row")
+            }
+            value -> decoded
+          }
+          val connection = DriverManager.getConnection(s"jdbc:sqlite:$path")
+          val stored = try {
+            val statement = connection.createStatement()
+            try {
+              val result = statement.executeQuery("SELECT typeof(stored_ordinary), typeof(stored_code), " +
+                "stored_ordinary, stored_code, typeof(stored_integer), typeof(stored_decimal), " +
+                "stored_integer, stored_decimal FROM declared_integer_mapping ORDER BY id")
+              try {
+                val rows = Vector.newBuilder[(String, String, Int, Int, String, String, String, String)]
+                while (result.next()) {
+                  rows += ((result.getString(1), result.getString(2), result.getInt(3), result.getInt(4),
+                    result.getString(5), result.getString(6), result.getString(7), result.getString(8)))
+                }
+                rows.result()
+              } finally result.close()
+            } finally statement.close()
+          } finally connection.close()
+          Then("both XInt fields have integer storage and exact codes while arbitrary precision retains exact text and logical values")
+          stored shouldBe values.map(value => ("integer", "integer", value, value,
+            "text", "text", integer.toString, decimal.toString))
+          roundtrips.foreach { case (value, decoded) =>
+            val row = decoded.get.get
+            _value(row, "ordinary") shouldBe value
+            _value(row, "ordinary").isInstanceOf[Int] shouldBe true
+            _value(row, "coded") shouldBe CodedValue(value)
+            _value(row, "integer") shouldBe integer
+            _value(row, "decimal") shouldBe decimal
+          }
+        } finally {
+          try datastore.closeC().get.get
+          finally Files.deleteIfExists(path)
+        }
+      }
+    }
+
+
+      "NATIVE-16 share exact signed16 storage across ordinary Short and code-bearing values for at least 100 samples" in {
+        Given("ordinary Short and generic integer-code codecs both selected by the same XShort Number declaration")
+        val generator = Gen.listOfN(8, Gen.choose(Short.MinValue.toInt, Short.MaxValue.toInt)).map { generated =>
+          Vector(Short.MinValue.toInt, -1, 0, 1, Short.MaxValue.toInt) ++ generated
+        }
+        val property = Prop.forAll(generator) { values =>
+          var encodes = Vector(0, 0)
+          var decodes = Vector(0, 0)
+          val shortencoder = summon[Encoder[Short]]
+          val shortdecoder = summon[Decoder[Short]]
+          val codecodec = _code_codec.jsonCodec
+          val ordinary = EntityStoreFieldBinding.nativeScalar[Short](XShort, EntityStoreScalarRepresentation.Number,
+            "ordinary-short")(using summon[ClassTag[Short]],
+            Encoder.instance { value => encodes = encodes.updated(0, encodes(0) + 1); shortencoder(value) },
+            Decoder.instance { cursor => decodes = decodes.updated(0, decodes(0) + 1); shortdecoder(cursor) })
+          val coded = EntityStoreFieldBinding.nativeScalar[CodedValue](XShort, EntityStoreScalarRepresentation.Number,
+            "short-code")(using summon[ClassTag[CodedValue]],
+            Encoder.instance { value => encodes = encodes.updated(1, encodes(1) + 1); codecodec(value) },
+            Decoder.instance { cursor => decodes = decodes.updated(1, decodes(1) + 1); codecodec(cursor) })
+          val mapping = EntityStoreRowMapping(Vector(_field("ordinary", "stored_ordinary", ordinary),
+            _field("coded", "stored_code", coded)))
+          val roundtrips = values.forall { value =>
+            val logical = _record("ordinary" -> value.toShort, "coded" -> CodedValue(value))
+            val encoded = mapping.encode(_collection, logical)
+            val decoded = encoded.flatMap(mapping.decode(_collection, _))
+            encoded.get.exists { row =>
+              Vector("stored_ordinary", "stored_code").forall { key =>
+                val stored = _value(row, key)
+                stored.isInstanceOf[Short] && stored == value.toShort
+              }
+            } && decoded.get.contains(logical)
+          }
+          roundtrips && encodes == Vector.fill(2)(values.size) && decodes == Vector.fill(2)(values.size)
+        }
+        When("ScalaCheck exercises signed16 boundaries, negative values, zero and generated assignments")
+        val result = Test.check(Test.Parameters.default.withMinSuccessfulTests(100), property)
+        Then("both declarations emit Short without widening and each captured conversion runs exactly once")
+        withClue(result.toString) { result.passed shouldBe true }
+        result.succeeded should be >= 100
+        result.discarded shouldBe 0
+      }
+
+      "NATIVE-17 reject fractional and overflow XShort values before captured decoders and reject unknown codes" in {
+        Given("an XShort Number binding with a permissive decimal decoder and finite code correspondence")
+        val generator = for {
+          whole <- Gen.choose(Short.MinValue.toInt, Short.MaxValue.toInt)
+          excess <- Gen.choose(1, 100000)
+        } yield Vector(BigDecimal(whole) + BigDecimal("0.5"),
+          BigDecimal(Short.MaxValue.toInt + excess), BigDecimal(Short.MinValue.toInt - excess))
+        val property = Prop.forAll(generator) { values =>
+          var encodes = 0
+          var decodes = 0
+          val binding = EntityStoreFieldBinding.nativeScalar[BigDecimal](XShort, EntityStoreScalarRepresentation.Number,
+            "permissive-short")(using summon[ClassTag[BigDecimal]],
+            Encoder.instance { value => encodes += 1; Json.fromBigDecimal(value) },
+            Decoder.instance { _ => decodes += 1; Right(BigDecimal(0)) })
+          val mapping = _single_mapping(binding)
+          val writes = values.map(value => mapping.encode(_collection, _record("value" -> value)))
+          val reads = values.flatMap(value => Vector[Any](value, value.toString)).map { value =>
+            mapping.decode(_collection, _record("stored" -> value))
+          }
+          writes.foreach(_expect_reason(_, "wrong-structured-shape"))
+          reads.foreach(_expect_reason(_, "wrong-physical-value"))
+          encodes == values.size && decodes == 0
+        }
+        val finitecodec = NumericCodeCodec.instance[CodedValue](
+          value => Option.when(Set(1, 2).contains(value.code))(value.code),
+          code => Option.when(Set(1, 2).contains(code))(CodedValue(code))).jsonCodec
+        val finite = _single_mapping(EntityStoreFieldBinding.nativeScalar[CodedValue](XShort,
+          EntityStoreScalarRepresentation.Number, "finite-short-code")(using summon[ClassTag[CodedValue]],
+          finitecodec, finitecodec))
+        val coded = _single_mapping(_short_coded_binding)
+        When("invalid numbers cross the common bridge, exact integral notation is read and an unknown in-range code reaches its codec")
+        val result = Test.check(Test.Parameters.default.withMinSuccessfulTests(100), property)
+        val notation = Vector("-32768.0", "0.000", "1e2", "32767.000").map(text =>
+          coded.decode(_collection, _record("stored" -> text)))
+        val unknown = finite.decode(_collection, _record("stored" -> 99))
+        Then("range violations never call the decoder, exact notation survives and unknown correspondence fails structurally")
+        withClue(result.toString) { result.passed shouldBe true }
+        result.succeeded should be >= 100
+        result.discarded shouldBe 0
+        notation shouldBe Vector(Short.MinValue.toInt, 0, 100, Short.MaxValue.toInt).map(value =>
+          Consequence.success(_record("value" -> CodedValue(value))))
+        _expect_reason(unknown, "application-codec-failure")
+      }
+
+      "NATIVE-18 save and reopen ordinary Short and captured codes through SQLite INTEGER storage" in {
+        Given("an isolated SQLite provider with ordinary Short and code values sharing the XShort Number route")
+        val path = Files.createTempFile("cncf-declared-short-mapping", ".db")
+        val datastore = SqlDataStore.sqlite(path.toString)
+        val collection = DataStore.CollectionId("declared_short_mapping")
+        given ExecutionContext = ExecutionContext.create()
+        val mapping = EntityStoreRowMapping(Vector(
+          _field("ordinary", "stored_ordinary", _native[Short](XShort, EntityStoreScalarRepresentation.Number)),
+          _field("coded", "stored_code", _short_coded_binding)), Set("id"))
+        val values = Vector(Short.MinValue, (-1).toShort, 0.toShort, 1.toShort, Short.MaxValue)
+        try {
+          When("public save writes every boundary case, the provider closes and a fresh provider reads the same rows")
+          values.zipWithIndex.foreach { case (value, index) =>
+            val logical = _record("ordinary" -> value, "coded" -> CodedValue(value.toInt))
+            mapping.encode(_collection, logical).flatMap(datastore.save(collection,
+              DataStore.StringEntryId(s"short-$index"), _)).get.get
+          }
+          datastore.closeC().get.get
+          val reopened = SqlDataStore.sqlite(path.toString)
+          val roundtrips = try {
+            values.zipWithIndex.map { case (value, index) =>
+              val decoded = reopened.load(collection, DataStore.StringEntryId(s"short-$index")).flatMap {
+                case Some(row) => mapping.decode(_collection, row)
+                case None => fail("Expected saved XShort row after reopening")
+              }
+              value -> decoded
+            }
+          } finally reopened.closeC().get.get
+          val connection = DriverManager.getConnection(s"jdbc:sqlite:$path")
+          val stored = try {
+            val statement = connection.createStatement()
+            try {
+              val result = statement.executeQuery("SELECT typeof(stored_ordinary), typeof(stored_code), " +
+                "stored_ordinary, stored_code FROM declared_short_mapping ORDER BY id")
+              try {
+                val rows = Vector.newBuilder[(String, String, Int, Int)]
+                while (result.next()) rows += ((result.getString(1), result.getString(2), result.getInt(3), result.getInt(4)))
+                rows.result()
+              } finally result.close()
+            } finally statement.close()
+          } finally connection.close()
+          Then("both columns contain native integers and reopening restores Short and code domain values exactly")
+          stored shouldBe values.map(value => ("integer", "integer", value.toInt, value.toInt))
+          roundtrips.foreach { case (value, decoded) =>
+            val row = decoded.get.get
+            _value(row, "ordinary") shouldBe value
+            _value(row, "ordinary").isInstanceOf[Short] shouldBe true
+            _value(row, "coded") shouldBe CodedValue(value.toInt)
+          }
+        } finally {
+          try datastore.closeC().get.get
+          finally Files.deleteIfExists(path)
+        }
+      }
+
+    "declared integer children at every array depth" which {
+      "NATIVE-19 preserve valid signed boundaries zero order and emptiness with one captured conversion per element" in {
+        Given("the same generic integer-code codec selected by scalar, array and nested-array XShort or XInt declarations")
+        val domains = Vector[(DataType, Int, Int)](
+          (XShort, Short.MinValue.toInt, Short.MaxValue.toInt), (XInt, Int.MinValue, Int.MaxValue))
+        domains.foreach { case (datatype, minimum, maximum) =>
+          val generator = Gen.listOfN(6, Gen.choose(minimum, maximum)).map(generated =>
+            Vector(minimum, 0, maximum) ++ generated)
+          val property = Prop.forAll(generator) { values =>
+            var encodes = 0
+            var decodes = 0
+            val codec = _code_codec.jsonCodec
+            val child = EntityStoreFieldBinding.nativeScalar[CodedValue](datatype,
+              EntityStoreScalarRepresentation.Number, "integer-child")(using summon[ClassTag[CodedValue]],
+              Encoder.instance { value => encodes += 1; codec(value) },
+              Decoder.instance { cursor => decodes += 1; codec(cursor) })
+            val scalar = _single_mapping(child)
+            val array = EntityStoreRowMapping(Vector(_field("value", "stored",
+              EntityStoreFieldBinding.array(child), Multiplicity.ZeroMore)))
+            val nested = EntityStoreRowMapping(Vector(_field("value", "stored",
+              EntityStoreFieldBinding.array(EntityStoreFieldBinding.array(child)), Multiplicity.ZeroMore)))
+            val members = values.map(CodedValue.apply)
+            val children = Vector(Vector.empty[CodedValue], members, Vector.empty[CodedValue])
+            val logical = _record("value" -> members)
+            val nestedlogical = _record("value" -> children)
+            val empty = _record("value" -> Vector.empty[CodedValue])
+            val nestedempty = _record("value" -> Vector(Vector.empty[CodedValue]))
+
+            When("the public scalar mapping encodes and restores each valid declared value")
+            values.foreach { value =>
+              val record = _record("value" -> CodedValue(value))
+              val scalarrestored = scalar.encode(_collection, record).flatMap(scalar.decode(_collection, _))
+              Then("the scalar mapping restores its original typed value")
+              scalarrestored shouldBe Consequence.success(record)
+            }
+            When("array mappings encode and restore ordered and empty numeric children")
+            val encoded = array.encode(_collection, logical)
+            val nestedencoded = nested.encode(_collection, nestedlogical)
+            val restored = encoded.flatMap(array.decode(_collection, _))
+            val nestedrestored = nestedencoded.flatMap(nested.decode(_collection, _))
+            val emptyrestored = array.encode(_collection, empty).flatMap(array.decode(_collection, _))
+            val nestedemptyrestored = nested.encode(_collection, nestedempty).flatMap(nested.decode(_collection, _))
+
+            Then("all numeric JSON children preserve order and empty arrays without extra captured conversions")
+            restored shouldBe Consequence.success(logical)
+            nestedrestored shouldBe Consequence.success(nestedlogical)
+            emptyrestored shouldBe Consequence.success(empty)
+            nestedemptyrestored shouldBe Consequence.success(nestedempty)
+            val numbers = Json.fromValues(values.map(Json.fromInt))
+            parser.parse(_value(encoded.get.get, "stored").asInstanceOf[String]).toOption.get shouldBe numbers
+            parser.parse(_value(nestedencoded.get.get, "stored").asInstanceOf[String]).toOption.get shouldBe
+              Json.arr(Json.arr(), numbers, Json.arr())
+            encodes shouldBe 3 * values.size
+            decodes shouldBe 3 * values.size
+            true
+          }
+          When("ScalaCheck selects at least one hundred boundary-containing ordered samples for the declared width")
+          val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(100), property)
+          Then("the scalar and both array depths satisfy the same declaration without discarded cases")
+          withClue(checked.toString) { checked.passed shouldBe true }
+          checked.succeeded should be >= 100
+          checked.discarded shouldBe 0
+        }
+      }
+
+      "NATIVE-20 reject fractional and overflowing children before captured decoding at every depth" in {
+        Given("permissive decimal callbacks under XShort and XInt declarations, including the code32768 regression")
+        val domains = Vector[(DataType, BigInt, BigInt)](
+          (XShort, BigInt(Short.MinValue.toInt), BigInt(Short.MaxValue.toInt)),
+          (XInt, BigInt(Int.MinValue), BigInt(Int.MaxValue)))
+        domains.foreach { case (datatype, minimum, maximum) =>
+          val generator = for {
+            whole <- Gen.choose(-100000, 100000)
+            excess <- Gen.choose(1, 100000)
+          } yield Vector(BigDecimal(whole) + BigDecimal("0.5"),
+            BigDecimal(maximum + excess), BigDecimal(minimum - excess))
+          val property = Prop.forAll(generator) { values =>
+            var encodes = 0
+            var decodes = 0
+            val child = EntityStoreFieldBinding.nativeScalar[BigDecimal](datatype,
+              EntityStoreScalarRepresentation.Number, "permissive-integer-child")(using summon[ClassTag[BigDecimal]],
+              Encoder.instance { value => encodes += 1; Json.fromBigDecimal(value) },
+              Decoder.instance { _ => decodes += 1; Right(BigDecimal(0)) })
+            val scalar = _single_mapping(child)
+            val array = EntityStoreRowMapping(Vector(_field("value", "stored",
+              EntityStoreFieldBinding.array(child), Multiplicity.ZeroMore)))
+            val nested = EntityStoreRowMapping(Vector(_field("value", "stored",
+              EntityStoreFieldBinding.array(EntityStoreFieldBinding.array(child)), Multiplicity.ZeroMore)))
+            val numbers = Json.fromValues(values.map(Json.fromBigDecimal))
+
+            When("invalid numbers cross scalar, array and nested-array write and physical read boundaries")
+            val scalarwrites = values.map(value => scalar.encode(_collection, _record("value" -> value)))
+            val scalarreads = values.map(value => scalar.decode(_collection, _record("stored" -> value)))
+            val arraywrite = array.encode(_collection, _record("value" -> values))
+            val arrayread = array.decode(_collection, _record("stored" -> numbers.noSpaces))
+            val nestedwrite = nested.encode(_collection, _record("value" -> Vector(Vector.empty[BigDecimal], values)))
+            val nestedread = nested.decode(_collection, _record("stored" -> Json.arr(Json.arr(), numbers).noSpaces))
+
+            Then("all violations fail with the declared stage reason and no invalid child reaches the captured decoder")
+            (scalarwrites ++ Vector(arraywrite, nestedwrite)).foreach(_expect_reason(_, "wrong-structured-shape"))
+            (scalarreads ++ Vector(arrayread, nestedread)).foreach(_expect_reason(_, "wrong-physical-value"))
+            Vector(arraywrite, arrayread, nestedwrite, nestedread).foreach { failure =>
+              _causes(failure) should have size values.size
+              _causes(failure).zipWithIndex.foreach { case (cause, index) =>
+                cause.observation.cause.descriptor.facets should contain(Descriptor.Facet.FieldPath(s"index[$index]"))
+              }
+            }
+            Vector(nestedwrite, nestedread).foreach { failure =>
+              _causes(failure).foreach(_.observation.cause.descriptor.facets should contain(
+                Descriptor.Facet.FieldPath("index[1]")))
+            }
+            encodes shouldBe 3 * values.size
+            decodes shouldBe 0
+            true
+          }
+          When("ScalaCheck exercises at least one hundred fractional and overflow sets at each declared width")
+          val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(100), property)
+          Then("all invalid children are rejected before decoder admission without discarded cases")
+          withClue(checked.toString) { checked.passed shouldBe true }
+          checked.succeeded should be >= 100
+          checked.discarded shouldBe 0
+        }
+        val coded = EntityStoreRowMapping(Vector(_field("value", "stored",
+          EntityStoreFieldBinding.array(_short_coded_binding), Multiplicity.ZeroMore)))
+        When("the shared generic Int correspondence encounters code32768 inside an XShort array")
+        val write = coded.encode(_collection, _record("value" -> Vector(CodedValue(32768))))
+        val read = coded.decode(_collection, _record("stored" -> "[32768]"))
+        Then("the child's XShort declaration rejects the code in both directions")
+        _expect_reason(write, "wrong-structured-shape")
+        _expect_reason(read, "wrong-physical-value")
       }
     }
 
@@ -509,6 +933,21 @@ final class EntityStoreNativeScalarMappingSpec extends AnyWordSpec with Matchers
         result.succeeded should be >= 200
       }
     }
+  }
+
+  private val _code_codec: NumericCodeCodec[CodedValue] =
+    NumericCodeCodec.instance[CodedValue](value => Some(value.code), code => Some(CodedValue(code)))
+
+  private def _coded_binding: EntityStoreFieldBinding = {
+    val codec = _code_codec.jsonCodec
+    EntityStoreFieldBinding.nativeScalar[CodedValue](XInt, EntityStoreScalarRepresentation.Number,
+      "generic-code")(using summon[ClassTag[CodedValue]], codec, codec)
+  }
+
+  private def _short_coded_binding: EntityStoreFieldBinding = {
+    val codec = _code_codec.jsonCodec
+    EntityStoreFieldBinding.nativeScalar[CodedValue](XShort, EntityStoreScalarRepresentation.Number,
+      "generic-short-code")(using summon[ClassTag[CodedValue]], codec, codec)
   }
 
   private val _collection: EntityCollectionId = EntityCollectionId("test", "native", "candidate")
@@ -574,4 +1013,8 @@ final class EntityStoreNativeScalarMappingSpec extends AnyWordSpec with Matchers
     result.get shouldBe None
     _facets(result) should contain(Descriptor.Facet.Reason(reason))
   }
+}
+
+object EntityStoreNativeScalarMappingSpec {
+  final case class CodedValue(code: Int)
 }

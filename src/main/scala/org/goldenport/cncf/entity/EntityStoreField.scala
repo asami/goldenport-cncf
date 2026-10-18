@@ -9,7 +9,7 @@ import org.goldenport.schema.{DataType, ValueDomain, XString, XJson, XSemiStruct
  * Authoritative logical field declaration and explicitly captured storage binding.
  *
  * @since   Oct.  5, 2026
- * @version Oct.  5, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class EntityStoreField(
@@ -103,13 +103,13 @@ object EntityStoreFieldBinding {
     override private[entity] def _encode(value: Any): Consequence[Any] = {
       codec._validate_binding.flatMap { _ =>
         codec._to_json(value).flatMap(EntityStoreScalarRepresentation._to_physical(
-          representation, _, codec.identity))
+          declaredtype, representation, _, codec.identity))
       }
     }
 
     override private[entity] def _decode(value: Any): Consequence[Any] = {
       codec._validate_binding.flatMap { _ =>
-        EntityStoreScalarRepresentation._from_physical(representation, value, codec.identity)
+        EntityStoreScalarRepresentation._from_physical(declaredtype, representation, value, codec.identity)
           .flatMap(codec._from_json).map(x => x: Any)
       }
     }

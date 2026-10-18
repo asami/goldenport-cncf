@@ -12,7 +12,8 @@ import org.goldenport.schema.{DataType, XJson, XSemiStructuredData}
  * Pure, explicitly selected logical-value / JSON-text storage conversion.
  *
  * @since   Oct.  5, 2026
- * @version Oct.  5, 2026
+ *  version Oct.  5, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait EntityStoreValueCodec[A] {
@@ -218,14 +219,14 @@ object EntityStoreValueCodec {
     private[entity] def _to_json(value: Any): Consequence[Json] = {
       _binding.flatMap { _ =>
         application._to_json(value).flatMap { json =>
-          EntityStoreScalarRepresentation._check_json(representation, json, identity, "encode")
+          EntityStoreScalarRepresentation._check_json(datatype, representation, json, identity, "encode")
         }
       }
     }
 
     private[entity] def _from_json(value: Json): Consequence[A] = {
       _binding.flatMap { _ =>
-        EntityStoreScalarRepresentation._check_json(representation, value, identity, "decode")
+        EntityStoreScalarRepresentation._check_json(datatype, representation, value, identity, "decode")
           .flatMap(application._from_json)
       }
     }

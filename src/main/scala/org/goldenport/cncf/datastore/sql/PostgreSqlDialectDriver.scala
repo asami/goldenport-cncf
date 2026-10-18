@@ -2,7 +2,8 @@ package org.goldenport.cncf.datastore.sql
 
 /*
  * @since   Oct. 14, 2026
- * @version Oct. 14, 2026
+ *  version Oct. 14, 2026
+ * @version Oct. 19, 2026
  */
 object PostgreSqlDialectDriver extends SqlDialectDriver {
   val name = "postgresql"
@@ -92,7 +93,9 @@ object PostgreSqlDialectDriver extends SqlDialectDriver {
 
   private def _column_def(column: (String, Any)): String = {
     val datatype = column._2 match {
-      case _: Byte | _: Short | _: Int | _: Long | _: Boolean => "BIGINT"
+      case _: Short => "SMALLINT"
+      case _: Int => "INTEGER"
+      case _: Byte | _: Long | _: Boolean => "BIGINT"
       case _: Float | _: Double | _: BigInt | _: BigDecimal => "DOUBLE PRECISION"
       case _ => "TEXT"
     }

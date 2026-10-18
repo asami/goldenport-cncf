@@ -10,7 +10,7 @@ import org.goldenport.cncf.entity.SimpleEntityStorageShapePolicy
 
 /*
  * @since   Oct.  1, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 private[sql] final class SqlDataStoreRecordCodec(config: SqlDataStore.Config, postgresql: Boolean) {
@@ -58,7 +58,7 @@ private[sql] final class SqlDataStoreRecordCodec(config: SqlDataStore.Config, po
       case m: java.util.UUID => m.toString
       case m: java.nio.charset.Charset => m.name()
       case m: Byte => m.toInt
-      case m: Short => m.toInt
+      case m: Short => m
       case m: Int => m
       case m: Long => m
       case m: Boolean => if (m) 1 else 0
