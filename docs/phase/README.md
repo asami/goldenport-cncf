@@ -15,6 +15,12 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
+- [Phase 115](phase-115.md) / [checklist](phase-115-checklist.md) is PLANNED:
+  adopt goldenport-core Phase 3 Record collection/null normalization through
+  Phase 100's delivered DataStore/EntityStore mapping. Preserve empty structures,
+  explicit SQL clearing and XJson semantics. This is a separate successor
+  acceptance boundary and does not expand active Phase 100 completion criteria.
+
 - [Phase 106](phase-106.md) / [checklist](phase-106-checklist.md) is PLANNED:
   generic Review Evidence/Admission integration driven by sm-workflow Phase 6,
   with Cozy 81 and cbd-support 15. Reuse Phase 90 CAM; add only actual missing

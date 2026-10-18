@@ -28,7 +28,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 1, 2026
- * @version Sep. 17, 2026
+ *  version Sep. 17, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationPersistenceMigrationSpec
@@ -91,6 +92,166 @@ final class InformationPersistenceMigrationSpec
       loaded shouldBe Some(information)
       after shouldBe before
       store.writeCount shouldBe writesbefore
+    }
+
+    "reopen the V0 SQL text wire read-only and adopt its canonical representation once" in {
+      Given("a closed test-owned SQLite database containing the retained V0 physical text representation")
+      val directory = java.nio.file.Files.createTempDirectory(
+        java.nio.file.Files.createDirectories(java.nio.file.Path.of("target/phase100/information-v0")), "sql-").toAbsolutePath
+      val database = directory.resolve("legacy.db")
+      val writer = org.goldenport.cncf.datastore.sql.SqlDataStore.sqlite(database.toString)
+      val information = locally {
+        given ExecutionContext = _context(writer)
+        val collectionid = _success(new InformationEntityRepository(None).collectionIdC)
+        val information = _information.copy(id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
+          _information.id.major, _information.id.minor, collectionid, _information.id.entropy.get))
+        try _success(writer.create(DataStore.CollectionId.EntityStore(collectionid), DataStore.EntryId(information.id),
+          _legacy_sql_record(information)))
+        finally _success(writer.closeC())
+        information
+      }
+      val before = java.nio.file.Files.readAllBytes(database).toVector
+
+      When("a fresh Information repository admits the physical SQL Strings without rewriting them")
+      val reader = org.goldenport.cncf.datastore.sql.SqlDataStore.sqlite(database.toString)
+      given ExecutionContext = _context(reader)
+      val repository = new InformationEntityRepository(None)
+      val collection = DataStore.CollectionId.EntityStore(information.id.collection)
+      val entry = DataStore.EntryId(information.id)
+      try {
+        val physical = _success(reader.load(collection, entry)).get
+        val loaded = _success(repository.load(information.id)).get
+        val after = _success(reader.load(collection, entry)).get
+
+        Then("the legacy raw text and repeated bindings decode exactly and the physical row is unchanged")
+        physical.getString("rawData") shouldBe Some("{\"title\":\"Legacy raw title\",\"source\":\"v0\"}")
+        physical.getAny("identityBindings").get shouldBe a[String]
+        loaded shouldBe information
+        after shouldBe physical
+        java.nio.file.Files.readAllBytes(database).toVector shouldBe before
+
+        When("the explicit fixture-owned adoption is performed twice using the V0/canonical discriminator")
+        var writes = 0
+        def _adopt_(): Unit = {
+          val current = _success(reader.load(collection, entry)).get
+          InformationPersistenceMigration.preview(current) match {
+            case InformationPersistenceMigration.Preview.LegacyV0(_) =>
+              val decoded = _success(InformationEntityRepository.informationPersistent.fromStoreRecord(current))
+              val canonical = _success(InformationEntityRepository.informationPersistent.toStoreRecordC(information.id.collection, decoded))
+              _success(reader.save(collection, entry, canonical))
+              writes += 1
+            case InformationPersistenceMigration.Preview.Canonical(_) => ()
+            case other => fail(s"unsupported fixture adoption: $other")
+          }
+        }
+        _adopt_()
+        val adopted = _success(reader.load(collection, entry)).get
+        _adopt_()
+        val retried = _success(reader.load(collection, entry)).get
+        val canonical = _success(repository.load(information.id)).get
+
+        Then("only one physical conversion occurs and retry preserves the full canonical Information")
+        writes shouldBe 1
+        InformationPersistenceMigration.preview(adopted) shouldBe a[InformationPersistenceMigration.Preview.Canonical]
+        retried shouldBe adopted
+        canonical shouldBe information
+      } finally _success(reader.closeC())
+    }
+
+    "create a generated embedded-revision entity through the runtime collection bridge" in {
+      Vector(false, true).foreach { normalized =>
+        Given(s"the actual Information descriptor registered against an isolated SQLite provider, normalize=$normalized")
+        val directory = java.nio.file.Files.createTempDirectory(
+          java.nio.file.Files.createDirectories(java.nio.file.Path.of("target/phase100/runtime-create")), "sql-").toAbsolutePath
+        val provider = org.goldenport.cncf.datastore.sql.SqlDataStore.jdbc(s"jdbc:sqlite:${directory.resolve("runtime.db")}",
+          config = org.goldenport.cncf.datastore.sql.SqlDataStore.Config(normalized))
+        given ExecutionContext = _context(provider)
+        val repository = new InformationEntityRepository(None)
+        val collectionid = _success(repository.collectionIdC)
+        val information = _information.copy(id = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
+          _information.id.major, _information.id.minor, collectionid, "runtime_seed"))
+        _success(repository.load(information.id)) // Registers the descriptor without creating a row.
+        val runtime = summon[ExecutionContext].entitySpace.entityOption(collectionid).get
+        val logical = _success(InformationEntityRepository.informationPersistent.toLogicalStoreRecord(information))
+        val input = Record.createFull(logical.fields.filterNot(_.key == "revision").flatMap { field =>
+          field.value.single match {
+            case Some(value) => Some(field.key -> value)
+            case None => None
+            case value => Some(field.key -> value)
+          }
+        })
+        try {
+          When("the runtime bridge creates the generated entity and the repository reads native acknowledgement")
+          _success(runtime.createRecordSynced(input))
+          val loaded = _success(repository.load(information.id)).get
+
+          Then("native create initializes revision while generated declared data survives")
+          loaded.revision shouldBe EntityRevision.INITIAL
+          loaded.rawData shouldBe information.rawData
+          loaded.workingData shouldBe information.workingData
+          loaded.identityBindings shouldBe information.identityBindings
+
+          When("the registered repository performs a native managed update and readback under the same SQL key policy")
+          val changed = loaded.copy(rawData = Record.data("normalized" -> normalized.toString))
+          val updated = _success(repository.update(changed))
+          val reloaded = _success(repository.load(information.id)).get
+
+          Then("the existing revision owner advances once and provider aliases preserve the changed domain value")
+          updated.revision.value shouldBe loaded.revision.value + 1L
+          reloaded shouldBe updated
+          reloaded.rawData shouldBe changed.rawData
+
+          When("application input attempts to set the managed revision through the same bridge")
+          val rejected = runtime.createRecordSynced(input.upsertSingle("revision", 9L))
+          val retained = _success(repository.load(information.id)).get
+
+          Then("the revision owner refuses the input and the already created entity remains unchanged")
+          rejected shouldBe a[Consequence.Failure[?]]
+          retained shouldBe reloaded
+        } finally _success(provider.closeC())
+      }
+    }
+
+    "preserve nonempty framework media writes as explicit physical SQL text" in {
+      Given("a generated Information with all four existing framework media arrays populated")
+      val base = _information
+      val content = org.simplemodeling.model.value.SimpleObjectContent(base.nameAttributes, base.descriptiveAttributes,
+        base.contentAttributes, base.lifecycleAttributes, base.publicationAttributes, base.securityAttributes,
+        base.resourceAttributes, base.auditAttributes, base.mediaAttributes, base.contextualAttribute)
+      val objectid = org.goldenport.datatype.ObjectId(org.goldenport.datatype.Identifier("media"))
+      val image = org.simplemodeling.model.value.Image(objectid, content)
+      val audio = org.simplemodeling.model.value.Audio(objectid, content)
+      val video = org.simplemodeling.model.value.Video(objectid, content)
+      val attachment = org.simplemodeling.model.value.Attachment(objectid, content)
+      val information = base.copy(mediaAttributes = base.mediaAttributes.copy(images = Vector(image), audios = Vector(audio),
+        videos = Vector(video), atathments = Vector(attachment)))
+      val directory = java.nio.file.Files.createTempDirectory(
+        java.nio.file.Files.createDirectories(java.nio.file.Path.of("target/phase100/framework-media")), "sql-").toAbsolutePath
+      val provider = org.goldenport.cncf.datastore.sql.SqlDataStore.sqlite(directory.resolve("media.db").toString)
+      given ExecutionContext = _context(provider)
+      try {
+        When("the actual generated physical adapter writes the nonempty arrays through strict SQL")
+        val physical = _success(InformationEntityRepository.informationPersistent.toStoreRecordC(information.id.collection, information))
+        val collection = DataStore.CollectionId.EntityStore(information.id.collection)
+        val entry = DataStore.EntryId(information.id)
+        _success(provider.create(collection, entry, physical))
+        val stored = _success(provider.load(collection, entry)).get
+
+        Then("each explicitly owned media column retains its legacy external projection as JSON array text")
+        val external = information.toRecord()
+        Vector("images", "audios", "videos", "attachments").foreach { key =>
+          val json = _success(org.goldenport.schema.XJson.fromJsonText(stored.getString(key).get))
+          val legacy = external.getAny(key).get match {
+            case values: Seq[?] => values.map {
+              case record: Record => _success(org.goldenport.schema.XJson.fromJsonText(record.toJsonString))
+              case _ => fail("Expected legacy framework media Record projection")
+            }
+            case _ => fail("Expected legacy framework media array projection")
+          }
+          legacy should have size 1
+          json shouldBe io.circe.Json.fromValues(legacy)
+        }
+      } finally _success(provider.closeC())
     }
 
     "reject mixed revision and lifecycle evidence with one stable compatibility failure" in {
@@ -395,7 +556,7 @@ final class InformationPersistenceMigrationSpec
 
   private def _legacy_binding_record: Record =
     Record(
-      _binding.toDataStore().fields.filterNot(field =>
+      InformationEntityRepository.bindingStoreRecord(_binding).fields.filterNot(field =>
         Set("rdfSubject", "knowledgeNodeId", "status").contains(field.key)
       )
     ) ++ Record.dataAuto(
@@ -420,15 +581,33 @@ final class InformationPersistenceMigrationSpec
       "aliveness"
     )
     Record(
-      InformationEntityRepository.informationPersistent
-        .toStoreRecord(information)
+      // The V0 fixture retains the historical physical writer, independently of
+      // the current declared writer used by the canonical-record fixtures.
+      information.toDataStore()
         .fields
-        .filterNot(field => managed.contains(field.key))
+        .filterNot(field => managed.contains(field.key) || Set("identityBindings", "resolutionCandidates").contains(field.key))
     ) ++ Record.dataAuto(
       "identityBindings" -> Vector(aliases),
       "resolutionCandidates" -> Vector(candidate),
       "updatedAt" -> _updated_at
     )
+  }
+
+  // Frozen legacy SQL transport for the V0 fixture. This is intentionally
+  // independent of the new physical provider and declared application codec.
+  private def _legacy_sql_record(information: Information): Record = {
+    val legacy = _legacy_record(information)
+    Record(legacy.fields.map { field =>
+      val value = field.value.single match {
+        case record: Record => record.toJsonString
+        case values: Iterable[?] => io.circe.Json.fromValues(values.map {
+          case record: Record => io.circe.parser.parse(record.toJsonString).fold(error => fail(error.message), identity)
+          case value => io.circe.Json.fromString(org.goldenport.text.Presentable.print(value))
+        }).noSpaces
+        case value => value
+      }
+      org.goldenport.record.Field(field.key, org.goldenport.record.Field.Value.Single(value))
+    })
   }
 
   private def _grouped_canonical_record: Record =

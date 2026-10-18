@@ -49,7 +49,7 @@ import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   Sep. 28, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 private[entity] trait StandardEntityRecordPart extends EntityStore { self: StandardEntityStore =>
@@ -104,7 +104,7 @@ private[entity] trait StandardEntityRecordPart extends EntityStore { self: Stand
     ))
     val domain =
       Record(SimpleEntityStorageShapePolicy.withoutManagedFields(existing).fields.filterNot(f =>
-        changedkeys.contains(f.key)
+        changedkeys.contains(f.key) || retained.keySet.contains(f.key)
       ))
     EntityConcurrencyMetadata.preserveForMutation(
       sanitized ++ retained ++ domain,
@@ -113,53 +113,30 @@ private[entity] trait StandardEntityRecordPart extends EntityStore { self: Stand
   }
 
   private[entity] def _merge_versioned_update_record(
+    collection: DataStore.CollectionId,
     existing: Record,
     changes: Record,
     revisionbinding: EntityRevisionBinding
-  ): Consequence[Record] = {
-    val sanitized = revisionbinding.withoutManagedRevision(changes)
-    val changedkeys = sanitized.keySet
-    val retained =
-      Record(
-        _retained_existing_managed_record(existing).fields.filterNot(field =>
-          changedkeys.contains(field.key)
-        )
-      )
-    val retainedkeys = retained.keySet
-    val domain =
-      Record(
-        SimpleEntityStorageShapePolicy
-          .withoutManagedFields(existing)
-          .fields
-          .filterNot(field => changedkeys.contains(field.key) || retainedkeys.contains(field.key))
-      )
-    Consequence.success(
-      revisionbinding.withoutManagedRevision(
-        sanitized ++ retained ++ domain
-      )
-    )
-  }
+  )(using ctx: ExecutionContext): Consequence[Record] =
+    _merge_plain_update_record(collection, existing, revisionbinding.withoutManagedRevision(changes))
+      .map(revisionbinding.withoutManagedRevision)
 
   private[entity] def _merge_plain_update_record(
+    collection: DataStore.CollectionId,
     existing: Record,
     changes: Record
-  ): Consequence[Record] = {
-    val changedkeys = changes.keySet
-    val retained =
-      Record(
-        _retained_existing_managed_record(existing).fields.filterNot(field =>
-          changedkeys.contains(field.key)
-        )
-      )
-    val domain =
-      Record(
-        SimpleEntityStorageShapePolicy
-          .withoutManagedFields(existing)
-          .fields
-          .filterNot(field => changedkeys.contains(field.key))
-      )
-    Consequence.success(changes ++ retained ++ domain)
-  }
+  )(using ctx: ExecutionContext): Consequence[Record] =
+    ctx.dataStoreSpace.dataStore(collection).flatMap { provider =>
+      Consequence {
+        val changedkeys = changes.keySet.map(provider.recordKey)
+        val retained = Record(_retained_existing_managed_record(existing).fields.filterNot(field =>
+          changedkeys.contains(provider.recordKey(field.key))))
+        val retainedkeys = retained.keySet.map(provider.recordKey)
+        val domain = Record(SimpleEntityStorageShapePolicy.withoutManagedFields(existing).fields.filterNot(field =>
+          changedkeys.contains(provider.recordKey(field.key)) || retainedkeys.contains(provider.recordKey(field.key))))
+        changes ++ retained ++ domain
+      }
+    }
 
   private[entity] def _save_plain[T](
     entity: T,
@@ -172,8 +149,9 @@ private[entity] trait StandardEntityRecordPart extends EntityStore { self: Stand
     ctx: ExecutionContext
   ): Consequence[Unit] =
     for {
+      source <- EntityPersistent._to_provider_record(persistent, id.collection, entity)
       admitted <- _reject_detached_managed_field(
-        persistent.toStoreRecord(entity),
+        source,
         "entity"
       )
       candidate = _complement_save_record(admitted, id, existing)
@@ -206,11 +184,13 @@ private[entity] trait StandardEntityRecordPart extends EntityStore { self: Stand
       existing <- _raw_record(collection, entryid)
       base <- _required_record(entryid, existing)
       _ <- _reject_logically_deleted_existing(id, Some(base))
+      source <- EntityPersistent._to_provider_record(persistent, id.collection, changes)
       admitted <- _reject_detached_managed_field(
-        persistent.toStoreRecord(changes),
+        source,
         "entity"
       )
       candidate <- _merge_plain_update_record(
+        collection,
         base,
         _complement_update_record(admitted, id)
       )
@@ -243,11 +223,13 @@ private[entity] trait StandardEntityRecordPart extends EntityStore { self: Stand
       existing <- _raw_record(collection, entryid)
       base <- _required_record(entryid, existing)
       _ <- _reject_logically_deleted_existing(id, Some(base))
+      source <- EntityPersistentUpdate._to_provider_changes_record(persistent, id.collection, patch)
       admitted <- _reject_detached_managed_field(
-        Update.toChangesRecord(persistent.toStoreRecord(patch)),
+        source,
         "patch"
       )
       candidate <- _merge_plain_update_record(
+        collection,
         base,
         _complement_update_record(admitted, id)
       )
@@ -276,7 +258,7 @@ private[entity] trait StandardEntityRecordPart extends EntityStore { self: Stand
     ctx: ExecutionContext
   ): Consequence[Unit] =
     for {
-      candidate <- _merge_plain_update_record(existing, changes)
+      candidate <- _merge_plain_update_record(collection, existing, changes)
       prepared <- ContentBodyStoragePolicy.prepareForSave(
         id,
         candidate,
@@ -503,7 +485,8 @@ private[entity] trait StandardEntityRecordPart extends EntityStore { self: Stand
           )
         )
         .getOrElse(Record.empty)
-    preserved ++ restored ++ correlated
+    val changedkeys = restored.keySet ++ correlated.keySet
+    Record(preserved.fields.filterNot(field => changedkeys.contains(field.key))) ++ restored ++ correlated
   }
 
   private[entity] def _is_soft_delete_target(existing: Record): Boolean = {

@@ -594,6 +594,32 @@ lazy val root = project
 
     Compile / sourceGenerators += generateInformationCmlModel.taskValue,
 
+    Test / sourceGenerators += Def.task {
+      val inputs = CncfGenerationBuildContract.resolve(
+        cozyGeneratorVersion,
+        version.value,
+        generateCncfRuntimeDescriptor.value,
+        baseDirectory.value,
+        baseDirectory.value / "src/test/cozy/phase100-store.cml"
+      ).fold(
+        errors => sys.error(errors.mkString("Phase 100 generation input resolution failed: ", " ", "")),
+        identity
+      )
+      runInformationCmlGeneration(
+        inputs,
+        target.value / "phase100-generated-fixture",
+        baseDirectory.value,
+        streams.value.log,
+        cncfCozyDevelopmentDirectory.value
+      ).filter { file =>
+        val path = file.getAbsolutePath.replace(java.io.File.separatorChar, '/')
+        // Compile this fixture's products; shared workflow/UI ABIs already have
+        // authoritative main/test definitions and are outside this fixture.
+        path.contains("/domain/entity/") || path.contains("/domain/value/") ||
+          path.endsWith("/domain/DomainComponent.scala")
+      }
+    }.taskValue,
+
     exportTextusRuntimeCatalog := {
       val source = baseDirectory.value / "src/main/warehouse/repository/textus/runtime-catalog.yaml"
       val exportfile = target.value / "cncf.d" / "runtime-catalog.yaml"

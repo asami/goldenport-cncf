@@ -333,11 +333,14 @@ numeric value. Submitted whitespace, field order, duplicate keys, malformed text
 and Unicode remain native evidence; the provider does not parse, trim, validate,
 repair or re-encode these fields, or coerce non-String JDBC values into text.
 
-This closed exemption follows the exact EntityStore identity and logical field.
-Ordinary Instance collections, other major/minor/name identities and other fields
-of the three builtin collections retain the existing JSON object/array, Record,
-owned/repeated value and numeric conversion. Equal table names or `canonicalJson`
-field spelling alone grant no exemption. Signed Job and private quota parsers
+Phase100 physical-provider activation dated 2026-10-18 explicitly supersedes
+the historical closed SQL exemption: [R2/R8](datastore-logical-type-mapping.md#r2-physical-text-and-exact-string)
+requires exact physical Strings for every collection and field. Ordinary
+Instance collections, foreign major/minor/name identities and other builtin
+fields receive the same text contract; names and payload shape supply no codec.
+Callers explicitly encode known Record/owned/repeated values before plain SQL
+writes and select their logical read codec separately, or use declared mappings.
+Native numeric conversion remains unchanged. Signed Job and private quota parsers
 continue to own strict grammar, duplicate-field refusal, wire/depth budgets,
 integrity/schema checks and ordinary authorization; preserving corrupt text does
 not admit it. Native detached revision and optimistic concurrency are unchanged.

@@ -31,7 +31,8 @@ import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ *  version Oct. 15, 2026
+ * @version Oct. 18, 2026
  */
 private[cncf] object UnitOfWorkMutationCaptureFixture {
   val instant: Instant = Instant.parse("2026-10-15T01:02:03Z")
@@ -448,11 +449,7 @@ private[cncf] object UnitOfWorkMutationCaptureFixture {
     val order = if (session.environment.postgresql) Vector("id") ++ names.filter(name => name == session.revisionField) ++
       names.filterNot(name => name == "id" || name == session.revisionField) else names
     Record(order.filterNot(name => java.util.Objects.isNull(cells(name))).map { name =>
-      val value = if (name == "permission") permissionRecord
-        else if (name == "business" && cells(name) == "{\"n\":7,\"ok\":false}") record("n" -> BigDecimal(7), "ok" -> false)
-        else if (name == "business" && cells(name) == "[7,false,\"label\"]") Vector(7L, false, "label")
-        else cells(name)
-      field(if (normalized) _aliases.getOrElse(name, name) else name, value)
+      field(if (normalized) _aliases.getOrElse(name, name) else name, cells(name))
     })
   }
   def expectedCreate(session: Session, before: Rows, physical: Map[(String, String), StoredTable], normalized: Boolean): Expected = {

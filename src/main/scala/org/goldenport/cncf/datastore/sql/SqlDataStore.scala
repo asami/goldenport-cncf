@@ -86,7 +86,7 @@ import org.simplemodeling.model.directive.Update
  *  version May. 26, 2026
  *  version Jul. 26, 2026
  *  version Sep. 29, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -504,6 +504,11 @@ class SqlDataStore(
         else _create_schema_failure("PostgreSQL columns have ambiguous decoded Record keys")
       }
     }
+
+  override def recordKey(storageName: String): String =
+    if (_postgresql)
+      _with_connection(connection => _pg_name(connection, _column_name(storageName))).map(_pg_read_key).take
+    else _pg_read_key(_column_name(storageName))
 
   private def _pg_read_key(name: String): String =
     if (SimpleEntityStorageShapePolicy.isConcurrencyRevisionStorageField(name)) name

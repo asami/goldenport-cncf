@@ -40,7 +40,8 @@ import org.goldenport.cncf.information.value.{InformationIdentityBinding, Inform
  * Component-owned EntityStore repository for generated Information roots.
  *
  * @since   Aug. 31, 2026
- * @version Sep.  3, 2026
+ *  version Sep.  3, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 private[information] final class InformationEntityRepository(
@@ -282,6 +283,33 @@ private[information] object InformationEntityRepository {
     summon[EntityPersistent[org.goldenport.cncf.information.entity.Information]]
 
   val informationPersistent: EntityPersistent[Information] = new EntityPersistent[Information] {
+    override def storeRowMapping: Option[org.goldenport.cncf.entity.EntityStoreRowMapping] =
+      _generated_persistent.storeRowMapping.map(mapping =>
+        mapping.copy(physicalFields = mapping.physicalFields + "lifecycleAttributes"))
+
+    override def toLogicalStoreRecord(information: Information): Consequence[Record] =
+      _generated_persistent.toLogicalStoreRecord(information)
+
+    override def admitLogicalStoreRecord(record: Record): Consequence[Record] =
+      InformationPersistenceMigration.canonicalRecordC(record)
+
+    override def decodeAdmittedLogicalStoreRecord(record: Record): Consequence[Information] =
+      _generated_persistent.fromRecord(record)
+
+    override def admitStoreRecordC(collection: EntityCollectionId, record: Record): Consequence[Record] =
+      org.goldenport.cncf.entity.EntityStorePersistenceStage._validate(collection, storeRowMapping).flatMap { _ =>
+        InformationPersistenceMigration.preview(record) match {
+          case InformationPersistenceMigration.Preview.LegacyV0(canonical) =>
+            // V0 admission already supplies the legacy decoder's canonical input.
+            // The logical write hook contains Option values and is not decode input.
+            Consequence.success(canonical)
+          case InformationPersistenceMigration.Preview.Canonical(_) =>
+            super.admitStoreRecordC(collection, record)
+          case InformationPersistenceMigration.Preview.Incompatible(_) =>
+            InformationPersistenceMigration.canonicalRecordC(record)
+        }
+      }
+
     def id(information: Information): EntityId =
       information.id
 
@@ -289,7 +317,7 @@ private[information] object InformationEntityRepository {
       _generated_persistent.toRecord(information)
 
     override def toStoreRecord(information: Information): Record =
-      _normalized_store_record(information)
+      toStoreRecordC(information.id.collection, information).TAKE
 
     def fromRecord(record: Record): Consequence[Information] =
       _generated_persistent.fromRecord(record)
@@ -298,7 +326,14 @@ private[information] object InformationEntityRepository {
       InformationPersistenceMigration.canonicalRecordC(record)
 
     override def fromStoreRecord(record: Record): Consequence[Information] =
-      admitStoreRecord(record).flatMap(_generated_persistent.fromRecord)
+      InformationPersistenceMigration.preview(record) match {
+        case InformationPersistenceMigration.Preview.LegacyV0(canonical) =>
+          _generated_persistent.fromRecord(canonical)
+        case InformationPersistenceMigration.Preview.Canonical(_) =>
+          EntityId.createC(record).flatMap(id => fromStoreRecordC(id.collection, record))
+        case InformationPersistenceMigration.Preview.Incompatible(code) =>
+          Consequence.stateInvalid(code)
+      }
 
     override private[cncf] def decodeAdmittedStoreRecord(
       record: Record
@@ -308,6 +343,14 @@ private[information] object InformationEntityRepository {
 
   val informationPersistentCreate: EntityPersistentCreate[Information] =
     new EntityPersistentCreate[Information] {
+      override def storeRowMapping: Option[org.goldenport.cncf.entity.EntityStoreRowMapping] =
+        informationPersistent.storeRowMapping.map(mapping => mapping.copy(
+          fields = mapping.fields.filterNot(_.logicalName == "revision"),
+          physicalFields = mapping.physicalFields + "revision"))
+
+      override def toLogicalStoreRecord(information: Information): Consequence[Record] =
+        _generated_persistent.toLogicalStoreRecord(information).map(_revision_binding.withoutManagedRevision)
+
       def id(information: Information): Option[EntityId] =
         Some(information.id)
 
@@ -318,9 +361,7 @@ private[information] object InformationEntityRepository {
         _generated_persistent.toRecord(information)
 
       override def toStoreRecord(information: Information): Record =
-        _revision_binding.withoutManagedRevision(
-          _normalized_store_record(information)
-        )
+        toStoreRecordC(information.id.collection, information).TAKE
     }
 
   private def _normalized_store_record(information: Information): Record = {

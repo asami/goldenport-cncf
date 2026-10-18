@@ -1,5 +1,6 @@
 package org.goldenport.cncf.entity
 
+import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.Consequence
 import org.goldenport.id.Identified
 import org.goldenport.id.Identifiable
@@ -18,11 +19,42 @@ import org.simplemodeling.model.value.SecurityAttributes
  *  version Mar. 24, 2026
  *  version Apr. 26, 2026
  *  version Jul. 30, 2026
- * @version Sep.  1, 2026
+ *  version Sep.  1, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EntityPersistent[E] extends RecordCodex[E]
     with Identified[E, EntityId] {
+  def storeRowMapping: Option[EntityStoreRowMapping] = None
+
+  def toLogicalStoreRecord(e: E): Consequence[Record] = {
+    Consequence.success(toRecord(e))
+  }
+
+  def admitLogicalStoreRecord(r: Record): Consequence[Record] = {
+    Consequence.success(r)
+  }
+
+  def decodeAdmittedLogicalStoreRecord(r: Record): Consequence[E] = {
+    fromRecord(r)
+  }
+
+  def toStoreRecordC(collection: EntityCollectionId, e: E): Consequence[Record] = {
+    EntityStorePersistenceStage._encode(collection, storeRowMapping, toLogicalStoreRecord(e))
+  }
+
+  def admitStoreRecordC(collection: EntityCollectionId, r: Record): Consequence[Record] = {
+    EntityStorePersistenceStage._admit(collection, storeRowMapping, r)(admitLogicalStoreRecord)
+  }
+
+  def decodeAdmittedStoreRecordC(collection: EntityCollectionId, r: Record): Consequence[E] = {
+    EntityStorePersistenceStage._decode_admitted(collection, storeRowMapping, r)(decodeAdmittedLogicalStoreRecord)
+  }
+
+  def fromStoreRecordC(collection: EntityCollectionId, r: Record): Consequence[E] = {
+    admitStoreRecordC(collection, r).flatMap(decodeAdmittedStoreRecordC(collection, _))
+  }
+
   def toStoreRecord(e: E): Record =
     toRecord(e)
 
@@ -72,14 +104,52 @@ trait EntityPersistent[E] extends RecordCodex[E]
 }
 
 object EntityPersistent {
+  private[cncf] def _validate_provider_mapping[E](persistent: EntityPersistent[E], collection: EntityCollectionId)
+      (using ctx: ExecutionContext): Consequence[Unit] =
+    EntityStorePersistenceStage._validate_provider(collection, persistent.storeRowMapping)
+
+  private[cncf] def _admit_provider_record[E](persistent: EntityPersistent[E], collection: EntityCollectionId,
+    record: Record)(using ctx: ExecutionContext): Consequence[Record] =
+    EntityStorePersistenceStage._provider_row(collection, persistent.storeRowMapping, record)
+      .flatMap(_admit_store_record(persistent, collection, _))
+
+  private[cncf] def _decode_provider_record[E](persistent: EntityPersistent[E], collection: EntityCollectionId,
+    record: Record)(using ctx: ExecutionContext): Consequence[E] =
+    EntityStorePersistenceStage._provider_row(collection, persistent.storeRowMapping, record)
+      .flatMap(_decode_store_record(persistent, collection, _))
+
+  private[cncf] def _to_provider_record[E](persistent: EntityPersistent[E], collection: EntityCollectionId,
+    entity: E)(using ctx: ExecutionContext): Consequence[Record] =
+    EntityStorePersistenceStage._validate_provider(collection, persistent.storeRowMapping)
+      .flatMap(_ => _to_store_record(persistent, collection, entity))
+
+  private[cncf] def _to_store_record[E](persistent: EntityPersistent[E], collection: EntityCollectionId,
+    entity: E): Consequence[Record] = persistent.storeRowMapping match {
+    case None => Consequence(persistent.toStoreRecord(entity))
+    case _ => persistent.toStoreRecordC(collection, entity)
+  }
+
+  private[cncf] def _validate_store_mapping[E](persistent: EntityPersistent[E], collection: EntityCollectionId): Consequence[Unit] =
+    persistent.storeRowMapping match {
+      case None => Consequence.unit
+      case mapping => EntityStorePersistenceStage._validate(collection, mapping)
+    }
+
+  private[cncf] def _admit_store_record[E](persistent: EntityPersistent[E], collection: EntityCollectionId,
+    record: Record): Consequence[Record] = persistent.storeRowMapping match {
+    case None => persistent.admitStoreRecord(record)
+    case _ => persistent.admitStoreRecordC(collection, record)
+  }
+
   private[cncf] def _decode_store_record[E](
     persistent: EntityPersistent[E],
     collectionid: EntityCollectionId,
     record: Record
   ): Consequence[E] =
-    persistent
-      .fromStoreRecord(record)
-      .flatMap { entity =>
+    (persistent.storeRowMapping match {
+      case None => persistent.fromStoreRecord(record)
+      case _ => persistent.fromStoreRecordC(collectionid, record)
+    }).flatMap { entity =>
         val actual = persistent.id(entity).collection
         if (actual == collectionid)
           Consequence.success(entity)
@@ -92,9 +162,10 @@ object EntityPersistent {
     collectionid: EntityCollectionId,
     record: Record
   ): Consequence[E] =
-    persistent
-      .decodeAdmittedStoreRecord(record)
-      .flatMap { entity =>
+    (persistent.storeRowMapping match {
+      case None => persistent.decodeAdmittedStoreRecord(record)
+      case _ => persistent.decodeAdmittedStoreRecordC(collectionid, record)
+    }).flatMap { entity =>
         val actual = persistent.id(entity).collection
         if (actual == collectionid)
           Consequence.success(entity)
@@ -167,6 +238,16 @@ trait EntityPersistentCreate[E] extends RecordEncoder[E]
     with Identifiable[E, EntityId] {
   def collection(e: E): EntityCollectionId
 
+  def storeRowMapping: Option[EntityStoreRowMapping] = None
+
+  def toLogicalStoreRecord(e: E): Consequence[Record] = {
+    Consequence.success(toRecord(e))
+  }
+
+  def toStoreRecordC(collection: EntityCollectionId, e: E): Consequence[Record] = {
+    EntityStorePersistenceStage._encode(collection, storeRowMapping, toLogicalStoreRecord(e))
+  }
+
   def toStoreRecord(e: E): Record =
     toRecord(e)
 
@@ -175,6 +256,17 @@ trait EntityPersistentCreate[E] extends RecordEncoder[E]
 }
 
 object EntityPersistentCreate {
+  private[cncf] def _to_provider_record[E](persistent: EntityPersistentCreate[E], collection: EntityCollectionId,
+    entity: E)(using ctx: ExecutionContext): Consequence[Record] =
+    EntityStorePersistenceStage._validate_provider(collection, persistent.storeRowMapping)
+      .flatMap(_ => _to_store_record(persistent, collection, entity))
+
+  private[cncf] def _to_store_record[E](persistent: EntityPersistentCreate[E], collection: EntityCollectionId,
+    entity: E): Consequence[Record] = persistent.storeRowMapping match {
+    case None => Consequence(persistent.toStoreRecord(entity))
+    case _ => persistent.toStoreRecordC(collection, entity)
+  }
+
   def derived[E <: EntityPersistableCreate](
       collectionId: EntityCollectionId
   ): EntityPersistentCreate[E] = new EntityPersistentCreate[E] {
@@ -193,6 +285,12 @@ object EntityPersistentCreate {
         persistent.id(entity).collection
       def toRecord(entity: E): Record =
         persistent.toRecord(entity)
+      override def storeRowMapping: Option[EntityStoreRowMapping] = {
+        persistent.storeRowMapping
+      }
+      override def toLogicalStoreRecord(e: E): Consequence[Record] = {
+        persistent.toLogicalStoreRecord(e)
+      }
       override def toStoreRecord(entity: E): Record =
         persistent.toStoreRecord(entity)
   }
@@ -246,6 +344,16 @@ trait EntityPersistableQuery extends RecordPresentable
 trait EntityPersistentUpdate[E] extends RecordCodex[E] {
   def collection(e: E): EntityCollectionId
 
+  def storeRowMapping: Option[EntityStoreRowMapping] = None
+
+  def toLogicalStoreRecord(e: E): Consequence[Record] = {
+    Consequence.success(toRecord(e))
+  }
+
+  def toStoreChangesRecordC(collection: EntityCollectionId, e: E): Consequence[Record] = {
+    EntityStorePersistenceStage._encode_changes(collection, storeRowMapping, toLogicalStoreRecord(e))
+  }
+
   def toStoreRecord(e: E): Record =
     toRecord(e)
 
@@ -257,6 +365,17 @@ trait EntityPersistentUpdate[E] extends RecordCodex[E] {
 }
 
 object EntityPersistentUpdate {
+  private[cncf] def _to_provider_changes_record[E](persistent: EntityPersistentUpdate[E], collection: EntityCollectionId,
+    entity: E)(using ctx: ExecutionContext): Consequence[Record] =
+    EntityStorePersistenceStage._validate_provider(collection, persistent.storeRowMapping)
+      .flatMap(_ => _to_store_changes_record(persistent, collection, entity))
+
+  private[cncf] def _to_store_changes_record[E](persistent: EntityPersistentUpdate[E], collection: EntityCollectionId,
+    entity: E): Consequence[Record] = persistent.storeRowMapping match {
+    case None => Consequence(org.simplemodeling.model.directive.Update.toChangesRecord(persistent.toStoreRecord(entity)))
+    case _ => persistent.toStoreChangesRecordC(collection, entity)
+  }
+
   def derived[E <: EntityPersistableUpdate](
     from: Record => Consequence[E],
       collectionId: EntityCollectionId

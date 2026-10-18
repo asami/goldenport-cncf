@@ -45,7 +45,7 @@ import org.simplemodeling.model.datatype.{
  *
  * @since   Sep. 10, 2026
  *  version Sep. 28, 2026
- * @version Oct.  3, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] final case class DurableJobStoreSnapshot(
@@ -390,6 +390,8 @@ private[job] final case class DurableJobStoreEntity(
 }
 
 private[job] object DurableJobStoreEntity {
+  private val _store_row_mapping = DurableJobStoreMapping.text(Vector("jobId", "canonicalJson"))
+
   val Collection: EntityCollectionId =
     EntityCollectionId("cncf", "builtin", "durableJob")
 
@@ -408,6 +410,7 @@ private[job] object DurableJobStoreEntity {
     }
 
   given EntityPersistent[DurableJobStoreEntity] with {
+    override def storeRowMapping: Option[org.goldenport.cncf.entity.EntityStoreRowMapping] = Some(_store_row_mapping)
     def id(entity: DurableJobStoreEntity): EntityId = entity.id
 
     def toRecord(entity: DurableJobStoreEntity): Record =
@@ -433,6 +436,7 @@ private[job] object DurableJobStoreEntity {
   }
 
   given EntityPersistentCreate[DurableJobStoreEntity] with {
+    override def storeRowMapping: Option[org.goldenport.cncf.entity.EntityStoreRowMapping] = Some(_store_row_mapping)
     def id(entity: DurableJobStoreEntity): Option[EntityId] =
       Some(entity.id)
 

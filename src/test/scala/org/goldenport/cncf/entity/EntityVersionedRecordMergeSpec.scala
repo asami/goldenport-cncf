@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 14, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 18, 2026
  */
 final class EntityVersionedRecordMergeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import EntityVersionedRecordMergeSpec.*
@@ -23,13 +23,16 @@ final class EntityVersionedRecordMergeSpec extends AnyWordSpec with Matchers wit
         Vector(false, true).foreach { rename =>
           s"retain exactly one name with explicit rename $rename and every untouched Field" in {
             Given("an existing SQL readback identity, name, managed values, absent NULL attributes and retained non-NULL empty Fields")
+            val context = _merge_context
             val sample = Sample("Original name", "Original title", rename, 7L)
             val binding = EntityRevisionBinding(representation)
             val existing = _existing(sample, binding)
             val changes = _changes(sample, binding)
             val expected = _expected(existing, changes, binding)
             When("the existing StandardEntityStore versioned merge applies a changed title and optional name")
-            val result = new StandardEntityStore()._merge_versioned_update_record(existing, changes, binding)
+            val result = new StandardEntityStore()._merge_versioned_update_record(
+              org.goldenport.cncf.datastore.DataStore.CollectionId.Instance("versioned_record_merge"),
+              existing, changes, binding)(using context)
             Then("one exact name follows patch precedence and all other Fields retain their values and order")
             result shouldBe a[Consequence.Success[?]]
             val merged = result.toOption.get
@@ -52,6 +55,7 @@ final class EntityVersionedRecordMergeSpec extends AnyWordSpec with Matchers wit
 
         "obey complete Field correspondence for at least one hundred total bounded samples" in {
           Given("nonempty bounded names/titles, optional rename, positive revisions and meaningful reducing shrinking")
+          val context = _merge_context
           val samples = for {
             namesize <- Gen.chooseNum(1, 40)
             titlesize <- Gen.chooseNum(1, 60)
@@ -67,7 +71,9 @@ final class EntityVersionedRecordMergeSpec extends AnyWordSpec with Matchers wit
             val changes = _changes(sample, binding)
             val expected = _expected(existing, changes, binding)
             When("the real versioned merge applies the generated patch")
-            val result = new StandardEntityStore()._merge_versioned_update_record(existing, changes, binding)
+            val result = new StandardEntityStore()._merge_versioned_update_record(
+              org.goldenport.cncf.datastore.DataStore.CollectionId.Instance("versioned_record_merge"),
+              existing, changes, binding)(using context)
             Then("unique Fields correspond completely to changed and untouched owners without managed revision")
             Prop.all(
               "successful merge" |: Prop(result.toOption.isDefined),
@@ -148,6 +154,13 @@ final class EntityVersionedRecordMergeSpec extends AnyWordSpec with Matchers wit
         }
       }
     }
+  }
+
+  private def _merge_context: ExecutionContext = {
+    val context = ExecutionContext.create()
+    context.dataStoreSpace.useDataStore(new org.goldenport.cncf.datastore.DataStore.InMemoryDataStore(
+      org.goldenport.cncf.unitofwork.CommitRecorder.noop))
+    context
   }
 
   private def _save_case(

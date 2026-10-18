@@ -43,7 +43,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   Apr. 26, 2026
  *  version Jun.  5, 2026
  *  version Aug.  8, 2026
- * @version Sep. 17, 2026
+ *  version Sep. 17, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponent() extends Component {
@@ -1249,11 +1250,11 @@ object BlobComponent {
         case Some(record) =>
           recover_with(
             exec_from(
-              EntityPersistent._decode_store_record(
+              EntityPersistent._decode_provider_record(
                 summon[EntityPersistent[Blob]],
                 result.id.collection,
                 record
-              )
+              )(using execution_context)
             )
           ) { conclusion =>
             _cleanup_created_blob_after_decode_failure(result.id, managedpayload, conclusion)

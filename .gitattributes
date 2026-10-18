@@ -1,0 +1,5 @@
+# Preserve the exact producer-generated fixtures; permit their final blank line only.
+src/test/scala/org/example/phase100/nested/entity/Proposal.scala whitespace=-blank-at-eof
+src/test/scala/org/example/phase100/nested/entity/create/Proposal.scala whitespace=-blank-at-eof
+src/test/scala/org/example/phase100/nested/entity/query/Proposal.scala whitespace=-blank-at-eof
+src/test/scala/org/example/phase100/nested/entity/update/Proposal.scala whitespace=-blank-at-eof

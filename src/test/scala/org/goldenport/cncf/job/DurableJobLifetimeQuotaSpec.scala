@@ -29,7 +29,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * B1 does not establish engine installation or real two-process acceptance.
  *
  * @since   Oct.  1, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.scalatest.tags.Slow
@@ -1222,7 +1222,7 @@ final class DurableJobLifetimeQuotaSpec extends AnyWordSpec with Matchers with G
   }
 
   private final class ObservedDataStore(val delegate: SqlDataStore)
-      extends DataStore with SearchableDataStore with EntityVersionedMutationDataStore {
+      extends DataStore with SearchableDataStore with EntityVersionedMutationDataStore with EntityCreateDataStore {
     var quotawrites = 0
     var jobcreates = 0
     var countcalls = 0
@@ -1236,6 +1236,11 @@ final class DurableJobLifetimeQuotaSpec extends AnyWordSpec with Matchers with G
     def isAccept(cid: DataStore.CollectionId): Boolean = accept(cid)
     override def entityMutationProviderCapabilities: EntityMutationProviderCapabilities =
       if (nativecas) delegate.entityMutationProviderCapabilities else EntityMutationProviderCapabilities.empty
+    override def createEntity(plan: EntityCreatePlan)(using ctx: ExecutionContext): Consequence[EntityCreateResult] = {
+      if (plan.collection == _quota_collection) quotawrites += 1
+      if (plan.collection == _job_collection) jobcreates += 1
+      delegate.createEntity(plan)
+    }
     def create(collection: DataStore.CollectionId, id: DataStore.EntryId, record: Record)(using ctx: ExecutionContext): Consequence[Unit] = {
       if (collection == _quota_collection) quotawrites += 1
       if (collection == _job_collection) jobcreates += 1
@@ -1292,10 +1297,13 @@ final class DurableJobLifetimeQuotaSpec extends AnyWordSpec with Matchers with G
   }
 
   private final class OpaqueDataStore(delegate: ObservedDataStore, native: Boolean)
-      extends DataStore with EntityVersionedMutationDataStore {
+      extends DataStore with EntityVersionedMutationDataStore with EntityCreateDataStore {
     def isAccept(cid: DataStore.CollectionId): Boolean = true
     override def entityMutationProviderCapabilities: EntityMutationProviderCapabilities =
       if (native) delegate.entityMutationProviderCapabilities else EntityMutationProviderCapabilities.empty
+    override def createEntity(plan: EntityCreatePlan)(using ctx: ExecutionContext): Consequence[EntityCreateResult] = {
+      delegate.createEntity(plan)
+    }
     def create(collection: DataStore.CollectionId, id: DataStore.EntryId, record: Record)(using ctx: ExecutionContext): Consequence[Unit] =
       delegate.create(collection, id, record)
     def load(collection: DataStore.CollectionId, id: DataStore.EntryId)(using ctx: ExecutionContext): Consequence[Option[Record]] =

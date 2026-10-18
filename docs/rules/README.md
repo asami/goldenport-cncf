@@ -11,6 +11,10 @@ define shared structure and boundaries across the codebase.
 
 ## Contents
 
+- **[Collection and semi-structured data](collection-and-semi-structured-data.md)**
+  Cardinality-driven Vector/NonEmptyVector contracts, Record, internal input
+  abstractions and database/generated-model migration.
+
 - **ai-assisted-development-rules.md**  
   Global rules for AI-assisted development, defining the strict separation of:
   design discussion, instruction writing, and implementation execution.

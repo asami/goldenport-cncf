@@ -49,7 +49,7 @@ import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   Sep. 28, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 private[entity] trait StandardEntityRevisionPart extends EntityStore { self: StandardEntityStore =>
@@ -111,13 +111,13 @@ private[entity] trait StandardEntityRevisionPart extends EntityStore { self: Sta
   ): Consequence[T] =
     _revision_binding_option(collection) match {
       case Some(binding) =>
-        persistent.admitStoreRecord(record).flatMap { admitted =>
+        EntityPersistent._admit_provider_record(persistent, collection, record).flatMap { admitted =>
           binding.decodeEntity(admitted)(
             EntityPersistent._decode_admitted_store_record(persistent, collection, _)
           )
         }
       case None =>
-        EntityPersistent._decode_store_record(persistent, collection, record)
+        EntityPersistent._decode_provider_record(persistent, collection, record)
     }
 
   private[entity] def _concurrency_policy(
@@ -346,7 +346,7 @@ private[entity] trait StandardEntityRevisionPart extends EntityStore { self: Sta
     revisionbinding: EntityRevisionBinding, persistent: EntityPersistent[T]
   )(using ctx: ExecutionContext): Consequence[EntitySnapshot[T]] =
     ContentBodyStoragePolicy.hydrate(id, record).flatMap { hydrated =>
-      persistent.admitStoreRecord(hydrated).flatMap { admitted =>
+      EntityPersistent._admit_provider_record(persistent, id.collection, hydrated).flatMap { admitted =>
         revisionbinding.snapshot(admitted)(
           EntityPersistent._decode_admitted_store_record(persistent, id.collection, _))
       }
@@ -356,7 +356,7 @@ private[entity] trait StandardEntityRevisionPart extends EntityStore { self: Sta
     revisionbinding: EntityRevisionBinding, persistent: EntityPersistent[T]
   )(using ctx: ExecutionContext): Consequence[EntityRevisionCarrier[T]] =
     ContentBodyStoragePolicy.hydrate(id, record).flatMap { hydrated =>
-      persistent.admitStoreRecord(hydrated).flatMap { admitted =>
+      EntityPersistent._admit_provider_record(persistent, id.collection, hydrated).flatMap { admitted =>
         revisionbinding.detachedCarrier(admitted)(
           EntityPersistent._decode_admitted_store_record(persistent, id.collection, _))
       }

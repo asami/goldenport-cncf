@@ -3,7 +3,8 @@ package org.goldenport.cncf.job
 import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.IdGenerationContext
-import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
+import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent, EntityStoreField, EntityStoreFieldBinding, EntityStoreRowMapping, SimpleEntityStorageShapePolicy}
+import org.goldenport.schema.{Multiplicity, ValueDomain, XSemiStructuredData}
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
@@ -16,7 +17,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   May.  7, 2026
  *  version May. 31, 2026
  *  version Jul. 30, 2026
- * @version Sep. 17, 2026
+ *  version Sep. 17, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 object JobEntityCollections {
@@ -251,6 +253,7 @@ object JobDefinitionEntity {
     )
 
   given EntityPersistent[JobDefinitionEntity] with {
+    override def storeRowMapping: Option[EntityStoreRowMapping] = Some(JobEntityStoreMapping.definition)
     def id(e: JobDefinitionEntity): EntityId = e.id
     def toRecord(e: JobDefinitionEntity): Record = e.toRecord()
     override def toStoreRecord(e: JobDefinitionEntity): Record = e.toRecord()
@@ -421,6 +424,7 @@ object JobEntity {
     EntityId.createC(record).flatMap(_require_job_id).map(id => JobEntity(id, record))
 
   given EntityPersistent[JobEntity] with {
+    override def storeRowMapping: Option[EntityStoreRowMapping] = Some(JobEntityStoreMapping.job)
     def id(e: JobEntity): EntityId = e.id
     def toRecord(e: JobEntity): Record = e.toRecord()
     override def toStoreRecord(e: JobEntity): Record = e.toRecord()
@@ -508,4 +512,48 @@ object JobEntity {
       "lastEventKind" -> model.timeline.events.lastOption.map(_.kind),
       "lastEventAt" -> model.timeline.events.lastOption.map(_.occurredAt.toString)
     )
+}
+
+
+private[job] object JobEntityStoreMapping {
+  private val _framework_physical_fields =
+    (SimpleEntityStorageShapePolicy.managementLogicalFields ++
+      SimpleEntityStorageShapePolicy.securityIdentityLogicalFields ++ Vector("name", "title", "permission", "revision"))
+      .flatMap(name => Vector(name, SimpleEntityStorageShapePolicy.targetName(name))).toSet ++
+      Set("content_byte_size", "content_digest", "content_charset", "content_storage", "content_ref",
+        "contentByteSize", "contentDigest", "contentCharset", "contentStorage", "contentRef")
+
+  private val _job_fields = _optional_records(Vector(
+    "input", "debugParameters", "declaredProfile", "jobDefinitionSnapshot", "lineage",
+    "continuation", "retry", "taskSummary", "timelineSummary")) ++
+    _arrays(Vector("continuationTaskIds"), EntityStoreFieldBinding.string) ++
+    _arrays(Vector("continuationTasks"), EntityStoreFieldBinding.semiStructuredData)
+
+  val job: EntityStoreRowMapping = EntityStoreRowMapping(_job_fields,
+    (_framework_physical_fields ++ Set(
+      "jobId", "status", "persistence", "origin", "scheduledStartAt", "submitterPrincipalId",
+      "submitterSubjectKind", "submitterSessionId", "component", "service", "operation",
+      "resultStatus", "resultSuccess", "resultMessage", "resultAvailable", "retryKind",
+      "retryAttemptCount", "retryMaxAttempts", "retryNextDueAt", "retryExhausted",
+      "recoveryRequired", "deadLetter", "poison", "lastFailureUserAction", "lastFailureMessage",
+      "taskCount", "timelineCount", "calltreeSaved", "calltreeStorage", "calltreeSerializedBytes",
+      "calltreePayloadReference", "calltreeDropReason", "requestSummary", "jobDefinitionId",
+      "jobDefinitionKey", "debugExecutionNotes")) -- _job_fields.map(_.logicalName))
+
+  private val _definition_fields = _optional_records(Vector("normalizedProfile"))
+
+  val definition: EntityStoreRowMapping = EntityStoreRowMapping(_definition_fields,
+    (_framework_physical_fields ++ Set("key", "jclSource", "jclFormat", "flow", "events", "onEvent",
+      "definitionStatus", "targetComponent", "targetService", "targetOperation", "targetAction")) --
+      _definition_fields.map(_.logicalName))
+
+  private def _optional_records(fields: Vector[String]): Vector[EntityStoreField] =
+    fields.map(name => EntityStoreField(name, name,
+      ValueDomain(XSemiStructuredData, Multiplicity.ZeroOne), EntityStoreFieldBinding.semiStructuredData))
+
+  private def _arrays(fields: Vector[String], binding: EntityStoreFieldBinding): Vector[EntityStoreField] = {
+    val declared = EntityStoreFieldBinding.array(binding)
+    fields.map(name => EntityStoreField(name, name,
+      ValueDomain(declared.datatype, Multiplicity.ZeroMore), declared))
+  }
 }

@@ -11,7 +11,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ *  version Oct. 15, 2026
+ * @version Oct. 18, 2026
  */
 final class PostgresqlUnitOfWorkMutationCaptureAcceptanceSpec extends AnyWordSpec
     with UnitOfWorkMutationCaptureFixture.Vocabulary with PostgresqlAcceptance {
@@ -107,16 +108,18 @@ final class PostgresqlUnitOfWorkMutationCaptureAcceptanceSpec extends AnyWordSpe
           }
         }
       }
-      "PG-CMC-01 distinguish literal physical JSON text from explicitly constructed logical JSON records and vectors" in {
+      "PG-CMC-01 retain literal physical JSON object and array text through canonical UoW capture" in {
         for { normalized <- Vector(false, true); business <- Vector("{\"n\":7,\"ok\":false}", "[7,false,\"label\"]") } {
-          Given("independently declared JSON-shaped business inputs and literal nested logical expectations")
+          Given("independently declared JSON-looking business Strings and exact original permission text")
           with_postgresql { database =>
             val environment = postgresql(database, normalized)
             val session = _session(database, environment, sample.copy(business = business)); val before = session.rows(); val physical = environment.physical()
             val expected = expectedCreate(session, before, physical, normalized)
-            When("native canonical creation is read through the existing SQL object/array decoder")
+            When("native canonical creation returns its physical record without payload inference")
             val outcome = success(session.evaluateC(session.createOperation)); val after = session.rows(); val physicalafter = environment.physical()
-            Then("every field and physical cell agrees with the independent object/array and permission oracle")
+            Then("every raw captured field and physical cell retains the independently prescribed String values")
+            outcome.persisted.record.getAny("business") shouldBe Some(business)
+            outcome.persisted.record.getAny("permission") shouldBe Some(permission)
             checkCreated(outcome, session, expected.raw); checkRows(after, expected.rows); checkPhysical(physicalafter, expected.physical)
           }
         }

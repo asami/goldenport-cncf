@@ -10,7 +10,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Separate operational identity; retained release markers never grant ID reuse.
  *
  * @since   Oct.  1, 2026
- * @version Oct.  1, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] enum DurableJobOwnedBlobQuotaState {
@@ -61,6 +61,8 @@ private[job] final case class DurableJobOwnedBlobQuotaEntity(id: EntityId, canon
 }
 
 private[job] object DurableJobOwnedBlobQuotaEntity {
+  private val _store_row_mapping = DurableJobStoreMapping.text(Vector("canonicalJson"))
+
   val Collection: EntityCollectionId = EntityCollectionId("cncf", "builtin", "durableJobOwnedBlobStorageQuota")
 
   def entityId: Consequence[EntityId] = EntityId.bridgeFromParts(
@@ -68,6 +70,7 @@ private[job] object DurableJobOwnedBlobQuotaEntity {
     timestamp = Instant.EPOCH, entropy = "owned_blob_quota_v1")
 
   given EntityPersistent[DurableJobOwnedBlobQuotaEntity] with {
+    override def storeRowMapping: Option[org.goldenport.cncf.entity.EntityStoreRowMapping] = Some(_store_row_mapping)
     def id(entity: DurableJobOwnedBlobQuotaEntity): EntityId = entity.id
     def toRecord(entity: DurableJobOwnedBlobQuotaEntity): Record = entity.toRecord()
     override def toStoreRecord(entity: DurableJobOwnedBlobQuotaEntity): Record = entity.toRecord()
@@ -82,6 +85,7 @@ private[job] object DurableJobOwnedBlobQuotaEntity {
   }
 
   given EntityPersistentCreate[DurableJobOwnedBlobQuotaEntity] with {
+    override def storeRowMapping: Option[org.goldenport.cncf.entity.EntityStoreRowMapping] = Some(_store_row_mapping)
     def id(entity: DurableJobOwnedBlobQuotaEntity): Option[EntityId] = Some(entity.id)
     def collection(entity: DurableJobOwnedBlobQuotaEntity): EntityCollectionId = Collection
     def toRecord(entity: DurableJobOwnedBlobQuotaEntity): Record = entity.toRecord()

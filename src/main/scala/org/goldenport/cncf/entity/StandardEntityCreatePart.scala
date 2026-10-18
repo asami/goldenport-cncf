@@ -50,7 +50,7 @@ import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   Sep. 28, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 private[entity] trait StandardEntityCreatePart extends EntityStore { self: StandardEntityStore =>
@@ -75,11 +75,12 @@ private[entity] trait StandardEntityCreatePart extends EntityStore { self: Stand
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
+      source <- EntityPersistentCreate._to_provider_record(tc, id.collection, entity)
       initialized <- revisionbinding match {
         case Some(binding) =>
           for {
             admitted <- binding.rejectManagedPatch(
-              tc.toStoreRecord(entity),
+              source,
               "entity"
             )
             initialized <- binding.initializeForCreate(
@@ -88,7 +89,7 @@ private[entity] trait StandardEntityCreatePart extends EntityStore { self: Stand
           } yield initialized
         case None =>
           _reject_detached_managed_field(
-            tc.toStoreRecord(entity),
+            source,
             "entity"
           ).map(_complement_create_record(_, id, options))
       }
@@ -119,7 +120,7 @@ private[entity] trait StandardEntityCreatePart extends EntityStore { self: Stand
         }
         _ <- authorize(existing)
         _ <- _reject_logically_deleted_existing(id, existing)
-        source = tc.toStoreRecord(entity)
+        source <- EntityPersistentCreate._to_provider_record(tc, id.collection, entity)
         admittedsource <- revisionbinding match {
           case Some(binding) =>
             binding.rejectManagedPatch(source, "entity")
@@ -134,6 +135,7 @@ private[entity] trait StandardEntityCreatePart extends EntityStore { self: Stand
               )
             for {
               candidate <- _merge_versioned_update_record(
+                cid,
                 current,
                 _complement_update_record(admitted, id),
                 binding
@@ -163,6 +165,7 @@ private[entity] trait StandardEntityCreatePart extends EntityStore { self: Stand
           case (Some(current), None) =>
             for {
               candidate <- _merge_plain_update_record(
+                cid,
                 current,
                 _complement_update_record(admittedsource, id)
               )
@@ -232,13 +235,14 @@ private[entity] trait StandardEntityCreatePart extends EntityStore { self: Stand
         }
         _ <- authorize(existing)
         _ <- _reject_logically_deleted_existing(id, existing)
-        source = tc.toStoreRecord(entity)
+        source <- EntityPersistentCreate._to_provider_record(tc, id.collection, entity)
         admittedsource <- binding.rejectManagedPatch(source, "entity")
         result <- existing match {
           case Some(current) =>
             for {
               expected <- binding.revision(current)
               candidate <- _merge_versioned_update_record(
+                cid,
                 current,
                 _complement_update_record(
                   SimpleEntityStorageShapePolicy.withoutManagedFields(admittedsource),

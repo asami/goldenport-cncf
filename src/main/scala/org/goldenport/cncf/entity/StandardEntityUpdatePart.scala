@@ -49,7 +49,7 @@ import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   Sep. 28, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 private[entity] trait StandardEntityUpdatePart extends EntityStore { self: StandardEntityStore =>
@@ -205,9 +205,10 @@ private[entity] trait StandardEntityUpdatePart extends EntityStore { self: Stand
       existing <- _raw_record(cid, dsid)
       base <- _required_record(dsid, existing)
       _ <- _reject_logically_deleted_existing(id, Some(base))
+      source <- EntityPersistent._to_provider_record(tc, id.collection, changes)
       admitted <- _admit_typed_mutation(
         revisionbinding,
-        tc.toStoreRecord(changes),
+        source,
         expectedrevision
       )
       effectiveexpected <- _effective_expected_revision(
@@ -217,6 +218,7 @@ private[entity] trait StandardEntityUpdatePart extends EntityStore { self: Stand
         policy
       )
       candidate <- _merge_versioned_update_record(
+        cid,
         base,
         _complement_update_record(
           admitted._1,
@@ -405,8 +407,9 @@ private[entity] trait StandardEntityUpdatePart extends EntityStore { self: Stand
     (for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
+      source <- EntityPersistentUpdate._to_provider_changes_record(tc, id.collection, patch)
       changes <- revisionbinding.rejectManagedPatch(
-        Update.toChangesRecord(tc.toStoreRecord(patch)),
+        source,
         "patch"
       )
       complemented = _complement_update_record(changes, id)
@@ -468,6 +471,7 @@ private[entity] trait StandardEntityUpdatePart extends EntityStore { self: Stand
         policy
       )
       candidate <- _merge_versioned_update_record(
+        collection,
         base,
         changes,
         revisionbinding
@@ -499,8 +503,9 @@ private[entity] trait StandardEntityUpdatePart extends EntityStore { self: Stand
     for {
       collection <- ctx.entityStoreSpace.dataStoreCollection(id)
       entryid <- ctx.entityStoreSpace.dataStoreEntryId(id)
+      source <- EntityPersistentUpdate._to_provider_changes_record(tc, id.collection, patch)
       changes <- revisionbinding.rejectManagedPatch(
-        Update.toChangesRecord(tc.toStoreRecord(patch)),
+        source,
         "patch"
       )
       complemented = _complement_update_record(changes, id)

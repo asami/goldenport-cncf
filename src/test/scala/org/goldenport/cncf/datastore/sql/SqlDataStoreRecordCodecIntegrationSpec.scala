@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 17, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SqlDataStoreRecordCodecIntegrationSpec extends AnyWordSpec
@@ -39,6 +39,50 @@ final class SqlDataStoreRecordCodecIntegrationSpec extends AnyWordSpec
     result.getOrElse(fail("Expected a successful SQL codec read"))
 
   "The shared SQL Record codec" should {
+    "refuse implicit structured writers without calling application conversion methods" in {
+      Given("physical rows containing structured values without a declaration or explicit application conversion")
+      var calls = 0
+      val presentable = new org.goldenport.record.RecordPresentable {
+        def toRecord(): Record = {
+          calls += 1
+          Record.dataAuto("private" -> "not-an-encoded-column")
+        }
+      }
+      val values = Vector[Any](Record.dataAuto("nested" -> 1), io.circe.Json.obj(),
+        Vector(1, 2), presentable, Double.NaN, Double.PositiveInfinity)
+      val policies = Vector(false, true).map(value => new SqlDataStoreRecordCodec(SqlDataStore.Config(), value))
+
+      When("both dialect policies receive these unsupported physical values")
+      val results = policies.flatMap(codec => values.map(value =>
+        intercept[org.goldenport.ConsequenceException](codec.columnValue(value)).consequence))
+
+      Then("each write fails with a structured physical-value reason and application methods are never inferred")
+      results.foreach {
+        case Consequence.Failure(conclusion) =>
+          conclusion.observation.cause.descriptor.facets should contain(
+            org.goldenport.observation.Descriptor.Facet.Reason("unsupported-physical-value"))
+        case other => fail(s"Unsupported physical value was accepted: $other")
+      }
+      calls shouldBe 0
+    }
+
+    "retain native NULL and exact decimal text under both dialect write policies" in {
+      Given("native SQL NULL, literal null text and an exact decimal outside Double precision")
+      val decimal = BigDecimal("12345678901234567890.123456789")
+      val policies = Vector(false, true).map(value => new SqlDataStoreRecordCodec(SqlDataStore.Config(), value))
+
+      When("the physical write codec transports each value")
+      val results = policies.map(codec =>
+        (codec.columnValue(null), codec.columnValue("null"), codec.columnValue(decimal)))
+
+      Then("NULL stays NULL, String stays String and decimal transport retains every digit")
+      results.foreach { case (absent, literal, exact) =>
+        java.util.Objects.isNull(absent) shouldBe true
+        literal shouldBe "null"
+        exact shouldBe decimal.toString
+      }
+    }
+
     "preserve JSON-looking durable Job metadata under both dialect read policies" in {
       Given("bounded numeric generators for JSON-looking durable Job text")
       val property = Prop.forAll(Gen.choose(0, 100000)) { number =>
@@ -54,12 +98,12 @@ final class SqlDataStoreRecordCodecIntegrationSpec extends AnyWordSpec
           }
         }
 
-        Then("canonical JSON and Job ID remain native text while ordinary payload retains generic JSON decoding")
+        Then("canonical JSON and Job ID remain native text while ordinary payload is also physical text")
         records.foreach { record =>
           val values = record.fields.map(field => field.key -> field.value.single).toMap
           values("canonicalJson") shouldBe canonical
           values("jobId") shouldBe jobid
-          values("payload") shouldBe Vector(number.toLong)
+          values("payload") shouldBe jobid
         }
         true
       }
@@ -73,7 +117,7 @@ final class SqlDataStoreRecordCodecIntegrationSpec extends AnyWordSpec
       checked.discarded shouldBe 0
     }
 
-    "preserve quota canonical JSON without disabling ordinary JSON decoding" in {
+    "preserve physical TEXT for quota and unrelated fields alike" in {
       Given("all three durable Job quota collections with JSON-looking canonical text and ordinary JSON data")
       val collections = Vector("durableJobStorageQuota", "durableJobOwnedBlobStorageQuota", "durableJobLifetimeQuota")
       val codec = new SqlDataStoreRecordCodec(SqlDataStore.Config(normalizeColumnNames = true), true)
@@ -86,11 +130,11 @@ final class SqlDataStoreRecordCodecIntegrationSpec extends AnyWordSpec
         }
       }
 
-      Then("the schema-declared native text stays text and the unrelated payload becomes its decoded value")
+      Then("both canonical and ordinary TEXT remain exact Strings")
       records.foreach { record =>
         val values = record.fields.map(field => field.key -> field.value.single).toMap
         values("canonicalJson") shouldBe canonical
-        values("payload") shouldBe Vector(1L, 2L)
+        values("payload") shouldBe "[1,2]"
       }
     }
 
@@ -107,8 +151,8 @@ final class SqlDataStoreRecordCodecIntegrationSpec extends AnyWordSpec
       record.fields.map(_.key) shouldBe Vector("id", "cncf_revision", "title", "nested", "items", "zero")
       val values = record.fields.map(field => field.key -> field.value.single).toMap
       values("title") shouldBe ""
-      values("nested") shouldBe Record.empty
-      values("items") shouldBe Vector.empty
+      values("nested") shouldBe "{}"
+      values("items") shouldBe "[]"
       values("zero") shouldBe 0
     }
 
@@ -129,19 +173,20 @@ final class SqlDataStoreRecordCodecIntegrationSpec extends AnyWordSpec
       }
     }
 
-    "retain PostgreSQL write aliases for admission while preserving the legacy last-wins policy" in {
-      Given("distinct logical fields whose normalized SQL column names collide")
-      val record = Record(Vector(Field("displayName", Field.Value.Single("first")), Field("display_name", Field.Value.Single("second"))))
-      val native = new SqlDataStoreRecordCodec(SqlDataStore.Config(normalizeColumnNames = true), true)
-      val legacy = new SqlDataStoreRecordCodec(SqlDataStore.Config(normalizeColumnNames = true), false)
+    "reject distinct write aliases while preserving repeated identical Record keys" in {
+      Given("distinct logical aliases and an ordinary repeated identical Record key")
+      val aliases = Record(Vector(Field("displayName", Field.Value.Single("first")), Field("display_name", Field.Value.Single("second"))))
+      val repeated = Record(Vector(Field("displayName", Field.Value.Single("first")), Field("displayName", Field.Value.Single("second"))))
+      val codecs = Vector(true, false).map(postgresql =>
+        new SqlDataStoreRecordCodec(SqlDataStore.Config(normalizeColumnNames = true), postgresql))
 
-      When("the shared write codec builds the candidates consumed by each dialect's admission")
-      val nativecolumns = native.recordColumns(record)
-      val legacycolumns = legacy.recordColumns(record)
+      When("each dialect projects distinct aliases and same-key overrides")
+      val failures = codecs.map(codec => intercept[org.goldenport.ConsequenceException](codec.recordColumns(aliases)).consequence)
+      val columns = codecs.map(_.recordColumns(repeated))
 
-      Then("PostgreSQL receives both aliases to reject ambiguity and the legacy codec retains its existing last value")
-      nativecolumns shouldBe Vector("display_name" -> "first", "display_name" -> "second")
-      legacycolumns shouldBe Vector("display_name" -> "second")
+      Then("distinct names cannot silently collapse while the effective same-key value remains last")
+      failures.foreach(_ shouldBe a[Consequence.Failure[?]])
+      columns.foreach(_ shouldBe Vector("display_name" -> "second"))
     }
   }
 }

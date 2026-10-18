@@ -49,7 +49,7 @@ import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 private[entity] trait StandardEntityLifecycleQueryPart extends EntityStore { self: StandardEntityStore =>
@@ -75,12 +75,10 @@ private[entity] trait StandardEntityLifecycleQueryPart extends EntityStore { sel
         rootid,
         Some(command.currentRootRecord)
       )
-      rootchanges <- _admit_conditional_root_changes(
-        Update.toChangesRecord(
-          request.patchPersistent.toStoreRecord(request.rootPatch)
-        )
-      )
+      source <- EntityPersistentUpdate._to_provider_changes_record(request.patchPersistent, rootid.collection, request.rootPatch)
+      rootchanges <- _admit_conditional_root_changes(source)
       rootcandidate <- _merge_versioned_update_record(
+        rootcollection,
         command.currentRootRecord,
         _complement_update_record(rootchanges, rootid),
         rootbinding
@@ -176,6 +174,7 @@ private[entity] trait StandardEntityLifecycleQueryPart extends EntityStore { sel
                     policy
                   )
                   updated <- _merge_versioned_update_record(
+                    cid,
                     rec,
                     _soft_delete_record(rec),
                     binding
@@ -247,6 +246,7 @@ private[entity] trait StandardEntityLifecycleQueryPart extends EntityStore { sel
               policy
             )
             restored <- _merge_versioned_update_record(
+              cid,
               base,
               _restore_record(base),
               binding
@@ -293,14 +293,15 @@ private[entity] trait StandardEntityLifecycleQueryPart extends EntityStore { sel
 
   def search[T](
     query: EntityQuery[T]
-  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]] = {
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]] =
+    EntityPersistent._validate_provider_mapping(tc, query.collection).flatMap { _ =>
     val storequery = EntityDirectiveQuery.mapPaths(query.query)(tc.storeFieldName)
     // Push normal entity access scope into the datastore query where possible.
     // The same scope is post-filtered below so in-memory/SQL/direct stores keep
     // identical deletedAt and future tenant semantics.
     val scopedexpr = EntityAccessScopePolicy.normalSearchExpr(
       query.collection,
-      EntityDirectiveQuery.whereOf(storequery),
+      if (tc.storeRowMapping == None) EntityDirectiveQuery.whereOf(storequery) else EntityDirectiveQuery.True,
       tc.storeFieldName("deletedAt")
     )
     for {
@@ -353,14 +354,28 @@ private[entity] trait StandardEntityLifecycleQueryPart extends EntityStore { sel
       // decode (for example AssociationDomain), while request/query values stay
       // in their wire/store shape. Filtering here keeps in-memory stores and
       // SQL stores consistent without imposing entity-value equality quirks.
-      recordmatched = visible.filter(record => EntityDirectiveQuery.matches(storequery, record))
-      hydrated <- ContentBodyStoragePolicy.hydrateAll(query.collection, recordmatched)
-      decoded <- hydrated.traverse(
-        _decode_entity(query.collection, _, tc)
-      )
+      rows <- tc.storeRowMapping match {
+        case None =>
+          ContentBodyStoragePolicy.hydrateAll(query.collection,
+            visible.filter(record => EntityDirectiveQuery.matches(storequery, record)))
+            .map(records => records.map(record => record -> false))
+        case _ =>
+          ContentBodyStoragePolicy.hydrateAll(query.collection, visible).flatMap { records =>
+            records.traverse(EntityPersistent._admit_provider_record(tc, query.collection, _))
+          }.map(records => records.filter(record => EntityDirectiveQuery.matches(query.query, record))
+            .map(record => record -> true))
+      }
+      decoded <- rows.traverse { case (record, admitted) =>
+        if (admitted)
+          _revision_binding_option(query.collection) match {
+            case Some(binding) => binding.decodeEntity(record)(EntityPersistent._decode_admitted_store_record(tc, query.collection, _))
+            case None => EntityPersistent._decode_admitted_store_record(tc, query.collection, record)
+          }
+        else _decode_entity(query.collection, record, tc)
+      }
       sorted = EntityDirectiveQuery.sortValues(decoded, query.query.sort)
       values = EntityDirectiveQuery.sliceValues(sorted, query.query.offset, query.query.limit)
-      count = if (query.query.includeTotal) Some(recordmatched.size) else None
+      count = if (query.query.includeTotal) Some(rows.size) else None
     } yield SearchResult(
       query = query.query,
       data = values,
@@ -375,6 +390,7 @@ private[entity] trait StandardEntityLifecycleQueryPart extends EntityStore { sel
     query: EntityQuery[T]
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]] =
     for {
+      _ <- EntityPersistent._validate_provider_mapping(tc, query.collection)
       cid <- ctx.entityStoreSpace.dataStoreCollection(query.collection)
       raw <- ctx.dataStoreSpace.search(
         cid,

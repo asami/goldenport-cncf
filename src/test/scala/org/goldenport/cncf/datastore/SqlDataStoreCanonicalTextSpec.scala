@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.sql.SqlDataStore
+import org.goldenport.cncf.entity.EntityStoreValueCodec
 import org.goldenport.record.{Record, RecordPresentable}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityRevision}
 import org.scalacheck.{Gen, Prop, Test}
@@ -15,13 +16,14 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  1, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SqlDataStoreCanonicalTextSpec
     extends AnyWordSpec
     with Matchers
     with GivenWhenThen {
+  import SqlDataStoreCanonicalTextSpec.*
   private val _collections = Vector(
     DataStore.CollectionId.EntityStore(EntityCollectionId("cncf", "builtin", "durableJob")),
     DataStore.CollectionId.EntityStore(EntityCollectionId("cncf", "builtin", "durableJobStorageQuota")),
@@ -146,13 +148,15 @@ final class SqlDataStoreCanonicalTextSpec
               }
               val loaded = _raw_texts.indices.map(index => _loaded(store, collection, _entry(index)))
 
-              Then("acknowledgement and independent native reads retain exact semantic text while ordinary JSON still decodes")
+              Then("acknowledgement and independent native reads retain every exact String before explicit caller decoding")
               acknowledged.zipWithIndex.foreach { (record, index) =>
                 record.fields shouldBe loaded(index).fields
                 record.getString("id") shouldBe Some(_entry(index).print)
                 _assert_text(record, "canonicalJson", _raw_texts(index))
                 _assert_revision(record, 1L)
-                record.getRecord("jsonText").flatMap(_.getInt("ordinary")) shouldBe Some(1)
+                _assert_text(record, "jsonText", "{\"ordinary\":1}")
+                EntityStoreValueCodec.semiStructuredData.decode(record.getAny("jsonText").get)
+                  .toOption.flatMap(_.getInt("ordinary")) shouldBe Some(1)
                 if (collection == _collections.head) _assert_text(record, "jobId", jobid)
               }
             }
@@ -228,8 +232,8 @@ final class SqlDataStoreCanonicalTextSpec
       }
     }
 
-    "legacy structured value compatibility" which {
-      "N6 decode matching Instance names and unrelated EntityStore identities as ordinary JSON" in {
+    "explicit structured caller compatibility" which {
+      "N6 retain physical text across matching Instance names and unrelated EntityStore identities" in {
         val collections = Vector(
           DataStore.CollectionId("durableJob"),
           DataStore.CollectionId("durableJobStorageQuota"),
@@ -255,30 +259,33 @@ final class SqlDataStoreCanonicalTextSpec
               val arrayrecord = _loaded(store, collection, _entry(1))
               val searched = _search(store, collection, 2)
 
-              Then("the exemption does not follow a table name or field spelling alone")
-              objectrecord.getAny("canonicalJson").get shouldBe a[Record]
-              objectrecord.getRecord("canonicalJson").flatMap(_.getString("name")) shouldBe Some("ordinary")
-              arrayrecord.getVector("canonicalJson") shouldBe Some(Vector(1L, "ordinary"))
+              Then("physical String preservation is uniform and only explicit caller codecs reconstruct values")
+              _assert_text(objectrecord, "canonicalJson", " {\"name\":\"ordinary\"} ")
+              _assert_text(arrayrecord, "canonicalJson", " [1, \"ordinary\"] ")
+              EntityStoreValueCodec.semiStructuredData.decode(objectrecord.getAny("canonicalJson").get)
+                .toOption.flatMap(_.getString("name")) shouldBe Some("ordinary")
+              EntityStoreValueCodec.json.decode(arrayrecord.getAny("canonicalJson").get).toOption shouldBe
+                io.circe.parser.parse("[1,\"ordinary\"]").toOption
               searched.size shouldBe 2
-              searched.head.getAny("canonicalJson").get shouldBe a[Record]
-              searched(1).getVector("canonicalJson") shouldBe Some(Vector(1L, "ordinary"))
+              _assert_text(searched.head, "canonicalJson", " {\"name\":\"ordinary\"} ")
+              _assert_text(searched(1), "canonicalJson", " [1, \"ordinary\"] ")
             }
           }
         }
       }
 
-      "N7 retain owned, repeated and scalar JSON decoding and numeric normalization beside builtin canonical text" in {
+      "N7 separate explicit owned and array codecs from physical text and native numeric normalization" in {
         _modes.foreach { normalize =>
           _collections.foreach { collection =>
-            Given("a builtin record with ordinary structured fields and an independently opaque canonicalJson")
+            Given("explicit caller encodings for known structured fields beside independently opaque canonicalJson and native scalars")
             _with_store(normalize) { (store, _) =>
               given ExecutionContext = ExecutionContext.create()
               val raw = _raw_texts(3)
               val fields = Vector(
-                "objectValue" -> Record.data("name" -> "record"),
-                "ownedValue" -> OwnedValue("owned"),
-                "repeatedValues" -> Vector(OwnedValue("first"), OwnedValue("second")),
-                "scalarValues" -> Vector("東京", 2, true),
+                "objectValue" -> Record.data("name" -> "record").toJsonString,
+                "ownedValue" -> OwnedValue("owned").toRecord().toJsonString,
+                "repeatedValues" -> Vector(OwnedValue("first"), OwnedValue("second")).map(_.toRecord().toJsonString).mkString("[", ",", "]"),
+                "scalarValues" -> io.circe.Json.arr(io.circe.Json.fromString("東京"), io.circe.Json.fromInt(2), io.circe.Json.fromBoolean(true)).noSpaces,
                 "jsonText" -> " {\"name\":\"ordinary\"} ",
                 "numberValue" -> 37,
                 "flagValue" -> true,
@@ -291,16 +298,26 @@ final class SqlDataStoreCanonicalTextSpec
               val loaded = _loaded(store, collection, _entry(0))
               val searched = _search(store, collection, 1)
 
-              Then("only the admitted text fields bypass the existing Record and JDBC conversion")
+              Then("every text field stays exact while explicit caller codecs restore logical values and native numbers retain their carriers")
               searched.size shouldBe 1
               Vector(loaded, searched.head).foreach { record =>
                 _assert_text(record, "canonicalJson", raw)
                 _assert_revision(record, 1L)
-                record.getRecord("objectValue").flatMap(_.getString("name")) shouldBe Some("record")
-                record.getRecord("ownedValue").flatMap(_.getString("name")) shouldBe Some("owned")
-                record.getVector("repeatedValues").get.collect { case item: Record => item.getString("name") } shouldBe Vector(Some("first"), Some("second"))
-                record.getVector("scalarValues") shouldBe Some(Vector("東京", 2L, true))
-                record.getRecord("jsonText").flatMap(_.getString("name")) shouldBe Some("ordinary")
+                _assert_text(record, "objectValue", "{\"name\":\"record\"}")
+                _assert_text(record, "ownedValue", "{\"name\":\"owned\"}")
+                _assert_text(record, "repeatedValues", "[{\"name\":\"first\"},{\"name\":\"second\"}]")
+                _assert_text(record, "scalarValues", "[\"東京\",2,true]")
+                _assert_text(record, "jsonText", " {\"name\":\"ordinary\"} ")
+                EntityStoreValueCodec.semiStructuredData.decode(record.getAny("objectValue").get)
+                  .toOption.flatMap(_.getString("name")) shouldBe Some("record")
+                EntityStoreValueCodec.semiStructuredData.decode(record.getAny("ownedValue").get)
+                  .toOption.flatMap(_.getString("name")) shouldBe Some("owned")
+                EntityStoreValueCodec.array(EntityStoreValueCodec.semiStructuredData).decode(record.getAny("repeatedValues").get)
+                  .toOption.map(_.map(_.getString("name"))) shouldBe Some(Vector(Some("first"), Some("second")))
+                EntityStoreValueCodec.json.decode(record.getAny("scalarValues").get).toOption shouldBe
+                  io.circe.parser.parse("[\"東京\",2,true]").toOption
+                EntityStoreValueCodec.semiStructuredData.decode(record.getAny("jsonText").get)
+                  .toOption.flatMap(_.getString("name")) shouldBe Some("ordinary")
                 record.getAny("numberValue").get shouldBe a[java.lang.Number]
                 record.getInt("numberValue") shouldBe Some(37)
                 record.getInt("flagValue") shouldBe Some(1)
@@ -432,6 +449,9 @@ final class SqlDataStoreCanonicalTextSpec
       case _ => fail("native mutation should acknowledge an authoritative applied record")
     }
 
+}
+
+object SqlDataStoreCanonicalTextSpec {
   private final case class OwnedValue(name: String) extends RecordPresentable {
     def toRecord(): Record = Record.data("name" -> name)
   }

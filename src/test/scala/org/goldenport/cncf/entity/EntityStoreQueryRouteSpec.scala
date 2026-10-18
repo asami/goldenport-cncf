@@ -3,6 +3,7 @@ package org.goldenport.cncf.entity
 import java.nio.file.Files
 import java.time.Instant
 import cats.~>
+import io.circe.{Decoder, Encoder}
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{
   Capability,
@@ -40,7 +41,8 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version May.  5, 2026
  *  version Jul. 29, 2026
  *  version Aug.  5, 2026
- * @version Sep. 17, 2026
+ *  version Sep. 17, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
@@ -388,7 +390,7 @@ final class EntityStoreQueryRouteSpec
     }
 
     "preserve parent-owned value objects through toStoreRecord and fromStoreRecord" in {
-      Given("an entity whose store record contains owned single and repeated value objects")
+      Given("an entity whose physical adapter explicitly encodes owned single and repeated values as JSON text")
       val collectionid       = EntityCollectionId("test", "a", "owned_value_entity")
       val path               = Files.createTempFile("cncf-owned-value-entity", ".db").toString
       val datastorespace     = new DataStoreSpace().addDataStore(SqlDataStore.sqlite(path))
@@ -1857,6 +1859,17 @@ private final case class OwnedValueEntity(
 
 private def _owned_value_persistent: EntityPersistent[OwnedValueEntity] =
   new EntityPersistent[OwnedValueEntity] {
+    private given _address_encoder: Encoder[OwnedAddress] =
+      Encoder.forProduct2("city", "postal_code")(value => (value.city, value.postalcode))
+    private given _address_decoder: Decoder[OwnedAddress] =
+      Decoder.forProduct2("city", "postal_code")(OwnedAddress.apply)
+    private given _line_encoder: Encoder[OwnedLine] =
+      Encoder.forProduct2("sku", "quantity")(value => (value.sku, value.quantity))
+    private given _line_decoder: Decoder[OwnedLine] =
+      Decoder.forProduct2("sku", "quantity")(OwnedLine.apply)
+    private val _address_codec = EntityStoreValueCodec.application[OwnedAddress]("owned-address-v1")
+    private val _lines_codec = EntityStoreValueCodec.array(EntityStoreValueCodec.application[OwnedLine]("owned-line-v1"))
+
     def id(e: OwnedValueEntity): EntityId     = e.id
     def toRecord(e: OwnedValueEntity): Record = e.toRecord()
     def fromRecord(r: Record): Consequence[OwnedValueEntity] =
@@ -1867,17 +1880,15 @@ private def _owned_value_persistent: EntityPersistent[OwnedValueEntity] =
       Record.dataAuto(
         "id"      -> e.id,
         "name"    -> e.name,
-        "address" -> e.address,
-        "lines"   -> e.lines
+        "address" -> _address_codec.encode(e.address).TAKE,
+        "lines"   -> _lines_codec.encode(e.lines).TAKE
       )
     override def fromStoreRecord(r: Record): Consequence[OwnedValueEntity] = {
       val decoded = for {
         id      <- r.getAs[EntityId]("id")
         name    <- r.getString("name")
-        address <- r.getRecord("address").flatMap(_owned_address)
-        lines <- r.getVector("lines").map(_.collect { case rec: Record => rec }).map(_.flatMap(
-          _owned_line
-        ))
+        address <- r.getString("address").flatMap(value => _address_codec.decode(value).map(Some(_)).getOrElse(None))
+        lines <- r.getString("lines").flatMap(value => _lines_codec.decode(value).map(Some(_)).getOrElse(None))
       } yield OwnedValueEntity(id, name, address, lines)
       decoded match {
         case Some(entity) => Consequence.success(entity)
