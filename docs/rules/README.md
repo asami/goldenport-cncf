@@ -13,7 +13,7 @@ define shared structure and boundaries across the codebase.
 
 - **[Collection and semi-structured data](collection-and-semi-structured-data.md)**
   Cardinality-driven Vector/NonEmptyVector contracts, Record, internal input
-  abstractions and database/generated-model migration.
+  abstractions, Map lookup/index conventions and database/generated-model migration.
 
 - **ai-assisted-development-rules.md**  
   Global rules for AI-assisted development, defining the strict separation of:

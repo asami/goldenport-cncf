@@ -51,7 +51,7 @@ import cats.~>
  *  version May. 31, 2026
  *  version Jul. 31, 2026
  *  version Aug. 12, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -317,7 +317,7 @@ object ExecutionContext {
   ): ExecutionResponseState =
     snapshotExecutionResponse(ctx)
 
-  /** Derives an asynchronous new-Job context without sharing submitter response state. */
+  /** Derives an asynchronous new-Job context with independent response, diagnostic and evaluation ownership. */
   private[cncf] def withFreshExecutionResponseCell(
     ctx: ExecutionContext
   ): ExecutionContext =
@@ -325,7 +325,7 @@ object ExecutionContext {
       case i: Instance =>
         val copied = i.copy()
         copied.executionResponseCell = ExecutionResponseCell.empty
-        copied
+        _rebind_runtime_context(copied)
       case _ => ctx
     }
 
@@ -479,6 +479,22 @@ object ExecutionContext {
       case _ => Consequence.operationInvalid("execution-context-uow-rebind-unsupported")
     }
 
+  private[cncf] def withActionScope(
+    ctx: ExecutionContext,
+    scope: ScopeContext
+  ): ExecutionContext = ctx match {
+    case instance: Instance =>
+      lazy val active: Instance = instance.copy(
+        cncfCore = instance.cncfCore.copy(
+          scope = scope,
+          runtime = ctx.runtime.withActionUnitOfWorkContext(active)
+        )
+      )
+      active
+    case _ =>
+      ctx.withScope(scope)
+  }
+
   private def _with_runtime_context_preserving_execution_profile(
     ctx: ExecutionContext,
     runtime: RuntimeContext
@@ -523,7 +539,7 @@ object ExecutionContext {
               idGeneration = binding.idGeneration,
               executionControl = binding.control
             )
-          ))
+          ), sharemetadata = true)
         case None =>
           i
       }
@@ -814,12 +830,16 @@ object ExecutionContext {
   }
 
   private def _rebind_runtime_context(
-    ctx: Instance
+    ctx: Instance,
+    sharemetadata: Boolean = false
   ): ExecutionContext = {
     lazy val rebound: ExecutionContext =
       _with_runtime_context_preserving_execution_profile(
         ctx,
-        ctx.runtime.withUnitOfWorkContext(rebound, ctx.runtime.toToken)
+        if (sharemetadata)
+          ctx.runtime.withActionUnitOfWorkContext(rebound)
+        else
+          ctx.runtime.withUnitOfWorkContext(rebound, ctx.runtime.toToken)
       )
     rebound
   }

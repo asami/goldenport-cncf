@@ -1,18 +1,29 @@
 package org.goldenport.cncf.component
 
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
+import java.nio.charset.StandardCharsets
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 import scala.collection.mutable.ArrayBuffer
 
 import cats.data.NonEmptyVector
+import cats.syntax.all.*
 import org.goldenport.Consequence
-import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, CommandExecutionPolicy, QueryAction}
-import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeKind, SecurityContext}
-import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine, JobId, JobPersistencePolicy, JobStatus}
+import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, CommandExecutionPolicy, FunctionalActionCall, QueryAction}
+import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.context.{ExecutionContext, ExecutionInvocationIdentity, GlobalRuntimeContext, RuntimeContext, ScopeContext, ScopeKind, SecurityContext}
+import org.goldenport.cncf.http.{HttpDriver, HttpExecutionAdmission, HttpExecutionGrant, HttpExecutionLimits, HttpExecutionMethod}
+import org.goldenport.cncf.job.{ActionId, ActionTask, InMemoryJobEngine, JobEngine, JobId, JobPersistencePolicy, JobResult, JobStatus, JobSubmitOption, JobTaskStatus}
 import org.goldenport.cncf.operation.CmlOperationDefinition
-import org.goldenport.cncf.operation.evaluation.{OperationEvaluationExecutionReport, OperationEvaluationOperationIdentity}
+import org.goldenport.cncf.operation.evaluation.{OperationEvaluationAdmissionDiagnostic, OperationEvaluationExecutionReport, OperationEvaluationOperationIdentity}
+import org.goldenport.cncf.observability.ConclusionDiagnostics
+import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.testutil.TestComponentFactory
-import org.goldenport.protocol.{Protocol, Request}
+import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp, UnitOfWorkTermination}
+import org.goldenport.bag.Bag
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
+import org.goldenport.datatype.{ContentType, MimeType}
+import org.goldenport.http.{HttpResponse, HttpStatus}
+import org.goldenport.protocol.{Property, Protocol, Request}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
@@ -24,7 +35,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since Aug. 12, 2026
- * @version Aug. 12, 2026
+ * @version Oct. 18, 2026
  * @author ASAMI, Tomoharu
  */
 final class ComponentLogicPlainActionExecutionSpec
@@ -144,6 +155,88 @@ final class ComponentLogicPlainActionExecutionSpec
         bound.scope.kind shouldBe ScopeKind.Action
         bound.scope.name shouldBe action.name
       }
+
+      Vector("target-only", "caller-only", "no-grants").foreach { grantcase =>
+        s"use the target-component UoW owner from a self-bound caller with $grantcase HTTP authority" in {
+          Given(s"Spec: docs/spec/action-execution-semantics.md; Rules: R9,R10; Example: E1; distinct caller and target components, $grantcase inherited HTTP grants, and an already self-bound caller Action runtime")
+          val caller = _component(s"uow-caller-$grantcase")
+          val target = _component(s"uow-target-$grantcase")
+          val grants = grantcase match {
+            case "target-only" => Map(target.componentId -> HttpExecutionGrant(
+              Vector("http://127.0.0.1:8089"), Set(HttpExecutionMethod.Post)))
+            case "caller-only" => Map(caller.componentId -> HttpExecutionGrant(
+              Vector("http://127.0.0.1:8089"), Set(HttpExecutionMethod.Post)))
+            case _ => Map.empty[ComponentId, HttpExecutionGrant]
+          }
+          val admission = HttpExecutionAdmission.fromRuntimeC(
+            "http://127.0.0.1:8089/", HttpExecutionLimits(1000, 1000, 4096), grants
+          ).getOrElse(fail("HTTP authority fixture was not admitted"))
+          val driver = new ActionOwnerHttpDriver
+          val base = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+            .asInstanceOf[ExecutionContext.Instance]
+          val root = ScopeContext.Instance(base.runtime.core.copy(
+            httpDriverOption = Some(driver), httpExecutionAdmissionOption = Some(admission)
+          ))
+          caller.withScopeContext(root)
+          target.withScopeContext(root)
+          val supplied = _self_bound_action_context(base, caller, root)
+          val parentruntime = supplied.runtime
+          val parentscope = supplied.scope
+          val parentuow = supplied.unitOfWork
+          val parentinterpreter = supplied.unitOfWorkInterpreter
+          val parentcommits = new AtomicInteger
+          parentuow.stagePostCommitC {
+            parentcommits.incrementAndGet()
+            Consequence.unit
+          }
+          val observed = new AtomicReference[Option[ExecutionContext]](None)
+          val action = _http_owner_action(target, observed)
+          supplied.unitOfWork.executionContext should be theSameInstanceAs supplied
+
+          When("the target component executes its ordinary ActionCall and declarative HTTP POST through the runtime interpreter")
+          val result = target.logic.executeAction(action, supplied)
+
+          Then("only target authority admits the actual effect, and frontend and interpreted Action ownership agree")
+          if (grantcase == "target-only") {
+            result shouldBe Consequence.success(OperationResponse.Scalar("target-uow-response"))
+            driver.calls shouldBe 1
+          } else {
+            result shouldBe a[Consequence.Failure[?]]
+            result match {
+              case Consequence.Failure(conclusion) =>
+                ConclusionDiagnostics.classify(conclusion).policy shouldBe Some("http.execution.grant")
+              case other => fail(s"expected target grant denial, got $other")
+            }
+            driver.calls shouldBe 0
+          }
+          val bound = observed.get().getOrElse(fail("target ActionCall context was not captured"))
+          bound.scope.kind shouldBe ScopeKind.Action
+          bound.scope.name shouldBe action.name
+          bound.scope.parent shouldBe Some(target.scopeContext)
+          bound.unitOfWork.executionContext should be theSameInstanceAs bound
+          bound.unitOfWork.executionContext.scope.parent shouldBe Some(target.scopeContext)
+          bound.scope.httpExecutionAdmissionOption shouldBe Some(admission)
+          bound.unitOfWork should not be theSameInstanceAs(parentuow)
+          bound.security should be theSameInstanceAs supplied.security
+          bound.core should be theSameInstanceAs supplied.core
+          bound.executionControl shouldBe supplied.executionControl
+          bound.idGeneration should be theSameInstanceAs supplied.idGeneration
+          bound.observability should be theSameInstanceAs supplied.observability
+          bound.jobContext shouldBe supplied.jobContext
+          bound.framework shouldBe supplied.framework
+          if (grantcase == "target-only")
+            bound.unitOfWork.lastCommitTermination shouldBe Some(UnitOfWorkTermination.Committed)
+
+          And("child completion leaves the original parent context, interpreter, UoW and pending callback untouched")
+          supplied.scope should be theSameInstanceAs parentscope
+          supplied.runtime should be theSameInstanceAs parentruntime
+          supplied.unitOfWork should be theSameInstanceAs parentuow
+          supplied.unitOfWorkInterpreter should be theSameInstanceAs parentinterpreter
+          parentuow.executionContext should be theSameInstanceAs supplied
+          parentuow.lastCommitTermination shouldBe None
+          parentcommits.get() shouldBe 0
+        }
+      }
     }
 
     "E2 no-route component embedding" must _e2 {
@@ -154,6 +247,7 @@ final class ComponentLogicPlainActionExecutionSpec
         val response = OperationResponse.RecordResponse(Record.data("embedded" -> true))
         val action = _plain_action("embedded-no-route", response, observed = observed)
         val supplied = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+        val supplieduow = supplied.unitOfWork
 
         When("the embedded Action is executed through ComponentLogic")
         val result = component.logic.executeAction(action, supplied)
@@ -163,8 +257,17 @@ final class ComponentLogicPlainActionExecutionSpec
         _jobs(component) shouldBe empty
         val bound = observed.get().getOrElse(fail("bound ActionCall context was not observed"))
         bound.security shouldBe supplied.security
-        bound.runtime shouldBe supplied.runtime
+        bound.runtime should not be theSameInstanceAs(supplied.runtime)
+        bound.unitOfWork should not be theSameInstanceAs(supplieduow)
+        bound.unitOfWork.executionContext should be theSameInstanceAs bound
+        bound.runtime.core should be theSameInstanceAs supplied.runtime.core
+        bound.runtime.context shouldBe supplied.runtime.context
+        bound.runtime.toToken shouldBe supplied.runtime.toToken
+        bound.runtime.operationMode shouldBe supplied.runtime.operationMode
+        bound.runtime.transitionValidationHook should be theSameInstanceAs supplied.runtime.transitionValidationHook
+        bound.runtime.entityCreateDefaultsPolicy shouldBe supplied.runtime.entityCreateDefaultsPolicy
         bound.idGeneration shouldBe supplied.idGeneration
+        bound.operationEvaluation shouldBe supplied.operationEvaluation
         bound.scope.kind shouldBe ScopeKind.Action
         bound.scope.name shouldBe action.name
         bound.operationEvaluation.invocation shouldBe None
@@ -425,6 +528,220 @@ final class ComponentLogicPlainActionExecutionSpec
         context.runtime.executionMetadata.failure shouldBe None
       }
 
+      "accumulate nested Action metadata through a global ancestor while preserving selected invocation binding" in {
+        Given("Spec: docs/spec/action-execution-semantics.md; Rules: R9,R11,R13; Example: E9; a self-bound caller below a GlobalRuntimeContext and nested ordinary component Actions")
+        val component = _component("global-nested-metadata")
+        val base = ExecutionContext.test()
+        val global = GlobalRuntimeContext.create(
+          "global-nested-metadata",
+          RuntimeConfig.default,
+          ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
+          base.observability,
+          AliasResolver.empty
+        )
+        val runtime = new RuntimeContext(
+          core = RuntimeContext.core(
+            name = "global-nested-metadata", parent = Some(global), observabilitycontext = base.observability
+          ),
+          unitofworksupplier = () => base.unitOfWork,
+          unitofworkinterpreterfn = base.runtime.unitOfWorkInterpreter,
+          commitaction = _ => (),
+          abortaction = _ => (),
+          disposeaction = _ => (),
+          token = "global-nested-metadata"
+        )
+        val source = ExecutionContext.create(runtime).asInstanceOf[ExecutionContext.Instance]
+        val context = ExecutionContext.withFreshUnitOfWorkContext(source.copy(
+          cncfCore = source.cncfCore.copy(executionControl = source.executionControl.copy(
+            profile = source.executionControl.profile.copy(name = "source-profile-must-not-win")
+          ))
+        )).getOrElse(fail("global caller UnitOfWork was not bound"))
+        val parentruntime = context.runtime
+        val parentuow = context.unitOfWork
+        val parentcontrol = context.executionControl
+        val childidentity = OperationEvaluationOperationIdentity.fromResolvedRoute(
+          component.name, "entity", "global-child"
+        )
+        val childadmission = OperationEvaluationAdmissionDiagnostic.admitted(childidentity)
+        val childreport = OperationEvaluationExecutionReport.empty.appendAdmission(childadmission)
+        context.runtime.updateExecutionMetadata(_.copy(
+          traceId = Some("global-parent-trace"),
+          executionId = Some("global-parent-execution"),
+          operationEvaluation = Some(OperationEvaluationExecutionReport.empty)
+        ))
+        val outerobserved = new AtomicReference[Option[ExecutionContext]](None)
+        val childobserved = new AtomicReference[Option[ExecutionContext]](None)
+        val child = _metadata_action(component, "global-child", OperationResponse.Scalar("child-response"), childcontext => {
+          childobserved.set(Some(childcontext))
+          childcontext.runtime.noteExecutionDiagnostics(Some("global-child-trace"), Some("global-child-execution"), None)
+          childcontext.runtime.updateExecutionMetadata(_.copy(operationEvaluation = Some(childreport)))
+        })
+        val outer = _metadata_action(component, "global-outer", OperationResponse.Scalar("outer-response"), outercontext => {
+          outerobserved.set(Some(outercontext))
+          When("the outer Action invokes the child through ordinary ComponentLogic with its global runtime lineage")
+          val childresult = component.logic.executeAction(child, outercontext)
+          Then("the outer Action sees the child's observable admission and diagnostics after the child returns")
+          childresult shouldBe Consequence.success(OperationResponse.Scalar("child-response"))
+          outercontext.runtime.executionMetadata.operationEvaluation shouldBe Some(childreport)
+          outercontext.runtime.executionMetadata.traceId should not be Some("global-parent-trace")
+          outercontext.runtime.executionMetadata.executionId should not be Some("global-parent-execution")
+        })
+
+        When("the original caller executes the outer Action through ordinary ComponentLogic")
+        val result = component.logic.executeAction(outer, context)
+
+        Then("the original caller retains child metadata and its UoW while each Action keeps its selected invocation and self-bound UoW")
+        result shouldBe Consequence.success(OperationResponse.Scalar("outer-response"))
+        context.runtime.executionMetadata.operationEvaluation shouldBe Some(childreport)
+        context.runtime.executionMetadata.operationEvaluation.toVector.flatMap(_.admissions) should contain(childadmission)
+        context.runtime.executionMetadata.traceId should not be empty
+        context.runtime.executionMetadata.traceId should not be Some("global-parent-trace")
+        context.runtime.executionMetadata.executionId should not be empty
+        context.runtime.executionMetadata.executionId should not be Some("global-parent-execution")
+        context.runtime should be theSameInstanceAs parentruntime
+        context.unitOfWork should be theSameInstanceAs parentuow
+        parentuow.executionContext should be theSameInstanceAs context
+        context.executionControl shouldBe parentcontrol
+        val outercontext = outerobserved.get().getOrElse(fail("outer Action context was not captured"))
+        val childcontext = childobserved.get().getOrElse(fail("child Action context was not captured"))
+        outercontext.unitOfWork should not be theSameInstanceAs(parentuow)
+        childcontext.unitOfWork should not be theSameInstanceAs(parentuow)
+        childcontext.unitOfWork should not be theSameInstanceAs(outercontext.unitOfWork)
+        Vector(outercontext, childcontext).foreach { bound =>
+          bound.unitOfWork.executionContext should be theSameInstanceAs bound
+          bound.unitOfWork.executionContext.core should be theSameInstanceAs bound.core
+          bound.unitOfWork.executionContext.idGeneration should be theSameInstanceAs bound.idGeneration
+          bound.unitOfWork.executionContext.executionControl shouldBe bound.executionControl
+          bound.executionControl.profile shouldBe global.executionProfileRuntime.baseBinding.control.profile
+          bound.executionControl.profile should not be parentcontrol.profile
+        }
+        outercontext.executionControl.invocation.map(_.operationSelector) shouldBe Some(
+          ExecutionInvocationIdentity.operationSelector(Some(component.name), Some("entity"), "global-outer")
+        )
+        childcontext.executionControl.invocation.map(_.operationSelector) shouldBe Some(
+          ExecutionInvocationIdentity.operationSelector(Some(component.name), Some("entity"), "global-child")
+        )
+        childcontext.executionControl.invocation.get.ordinal should be > outercontext.executionControl.invocation.get.ordinal
+      }
+
+      "isolate an Ephemeral no-global Action Job's worker metadata and response throughout completion" in {
+        Given("Spec: docs/spec/action-execution-semantics.md; Rules: R6,R9,R11,R13; Example: E9; a no-global caller with seeded metadata and a manually drained Ephemeral component Action Job without calltree tracing")
+        val manualengine = InMemoryJobEngine.create(
+          InMemoryJobEngine.SchedulerConfig(workerCount = 1, autoStartWorkers = false)
+        )
+        val component = _routed_component(
+          "ephemeral-metadata-isolation", "ephemeral-worker", "OTHER", jobengine = Some(manualengine)
+        )
+        val parentcontext = ExecutionContext.test()
+        val parentuow = parentcontext.unitOfWork
+        val parentadmission = OperationEvaluationAdmissionDiagnostic.admitted(
+          OperationEvaluationOperationIdentity.fromResolvedRoute(component.name, "entity", "parent")
+        )
+        val workeradmission = OperationEvaluationAdmissionDiagnostic.admitted(
+          OperationEvaluationOperationIdentity.fromResolvedRoute(component.name, "entity", "ephemeral-worker")
+        )
+        val parentreport = OperationEvaluationExecutionReport.empty.appendAdmission(parentadmission)
+        val workerreport = parentreport.appendAdmission(workeradmission)
+        parentcontext.runtime.updateExecutionMetadata(_.copy(
+          traceId = Some("ephemeral-parent-trace"),
+          executionId = Some("ephemeral-parent-execution"),
+          operationEvaluation = Some(parentreport)
+        ))
+        val workerstarted = new CountDownLatch(1)
+        val workerrelease = new CountDownLatch(1)
+        val workerobserved = new AtomicReference[Option[ExecutionContext]](None)
+        val workerfailure = new AtomicReference[Option[Throwable]](None)
+        val drained = new AtomicBoolean(false)
+        val response = OperationResponse.Scalar("ephemeral-worker-response")
+        val action = _metadata_action(component, "ephemeral-worker", response, workercontext => {
+          try {
+            workerobserved.set(Some(workercontext))
+            workercontext.runtime.noteExecutionDiagnostics(Some("ephemeral-worker-trace"), Some("ephemeral-worker-execution"), None)
+            workercontext.runtime.updateExecutionMetadata(metadata => metadata.copy(
+              operationEvaluation = Some(metadata.operationEvaluation.getOrElse(OperationEvaluationExecutionReport.empty)
+                .appendAdmission(workeradmission))
+            ))
+            ExecutionContext.noteExecutionResponse(workercontext, RuntimeContext.ExecutionResponseMetadata.direct)
+            workerstarted.countDown()
+            workerrelease.await(5, TimeUnit.SECONDS) shouldBe true
+          } catch {
+            case e: Throwable =>
+              workerfailure.set(Some(e))
+              throw e
+          }
+        })
+        val task = ActionTask(ActionId.generate(), action, component.actionEngine, component = Some(component))
+
+        When("the public JobEngine submission explicitly selects Ephemeral persistence")
+        val jobid = manualengine.submit(
+          List(task), parentcontext, JobSubmitOption(persistence = JobPersistencePolicy.Ephemeral)
+        ).getOrElse(fail("Ephemeral Action Job submission failed"))
+        Given("the admitted caller records its AcceptedJob response before the worker is allowed to run")
+        ExecutionContext.noteExecutionResponse(parentcontext, RuntimeContext.ExecutionResponseMetadata.direct.copy(
+          responseKind = RuntimeContext.ExecutionResponseKind.AcceptedJob
+        ))
+        ExecutionContext.noteResponseJobId(parentcontext, jobid.value)
+        val parentmetadata = parentcontext.runtime.executionMetadata
+        val parentresponse = ExecutionContext.currentExecutionResponseState(parentcontext)
+
+        Then("the submitted Job is Ephemeral and its Action has not run")
+        manualengine.query(jobid).map(_.persistence) shouldBe Some(JobPersistencePolicy.Ephemeral)
+        manualengine.getStatus(jobid) shouldBe Some(JobStatus.Submitted)
+        workerobserved.get() shouldBe None
+        parentcontext.framework.callTreeEnabled shouldBe false
+        parentcontext.observability.callTreeContext.isEnabled shouldBe false
+
+        When("the actual asynchronous dequeue runs the component ActionCall and blocks after worker-local writes")
+        val worker = new Thread(() => {
+          try {
+            drained.set(manualengine.drainOne())
+          } catch {
+            case e: Throwable => workerfailure.set(Some(e))
+          }
+        })
+        worker.start()
+        try {
+          Then("the blocked worker owns its metadata, response and self-bound UoW while the submitter remains unchanged")
+          workerstarted.await(5, TimeUnit.SECONDS) shouldBe true
+          workerfailure.get().foreach(e => fail("Ephemeral worker failed", e))
+          val workercontext = workerobserved.get().getOrElse(fail("Ephemeral Action context was not captured"))
+          workercontext.observability.callTreeContext.isEnabled shouldBe false
+          workercontext.unitOfWork.executionContext should be theSameInstanceAs workercontext
+          workercontext.unitOfWork should not be theSameInstanceAs(parentuow)
+          workercontext.runtime.executionMetadata.operationEvaluation shouldBe Some(workerreport)
+          workercontext.runtime.executionMetadata.traceId shouldBe Some("ephemeral-worker-trace")
+          workercontext.runtime.executionMetadata.executionId shouldBe Some("ephemeral-worker-execution")
+          ExecutionContext.currentExecutionResponse(workercontext) shouldBe Some(RuntimeContext.ExecutionResponseMetadata.direct)
+          parentcontext.runtime.executionMetadata shouldBe parentmetadata
+          ExecutionContext.currentExecutionResponseState(parentcontext) shouldBe parentresponse
+        } finally {
+          When("the worker is released and joined even if a blocked-state expectation fails")
+          workerrelease.countDown()
+          worker.join(5000L)
+        }
+
+        Then("the actual Action task and Job succeed, the worker retains its writes, and parent metadata and response remain unchanged")
+        worker.isAlive shouldBe false
+        workerfailure.get().foreach(e => fail("Ephemeral worker failed", e))
+        drained.get() shouldBe true
+        manualengine.getStatus(jobid) shouldBe Some(JobStatus.Succeeded)
+        manualengine.getResult(jobid) shouldBe Some(JobResult.Success(response))
+        val model = manualengine.query(jobid).getOrElse(fail("Ephemeral Job read model is missing"))
+        model.persistence shouldBe JobPersistencePolicy.Ephemeral
+        model.tasks.tasks.map(_.status) shouldBe Vector(JobTaskStatus.Succeeded)
+        model.tasks.tasks.head.result.success shouldBe true
+        val workercontext = workerobserved.get().getOrElse(fail("completed Action context was not captured"))
+        workercontext.runtime.executionMetadata.operationEvaluation shouldBe Some(workerreport)
+        workercontext.runtime.executionMetadata.traceId should not be empty
+        workercontext.runtime.executionMetadata.traceId should not be parentmetadata.traceId
+        workercontext.runtime.executionMetadata.executionId should not be empty
+        workercontext.runtime.executionMetadata.executionId should not be parentmetadata.executionId
+        ExecutionContext.currentExecutionResponse(workercontext) shouldBe Some(RuntimeContext.ExecutionResponseMetadata.direct)
+        parentcontext.runtime.executionMetadata shouldBe parentmetadata
+        ExecutionContext.currentExecutionResponseState(parentcontext) shouldBe parentresponse
+        parentcontext.unitOfWork should be theSameInstanceAs parentuow
+      }
+
       "isolate accepted parent metadata from a controlled asynchronous Job worker" in {
         Given("Spec: docs/spec/action-execution-semantics.md; Rules: R5,R6,R13; Example: E9; an AcceptedJob parent and a worker that records a separate direct response while held at a barrier")
         val manualengine = InMemoryJobEngine.create(
@@ -535,6 +852,118 @@ final class ComponentLogicPlainActionExecutionSpec
       selectedjobengine
     )
     component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Builtin))
+  }
+
+  private def _self_bound_action_context(
+    base: ExecutionContext.Instance,
+    caller: Component,
+    root: ScopeContext
+  ): ExecutionContext.Instance = {
+    lazy val active: ExecutionContext.Instance = ExecutionContext.Instance(
+      base.core,
+      base.cncfCore.copy(
+        scope = caller.scopeContext.createChildScope(ScopeKind.Action, "caller-action"),
+        runtime = runtime,
+        executionControl = base.executionControl.copy(
+          profile = base.executionControl.profile.copy(name = "action-owner-spec")
+        )
+      )
+    )
+    lazy val unitofwork = new UnitOfWork(active)
+    lazy val interpreter = new (cats.~>[UnitOfWorkOp, Consequence]) {
+      def apply[A](op: UnitOfWorkOp[A]): Consequence[A] =
+        new UnitOfWorkInterpreter(unitofwork).interpret(op)
+    }
+    lazy val runtime: RuntimeContext = new RuntimeContext(
+      core = root.core,
+      unitofworksupplier = () => unitofwork,
+      unitofworkinterpreterfn = interpreter,
+      commitaction = uow => { val _ = uow.commit(); () },
+      abortaction = uow => { val _ = uow.abort(); () },
+      disposeaction = uow => { val _ = uow.dispose(); () },
+      token = base.runtime.toToken,
+      context = base.runtime.context,
+      operationMode = base.runtime.operationMode,
+      transitionValidationHook = base.runtime.transitionValidationHook,
+      entityCreateDefaultsPolicy = base.runtime.entityCreateDefaultsPolicy
+    )
+    active
+  }
+
+  private def _http_owner_action(
+    target: Component,
+    observed: AtomicReference[Option[ExecutionContext]]
+  ): Action = new Action {
+    val request: Request = Request.of(
+      component = target.name, service = "entity", operation = "target-http-owner"
+    )
+
+    override def createCall(core: ActionCall.Core): ActionCall = {
+      val captured = core
+      new FunctionalActionCall {
+        override val core: ActionCall.Core = captured
+
+        protected def build_Program: ExecUowM[OperationResponse] = {
+          observed.set(Some(executionContext))
+          http_post("/selected", Some("child-body"), Map("X-Action" -> "target")).map { response =>
+            OperationResponse.Scalar(response.getString.getOrElse("missing HTTP response"))
+          }
+        }
+      }
+    }
+  }
+
+  private final class ActionOwnerHttpDriver extends HttpDriver {
+    private val _calls = new AtomicInteger
+    def calls: Int = _calls.get()
+
+    def get(path: String, headers: Map[String, String], properties: Vector[Property]): HttpResponse =
+      fail("unexpected GET in target Action POST program")
+
+    def post(
+      path: String,
+      body: Option[String],
+      headers: Map[String, String],
+      properties: Vector[Property]
+    ): HttpResponse = {
+      _calls.incrementAndGet()
+      path shouldBe "http://127.0.0.1:8089/selected"
+      body shouldBe Some("child-body")
+      headers shouldBe Map("X-Action" -> "target")
+      HttpResponse.Text(
+        HttpStatus.Ok,
+        ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+        Bag.text("target-uow-response", StandardCharsets.UTF_8)
+      )
+    }
+
+    def put(
+      path: String,
+      body: Option[String],
+      headers: Map[String, String],
+      properties: Vector[Property]
+    ): HttpResponse = fail("unexpected PUT in target Action POST program")
+  }
+
+  private def _metadata_action(
+    component: Component,
+    operationname: String,
+    response: OperationResponse,
+    duringexecute: ExecutionContext => Unit
+  ): Action = new Action {
+    val request: Request = Request.of(component = component.name, service = "entity", operation = operationname)
+
+    override def createCall(core: ActionCall.Core): ActionCall = {
+      val captured = core
+      new ActionCall {
+        override val core: ActionCall.Core = captured
+
+        override def execute(): Consequence[OperationResponse] = {
+          duringexecute(executionContext)
+          Consequence.success(response)
+        }
+      }
+    }
   }
 
   private def _plain_action(

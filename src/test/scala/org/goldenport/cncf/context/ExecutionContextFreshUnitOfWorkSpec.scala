@@ -15,7 +15,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkTermination
 
 /*
  * @since   Oct. 14, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ExecutionContextFreshUnitOfWorkSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -69,6 +69,40 @@ final class ExecutionContextFreshUnitOfWorkSpec extends AnyWordSpec with Matcher
       fresh.framework shouldBe source.framework
       fresh.cncfCore.resources should be theSameInstanceAs source.cncfCore.resources
       fresh.cncfCore.resourceTrees should be theSameInstanceAs source.cncfCore.resourceTrees
+    }
+
+    "copy initial diagnostics into an independent public fresh UnitOfWork runtime" in {
+      Given("a source runtime with explicit trace and execution diagnostics before a public fresh UnitOfWork binding")
+      val source = ExecutionContext.create()
+      source.runtime.noteExecutionDiagnostics(Some("source-trace"), Some("source-execution"), None)
+      val initial = source.runtime.executionMetadata
+
+      When("the public helper creates a fresh UnitOfWork context")
+      val fresh = ExecutionContext.withFreshUnitOfWorkContext(source).TAKE
+
+      Then("the new runtime inherits the initial diagnostics with its own self-bound UnitOfWork")
+      fresh.runtime should not be theSameInstanceAs(source.runtime)
+      fresh.unitOfWork.executionContext should be theSameInstanceAs fresh
+      fresh.runtime.executionMetadata shouldBe initial
+
+      When("the fresh runtime changes its diagnostic fields")
+      fresh.runtime.noteExecutionDiagnostics(Some("fresh-trace"), Some("fresh-execution"), Some("fresh-failure"))
+      val freshmetadata = fresh.runtime.executionMetadata
+
+      Then("the source diagnostics retain their original values")
+      source.runtime.executionMetadata shouldBe initial
+      freshmetadata.traceId shouldBe Some("fresh-trace")
+      freshmetadata.executionId shouldBe Some("fresh-execution")
+      freshmetadata.failure shouldBe Some("fresh-failure")
+
+      When("the source runtime independently changes its diagnostics")
+      source.runtime.noteExecutionDiagnostics(Some("source-next-trace"), Some("source-next-execution"), Some("source-failure"))
+
+      Then("the fresh diagnostics retain their own values and do not follow the source update")
+      fresh.runtime.executionMetadata shouldBe freshmetadata
+      source.runtime.executionMetadata.traceId shouldBe Some("source-next-trace")
+      source.runtime.executionMetadata.executionId shouldBe Some("source-next-execution")
+      source.runtime.executionMetadata.failure shouldBe Some("source-failure")
     }
 
     "reject an unsupported context implementation with the declared operation failure" in {

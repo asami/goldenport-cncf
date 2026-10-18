@@ -33,7 +33,8 @@ import org.goldenport.util.StringUtils
  *  version Apr. 28, 2026
  *  version May. 10, 2026
  *  version Jun. 18, 2026
- * @version Aug. 12, 2026
+ *  version Aug. 12, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContext(
@@ -50,8 +51,8 @@ final class RuntimeContext(
   val entityCreateDefaultsPolicy: EntityCreateDefaultsPolicy = EntityCreateDefaultsPolicy.default
 ) extends ScopeContext() {
   private var _resolved_parameters: Option[ResolvedParameters] = None
-  private var _execution_metadata: RuntimeContext.ExecutionMetadata =
-    RuntimeContext.ExecutionMetadata.empty
+  private var _execution_metadata_cell =
+    new RuntimeContext.ExecutionMetadataCell(RuntimeContext.ExecutionMetadata.empty)
 
   lazy val unitOfWork: UnitOfWork = unitofworksupplier()
 
@@ -145,7 +146,15 @@ final class RuntimeContext(
       entityCreateDefaultsPolicy = entityCreateDefaultsPolicy
     )
     _resolved_parameters.foreach(runtime.setResolvedParameters)
-    runtime._execution_metadata = executionMetadata
+    runtime._execution_metadata_cell = new RuntimeContext.ExecutionMetadataCell(executionMetadata)
+    runtime
+  }
+
+  private[cncf] def withActionUnitOfWorkContext(
+    executioncontext: => ExecutionContext
+  ): RuntimeContext = {
+    val runtime = withUnitOfWorkContext(executioncontext)
+    runtime._execution_metadata_cell = _execution_metadata_cell
     runtime
   }
 
@@ -162,15 +171,13 @@ final class RuntimeContext(
   def clearResolvedParameters(): Unit =
     _resolved_parameters = None
 
-  def executionMetadata: RuntimeContext.ExecutionMetadata = synchronized {
-    _execution_metadata
-  }
+  def executionMetadata: RuntimeContext.ExecutionMetadata =
+    _execution_metadata_cell.get
 
   def updateExecutionMetadata(
     f: RuntimeContext.ExecutionMetadata => RuntimeContext.ExecutionMetadata
-  ): Unit = synchronized {
-    _execution_metadata = f(_execution_metadata)
-  }
+  ): Unit =
+    _execution_metadata_cell.update(f)
 
   def noteResponseJobId(jobid: String): Unit =
     updateExecutionMetadata(_.copy(responseJobId = Some(jobid)))
@@ -223,15 +230,30 @@ final class RuntimeContext(
       metadata.copy(operationEvaluation = Some(report))
     }
 
-  def clearExecutionMetadata(): Unit = synchronized {
-    _execution_metadata = RuntimeContext.ExecutionMetadata.empty
-  }
+  def clearExecutionMetadata(): Unit =
+    _execution_metadata_cell.clear()
 
   private def _operation_evaluation_attempt_id: Option[OperationEvaluationAttemptId] =
     unitOfWork.executionContext.operationEvaluation.correlation.map(_.attemptId)
 }
 
 object RuntimeContext {
+  private final class ExecutionMetadataCell(initial: ExecutionMetadata) {
+    private var _value: ExecutionMetadata = initial
+
+    def get: ExecutionMetadata = synchronized {
+      _value
+    }
+
+    def update(f: ExecutionMetadata => ExecutionMetadata): Unit = synchronized {
+      _value = f(_value)
+    }
+
+    def clear(): Unit = synchronized {
+      _value = ExecutionMetadata.empty
+    }
+  }
+
   final case class ExecutionMetadata(
     responseJobId: Option[String] = None,
     debugJobId: Option[String] = None,
