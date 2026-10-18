@@ -112,7 +112,8 @@ import org.simplemodeling.model.datatype.{
  *  version Jun. 18, 2026
  *  version Jul. 30, 2026
  *  version Aug. 13, 2026
- * @version Sep. 17, 2026
+ *  version Sep. 17, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -3701,7 +3702,7 @@ object AdminComponent {
   ): Record = {
     val images = _record_seq(projection.getAny("images"))
     val representative = projection.getAny("representativeImage").collect { case r: Record => r }
-    Record.createFull(
+    Record.dataAuto((
       record.asMap.toVector.filterNot { case (key, _) =>
         key.equalsIgnoreCase("sourceEntityId") ||
           key.equalsIgnoreCase("images") ||
@@ -3712,7 +3713,7 @@ object AdminComponent {
         "images" -> images,
         "representativeImage" -> representative
       )
-    )
+    )*)
   }
 
   private def _record_seq(

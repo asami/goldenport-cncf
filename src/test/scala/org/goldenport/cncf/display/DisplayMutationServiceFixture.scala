@@ -47,7 +47,8 @@ import org.typelevel.ci.CIString
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 17, 2026
+ *  version Oct. 17, 2026
+ * @version Oct. 18, 2026
  */
 /** Real ordinary component assembly; no fixture-owned resource map or result writer. */
 private[cncf] object DisplayMutationServiceFixture {
@@ -148,7 +149,7 @@ private[cncf] object DisplayMutationServiceFixture {
     val order = if (session.backend == "postgresql") Vector("id") ++ names.filter(_ == revisionkey) ++
       names.filterNot(name => name == "id" || name == revisionkey) else names
     Record(order.filter(name => cells(name) != null).map { name =>
-      _field(name, if (name == "permission") _permission_record else cells(name))
+      _field(name, cells(name))
     })
   }
   private def _expected_root(session: Session, stored: Record, bodyrecord: Option[Record], hydrated: Boolean,

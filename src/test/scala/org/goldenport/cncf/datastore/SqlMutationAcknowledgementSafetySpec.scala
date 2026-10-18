@@ -21,7 +21,7 @@ import scala.util.control.NonFatal
 
 /*
  * @since   Oct. 14, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 18, 2026
  */
 final class SqlMutationAcknowledgementSafetySpec extends AnyWordSpec with Matchers with GivenWhenThen with PostgresqlAcceptance {
   import SqlMutationAcknowledgementSafetySpec.*
@@ -44,7 +44,9 @@ final class SqlMutationAcknowledgementSafetySpec extends AnyWordSpec with Matche
     ("malformed object", "{broken:before}", "{broken:after}"),
     ("malformed array", "[broken,before]", "[broken,after]"),
     ("scalar boolean", "true", "false"),
-    ("scalar number", "1", "2"))
+    ("scalar number", "1", "2"),
+    ("JSON object whitespace", "{\"value\":1}", " { \"value\":1 } "),
+    ("JSON array whitespace", "[1,true]", " [ 1, true ] "))
   private val _null_samples = for {
     labelsize <- Gen.chooseNum(1, 12)
     label <- Gen.listOfN(labelsize, Gen.oneOf('a', 'Z', '日', '界', 'λ', 'β')).map(_.mkString)
@@ -161,7 +163,7 @@ final class SqlMutationAcknowledgementSafetySpec extends AnyWordSpec with Matche
   "SQL storage-correspondent business comparison" should {
     _backends.foreach { backend =>
       s"retain authoritative revision and side state on actual $backend" which {
-        "compare nested object and array carriers in both Patch and Replace forms" in {
+        "compare explicitly encoded object and array text in both Patch and Replace forms" in {
           Given("an actual SQL writer, independent reader and complete selected/unrelated storage targets")
           _with_backend(backend) { (dialect, datasource, reader) =>
             val writer = new SqlDataStore(dialect, datasource)
@@ -453,8 +455,8 @@ final class SqlMutationAcknowledgementSafetySpec extends AnyWordSpec with Matche
     Field("empty_text", Field.Value.Single("")),
     Field("numeric_zero", Field.Value.Single(0L)),
     Field("false_value", Field.Value.Single(false)),
-    Field("empty_record", Field.Value.Single(Record.empty)),
-    Field("empty_vector", Field.Value.Single(Vector.empty[Any]))))
+    Field("empty_record", Field.Value.Single("{}")),
+    Field("empty_vector", Field.Value.Single("[]"))))
 
   private def _seed_null_rows(setup: MutationSession, writer: SqlDataStore): Unit = {
     success(writer.save(setup.rootCollection, setup.rootEntry, _null_fields("nullable 日λ"))(using setup.executionContext))
@@ -638,12 +640,7 @@ final class SqlMutationAcknowledgementSafetySpec extends AnyWordSpec with Matche
       val raw = row(name)
       if (java.util.Objects.isNull(raw)) None else {
         val key = if (normalize) aliases.getOrElse(name, name) else name
-        val value = name match {
-          case "empty_record" => Record.empty
-          case "empty_vector" => Vector.empty[Any]
-          case _ => raw
-        }
-        Some(Field(key, Field.Value.Single(value)))
+        Some(Field(key, Field.Value.Single(raw)))
       }
     })
   }
@@ -655,29 +652,29 @@ final class SqlMutationAcknowledgementSafetySpec extends AnyWordSpec with Matche
     actual.fields.map(_.key).distinct.size shouldBe actual.fields.size
     Vector("empty_text", "emptyText").filter(actual.keySet.contains).foreach(key => actual.getString(key) shouldBe Some(""))
     Vector("empty_record", "emptyRecord").filter(actual.keySet.contains).foreach { key =>
-      actual.fields.find(_.key == key).get.value.single shouldBe Record.empty
+      actual.getAny(key) shouldBe Some("{}")
     }
     Vector("empty_vector", "emptyVector").filter(actual.keySet.contains).foreach { key =>
-      actual.fields.find(_.key == key).get.value.single shouldBe Vector.empty[Any]
+      actual.getAny(key) shouldBe Some("[]")
     }
   }
 
   private def _require_sql_comparison(setup: MutationSession, writer: SqlDataStore, reader: SqlDataStore,
     originalroot: Record, originalbody: Record, sample: SqlComparisonSample): Unit = {
-    Given("one freshly reseeded INITIAL1 root with nested permissions, attributes, a raw Long Vector and exact ordinary/malformed text")
+    Given("one freshly reseeded INITIAL1 root with explicitly encoded permission, attributes and Long-array text and exact ordinary/malformed text")
     val note = s" \t${sample.label}\r\n "
     val opaque = s" {broken:${sample.label}} "
-    val seed = Record(Record.dataAuto("permission" -> _permission_record(sample.ownerwrite),
-      "attributes" -> Record.dataAuto("label" -> sample.label, "count" -> sample.numbers.size.toLong),
-      "note" -> note, "opaque" -> opaque).fields :+ Field("numbers", Field.Value.Single(sample.numbers)))
+    val seed = Record(Record.dataAuto("permission" -> _permission_record(sample.ownerwrite).toJsonString,
+      "attributes" -> Record.dataAuto("label" -> sample.label, "count" -> sample.numbers.size.toLong).toJsonString,
+      "note" -> note, "opaque" -> opaque).fields :+ Field("numbers", Field.Value.Single(sample.numbers.mkString("[", ",", "]"))))
     _seed_comparison(setup, writer, originalroot, originalbody, seed)
     val root = setup.load(reader)
     val body = _load_comparison_body(setup, reader)
     val before = _snapshot(setup, reader)
     success(EntityRevision.createC(root.asMap("cncf_revision"))) shouldBe EntityRevision.INITIAL
-    _fixture_value(root.asMap("permission")) shouldBe _permission_map(sample.ownerwrite)
-    _fixture_value(root.asMap("attributes")) shouldBe Map("label" -> sample.label, "count" -> sample.numbers.size.toLong)
-    _fixture_value(root.asMap("numbers")) shouldBe sample.numbers
+    root.getAny("permission") shouldBe Some(_permission_json(sample.ownerwrite))
+    root.getAny("attributes") shouldBe Some(s"{\"label\":\"${sample.label}\",\"count\":${sample.numbers.size}}")
+    root.getAny("numbers") shouldBe Some(sample.numbers.mkString("[", ",", "]"))
     root.getString("note") shouldBe Some(note)
     root.getString("opaque") shouldBe Some(opaque)
     val equivalent = Record.dataAuto("permission" -> _permission_json(sample.ownerwrite),
@@ -712,7 +709,7 @@ final class SqlMutationAcknowledgementSafetySpec extends AnyWordSpec with Matche
     applied shouldBe a[EntityVersionedMutationResult.Applied]
     success(EntityRevision.createC(committedroot.asMap("cncf_revision"))) shouldBe revision(2)
     (applied.asInstanceOf[EntityVersionedMutationResult.Applied].record.fields == committedroot.fields) shouldBe true
-    _fixture_map(committedroot) shouldBe _fixture_map(root).updated("permission", _permission_map(!sample.ownerwrite))
+    _fixture_map(committedroot) shouldBe _fixture_map(root).updated("permission", _permission_json(!sample.ownerwrite))
       .updated("cncf_revision", committedroot.asMap("cncf_revision"))
     _fixture_map(committedbody) shouldBe _fixture_map(body).updated("content", "Published permission-change body")
     _require_other_targets_unchanged(before, committed)

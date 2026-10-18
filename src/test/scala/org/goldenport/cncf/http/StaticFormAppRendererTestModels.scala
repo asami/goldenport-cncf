@@ -73,7 +73,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 private final case class RendererJobAction(
@@ -97,7 +97,7 @@ private final case class NoticeEntity(
 ) {
   def toRecord(): Record =
     Record.dataAuto(
-      "id" -> id,
+      "id" -> id.print,
       "title" -> title,
       "author" -> author
     )

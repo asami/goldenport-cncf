@@ -13,7 +13,7 @@ import org.goldenport.cncf.information.value.{InformationBindingStatus, Informat
  * generated revision and lifecycle representation.
  *
  * @since   Sep. 1, 2026
- * @version Sep. 1, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 private[information] object InformationPersistenceMigration {
@@ -133,13 +133,42 @@ private[information] object InformationPersistenceMigration {
   private def _legacy_v0(record: Record): Preview =
     record.getAsC[Instant]("updatedAt") match {
       case Consequence.Success(Some(updatedat)) =>
-        _canonicalize_legacy_bindings(_legacy_record(record, updatedat)) match {
-          case Consequence.Success(canonical) => Preview.LegacyV0(canonical)
-          case Consequence.Failure(_) => _incompatible("legacy-v0-invalid-identity-binding")
+        _decode_legacy_text_fields(_legacy_record(record, updatedat)) match {
+          case Consequence.Success(decoded) => _canonicalize_legacy_bindings(decoded) match {
+            case Consequence.Success(canonical) => Preview.LegacyV0(canonical)
+            case Consequence.Failure(_) => _incompatible("legacy-v0-invalid-identity-binding")
+          }
+          case Consequence.Failure(_) => _incompatible("legacy-v0-invalid-structured-value")
         }
       case _ =>
         _incompatible("legacy-v0-missing-or-invalid-updatedAt")
     }
+
+  // This is the explicit V0 SQL wire, not provider payload inference.
+  private val _legacy_record_fields = Set("rawData", "workingData", "importContext")
+  private val _legacy_record_array_fields = Set("validationIssues", "resolutionCandidates", "identityBindings",
+    "publicationStatuses", "conflicts", "fieldEvents", "contentReferences")
+
+  private def _decode_legacy_text_fields(record: Record): Consequence[Record] = {
+    record.fields.foldLeft(Consequence.success(Record.empty)) { (result, field) =>
+      val decoded: Consequence[Any] = field.value.single match {
+        case text: String if _legacy_record_fields.contains(field.key) =>
+          org.goldenport.schema.XJson.fromJsonText(text).flatMap(org.goldenport.schema.XSemiStructuredData.fromJson)
+        case text: String if _legacy_record_array_fields.contains(field.key) =>
+          org.goldenport.schema.XJson.fromJsonText(text).flatMap { json =>
+            json.asArray match {
+              case Some(values) => values.foldLeft(Consequence.success(Vector.empty[Record])) { (records, value) =>
+                records.flatMap(items => org.goldenport.schema.XSemiStructuredData.fromJson(value).map(items :+ _))
+              }
+              case None => Consequence.valueInvalid("V0 Information requires its declared record array")
+            }
+          }
+        case _ => Consequence.success(field.value.single)
+      }
+      result.flatMap(current => decoded.map(value => current ++
+        Record(Vector(org.goldenport.record.Field(field.key, org.goldenport.record.Field.Value.Single(value))))))
+    }
+  }
 
   private def _legacy_record(record: Record, updatedat: Instant): Record =
     Record(record.fields.filterNot(_.key == "updatedAt")) ++
@@ -161,13 +190,21 @@ private[information] object InformationPersistenceMigration {
     } yield candidates
 
   private def _canonicalize_candidate(record: Record): Consequence[Record] =
-    record.getAny("binding") match {
-      case Some(binding: Record) =>
-        _canonicalize_binding(binding).map(
-          record.upsertSingle("binding", _)
-        )
-      case _ =>
-        Consequence.success(record)
+    _legacy_confidence(record).flatMap { candidate =>
+      candidate.getAny("binding") match {
+        case Some(binding: Record) =>
+          _canonicalize_binding(binding).map(candidate.upsertSingle("binding", _))
+        case _ => Consequence.success(candidate)
+      }
+    }
+
+  private def _legacy_confidence(record: Record): Consequence[Record] =
+    record.getAny("confidence") match {
+      case Some(decimal: BigDecimal) =>
+        val value = decimal.toDouble
+        if (value.isFinite) Consequence.success(record.upsertSingle("confidence", value))
+        else Consequence.valueInvalid("Legacy Information confidence requires a finite Double")
+      case _ => Consequence.success(record)
     }
 
   private def _canonicalize_binding(record: Record): Consequence[Record] =
@@ -178,8 +215,9 @@ private[information] object InformationPersistenceMigration {
 
   private def _normalize_legacy_binding(record: Record): Consequence[Record] =
     for {
+      confidence <- _legacy_confidence(record)
       rdfsubject <- _normalize_legacy_alias(
-        record,
+        confidence,
         "rdf_subject",
         "rdfSubject"
       )

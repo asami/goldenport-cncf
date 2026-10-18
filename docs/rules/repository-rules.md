@@ -271,7 +271,13 @@ Free Monad / interpreter モデルでは:
 
 ## Collection / Group idiom
 
-- Collection / Group 系の型は以下を必ず提供すること:
+Collection representation follows
+[Collection and Semi-Structured Data Representation](collection-and-semi-structured-data.md):
+cardinality and meaning determine public/domain types; internal input capability
+abstractions do not change the standard Vector-based representation.
+
+- 自然な empty を持つ Collection / Group 系の型は以下を必ず提供すること
+  （NonEmpty や必須要素を持つ型には適用しない）:
   - default empty 引数
   - canonical empty 値
   - zero-arg apply()（binary compatibility のため）

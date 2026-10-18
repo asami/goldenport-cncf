@@ -59,7 +59,7 @@ import org.simplemodeling.model.directive.Update
  *  version May. 11, 2026
  *  version Aug.  1, 2026
  *  version Sep. 19, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -1831,6 +1831,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     persistedrecord: Boolean,
     capturecoherence: Boolean = false
   ): Consequence[Unit] = {
+    given ExecutionContext = uow.executionContext
     (for {
       r <- record
       collection <- _component_option.flatMap { component =>
@@ -1846,14 +1847,14 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
           collection.descriptor.revisionBinding match {
             case Some(binding) =>
               binding.decodeEntity(r)(
-                EntityPersistent._decode_store_record(
+                EntityPersistent._decode_provider_record(
                   persistent,
                   collection.descriptor.collectionId,
                   _
                 )
               )
             case None =>
-              EntityPersistent._decode_store_record(
+              EntityPersistent._decode_provider_record(
                 persistent,
                 collection.descriptor.collectionId,
                 r

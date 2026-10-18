@@ -2,6 +2,7 @@ package org.goldenport.cncf.job
 
 import java.math.{MathContext, RoundingMode}
 import java.nio.charset.StandardCharsets
+import cats.data.NonEmptyVector
 import io.circe.{Json, JsonNumber}
 import io.circe.parser.parse
 import org.goldenport.Consequence
@@ -16,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  4, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.scalatest.tags.Slow
@@ -72,7 +73,7 @@ final class DurableJobOperationResponseCodecSpec extends AnyWordSpec with Matche
 
   "Native nested typed atoms" should _scenario("ORC3") {
     "retain widths, duplicates, collections, finite bits and raw decimal context at their boundaries" in {
-      Given("ORC3: ordered duplicate/null/empty nested Records, List and Vector, all numeric widths, finite extreme bits and a nondefault unrounded decimal context")
+      Given("ORC3: ordered duplicate/empty nested Records and Core-canonical collections, all numeric widths, finite extreme bits and a nondefault unrounded decimal context")
       val context = new MathContext(2, RoundingMode.DOWN)
       val decimal = new BigDecimal(new java.math.BigDecimal(new java.math.BigInteger("1234500"), 4), context)
       val numbers: Vector[Any] = Vector(Byte.MinValue, Byte.MaxValue, Short.MinValue, Short.MaxValue,
@@ -80,7 +81,7 @@ final class DurableJobOperationResponseCodecSpec extends AnyWordSpec with Matche
         -0.0d, Double.MinPositiveValue, Double.MaxValue, BigInt("9" * 1024), decimal,
         new BigDecimal(new java.math.BigDecimal(java.math.BigInteger.ONE, -16384), new MathContext(1024, RoundingMode.UNNECESSARY)),
         new BigDecimal(new java.math.BigDecimal(java.math.BigInteger.ONE, 16384), MathContext.UNLIMITED))
-      val record = Record(Vector(Field("dup", Field.Value.Single(null)), Field("dup", Field.Value.Single(Record())),
+      val record = Record(Vector(Field("dup", Field.Value.Single("first")), Field("dup", Field.Value.Single(Record())),
         Field("list", Field.Value.Single(List("x", Vector(1.toByte)))), Field("vector", Field.Value.Single(Vector("x", List(1.toByte))))) ++
         numbers.zipWithIndex.map { case (value, index) => Field(s"n$index", Field.Value.Single(value)) })
       val response = OperationResponse.RecordResponse(record)
@@ -99,9 +100,26 @@ final class DurableJobOperationResponseCodecSpec extends AnyWordSpec with Matche
     }
   }
 
+  "Core-owned Record construction" should {
+    "omit null attributes and canonicalize sequence containers before codec admission" in {
+      Given("public Core inputs containing a null attribute, ordered duplicate keys, an empty child and nested List values")
+      val fields = Vector("absent" -> null, "dup" -> "first", "dup" -> Record.empty,
+        "items" -> List("x", Vector("x")))
+      When("the Core C constructor admits those inputs")
+      val constructed = Record.createC(fields)
+      Then("the valid Record has no null property and keeps ordered duplicates, empty structures and Vector sequences")
+      constructed.isSuccess shouldBe true
+      val record = constructed.toOption.get
+      record.fields.map(_.key) shouldBe Vector("dup", "dup", "items")
+      record.getAny("absent") shouldBe None
+      record.fields(1).value.single shouldBe Record.empty
+      record.getAny("items") shouldBe Some(Vector("x", Vector("x")))
+    }
+  }
+
   "Hostile unsupported values" should _scenario("ORC4") {
     "refuse without invoking observation, getter, provider or conversion capabilities" in {
-      Given("ORC4: unsupported response families, untrusted subclasses, unknown Single-like values and arbitrary atoms with throwing counting methods")
+      Given("ORC4: genuine hostile response families and opaque hostile atoms held by valid public Record construction, with throwing counting methods")
       val counter = new Counter
       val unknown = new Object {
         override def toString: String = counter.touch()
@@ -112,35 +130,11 @@ final class DurableJobOperationResponseCodecSpec extends AnyWordSpec with Matche
         override def display: String = counter.touch()
         override def show: String = counter.touch()
       }
-      val record = new Record(Vector.empty) {
-        override def print: String = counter.touch()
-        override def getAny(key: String): Option[Any] = counter.touch()
-      }
-      val field = new Field("private-key", Field.Value.Single("private-body")) {
-        override def print: String = counter.touch()
-      }
-      val single = new Field.Value.Single("private-body") {
-        override def print: String = counter.touch()
-      }
-      val fieldvalue = new Field.Value {
-        def single: Any = counter.touch()
-        def print: String = counter.touch()
-      }
       val closure = () => counter.touch()
-      val customseq = new scala.collection.immutable.AbstractSeq[Any] {
-        def length: Int = counter.touch()
-        def apply(index: Int): Any = counter.touch()
-        def iterator: Iterator[Any] = counter.touch()
-      }
       val values: Vector[OperationResponse] = Vector(null, OperationResponse.Opaque(unknown), OperationResponse.Http(null), response,
-        OperationResponse.RecordResponse(record), OperationResponse.RecordResponse(Record(Vector(field))),
-        OperationResponse.RecordResponse(Record(Vector(Field("x", single)))),
-        OperationResponse.RecordResponse(Record(Vector(Field("x", fieldvalue)))),
-        OperationResponse.RecordResponse(null), OperationResponse.RecordResponse(Record(null)),
-        OperationResponse.RecordResponse(Record(Vector(null))), OperationResponse.RecordResponse(Record(Vector(Field(null, Field.Value.Single(1))))),
-        OperationResponse.RecordResponse(Record(Vector(Field("x", null)))), OperationResponse.Json(null), OperationResponse.Yaml(null),
+        OperationResponse.RecordResponse(null), OperationResponse.Json(null), OperationResponse.Yaml(null),
         OperationResponse.Scalar(null.asInstanceOf[String]), OperationResponse.Scalar(1)(using null)) ++
-        Vector[Any](unknown, closure, Map("x" -> 1), Array(1), Set(1), customseq, Some(1), (), 'x',
+        Vector[Any](unknown, closure, Map("x" -> 1), Set(1), Some(1), (), 'x',
           new java.math.BigInteger("1"), java.math.BigDecimal.ONE).map(_record_response)
       When("each hostile value is offered to the closed producer")
       val results = values.map(DurableJobOperationResponseCodec.encode)
@@ -152,7 +146,7 @@ final class DurableJobOperationResponseCodecSpec extends AnyWordSpec with Matche
 
   "Closed canonical consumer admission" should _scenario("ORC5") {
     "refuse malformed, noncanonical, numerically invalid and Unicode-invalid text" in {
-      Given("ORC5: independently handwritten hostile under-limit bodies, wrong descriptors, duplicate keys and bounded numeric or surrogate violations")
+      Given("ORC5: actual malformed field/wire shapes, hostile under-limit bodies, wrong descriptors, duplicate keys and bounded numeric or surrogate violations")
       val valid = _prefix + """{"kind":"void"}}"""
       val bodies = Vector("""{"kind":"other"}""", """{"kind":"void","extra":1}""", """{}""",
         """{"kind":1}""", """{"kind":"void","kind":"void"}""", """{"kind":"scalar"}""",
@@ -174,6 +168,9 @@ final class DurableJobOperationResponseCodecSpec extends AnyWordSpec with Matche
         """{"kind":"record","fields":[{"key":"x","value":{"type":"bigdecimal","unscaled":"1","scale":0,"precision":1025,"rounding":"UP"}}]}""",
         """{"kind":"record","fields":[{"key":"x","value":{"type":"bigdecimal","unscaled":"1","scale":0,"precision":0,"rounding":"other"}}]}""",
         """{"kind":"record","fields":[{"key":"x"}]}""", """{"kind":"record","fields":null}""",
+        """{"kind":"record","fields":[null]}""", """{"kind":"record","fields":[{"key":null,"value":{"type":"int","value":1}}]}""",
+        """{"kind":"record","fields":[{"key":"x","value":null}]}""",
+        """{"kind":"record","fields":[{"key":"x","value":{}}]}""",
         """{"kind":"json","value":{"k":"\ud800"}}""", """{"kind":"json","value":{"\udc00":0}}""",
         """{"kind":"yaml","value":"\ud800"}""", """{"kind":"yaml","value":"\u0061"}""",
         """{"kind":"yaml","value":"""" + '\ud800' + "\"}",
@@ -393,6 +390,135 @@ final class DurableJobOperationResponseCodecSpec extends AnyWordSpec with Matche
     }
   }
 
+  "Retained format1 Record input" should _scenario("ORC13") {
+    "omit field nulls while preserving ordered duplicates, empty structures and raw JSON lexemes" in {
+      Given("ORC13: independently handwritten full retained format1 text with nested null fields, old lists, duplicate Records and raw JSON documents")
+      val wire = """{"format":{"schemaId":"cncf.job-operation-response","version":1},"response":{"kind":"record","fields":[{"key":"absent","value":{"type":"null"}},{"key":"dup","value":{"type":"string","value":"first"}},{"key":"child","value":{"type":"record","fields":[{"key":"gone","value":{"type":"null"}},{"key":"empty","value":{"type":"record","fields":[]}},{"key":"array","value":{"type":"list","values":[]}}]}},{"key":"dup","value":{"type":"record","fields":[]}},{"key":"items","value":{"type":"list","values":[{"type":"record","fields":[{"key":"gone","value":{"type":"null"}},{"key":"id","value":{"type":"int","value":2}}]},{"type":"record","fields":[]},{"type":"record","fields":[{"key":"id","value":{"type":"int","value":2}}]}]}},{"key":"mixed","value":{"type":"vector","values":[{"type":"list","values":[{"type":"int","value":2},{"type":"int","value":1},{"type":"int","value":2}]},{"type":"vector","values":[]}]}},{"key":"rawNull","value":{"type":"json","value":null}},{"key":"rawDocument","value":{"type":"json","value":{"z":1.2300,"a":null,"empty":{},"array":[]}}},{"key":"rawArray","value":{"type":"json","value":[null,1e+02,-0.00,{}]}}]}}"""
+      val canonical = """{"format":{"schemaId":"cncf.job-operation-response","version":1},"response":{"kind":"record","fields":[{"key":"dup","value":{"type":"string","value":"first"}},{"key":"child","value":{"type":"record","fields":[{"key":"empty","value":{"type":"record","fields":[]}},{"key":"array","value":{"type":"vector","values":[]}}]}},{"key":"dup","value":{"type":"record","fields":[]}},{"key":"items","value":{"type":"vector","values":[{"type":"record","fields":[{"key":"id","value":{"type":"int","value":2}}]},{"type":"record","fields":[]},{"type":"record","fields":[{"key":"id","value":{"type":"int","value":2}}]}]}},{"key":"mixed","value":{"type":"vector","values":[{"type":"vector","values":[{"type":"int","value":2},{"type":"int","value":1},{"type":"int","value":2}]},{"type":"vector","values":[]}]}},{"key":"rawNull","value":{"type":"json","value":null}},{"key":"rawDocument","value":{"type":"json","value":{"z":1.2300,"a":null,"empty":{},"array":[]}}},{"key":"rawArray","value":{"type":"json","value":[null,1e+02,-0.00,{}]}}]}}"""
+      val item = Record.data("id" -> 2)
+      val rawdocument = Json.obj("z" -> Json.fromJsonNumber(JsonNumber.fromDecimalStringUnsafe("1.2300")),
+        "a" -> Json.Null, "empty" -> Json.obj(), "array" -> Json.arr())
+      val rawarray = Json.arr(Json.Null, Json.fromJsonNumber(JsonNumber.fromDecimalStringUnsafe("1e+02")),
+        Json.fromJsonNumber(JsonNumber.fromDecimalStringUnsafe("-0.00")), Json.obj())
+      val expected = Record.create(Vector("dup" -> "first",
+        "child" -> Record.data("empty" -> Record.empty, "array" -> Vector.empty), "dup" -> Record.empty,
+        "items" -> Vector(item, Record.empty, item), "mixed" -> Vector(Vector(2, 1, 2), Vector.empty),
+        "rawNull" -> Json.Null, "rawDocument" -> rawdocument, "rawArray" -> rawarray))
+      When("the retained literal is decoded and its canonical semantic response is encoded again")
+      val decoded = DurableJobOperationResponseCodec.decode(wire)
+      val reencoded = decoded.flatMap(DurableJobOperationResponseCodec.encode)
+      val canonicaldecoded = DurableJobOperationResponseCodec.decode(canonical)
+      Then("the independently constructed normalized value keeps exact field and element order and the new wire differs only by declared omission and vector normalization")
+      decoded.toOption.map(_observe) shouldBe Some(_observe(OperationResponse.RecordResponse(expected)))
+      val record = decoded.toOption.get.asInstanceOf[OperationResponse.RecordResponse].record
+      record.fields.map(_.key) shouldBe Vector("dup", "child", "dup", "items", "mixed", "rawNull", "rawDocument", "rawArray")
+      record.getAny("absent") shouldBe None
+      record.getRecord("child").get.fields.map(_.key) shouldBe Vector("empty", "array")
+      record.getAny("items") shouldBe Some(Vector(item, Record.empty, item))
+      record.getAny("mixed") shouldBe Some(Vector(Vector(2, 1, 2), Vector.empty))
+      record.getAny("rawNull") shouldBe Some(Json.Null)
+      record.getAny("rawDocument").get.asInstanceOf[Json].noSpaces shouldBe """{"z":1.2300,"a":null,"empty":{},"array":[]}"""
+      record.getAny("rawArray").get.asInstanceOf[Json].noSpaces shouldBe """[null,1e+02,-0.00,{}]"""
+      reencoded.toOption shouldBe Some(canonical)
+      canonicaldecoded.toOption.map(_observe) shouldBe decoded.toOption.map(_observe)
+    }
+  }
+
+  "Nonempty semantic collections" should _scenario("ORC14") {
+    "encode actual NonEmptyVectors as vector atoms and reconstruct declared nonempty types through Core" in {
+      Given("ORC14: actual nested Cats NonEmptyVectors retained by valid Core construction, with an empty ordinary collection")
+      val numbers = NonEmptyVector.of(2, 1, 2)
+      val item = Record.data("numbers" -> numbers, "empty" -> Record.empty)
+      val items = NonEmptyVector.of(item, item)
+      val source = Record.data("items" -> items, "empty" -> Vector.empty)
+      val wire = """{"format":{"schemaId":"cncf.job-operation-response","version":1},"response":{"kind":"record","fields":[{"key":"items","value":{"type":"vector","values":[{"type":"record","fields":[{"key":"numbers","value":{"type":"vector","values":[{"type":"int","value":2},{"type":"int","value":1},{"type":"int","value":2}]}},{"key":"empty","value":{"type":"record","fields":[]}}]},{"type":"record","fields":[{"key":"numbers","value":{"type":"vector","values":[{"type":"int","value":2},{"type":"int","value":1},{"type":"int","value":2}]}},{"key":"empty","value":{"type":"record","fields":[]}}]}]}},{"key":"empty","value":{"type":"vector","values":[]}}]}}"""
+      When("the actual nonempty response is encoded, the literal decoded and Core typed readers reconstruct its declared cardinalities")
+      val encoded = DurableJobOperationResponseCodec.encode(OperationResponse.RecordResponse(source))
+      val decoded = DurableJobOperationResponseCodec.decode(wire)
+        .map(_.asInstanceOf[OperationResponse.RecordResponse].record)
+      val typeditems = decoded.flatMap(_.asC[NonEmptyVector[Record]]("items"))
+      val typednumbers = typeditems.flatMap(_.head.asC[NonEmptyVector[Int]]("numbers"))
+      val empty = decoded.flatMap(_.asC[NonEmptyVector[Record]]("empty"))
+      val reencoded = decoded.flatMap(record => DurableJobOperationResponseCodec.encode(OperationResponse.RecordResponse(record)))
+      Then("wire atoms use vector, untyped input stays Vector and explicit Core nonempty reads retain duplicates and order while refusing empty input")
+      source.getAny("items") shouldBe Some(items)
+      item.getAny("numbers") shouldBe Some(numbers)
+      encoded.toOption shouldBe Some(wire)
+      decoded.toOption.get.getAny("items") shouldBe Some(Vector(
+        Record.data("numbers" -> Vector(2, 1, 2), "empty" -> Record.empty),
+        Record.data("numbers" -> Vector(2, 1, 2), "empty" -> Record.empty)))
+      typednumbers.toOption shouldBe Some(numbers)
+      typeditems.toOption.get.toVector.map(_.getRecord("empty")) shouldBe Vector(Some(Record.empty), Some(Record.empty))
+      empty.isSuccess shouldBe false
+      reencoded.toOption shouldBe Some(wire)
+    }
+  }
+
+  "Retained null position and grammar admission" should _scenario("ORC15") {
+    "refuse root and every sequence null without shifting positions or weakening closed syntax" in {
+      Given("ORC15: root null atoms, first/middle/last list and vector nulls, nested null positions and malformed or reordered retained field atoms")
+      val nullatom = """{"type":"null"}"""
+      val integer = """{"type":"int","value":1}"""
+      val sequences = Vector("list", "vector").flatMap { kind =>
+        (0 to 2).map { position =>
+          val values = Vector.fill(3)(integer).updated(position, nullatom).mkString(",")
+          s"""{"type":"$kind","values":[$values]}"""
+        }
+      }
+      val nested = Vector(
+        """{"type":"list","values":[{"type":"int","value":1},{"type":"vector","values":[{"type":"int","value":1},{"type":"null"}]}]}""",
+        """{"type":"vector","values":[{"type":"list","values":[{"type":"null"},{"type":"int","value":1}]}]}""",
+        """{"type":"list","values":[{"type":"record","fields":[{"key":"child","value":{"type":"vector","values":[{"type":"null"}]}}]}]}""")
+      val malformed = Vector("""{"type":"null","extra":0}""", """{"extra":0,"type":"null"}""",
+        """{"type":"null","type":"null"}""", """{"type":"unknown","values":[]}""",
+        """{"values":[],"type":"list"}""", """{"value":1,"type":"int"}""")
+      val fields = (sequences ++ nested ++ malformed).map(atom =>
+        _prefix + """{"kind":"record","fields":[{"key":"x","value":""" + atom + "}]}}")
+      val controls = Vector(
+        _prefix + nullatom + "}",
+        _prefix + """{"kind":"scalar","value":{"type":"null"}}}""",
+        _prefix + """{"kind":"record","fields":[{"value":{"type":"null"},"key":"x"}]}}""",
+        _prefix + """{"fields":[],"kind":"record"}}""",
+        """{"format":{"version":1,"schemaId":"cncf.job-operation-response"},"response":{"kind":"void"}}""")
+      When("the consumer admits each retained null placement and malformed closed grammar")
+      val results = (fields ++ controls).map(DurableJobOperationResponseCodec.decode)
+      Then("every invalid input yields the unchanged constant redacted refusal instead of a filtered or partially reconstructed response")
+      results.foreach(_refused)
+    }
+  }
+
+  "Retained shape normalization laws" should _scenario("ORC16") {
+    "connect shrinking retained list/null input to independent Vector semantics and canonical new output" in {
+      Given("ORC16: an ordinary shrinking Vector[Int] generator of zero to six ordered values with duplicates allowed")
+      val generator = Gen.choose(0, 6).flatMap(size => Gen.listOfN(size, Gen.choose(-9, 9))).map(_.toVector)
+      val property = Prop.forAll(generator) { values =>
+        Given("ORC16 generated case: independently assembled retained null fields and mixed old list/vector atoms for the generated ordered values")
+        val atoms = values.map(value => s"""{"type":"int","value":$value}""").mkString(",")
+        val wire = _prefix + """{"kind":"record","fields":[{"key":"gone","value":{"type":"null"}},{"key":"items","value":{"type":"list","values":[{"type":"record","fields":[{"key":"gone","value":{"type":"null"}},{"key":"values","value":{"type":"list","values":[""" +
+          atoms + """]}}]},{"type":"record","fields":[]},{"type":"vector","values":[]}]}},{"key":"items","value":{"type":"list","values":[]}}]}}"""
+        val canonical = _prefix + """{"kind":"record","fields":[{"key":"items","value":{"type":"vector","values":[{"type":"record","fields":[{"key":"values","value":{"type":"vector","values":[""" +
+          atoms + """]}}]},{"type":"record","fields":[]},{"type":"vector","values":[]}]}},{"key":"items","value":{"type":"vector","values":[]}}]}}"""
+        val expected = OperationResponse.RecordResponse(Record.create(Vector(
+          "items" -> Vector(Record.data("values" -> values), Record.empty, Vector.empty), "items" -> Vector.empty)))
+        When("the retained text is decoded and encoded through the real codec")
+        val decoded = DurableJobOperationResponseCodec.decode(wire)
+        val encoded = decoded.flatMap(DurableJobOperationResponseCodec.encode)
+        val canonicaldecoded = DurableJobOperationResponseCodec.decode(canonical)
+        Then("omission, duplicate properties, empty structures and generated element order agree with the independent semantic and wire expectations")
+        decoded.toOption.map(_observe) shouldBe Some(_observe(expected))
+        encoded.toOption shouldBe Some(canonical)
+        canonicaldecoded.toOption.map(_observe) shouldBe Some(_observe(expected))
+        true
+      }
+      When("ScalaCheck checks the connected retained-shape property with ordinary shrinking and at least 100 successful cases")
+      val checked = Test.check(Test.Parameters.default.withInitialSeed(Seed(11516001L)).withMinSuccessfulTests(100), property)
+      Then("the property passes with at least 100 successes and zero discarded cases")
+      checked.passed shouldBe true
+      checked.succeeded should be >= 100
+      checked.discarded shouldBe 0
+    }
+  }
+
   private final class Counter {
     private var _count = 0
     def count: Int = _count
@@ -461,7 +587,7 @@ final class DurableJobOperationResponseCodecSpec extends AnyWordSpec with Matche
 
   private def _atom_generator(depth: Int): Gen[Any] = {
     val primitive: Gen[Any] = Gen.oneOf(
-      Gen.const(null: Any), _string_generator.map(value => value: Any), Gen.oneOf(true, false).map(value => value: Any),
+      _string_generator.map(value => value: Any), Gen.oneOf(true, false).map(value => value: Any),
       Gen.choose(Byte.MinValue.toInt, Byte.MaxValue.toInt).map(value => value.toByte: Any),
       Gen.choose(Short.MinValue.toInt, Short.MaxValue.toInt).map(value => value.toShort: Any),
       Gen.choose(Int.MinValue, Int.MaxValue).map(value => value: Any),

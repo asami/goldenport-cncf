@@ -26,7 +26,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Native retained capacity, persisted ambiguous reservations and fenced recovery.
  *
  * @since   Oct.  1, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.scalatest.tags.Slow
@@ -44,7 +44,8 @@ final class DurableJobStorageQuotaSpec extends AnyWordSpec with Matchers with Gi
         _with_database(policy) { fixture =>
           given ExecutionContext = fixture.context
           When("both records fill native capacity and a third identity requests admission")
-          val firstsnapshot = _success(fixture.store.create(first, _access))
+          val firstresult = fixture.store.create(first, _access)
+          val firstsnapshot = withClue(fixture.entity.diagnostic) { _success(firstresult) }
           val secondsnapshot = _success(fixture.store.create(second, _access))
           val writes = fixture.provider.jobcreates
           val refused = fixture.store.create(_record("c"), _access)
@@ -1036,6 +1037,16 @@ final class DurableJobStorageQuotaSpec extends AnyWordSpec with Matchers with Gi
   }
 
   private final class ObservedEntityStore extends StandardEntityStore {
+    private var _diagnostic = ""
+    def diagnostic: String = _diagnostic
+    private def _observe[A](label: String, result: Consequence[A]): Unit = {
+      val message = result match {
+        case Consequence.Success(_) => "success"
+        case Consequence.Failure(conclusion) => conclusion.causes.map(cause =>
+          cause.display + " " + cause.observation.cause.descriptor.facets.mkString(",")).mkString("\n")
+      }
+      _diagnostic += label + ": " + message + "\n"
+    }
     var beforequotacreate: Option[() => Unit] = None
     var beforequota: Option[() => Unit] = None
     var beforejob: Option[() => Unit] = None
@@ -1063,6 +1074,7 @@ final class DurableJobStorageQuotaSpec extends AnyWordSpec with Matchers with Gi
       }
       if (job && failcreatebefore) throw new IllegalStateException("private-provider-secret /private/path raw-json")
       val result = super.create(entity, options)
+      _observe("create " + tc.collection(entity).name, result)
       if (job && result.isSuccess && losecreateack) throw new IllegalStateException("private-lost-create-ack")
       result
     }
@@ -1089,6 +1101,7 @@ final class DurableJobStorageQuotaSpec extends AnyWordSpec with Matchers with Gi
         }
       }
       val result = super.updateDetached(changes, expectedRevision, executionPolicy)
+      _observe("update " + tc.id(changes).collection.name, result)
       if (!job && result.isSuccess && losequotaack) throw new IllegalStateException("private-lost-quota-ack")
       if (job && result.isSuccess) {
         val action = afterjob
@@ -1112,7 +1125,7 @@ final class DurableJobStorageQuotaSpec extends AnyWordSpec with Matchers with Gi
   }
 
   private final class ObservedDataStore(val delegate: SqlDataStore)
-      extends DataStore with SearchableDataStore with EntityVersionedMutationDataStore {
+      extends DataStore with SearchableDataStore with EntityVersionedMutationDataStore with EntityCreateDataStore {
     var creates = 0
     var jobcreates = 0
     var jobupdates = 0
@@ -1126,6 +1139,11 @@ final class DurableJobStorageQuotaSpec extends AnyWordSpec with Matchers with Gi
     def isAccept(cid: DataStore.CollectionId): Boolean = accept(cid)
     override def entityMutationProviderCapabilities: EntityMutationProviderCapabilities =
       if (nativecas) delegate.entityMutationProviderCapabilities else EntityMutationProviderCapabilities.empty
+    override def createEntity(plan: EntityCreatePlan)(using ctx: ExecutionContext): Consequence[EntityCreateResult] = {
+      creates += 1
+      if (plan.collection == _job_collection) jobcreates += 1
+      delegate.createEntity(plan)
+    }
     def create(collection: DataStore.CollectionId, id: DataStore.EntryId, record: Record)(using ctx: ExecutionContext): Consequence[Unit] = {
       creates += 1
       if (collection == _job_collection) jobcreates += 1
@@ -1178,9 +1196,12 @@ final class DurableJobStorageQuotaSpec extends AnyWordSpec with Matchers with Gi
   }
 
   private final class OpaqueDataStore(delegate: ObservedDataStore)
-      extends DataStore with EntityVersionedMutationDataStore {
+      extends DataStore with EntityVersionedMutationDataStore with EntityCreateDataStore {
     def isAccept(cid: DataStore.CollectionId): Boolean = true
     override def entityMutationProviderCapabilities: EntityMutationProviderCapabilities = delegate.entityMutationProviderCapabilities
+    override def createEntity(plan: EntityCreatePlan)(using ctx: ExecutionContext): Consequence[EntityCreateResult] = {
+      delegate.createEntity(plan)
+    }
     def create(collection: DataStore.CollectionId, id: DataStore.EntryId, record: Record)(using ctx: ExecutionContext): Consequence[Unit] =
       delegate.create(collection, id, record)
     def load(collection: DataStore.CollectionId, id: DataStore.EntryId)(using ctx: ExecutionContext): Consequence[Option[Record]] =

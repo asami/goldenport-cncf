@@ -14,7 +14,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *
  * @since   Apr. 27, 2026
  *  version Apr. 28, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BlobRepository {
@@ -95,13 +96,13 @@ object BlobRecordCodec {
     _record(blob.id, blob.kind, blob.sourceMode, blob.filename, blob.contentType, blob.byteSize, blob.digest, blob.storageRef, blob.externalUrl, blob.accessUrl, Some(blob.createdAt), Some(blob.updatedAt), blob.attributes)
 
   def toStoreRecord(blob: Blob): Record =
-    toRecord(blob)
+    toRecord(blob).upsertSingle("attributes", Record.data(blob.attributes.toVector.sortBy(_._1)*).toJsonString)
 
   def toRecord(blob: BlobCreate): Record =
     _record(blob.id, blob.kind, blob.sourceMode, blob.filename, blob.contentType, blob.byteSize, blob.digest, blob.storageRef, blob.externalUrl, blob.accessUrl, None, None, blob.attributes)
 
   def toStoreRecord(blob: BlobCreate): Record =
-    toRecord(blob)
+    toRecord(blob).upsertSingle("attributes", Record.data(blob.attributes.toVector.sortBy(_._1)*).toJsonString)
 
   def fromRecord(record: Record): Consequence[Blob] =
     fromStoreRecord(record)
@@ -115,6 +116,7 @@ object BlobRecordCodec {
       createdat <- _instant(record, "createdAt", "created_at").map(Consequence.success).getOrElse(Consequence.argumentMissing("createdAt"))
       updatedat <- _instant(record, "updatedAt", "updated_at").map(Consequence.success).getOrElse(Consequence.argumentMissing("updatedAt"))
       storageref <- _storage_ref(record)
+      attributes <- _attributes(record)
     } yield Blob(
       id = id,
       kind = kind,
@@ -128,7 +130,7 @@ object BlobRecordCodec {
       accessUrl = access,
       createdAt = createdat,
       updatedAt = updatedat,
-      attributes = _attributes(record)
+      attributes = attributes
     )
 
   private def _record(
@@ -225,10 +227,24 @@ object BlobRecordCodec {
       case other => scala.util.Try(Instant.parse(other.toString.trim)).toOption
     }.nextOption()
 
-  private def _attributes(record: Record): Map[String, String] =
+  private def _attributes(record: Record): Consequence[Map[String, String]] =
     record.getAny("attributes") match {
-      case Some(rec: Record) => rec.asMap.map { case (k, v) => k -> v.toString }
-      case Some(map: Map[?, ?]) => map.iterator.collect { case (k: String, v) => k -> v.toString }.toMap
-      case _ => Map.empty
+      case None => Consequence.success(Map.empty)
+      case Some(rec: Record) => Consequence.success(rec.asMap.map { case (k, v) => k -> v.toString })
+      case Some(map: Map[?, ?]) => Consequence.success(map.iterator.collect { case (k: String, v) => k -> v.toString }.toMap)
+      case Some(text: String) =>
+        io.circe.parser.parse(text).fold(
+          _ => Consequence.valueInvalid("Invalid metadata attributes JSON"),
+          json => json.asObject match {
+            case Some(fields) =>
+              fields.toVector.foldLeft(Consequence.success(Map.empty[String, String])) { case (result, (key, value)) =>
+                result.flatMap(values => value.asString match {
+                  case Some(text) => Consequence.success(values.updated(key, text))
+                  case None => Consequence.valueInvalid("Metadata attributes JSON member must be a String")
+                })
+              }
+            case None => Consequence.valueInvalid("Metadata attributes JSON must be an object")
+          })
+      case Some(_) => Consequence.valueInvalid("Invalid metadata attributes value")
     }
 }

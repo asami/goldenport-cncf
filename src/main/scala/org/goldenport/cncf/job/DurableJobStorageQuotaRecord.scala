@@ -10,7 +10,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Closed operational values. No signed Job schema or authorization is stored here.
  *
  * @since   Oct.  1, 2026
- * @version Oct.  1, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] final case class DurableJobStorageQuotaPending(
@@ -67,6 +67,8 @@ private[job] final case class DurableJobStorageQuotaEntity(
 }
 
 private[job] object DurableJobStorageQuotaEntity {
+  private val _store_row_mapping = DurableJobStoreMapping.text(Vector("canonicalJson"))
+
   val Collection: EntityCollectionId = EntityCollectionId("cncf", "builtin", "durableJobStorageQuota")
 
   def entityId: Consequence[EntityId] =
@@ -79,6 +81,7 @@ private[job] object DurableJobStorageQuotaEntity {
     )
 
   given EntityPersistent[DurableJobStorageQuotaEntity] with {
+    override def storeRowMapping: Option[org.goldenport.cncf.entity.EntityStoreRowMapping] = Some(_store_row_mapping)
     def id(entity: DurableJobStorageQuotaEntity): EntityId = entity.id
     def toRecord(entity: DurableJobStorageQuotaEntity): Record = entity.toRecord()
     override def toStoreRecord(entity: DurableJobStorageQuotaEntity): Record = entity.toRecord()
@@ -94,6 +97,7 @@ private[job] object DurableJobStorageQuotaEntity {
   }
 
   given EntityPersistentCreate[DurableJobStorageQuotaEntity] with {
+    override def storeRowMapping: Option[org.goldenport.cncf.entity.EntityStoreRowMapping] = Some(_store_row_mapping)
     def id(entity: DurableJobStorageQuotaEntity): Option[EntityId] = Some(entity.id)
     def collection(entity: DurableJobStorageQuotaEntity): EntityCollectionId = Collection
     def toRecord(entity: DurableJobStorageQuotaEntity): Record = entity.toRecord()

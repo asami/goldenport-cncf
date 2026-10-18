@@ -21,7 +21,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRe
  * Actual native providers with measured delegates and acknowledgement fault sites.
  *
  * @since   Oct. 3, 2026
- * @version Oct. 3, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] object DurableJobOperationalMetricsFixtures {
@@ -253,11 +253,15 @@ private[job] object DurableJobOperationalMetricsFixtures {
   }
 
   final class MeasuredDataStore(val delegate: SqlDataStore)
-    extends DataStore with SearchableDataStore with EntityVersionedMutationDataStore {
+    extends DataStore with SearchableDataStore with EntityVersionedMutationDataStore with EntityCreateDataStore {
     private var _calls = Vector.empty[String]
     def calls: Vector[String] = _calls
     def isAccept(cid: DataStore.CollectionId): Boolean = true
     override def entityMutationProviderCapabilities: EntityMutationProviderCapabilities = delegate.entityMutationProviderCapabilities
+    override def createEntity(plan: EntityCreatePlan)(using ctx: ExecutionContext): Consequence[EntityCreateResult] = {
+      _calls :+= "createEntity"
+      delegate.createEntity(plan)
+    }
     def create(collection: DataStore.CollectionId, id: DataStore.EntryId, record: Record)(using ctx: ExecutionContext): Consequence[Unit] = {
       _calls :+= "create"; delegate.create(collection, id, record)
     }

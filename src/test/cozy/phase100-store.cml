@@ -1,0 +1,34 @@
+# ENTITY
+
+## Proposal
+
+### ATTRIBUTE
+
+| name             | type                | multiplicity |
+|------------------+---------------------+--------------|
+| id               | entityid            | 1            |
+| originalProposal | String              | 1            |
+| payload          | XJson               | 1            |
+| evidence         | XSemiStructuredData | 1            |
+| optionalPayload  | XJson               | ?            |
+| optionalEvidence | XSemiStructuredData | ?            |
+| payloads         | XJson               | *            |
+| evidences        | XSemiStructuredData | *            |
+| name             | name                | 1            |
+| quantity         | int                 | 1            |
+| active           | boolean             | 1            |
+| amount           | decimal             | 1            |
+| summary          | ProposalSummary     | 1            |
+| optionalSummary  | ProposalSummary     | ?            |
+| summaries        | ProposalSummary     | *            |
+
+# VALUE
+
+## ProposalSummary
+
+### ATTRIBUTE
+
+| name    | type   | multiplicity |
+|---------+--------+--------------|
+| caption | string | 1            |
+| rank    | int    | 1            |

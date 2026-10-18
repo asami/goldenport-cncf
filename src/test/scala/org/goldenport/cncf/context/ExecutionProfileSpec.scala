@@ -20,7 +20,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 15, 2026
- * @version Aug. 11, 2026
+ *  version Aug. 11, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ExecutionProfileSpec
@@ -393,7 +394,7 @@ final class ExecutionProfileSpec
           |  key: descriptor-run
           |  time:
           |    mode: manual
-          |    start-at: 2026-07-28T09:00:00Z
+          |    start-at: '2026-07-28T09:00:00Z'
           |  random:
           |    mode: seeded
           |    seed: descriptor-seed

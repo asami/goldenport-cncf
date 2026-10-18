@@ -307,13 +307,15 @@ taxonomy, include policy entity-conditional-transition.exact-value and preserve
 complete native schema/root/body/revision/readback. Native scalar type admission
 MUST NOT imply raw floating admission into the closed exact-value algebra.
 
-SQL WriteIfChanged comparison MUST apply the existing SQL column decoder only
-to Single(String) values in temporary comparison Records reconstructed in
-original Field key/order, omitting exact Single(Update.SetNull) comparison
-Fields as absent logical attributes. JSON object/array strings MUST correspond to the
-existing persisted Record/Vector read carriers; all other non-String Fields MUST retain
-their original values. Ordinary, scalar-looking and malformed JSON strings
-MUST retain exact text and significant whitespace. The generic comparison,
+The Phase100 physical-provider activation dated 2026-10-18 supersedes the
+earlier Phase96 inferred Record/Vector correspondence at this boundary.
+Under [R2/R8](datastore-logical-type-mapping.md#r2-physical-text-and-exact-string),
+plain SQL writers receive explicitly encoded text and readers retain every
+String verbatim, including valid JSON objects/arrays and their significant
+lexical whitespace. WriteIfChanged temporary comparison Records retain original
+Field keys/order and values, omitting only exact Single(Update.SetNull) Fields
+as absent attributes. They MUST NOT infer logical JSON equivalence. Declared
+logical reconstruction belongs to the selected mapper or explicit caller codec. The generic comparison,
 revision/exclusion rules, security complements, memory behavior and all global
 encoding/decoding contracts MUST remain unchanged. Desired writes and clear
 markers MUST NOT be normalized by this comparison boundary. ObservedRequired
@@ -333,10 +335,13 @@ values in -10–10, and both booleans. Its explicitly imported shrinker MUST
 reduce nonempty label/array lengths, nonzero arrays to all zero, or true
 booleans to false; generated inputs MUST NOT be filtered or discarded.
 
-Each sample MUST seed nested permission Records with owner(read=true,
-write=ownerwrite,execute=false), group(read=true,write=false,execute=false) and
-other(all false), an attributes Record(label,count), a raw Single(Vector[Long]),
-exact whitespace-padded note and malformed opaque text. Candidates MUST carry
+Each sample MUST explicitly encode its known nested permission Record with
+owner(read=true,write=ownerwrite,execute=false), group(read=true,write=false,
+execute=false) and other(all false), its attributes Record(label,count) and
+its Long Vector to physical JSON text before the plain SQL writer. Independently
+specified String expectations retain the exact readback. Exact whitespace-padded
+note and malformed opaque text remain unchanged. This is fixture-owned encoding,
+not an automatic provider or runtime-shape conversion. Candidates MUST carry
 independently written permission/attributes/numbers JSON strings. Replace MUST
 retain all loaded root Fields in key/order, replace only those three values
 and remove the managed revision; Patch MUST supply exactly those values.
@@ -360,9 +365,12 @@ changed state at expected two with another different side candidate MUST yield
 typed NoOp, full authoritative Fields, revision two and the full unchanged
 committed snapshot.
 
-Five deterministic raw-text cases per backend MUST cover whitespace-padded
-non-JSON text, malformed object text, malformed array text, true/false-looking
-strings and 1/2-looking strings. Repeating exact text with a different side
+The original five deterministic raw-text cases per backend MUST cover
+whitespace-padded non-JSON text, malformed object text, malformed array text,
+true/false-looking strings and 1/2-looking strings. Two additional cases MUST
+cover valid JSON object/array text with equal JSON contents but different
+lexical whitespace, proving the physical String rather than inferred JSON
+comparison contract. Repeating exact text with a different side
 candidate MUST yield NoOp at revision one with complete preservation; genuinely
 different text MUST yield Applied at revision two with exact changed text and
 side content, all other baseline keys and all unrelated targets unchanged.
@@ -407,7 +415,7 @@ total bounded PBT where applicable.
 | PG-E5, PG-E6, PG-E9 | [PostgresqlCanonicalMutationAcceptanceSpec](../../src/test/scala/org/goldenport/cncf/entity/PostgresqlCanonicalMutationAcceptanceSpec.scala): actual canonical update/body hydration, no-op/stale and authorization; typed prior-match physical/logical observed deletion, revision/guard/failure preservation and resident/View behavior. |
 | PG-E7, PG-E9, PG-E10 | [PostgresqlConditionalTransitionAcceptanceSpec](../../src/test/scala/org/goldenport/cncf/datastore/PostgresqlConditionalTransitionAcceptanceSpec.scala): actual source predicates, authoritative Create/Bind/NotMatched, collision/rollback/acknowledgement and independent same-root or shared-successor races. |
 | PG-E3, PG-E4, PG-E9 | [PostgresqlEntityCreatePropertySpec](../../src/test/scala/org/goldenport/cncf/datastore/PostgresqlEntityCreatePropertySpec.scala): positive pair, duplicate preservation and real no-orphan laws; each requires at least 100 successes and zero discards on bounded shared pools. |
-| PG-E2, PG-E5, PG-E9, PG-E10 | [SqlMutationAcknowledgementSafetySpec](../../src/test/scala/org/goldenport/cncf/datastore/SqlMutationAcknowledgementSafetySpec.scala): actual PostgreSQL, SQLite and MySQL create/versioned/conditional wrappers, direct/CAS/delete/read-only outcomes, known rejection, real commit then indeterminate/throw/null, rollback refusal and borrowed-connection discard; fixed Patch/Replace carrier correspondence and three total bounded shrinking real-SQL laws requiring >=100 successes and zero discards each, complete no-op/stale/permission-change root/side/revision snapshots, and five exact raw-text repeat/change cases per backend. |
+| PG-E2, PG-E5, PG-E9, PG-E10 | [SqlMutationAcknowledgementSafetySpec](../../src/test/scala/org/goldenport/cncf/datastore/SqlMutationAcknowledgementSafetySpec.scala): actual PostgreSQL, SQLite and MySQL create/versioned/conditional wrappers, direct/CAS/delete/read-only outcomes, known rejection, real commit then indeterminate/throw/null, rollback refusal and borrowed-connection discard; fixed Patch/Replace carrier correspondence and three total bounded shrinking real-SQL laws requiring >=100 successes and zero discards each, complete no-op/stale/permission-change root/side/revision snapshots, and seven exact raw-text repeat/change cases per backend (the original five plus two JSON lexical-whitespace cases). |
 | PG-E2, PG-E3, PG-E5 | [ContentBodyStoragePolicySpec](../../src/test/scala/org/goldenport/cncf/entity/ContentBodyStoragePolicySpec.scala): supplied pure legacy raw-null hydration and metadata law, distinct from SQL readback omission; eight exact-whitespace forced inline/overflow save/hydrate/repeat cases with position-preserving repeat Fields and exact Instance/name storage-address assertions, two additional total bounded shrinking actual-memory payload laws requiring >=100 successes and zero discards each, and twelve unchanged missing/NULL/empty/blank/SetNull planning cases preserving actual prior overflow state. |
 | PG-E5 | [EntityVersionedRecordMergeSpec](../../src/test/scala/org/goldenport/cncf/entity/EntityVersionedRecordMergeSpec.scala): all four Embedded/Detached omitted/changed-name cases and two retained total bounded shrinking laws requiring >=100 successes and zero discards; complete independently specified canonical security, exact unique ordered non-NULL Field correspondence, explicit SQL-null attribute absence and retained non-NULL empty Fields with safe diagnostics, identity/name/title retention and managed revision removal. |
 | PG-E1–PG-E11 supporting fixture | [PostgresqlPersistenceFixture](../../src/test/scala/org/goldenport/cncf/datastore/PostgresqlPersistenceFixture.scala): task-owned actual database and durability settings, independent pools/readers, canonical fixture delegation, real JDBC fault proxies and complete snapshots. |

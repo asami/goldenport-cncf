@@ -1,6 +1,9 @@
 # Phase 100: DataStore Logical Types, Storage Mapping and Recovery
 
-status=planned
+status=closed
+closed_at=2026-10-18
+release_binding=phase100-final-closure-20261018-01@1
+resumed_at=2026-10-17
 planned_at=2026-10-03
 renumbered_at=2026-10-05
 driver=textus-knowledge-workbench
@@ -9,7 +12,76 @@ producer_handoff=asami/cozy Phase 78
 
 Renumbered on 2026-10-05 from the local, uncommitted DataStore Phase 97 plan.
 GitHub Phase 97 (AI Audit) is authoritative; GitHub Phases 98 and 99 retain
-their existing allocations. The DataStore requirements and OPEN status are unchanged.
+their existing allocations. That renumbering preserved the DataStore requirements and their original OPEN status.
+
+## Migration execution history — 2026-10-17
+
+The user requests Phase 100 completion within the Workbench mac mini ->
+asamiair migration and reports Phase 96 complete/pushed. Canonical CNCF main
+and fetched origin/main select `e455716c`; Phase 96's CLOSED acceptance remains
+intact. The planning-only instruction below is historical and superseded by
+this development instruction, without changing the original Phase requirements.
+
+The migration WIP is integrated into the canonical CNCF/Core/Cozy main and
+SimpleModeler scala12 working trees, with integration commits pending. Core
+logical types, producer declarations and generated persistence hooks are the
+selected prerequisites. Current provider/consumer validation, independent
+comparison review and Phase acceptance remain required. Live command evidence
+stays in private ignored workflow storage under the shared retention policy.
+
+The Workbench migration ledger is
+`/Users/asami/src/dev2026/textus-knowledge-workbench/docs/phase/workbench-asamiair-migration.md`.
+On 2026-10-18 the user confirmed source-only migration with no existing Workbench
+DB. No source-host access or original production database is required. Diagnose
+and rehearse restart/recovery on retained inputs and test-owned isolated stores.
+Original private Workbench Phase 1 workflow history remains separate; its identity
+and counters are not recreated. No live database changes or Phase acceptance are
+claimed. The owning checklist retains all unsatisfied criteria.
+
+## Phase 100 / Phase 115 boundary — 2026-10-18
+
+The user-selected [collection rule](../rules/collection-and-semi-structured-data.md)
+and [Phase 115](phase-115.md) assign canonical collection and Core Phase 3
+Record adoption to Phase 115 after Phase 100 acceptance. Phase 100 retains its
+declared logical/storage mappings, selected generated consumers, exact original
+text, SQL restart and recovery requirements. Phase 115 is a separately accepted
+migration; it adds no Phase 100 completion condition.
+
+The static generated object List Query finding is retained with its original
+comparison invalidation. Its canonical producer/model/caller migration belongs
+to Phase 115; an old List declaration alone does not authorize a restoration
+branch. This ownership disposition is not a source repair or comparison closure.
+NICT's direct downstream checks and failed CAR preparation are recorded separately;
+its application runtime adoption remains with NICT. See the
+[boundary assessment and evidence limits](../journal/2026/10/2026-10-18-phase100-phase115-collection-boundary.md).
+Original comparison closure, the sole recovery-full review, all owning checklist
+requirements and release records remain required. No closure is claimed here.
+
+## Closure — 2026-10-18
+
+The owning checklist records all 47 items satisfied. The original comparison
+chain and the sole recovery-full review are closed through focused review;
+accepted follow-ups remain in the original Hygiene/Development Candidate journals.
+Original bases, Phase 96, Workbench Phase 1 history, unknown historical counters
+and the separate reassessment lineage are preserved.
+
+The user explicitly replaced item 02.02's historical ordering condition with
+current frozen ABI/generated-fixture conformance, completed functional validation
+and independent assessment. The original preimplementation revision/order remains
+UNPROVEN. Its original wording and dated decision remain in the checklist/journal;
+this closure does not backdate evidence or claim historical proof.
+
+Core, Cozy, SimpleModeler, Workbench and CNCF source integrations are committed.
+Modeler and Workbench retain three ordered parents; CNCF retains both parents in
+`507a864507d8`. The approved exact-path Git convention preserves unchanged generated
+fixture bytes. The earlier consumed partial attempt is retained.
+
+The final local release binds this checklist and management projection to actual
+completed validation, the closed review chain and canonical follow-up records.
+This is source-only migration with isolated test stores, not an original DB
+cutover or completion of the whole Workbench application. Phase 115 remains
+planned and owns Core Phase 3 Record/collection adoption and the retained static
+List Query migration. No remote push or public publication is implied.
 
 ## Goal
 
@@ -26,14 +98,17 @@ OR-mapping route, and eliminate that workaround from the active route.
 Preserving its behavior through `XSemiStructuredData` is required; deleting or
 renaming the marker alone is not completion.
 
-This allocates one independent Phase. It does not start implementation, accept
-the current working tree, reopen an existing Phase or authorize a live database
-migration. All work groups remain OPEN in the checklist.
+The original allocation alone did not start implementation, accept a working
+tree, reopen another Phase or authorize a live database migration. Subsequent
+execution and the current closure are recorded above and in the owning checklist.
 
-The user explicitly limited the current work to establishing this development
-plan. The routes below are the implementation target, not a claim that they
-are already implemented. Implementation and validation execution await a
-subsequent development instruction.
+The plan was initially prepared without implementation authority. On
+2026-10-05 the user instructed dedicated-checkout development of CNCF Phase 100
+and Cozy Phase 78 for Workbench, then explicitly added dedicated Core and
+SimpleModeler checkouts. That subsequent direction now authorizes the
+coordinated prerequisites and implementation. Core canonical types are being
+implemented first. The routes below remain the target; separate CNCF and Cozy
+Phase acceptance and all OPEN checklist requirements are retained.
 
 ## Requirement baseline
 
@@ -261,6 +336,9 @@ distributed/shared-transaction redesign, a new Record implementation, automatic
 type guessing for historical rows, or unapproved production data rewriting.
 
 ## References
+
+- [Logical type mapping contract proposal](../spec/datastore-logical-type-mapping.md): DSM-100-02 behavior and fixture inputs; implementation and exact producer ABI remain pending.
+- [Source inventory](../journal/2026/10/2026-10-05-phase100-source-inventory.md): selected branch evidence and canonical source owners.
 
 - [Allocation and evidence](../journal/2026/10/2026-10-03-datastore-logical-type-mapping-phase.md)
 - [DataStore and Aggregate persistence model](../design/datastore-and-aggregate-persistence-model.md)

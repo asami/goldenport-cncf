@@ -1,0 +1,375 @@
+package org.goldenport.cncf.http
+
+import cats.data.{NonEmptyList, NonEmptyVector}
+import io.circe.Json
+import org.goldenport.Consequence
+import org.goldenport.cncf.operation.{CmlOperationDefinition, CmlOperationField, CmlOperationUpdateField}
+import org.goldenport.convert.ValueReader
+import org.goldenport.datatype.I18nLabel
+import org.goldenport.observation.Descriptor
+import org.goldenport.protocol.spec.ParameterDefinition
+import org.goldenport.record.Record
+import org.goldenport.schema.{DataType, Multiplicity, ValueDomain, XJson, XSemiStructuredData, XString}
+import org.goldenport.value.BaseContent
+import org.scalacheck.{Gen, Prop, Test}
+import org.scalatest.GivenWhenThen
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
+
+/*
+ * JSON syntax, semantic Record ownership and explicit update instructions.
+ *
+ * @since   Oct. 18, 2026
+ * @version Oct. 18, 2026
+ * @author  ASAMI, Tomoharu
+ */
+final class OperationJsonBodyDecoderSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  "Operation JSON body admission" should {
+    "delegate semantic structures to Core" which {
+      "omit nested null properties while preserving ordered properties and empty structures" in {
+        Given("an ordinary object interleaving semantic children and actual raw Json parameters")
+        val text = """{"first":"one","gone":null,"payload":{"gone":null},"evidence":{"z":1,"gone":null,"empty":{},"array":[],"child":{"gone":null,"text":"null"}},"payloads":[null],"last":"two"}"""
+
+        When("the selected Operation's body is decoded outside Entity update semantics")
+        val record = _decode(text, operation = None)
+        val evidence = record.getAny("evidence").get.asInstanceOf[Record]
+        val child = evidence.getAny("child").get.asInstanceOf[Record]
+
+        Then("Core omission keeps the surviving order, empty object, empty array and literal text")
+        record.fields.map(_.key) shouldBe Vector("first", "payload", "evidence", "payloads", "last")
+        evidence.fields.map(_.key) shouldBe Vector("z", "empty", "array", "child")
+        evidence.getAny("gone") shouldBe None
+        evidence.getAny("empty") shouldBe Some(Record.empty)
+        evidence.getAny("array") shouldBe Some(Vector.empty)
+        child.fields.map(_.key) shouldBe Vector("text")
+        child.getString("text") shouldBe Some("null")
+        record.getAny("payload") shouldBe Some(_json("""{"gone":null}"""))
+      }
+
+      Vector(
+        "root sequence" -> """{"evidence":[1,null,2]}""",
+        "nested sequence" -> """{"evidence":{"values":[{},null,{}]}}""",
+        "unknown semantic field" -> """{"other":[null]}"""
+      ).foreach { case (label, text) =>
+        s"reject a null position in a $label instead of falling back to an opaque body" in {
+          Given("a valid JSON object with a null element owned by semantic Record conversion")
+          val parameters = _parameters
+
+          When("the object crosses the Core Record conversion boundary")
+          val result = OperationJsonBodyDecoder.decode(text, parameters, None)
+
+          Then("the conversion returns a structured failure and never a successful None fallback")
+          result shouldBe a[Consequence.Failure[?]]
+        }
+      }
+    }
+
+    "retain exact raw Json values" which {
+      Vector("null", "[null,{},null]", "9007199254740993.1234567890123456789", "1.2300e+40").foreach { literal =>
+        s"preserve scalar raw Json syntax $literal" in {
+          Given("an actual scalar XJson parameter and its original JSON number, array or null node")
+          val text = s"""{"payload":$literal}"""
+          val expected = _json(literal)
+
+          When("the body adapter selects the scalar raw field")
+          val record = _decode(text)
+
+          Then("the original document value and number lexeme remain present")
+          record.getAny("payload") shouldBe Some(expected)
+          record.getAny("payload").get.asInstanceOf[Json].noSpaces shouldBe literal
+        }
+      }
+
+      "retain raw collection order, duplicates, number lexemes and null positions" in {
+        Given("a declared multiple XJson parameter with repeated document children")
+        val literal = """[null,1.2300e+40,{"gone":null},null,1.2300e+40]"""
+        val expected = _json(literal).asArray.get
+
+        When("a syntax array is admitted as a raw collection")
+        val record = _decode(s"""{"payloads":$literal}""")
+        val values: Vector[Json] = _take(summon[ValueReader[Vector[Json]]].readC(record.getAny("payloads").get))
+
+        Then("every position is a raw child and exact numeric syntax is retained")
+        values shouldBe expected
+        values.map(_.noSpaces) shouldBe Vector("null", "1.2300e+40", "{\"gone\":null}", "null", "1.2300e+40")
+      }
+
+      "distinguish an absent optional document from present Json.Null" in {
+        Given("an optional actual XJson parameter")
+        val parameters = Vector(_parameter("optionalPayload", XJson, Multiplicity.ZeroOne))
+
+        When("one body omits the document and another assigns JSON null")
+        val absent = _decode("{}", parameters)
+        val present = _decode("""{"optionalPayload":null}""", parameters)
+
+        Then("only the second body contains a real document assignment")
+        absent.getAny("optionalPayload") shouldBe None
+        present.getAny("optionalPayload") shouldBe Some(Json.Null)
+      }
+
+      "match declared aliases through the existing normalized naming contract" in {
+        Given("a canonical raw parameter with a declared alias and generated source metadata")
+        val content = BaseContent.simple("rawPayload")
+        val aliased = _parameter("rawPayload", XJson).copy(content = content.copy(
+          nameAttributes = content.nameAttributes.copy(alias = Some(NonEmptyVector.one(I18nLabel("external-document"))))))
+        val metadata = _operation.copy(parameters = Vector(
+          CmlOperationField("raw_payload", "untrusted-leaf", "?", update = Some(CmlOperationUpdateField("*", false)))))
+
+        When("an aliased value carrier supplies ordered raw children")
+        val record = _decode("""{"external_document__append":[null,{"gone":null},null]}""", Vector(aliased), Some(metadata))
+
+        Then("the original alias/carrier key and its raw Vector are preserved")
+        record.fields.map(_.key) shouldBe Vector("external_document__append")
+        record.getAny("external_document__append") shouldBe Some(Vector(Json.Null, _json("""{"gone":null}"""), Json.Null))
+      }
+
+      Vector(DataType.Named("application.Json"), DataType.Named("json")).foreach { datatype =>
+        s"keep custom datatype ${datatype.name} under semantic Record ownership" in {
+          Given("a real custom protocol datatype and a CML leaf named Json, neither of which is canonical XJson")
+          val parameters = Vector(_parameter("payload", datatype))
+          val metadata = _operation.copy(parameters = Vector(CmlOperationField("payload", "Json")))
+
+          When("a nested null object and a null sequence are separately admitted")
+          val record = _decode("""{"payload":{"gone":null,"empty":{}}}""", parameters, Some(metadata))
+          val rejected = OperationJsonBodyDecoder.decode("""{"payload":[null]}""", parameters, Some(metadata))
+
+          Then("the object is a normalized Record and null sequence positions still fail")
+          record.getAny("payload") shouldBe Some(Record.dataAuto("empty" -> Record.empty))
+          rejected shouldBe a[Consequence.Failure[?]]
+        }
+      }
+    }
+
+    "select shape from actual multiplicity" which {
+      Vector(Multiplicity.One, Multiplicity.ZeroOne, Multiplicity.Range(0, 1)).foreach { multiplicity =>
+        s"keep ${multiplicity.label} raw documents scalar" in {
+          Given("an actual scalar protocol multiplicity with no generated update metadata")
+          val parameters = Vector(_parameter("payload", XJson, multiplicity))
+
+          When("JSON null is assigned")
+          val record = _decode("""{"payload":null}""", parameters, None)
+
+          Then("Json.Null is the present scalar document")
+          record.getAny("payload") shouldBe Some(Json.Null)
+        }
+      }
+      Vector(Multiplicity.ZeroMore, Multiplicity.OneMore, Multiplicity.Range(0, 3),
+        Multiplicity.Ranges(List(NonEmptyList.one(Multiplicity.Range(2, 4))))).foreach { multiplicity =>
+        s"require a syntax array for ${multiplicity.label} raw collections" in {
+          Given("a collection protocol multiplicity with no generated metadata")
+          val parameters = Vector(_parameter("payload", XJson, multiplicity))
+
+          When("a null root and an ordered array are independently decoded")
+          val rejected = OperationJsonBodyDecoder.decode("""{"payload":null}""", parameters, None)
+          val record = _decode("""{"payload":[null,1,null]}""", parameters, None)
+
+          Then("null is never scalar-promoted and an array retains its exact children")
+          rejected shouldBe a[Consequence.Failure[?]]
+          record.getAny("payload") shouldBe Some(Vector(Json.Null, Json.fromInt(1), Json.Null))
+        }
+      }
+      Vector("*", "+", "0..3").foreach { source =>
+        s"prefer source multiplicity $source over an optional generated request field" in {
+          Given("a generated optional request parameter with explicit collection source metadata")
+          val parameters = Vector(_parameter("payload", XJson, Multiplicity.ZeroOne))
+          val metadata = _operation.copy(parameters = Vector(CmlOperationField("payload", "Json", "?",
+            update = Some(CmlOperationUpdateField(source, false)))))
+
+          When("the raw body contains an array or a null collection root")
+          val record = _decode("""{"payload":[null,null]}""", parameters, Some(metadata))
+          val rejected = OperationJsonBodyDecoder.decode("""{"payload":null}""", parameters, Some(metadata))
+
+          Then("source metadata selects the Vector shape without weakening array admission")
+          record.getAny("payload") shouldBe Some(Vector(Json.Null, Json.Null))
+          rejected shouldBe a[Consequence.Failure[?]]
+        }
+      }
+      "prefer scalar source metadata and leave required cardinality to typed construction" in {
+        Given("scalar source metadata over a multiple protocol field and a separately required collection")
+        val parameters = Vector(_parameter("payload", XJson, Multiplicity.ZeroMore))
+        val metadata = _operation.copy(parameters = Vector(CmlOperationField("payload", "Json", "?",
+          update = Some(CmlOperationUpdateField("?", true)))))
+        val required = Vector(_parameter("payloads", XJson, Multiplicity.OneMore))
+
+        When("a scalar null and an empty required array are decoded before typed construction")
+        val scalar = _decode("""{"payload":null}""", parameters, Some(metadata))
+        val empty = _decode("""{"payloads":[]}""", required, None)
+        val cardinality = summon[ValueReader[NonEmptyVector[Json]]].readC(empty.getAny("payloads").get)
+
+        Then("the scalar is retained and the existing typed reader rejects the empty required collection")
+        scalar.getAny("payload") shouldBe Some(Json.Null)
+        empty.getAny("payloads") shouldBe Some(Vector.empty)
+        cardinality shouldBe a[Consequence.Failure[?]]
+      }
+    }
+
+    "preserve update carrier meaning" which {
+      (OperationUpdateDirective.ExplicitValueAssignment.kinds.map(_.suffix) ++
+        OperationUpdateDirective.ValueOperation.kinds.map(_.suffix)).foreach { suffix =>
+        s"retain raw values and the original $suffix carrier key" in {
+          Given("a scalar canonical XJson parameter with a supported value carrier")
+          val key = "payload" + suffix
+          val document = _json("""{"gone":null,"values":[null]}""")
+
+          When("the raw document is decoded through that carrier")
+          val record = _decode(Json.obj(key -> document).noSpaces)
+
+          Then("no carrier is rewritten and no raw child is normalized away")
+          record.fields.map(_.key) shouldBe Vector(key)
+          record.getAny(key) shouldBe Some(document)
+          record.getAny("payload") shouldBe None
+        }
+      }
+      "leave the command carrier as ordinary text" in {
+        Given("an actual raw Json parameter and the explicit SQL-null command spelling")
+        val text = """{"payload__update_command":"null"}"""
+
+        When("the body adapter decodes without extracting a command as Json")
+        val record = _decode(text)
+        val directives = _take(OperationUpdateDirectiveNormalizer.normalize(record))
+
+        Then("the existing normalizer alone interprets the command")
+        record.getAny("payload__update_command") shouldBe Some("null")
+        directives.directive("payload") shouldBe OperationUpdateDirective.OperandlessCommand(
+          "payload", OperationUpdateDirective.OperandlessCommand.Kind.Null)
+      }
+
+      (Vector("nickname", "nickname__update_command") ++
+        OperationUpdateDirective.ExplicitValueAssignment.kinds.map(kind => "nickname" + kind.suffix) ++
+        OperationUpdateDirective.ValueOperation.kinds.map(kind => "nickname" + kind.suffix)).foreach { key =>
+        s"reject JSON syntax null at $key before Record omission" in {
+          Given("an Entity update body with a root ordinary assignment or carrier set to JSON null")
+          val text = Json.obj(key -> Json.Null).noSpaces
+
+          When("syntax admission runs before semantic Record construction")
+          val result = OperationJsonBodyDecoder.decode(text, _parameters, Some(_operation))
+
+          Then("a structured client policy error requires an explicit clear instruction")
+          result match {
+            case Consequence.Failure(conclusion) =>
+              conclusion.status.webCode.code shouldBe 400
+              conclusion.observation.cause.descriptor.facets should contain(Descriptor.Facet.Reason("explicit-clear-required"))
+              (conclusion.show +: conclusion.causes.map(_.display)).mkString("\n") should include ("explicit-clear-required")
+            case _ => fail("JSON null became omission, a document or an adaptive blank command")
+          }
+        }
+      }
+      "preserve zero-length explicit values and let only blank strings select adaptive commands" in {
+        Given("ordinary String carriers using explicit empty, adaptive empty and whitespace operands")
+        val text = """{"nickname__value":"","tags__value_or_clear":"","optionalName__value_or_null":"","spaced__value_or_null":" "}"""
+
+        When("JSON syntax admission is followed by the existing directive normalizer")
+        val record = _decode(text)
+        val directives = _take(OperationUpdateDirectiveNormalizer.normalize(record))
+
+        Then("JSON strings retain the established explicit assignment and adaptive command rules")
+        record.getString("nickname__value") shouldBe Some("")
+        directives.directive("nickname") shouldBe OperationUpdateDirective.ExplicitValueAssignment(
+          "nickname", OperationUpdateDirective.ExplicitValueAssignment.Kind.Value, Vector(""))
+        directives.directive("tags") shouldBe OperationUpdateDirective.OperandlessCommand(
+          "tags", OperationUpdateDirective.OperandlessCommand.Kind.Clear)
+        directives.directive("optionalName") shouldBe OperationUpdateDirective.OperandlessCommand(
+          "optionalName", OperationUpdateDirective.OperandlessCommand.Kind.Null)
+        directives.directive("spaced") shouldBe OperationUpdateDirective.ExplicitValueAssignment(
+          "spaced", OperationUpdateDirective.ExplicitValueAssignment.Kind.ValueOrNull, Vector(" "))
+      }
+      Vector(
+        """{"payload":null,"payload__update_command":"null"}""",
+        """{"payload__value":{"gone":null},"payload":[null]}""",
+        """{"nickname__value":"","nickname__value_or_null":""}"""
+      ).zipWithIndex.foreach { case (text, index) =>
+        s"retain every conflicting key for existing directive validation case $index" in {
+          Given("an object containing conflicting plain, value or command carriers")
+          val keys = _json(text).asObject.get.keys.toVector
+
+          When("the adapter decodes and the existing normalizer evaluates the complete Record")
+          val record = _decode(text)
+          val result = OperationUpdateDirectiveNormalizer.normalize(record)
+
+          Then("original order and conflict information survive until structured directive rejection")
+          record.fields.map(_.key) shouldBe keys
+          result shouldBe a[Consequence.Failure[?]]
+        }
+      }
+    }
+
+    "retain opaque body compatibility" which {
+      Vector("{", "", "[]", "null", "42", "\"text\"").zipWithIndex.foreach { case (text, index) =>
+        s"return None for malformed or non-object syntax case $index" in {
+          Given("body syntax that the historical adapter could not decode as an object")
+          val parameters = _parameters
+
+          When("the body is offered to the foreign syntax adapter")
+          val result = OperationJsonBodyDecoder.decode(text, parameters, Some(_operation))
+
+          Then("the caller receives only the established opaque Bag fallback signal")
+          result.toOption shouldBe Some(None)
+        }
+      }
+    }
+
+    "preserve independent raw and semantic shapes" which {
+      "satisfy at least one hundred ordinary shrinking samples with zero discards" in {
+        Given("independent raw text, semantic text, exact decimal and ordered duplicate generators")
+        val samples = for {
+          rawtext <- Gen.alphaNumStr
+          semantictext <- Gen.alphaNumStr
+          number <- Gen.choose(-1000000, 1000000)
+          values <- Gen.listOf(Gen.alphaNumStr)
+        } yield (rawtext, semantictext, number, values)
+        val property = Prop.forAll(samples) { case (rawtext, semantictext, number, values) =>
+          Given("one independently generated raw document and semantic child sequence with ordered duplicates")
+          val decimal = Json.fromBigDecimal(BigDecimal(number) / BigDecimal(1000))
+          val raw = Json.obj("null" -> Json.Null, "array" -> Json.arr(Json.Null, decimal), "text" -> Json.fromString(rawtext))
+          val ordered = (values ++ values).toVector
+          val semantic = Json.obj("gone" -> Json.Null, "empty" -> Json.obj(), "array" -> Json.arr(),
+            "text" -> Json.fromString(semantictext), "values" -> Json.fromValues(ordered.map(value =>
+              Json.obj("gone" -> Json.Null, "text" -> Json.fromString(value)))))
+          val body = Json.obj("payload" -> raw, "evidence" -> semantic,
+            "payloads" -> Json.arr(raw, Json.Null, raw))
+          val expected = Record.dataAuto("empty" -> Record.empty, "array" -> Vector.empty[Any],
+            "text" -> semantictext, "values" -> ordered.map(value => Record.dataAuto("text" -> value)))
+
+          When("the selected Operation decodes the complete body through raw selection and Core normalization")
+          val record = _decode(body.noSpaces)
+
+          Then("each independent raw document and semantic shape retains its own exact contract")
+          record.fields.map(_.key) shouldBe Vector("payload", "evidence", "payloads")
+          record.getAny("payload") shouldBe Some(raw)
+          record.getAny("payloads") shouldBe Some(Vector(raw, Json.Null, raw))
+          record.getAny("evidence") shouldBe Some(expected)
+          true
+        }
+
+        When("ScalaCheck executes the connected shrinking property")
+        val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(100), property)
+        Then("at least one hundred successful samples and no discarded cases are required")
+        withClue(checked.toString) { checked.passed shouldBe true }
+        checked.succeeded should be >= 100
+        checked.discarded shouldBe 0
+      }
+    }
+  }
+
+  private val _parameters = Vector(
+    _parameter("payload", XJson), _parameter("payloads", XJson, Multiplicity.ZeroMore),
+    _parameter("evidence", XSemiStructuredData), _parameter("nickname", XString, Multiplicity.ZeroOne))
+  private val _operation = CmlOperationDefinition(
+    name = "update", kind = "COMMAND", inputType = "Policy115", outputType = "Unit", inputValueKind = "ENTITY_UPDATE",
+    parameters = Vector(
+      CmlOperationField("payload", "Json", "?", update = Some(CmlOperationUpdateField("?", true))),
+      CmlOperationField("payloads", "Json", "?", update = Some(CmlOperationUpdateField("*", false))),
+      CmlOperationField("nickname", "String", "?", update = Some(CmlOperationUpdateField("?", true)))))
+
+  private def _parameter(name: String, datatype: DataType, multiplicity: Multiplicity = Multiplicity.One): ParameterDefinition =
+    ParameterDefinition(content = BaseContent.simple(name), kind = ParameterDefinition.Kind.Argument,
+      domain = ValueDomain(datatype, multiplicity))
+  private def _decode(text: String, parameters: Seq[ParameterDefinition] = _parameters,
+    operation: Option[CmlOperationDefinition] = Some(_operation)): Record =
+    _take(OperationJsonBodyDecoder.decode(text, parameters, operation)).getOrElse(fail("expected an object Record"))
+  private def _json(text: String): Json = io.circe.parser.parse(text).fold(error => fail(error.message), identity)
+  private def _take[A](result: Consequence[A]): A = result match {
+    case Consequence.Success(value) => value
+    case Consequence.Failure(conclusion) => fail((conclusion.show +: conclusion.causes.map(_.display)).mkString("\n"))
+  }
+}

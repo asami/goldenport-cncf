@@ -12,7 +12,8 @@ import org.scalatest.GivenWhenThen
 
 /*
  * @since   Jan. 14, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 class ScriptDslSpec extends AnyWordSpec with Matchers with ResponseMatchers with GivenWhenThen {
@@ -112,7 +113,7 @@ class ScriptDslSpec extends AnyWordSpec with Matchers with ResponseMatchers with
         |  key: script-dsl-spec
         |  time:
         |    mode: manual
-        |    start-at: 2026-08-11T00:00:00Z
+        |    start-at: '2026-08-11T00:00:00Z'
         |  random:
         |    mode: seeded
         |    seed: script-dsl-spec

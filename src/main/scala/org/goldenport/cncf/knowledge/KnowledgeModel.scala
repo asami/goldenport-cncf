@@ -3,14 +3,16 @@ package org.goldenport.cncf.knowledge
 import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.convert.ValueReader
-import org.goldenport.record.Record
+import org.goldenport.record.{Record, RecordPresentable}
+import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   May. 17, 2026
- * @version May. 23, 2026
+ *  version May. 23, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
-final case class KnowledgeNodeId(value: String) {
+final case class KnowledgeNodeId(value: String) extends NominalScalar {
   def print: String = value
 }
 
@@ -52,7 +54,7 @@ final case class KnowledgeProvenanceId(value: String) {
   def print: String = value
 }
 
-final case class RdfNodeName(value: String) {
+final case class RdfNodeName(value: String) extends NominalScalar {
   def print: String = value
 }
 
@@ -159,7 +161,14 @@ final case class ExternalKnowledgeIdentifier(
   system: String,
   value: String,
   kind: Option[String] = None
-) {
+) extends RecordPresentable {
+  def toRecord(): Record =
+    Record.dataAuto(
+      "system" -> system,
+      "value" -> value,
+      "kind" -> kind
+    )
+
   def key: String =
     Vector(
       _key_part("system", Some(system)),
@@ -421,7 +430,15 @@ final case class KnowledgeEntityBinding(
   entityId: String,
   entityVersion: Option[String] = None,
   component: Option[String] = None
-) {
+) extends RecordPresentable {
+  def toRecord(): Record =
+    Record.dataAuto(
+      "entityName" -> entityName,
+      "entityId" -> entityId,
+      "entityVersion" -> entityVersion,
+      "component" -> component
+    )
+
   def externalIdentifier: ExternalKnowledgeIdentifier =
     ExternalKnowledgeIdentifier.entity(entityName, entityId)
 }

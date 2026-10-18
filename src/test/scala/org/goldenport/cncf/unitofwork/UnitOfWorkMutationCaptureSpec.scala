@@ -14,7 +14,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRe
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ *  version Oct. 15, 2026
+ * @version Oct. 18, 2026
  */
 final class UnitOfWorkMutationCaptureSpec extends AnyWordSpec with UnitOfWorkMutationCaptureFixture.Vocabulary {
   import UnitOfWorkMutationCaptureFixture.*
@@ -384,15 +385,17 @@ final class UnitOfWorkMutationCaptureSpec extends AnyWordSpec with UnitOfWorkMut
           }
         }
       }
-      "UMC-01 preserve explicitly declared JSON-shaped business semantics on SQLite without decoder-derived expectations" in {
+      "UMC-01 retain literal physical JSON object and array text through SQLite canonical capture" in {
         for { normalized <- Vector(false, true); business <- Vector("{\"n\":7,\"ok\":false}", "[7,false,\"label\"]") } {
-          Given("literal JSON object/array business inputs with explicit independent Record/Vector expectations")
+          Given("independently declared JSON-looking business Strings and exact original permission text")
           withSqlite(normalized) { environment =>
             val session = _session(environment, sample.copy(business = business)); val before = session.rows(); val physical = environment.physical()
             val expected = expectedCreate(session, before, physical, normalized)
-            When("the canonical create and normal SQL reader interpret the actual input")
+            When("native canonical creation returns its physical record without payload inference")
             val outcome = success(session.evaluateC(session.createOperation)); val after = session.rows(); val physicalafter = environment.physical()
-            Then("complete logical JSON interpretation and complete physical JSON text cells both match the declared oracle")
+            Then("every raw captured field and physical cell retains the independently prescribed String values")
+            outcome.persisted.record.getAny("business") shouldBe Some(business)
+            outcome.persisted.record.getAny("permission") shouldBe Some(permission)
             checkCreated(outcome, session, expected.raw); checkRows(after, expected.rows); checkPhysical(physicalafter, expected.physical)
           }
         }

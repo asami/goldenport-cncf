@@ -30,7 +30,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRe
  * Only target-owned paths and real managed bindings are positive runtimes.
  *
  * @since   Oct.  3, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object JobDurableRuntimeFixtures {
@@ -262,7 +262,7 @@ private[cncf] object JobDurableRuntimeFixtures {
           .replace("mode: manual", "mode: realtime").replace("mode: deterministic", "mode: concurrent"))
         Files.writeString(file, Files.readString(file).replace("ids:\n    mode: concurrent", "ids:\n    mode: production")
           .replace("time:\n    mode: realtime", "time:\n    mode: system")
-          .replace(s"    start-at: $instant\n", ""))
+          .replace(s"    start-at: '$instant'\n", ""))
       }
       new CncfRuntime().initializeHandle(BootstrapConfig(cwd = root, args = arguments, extraComponents = extras))
     }
@@ -306,7 +306,7 @@ private[cncf] object JobDurableRuntimeFixtures {
       |  key: durable-runtime-69709702
       |  time:
       |    mode: manual
-      |    start-at: $instant
+      |    start-at: '$instant'
       |  random:
       |    mode: seeded
       |    seed: durable-runtime-69709702

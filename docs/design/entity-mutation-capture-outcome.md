@@ -53,8 +53,15 @@ The independent memory oracle declares input/default keys in a new Map to match
 ordinary immutable-Map iteration semantics, then appends managed revision and
 body fields. No actual Field vector is normalized, sorted or collapsed. SQL
 fixtures explicitly own complete schemas and readers. Their physical String,
-integral and NULL cells remain separate from logical omitted NULL attributes,
-decoded JSON Records and explicit read aliases. Strict-create enum print values
+integral and NULL cells remain separate from omitted NULL attributes and explicit
+read aliases. Under [Phase 100 R2/R9](../spec/datastore-logical-type-mapping.md#r2-physical-text-and-exact-string)
+and its [undeclared physical-adapter activation](../spec/entity-store-persistence-stages.md),
+the fixture's identity decoder supplies no logical field mapping: raw SQL readback
+and capture therefore retain permission and JSON-looking business Strings. This
+supersedes only the earlier decoded Record/Vector correspondence; it preserves
+historical Phase96 decisions, receipt reference identity and lifecycle ownership.
+Declared logical reconstruction remains the OR-mapping owner's responsibility.
+Strict-create enum print values
 and conditional-delete numeric assignment are distinct existing mechanisms;
 TEXT SQL state columns therefore contain published/alive on create and text 3
 after logical delete. No product conversion is changed to ease assertions.

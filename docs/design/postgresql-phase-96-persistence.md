@@ -196,11 +196,13 @@ records.
 
 The common SQL WriteIfChanged comparison boundary reconstructs comparison-only
 Records from the original ordered Fields, omitting exact Single(Update.SetNull)
-as absent logical attributes. Only Single(String) values pass
-through the existing SQL column decoder: admitted JSON object/array text
-corresponds to its persisted Record/Vector read carrier. Every non-String Field
-retains its original value, key and position. Ordinary, scalar-looking and
-malformed JSON text retains the exact original String, including whitespace.
+as absent logical attributes. Phase100 physical-provider activation dated
+2026-10-18 explicitly supersedes the earlier inferred Record/Vector carrier
+correspondence: all physical Strings, including valid JSON objects/arrays,
+retain exact text and lexical whitespace. Every other Field retains its value,
+key and position. A plain provider compares those physical values; only an
+explicit caller codec or declared mapper reconstructs logical values under
+[R2/R8](../spec/datastore-logical-type-mapping.md#r2-physical-text-and-exact-string).
 The unchanged generic business-state comparison receives those temporary
 Records and keeps its existing revision/exclusion policy. This is no global
 JSON meaning, codec or security-policy change. Desired writes, PostgreSQL's
@@ -282,8 +284,11 @@ observation remain required for this authored evidence.
 The existing all-backend acknowledgement specification additionally authors
 SQL carrier comparison on actual PostgreSQL, SQLite and MySQL with plain
 SqlDataStore writers and independent durable readers. Fixed Patch/Replace
-cases and one total bounded law per backend use nested permission/attribute
-Records, raw Long Vectors and independently written JSON-string candidates.
+cases and one total bounded law per backend explicitly encode the known
+permission/attribute Records and Long Vectors before plain SQL writes, with
+independently written exact JSON-string expectations and candidates. This
+fixture-owned encoding replaces the historical inferred SQL carriers under
+Phase100 without moving mutation, comparison or transaction responsibilities.
 Each law requires at least 100 successes and zero discards with meaningful
 companion shrinking and sequential INITIAL1 reseeding on shared bounded
 rows/pools. Equivalent state requires complete authoritative NoOp Fields,
@@ -291,9 +296,11 @@ revision and eight-target preservation; expected revision two against actual
 one requires Stale before equality. Flipping only owner write permission
 requires revision two and exact complete root/side correspondence, with every
 other target unchanged; repeating that changed state again requires NoOp.
-Five raw-text cases per backend cover significant whitespace, malformed
-objects/arrays, boolean-looking text and numeric-looking text, requiring exact
-repeat preservation and genuine changed-text publication. These authored
+The original five raw-text cases per backend cover significant whitespace,
+malformed objects/arrays, boolean-looking text and numeric-looking text. Two
+additional valid JSON object/array whitespace cases establish exact physical
+String comparison. All require exact repeat preservation and genuine
+changed-text publication. These authored
 provider laws do not complete registered Entity/Aggregate/Display acceptance.
 Original registered Entity AND Aggregate, ordinary Display routes and actual
 contextual committed reload remain original Slice C work. All four P96-07

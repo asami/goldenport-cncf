@@ -30,7 +30,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Actual native bytes, conservative persisted reservations and acknowledged disposal.
  *
  * @since   Oct.  1, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.scalatest.tags.Slow
@@ -1391,7 +1391,7 @@ final class DurableJobOwnedBlobQuotaSpec extends AnyWordSpec with Matchers with 
   }
 
   private final class ObservedDataStore(val delegate: SqlDataStore)
-      extends DataStore with SearchableDataStore with EntityVersionedMutationDataStore {
+      extends DataStore with SearchableDataStore with EntityVersionedMutationDataStore with EntityCreateDataStore {
     var requests = Vector.empty[QueryDirective]
     var censusmode = "normal"
     var nativecas = true
@@ -1399,6 +1399,9 @@ final class DurableJobOwnedBlobQuotaSpec extends AnyWordSpec with Matchers with 
     def isAccept(cid: DataStore.CollectionId): Boolean = accept(cid)
     override def entityMutationProviderCapabilities: EntityMutationProviderCapabilities =
       if (nativecas) delegate.entityMutationProviderCapabilities else EntityMutationProviderCapabilities.empty
+    override def createEntity(plan: EntityCreatePlan)(using ctx: ExecutionContext): Consequence[EntityCreateResult] = {
+      delegate.createEntity(plan)
+    }
     def create(collection: DataStore.CollectionId, id: DataStore.EntryId, record: Record)(using ctx: ExecutionContext): Consequence[Unit] =
       delegate.create(collection, id, record)
     def load(collection: DataStore.CollectionId, id: DataStore.EntryId)(using ctx: ExecutionContext): Consequence[Option[Record]] =
@@ -1439,9 +1442,12 @@ final class DurableJobOwnedBlobQuotaSpec extends AnyWordSpec with Matchers with 
     def abort(tx: TransactionContext): Unit = record_abort(CommitRecorder.noop)
   }
 
-  private final class OpaqueDataStore(delegate: ObservedDataStore) extends DataStore with EntityVersionedMutationDataStore {
+  private final class OpaqueDataStore(delegate: ObservedDataStore) extends DataStore with EntityVersionedMutationDataStore with EntityCreateDataStore {
     def isAccept(cid: DataStore.CollectionId): Boolean = true
     override def entityMutationProviderCapabilities: EntityMutationProviderCapabilities = delegate.entityMutationProviderCapabilities
+    override def createEntity(plan: EntityCreatePlan)(using ctx: ExecutionContext): Consequence[EntityCreateResult] = {
+      delegate.createEntity(plan)
+    }
     def create(collection: DataStore.CollectionId, id: DataStore.EntryId, record: Record)(using ctx: ExecutionContext): Consequence[Unit] =
       delegate.create(collection, id, record)
     def load(collection: DataStore.CollectionId, id: DataStore.EntryId)(using ctx: ExecutionContext): Consequence[Option[Record]] =

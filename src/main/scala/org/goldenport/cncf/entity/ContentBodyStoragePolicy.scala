@@ -27,7 +27,7 @@ import org.simplemodeling.model.datatype.EntityId
  * @since   May.  4, 2026
  *  version Jul. 24, 2026
  *  version Sep. 29, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 object ContentBodyStoragePolicy {
@@ -223,7 +223,6 @@ object ContentBodyStoragePolicy {
 
   private def _content(record: Record): Option[String] =
     record.getAny("content").map {
-      case null => ""
       case Update.SetNull => ""
       case Some(v) => v.toString
       case v => v.toString
@@ -264,7 +263,6 @@ object ContentBodyStoragePolicy {
 
   private def _string(record: Record, names: String*): Option[String] =
     names.iterator.flatMap(record.getAny).map {
-      case null => ""
       case Update.SetNull => ""
       case Some(v) => v.toString
       case v => v.toString

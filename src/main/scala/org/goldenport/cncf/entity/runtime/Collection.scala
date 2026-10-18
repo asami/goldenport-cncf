@@ -28,7 +28,8 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp
  * @since   Mar. 14, 2026
  *  version Mar. 30, 2026
  *  version May. 10, 2026
- * @version Jul. 29, 2026
+ *  version Jul. 29, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Collection[A] {
@@ -145,6 +146,19 @@ final class EntityCollection[E](
           Some(descriptor.persistent.id(value))
         def toRecord(value: E): Record =
           descriptor.persistent.toRecord(value)
+        override def storeRowMapping: Option[org.goldenport.cncf.entity.EntityStoreRowMapping] =
+          descriptor.persistent.storeRowMapping.map { mapping =>
+            descriptor.revisionBinding.map { binding =>
+              mapping.copy(
+                fields = mapping.fields.filterNot(field =>
+                  field.logicalName == binding.storageFieldName || field.storageName == binding.storageFieldName),
+                physicalFields = mapping.physicalFields + binding.storageFieldName)
+            }.getOrElse(mapping)
+          }
+        override def toLogicalStoreRecord(value: E): Consequence[Record] =
+          descriptor.persistent.toLogicalStoreRecord(value).map { record =>
+            descriptor.revisionBinding.map(_.withoutManagedRevision(record)).getOrElse(record)
+          }
         override def toStoreRecord(value: E): Record =
           descriptor.revisionBinding
             .map(
@@ -165,14 +179,14 @@ final class EntityCollection[E](
             descriptor.revisionBinding match {
               case Some(binding) =>
                 binding.decodeEntity(record)(
-                  EntityPersistent._decode_store_record(
+                  EntityPersistent._decode_provider_record(
                     descriptor.persistent,
                     descriptor.collectionId,
                     _
                   )
                 )
               case None =>
-                EntityPersistent._decode_store_record(
+                EntityPersistent._decode_provider_record(
                   descriptor.persistent,
                   descriptor.collectionId,
                   record

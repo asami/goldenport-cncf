@@ -12,7 +12,7 @@ import JobDurableRuntimeFixtures.{failureConclusion, success}
 
 /*
  * @since   Oct. 14, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobUnitOfWorkCompatibilitySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -55,6 +55,7 @@ final class JobUnitOfWorkCompatibilitySpec extends AnyWordSpec with Matchers wit
             model.jobId shouldBe jobid
             model.debug.requestSummary shouldBe option.requestSummary
             model.debug.parameters shouldBe option.parameters
+            _require_projection(native, jobid, option.parameters)
             model.debug.executionNotes shouldBe option.executionNotes
             native.engine._get_record(jobid).get.priority shouldBe option.priority
             native.signed(jobid).record.body.identity.jobId shouldBe jobid.value
@@ -191,6 +192,7 @@ final class JobUnitOfWorkCompatibilitySpec extends AnyWordSpec with Matchers wit
             model.jobId shouldBe jobid
             model.debug.requestSummary shouldBe option.requestSummary
             model.debug.parameters shouldBe option.parameters
+            _require_projection(native, jobid, option.parameters)
             native.engine._get_record(jobid).get.priority shouldBe option.priority
             native.signed(jobid).record.body.identity.jobId shouldBe jobid.value
           }
@@ -221,6 +223,17 @@ final class JobUnitOfWorkCompatibilitySpec extends AnyWordSpec with Matchers wit
         }
       }
     }
+  }
+
+  private def _require_projection(native: JobDurableRuntimeFixtures.Fixture, jobid: JobId,
+    expected: Map[String, String]): Unit = {
+    val entityid = JobEntity.entityId(jobid)
+    val carrier = success(native.owner._execute_c {
+      native.entity.loadDetached[JobEntity](entityid)(using JobEntity.entityPersistent, native.context)
+    }).getOrElse(fail("the native JobEntity projection should exist"))
+    carrier.revision.value should be > 0L
+    carrier.entity.id shouldBe entityid
+    carrier.entity.record.getRecord("debugParameters").map(_.asMap) shouldBe Some(expected)
   }
 
   private final class ObservationTask extends JobTask {

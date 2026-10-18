@@ -310,10 +310,14 @@ Each provider-bound record MUST contain at most 256 fields. Each ordered
 provider-bound sequence MUST contain at most 1024 values. Nested records and
 sequences MUST be at most 16 levels deep.
 
-Sequence admission MUST inspect at most the first 1025 values to distinguish
-an admitted sequence from an over-limit sequence. It MUST NOT traverse an
-entire lazy or otherwise unbounded sequence before returning the deterministic
-limit failure.
+Sequence admission of an already constructed canonical `Record` MUST inspect
+at most the first 1025 values to distinguish an admitted sequence from an
+over-limit sequence and return the deterministic structured limit failure.
+Core owns finite `Seq` values during `Record` construction by materializing
+them into canonical Vector-family values; that construction is separate from
+the provider-plan admission bound. Explicitly foreign lazy or unbounded ingress
+MUST be bounded before `Record` construction. Admission MUST NOT traverse an
+entire lazy or otherwise unbounded foreign sequence to determine its limit.
 
 Provider-bound record values MUST be normalized strings, booleans, numeric
 storage scalars, `Instant`, nested `Record`, or ordered `Seq` values. Raw null,

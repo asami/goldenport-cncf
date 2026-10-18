@@ -107,13 +107,19 @@ The full seven overflow fields use `content_byte_size`, `content_digest` and
 SQL fixtures explicitly declare complete root/body columns before action.
 Only revision and byte-size columns are integral; other columns are TEXT.
 Strict-create state values are `published` and `alive`; SQL logical delete stores
-text `3` in those TEXT columns, whereas memory stores numeric 3. Physical permission
-remains the literal compact JSON String; logical SQL permission is independently
-constructed ordered nested Records. Declared JSON-shaped business examples have
-independent Record/Vector expectations. Exact and normalized readers use explicit
-alias tables, including `source_entity_id` to `sourceEntityId`. PostgreSQL logical
-order is id, selected revision, then metadata order; SQLite retains metadata order.
-Actual after state never determines expected values or Field order.
+text `3` in those TEXT columns, whereas memory stores numeric 3. Under the
+[Phase 100 R2/R9 contract](datastore-logical-type-mapping.md#r2-physical-text-and-exact-string)
+and the [undeclared physical-adapter activation](entity-store-persistence-stages.md),
+the raw SQL readback and captured Record retain the original permission and
+JSON-looking business Strings. The fixture's identity decoder declares no logical
+field mapping and performs no payload-based Record/Vector reconstruction. This
+supersedes the earlier Phase96 correspondence expectations for decoded permission
+Records and JSON-shaped business Record/Vector values; it changes no historical
+Phase96 acceptance or capture identity, revision, transaction or coherence rule.
+Exact and normalized readers retain explicit alias tables, including
+`source_entity_id` to `sourceEntityId`. PostgreSQL logical key order is id, selected
+revision, then metadata order; SQLite retains metadata order. Actual after state
+never determines expected values or Field order.
 
 [SQL NULL omission](sql-null-record-boundary.md) remains logical-only: complete
 physical columns, types and NULL cells remain in the full physical oracle. The

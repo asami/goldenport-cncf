@@ -49,7 +49,7 @@ import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   Sep. 28, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 private[entity] trait StandardEntityReadSavePart extends EntityStore { self: StandardEntityStore =>
@@ -110,7 +110,7 @@ private[entity] trait StandardEntityReadSavePart extends EntityStore { self: Sta
       )
       record <- _load_record(id)
       snapshot <- record.traverse(
-        tc.admitStoreRecord(_).flatMap { admitted =>
+        EntityPersistent._admit_provider_record(tc, id.collection, _).flatMap { admitted =>
           binding.snapshot(admitted)(
             EntityPersistent._decode_admitted_store_record(tc, id.collection, _)
           )
@@ -131,7 +131,7 @@ private[entity] trait StandardEntityReadSavePart extends EntityStore { self: Sta
       )
       record <- _load_record(id)
       carrier <- record.traverse(
-        tc.admitStoreRecord(_).flatMap { admitted =>
+        EntityPersistent._admit_provider_record(tc, id.collection, _).flatMap { admitted =>
           binding.detachedCarrier(admitted)(
             EntityPersistent._decode_admitted_store_record(tc, id.collection, _)
           )
@@ -201,8 +201,9 @@ private[entity] trait StandardEntityReadSavePart extends EntityStore { self: Sta
             case Some(binding) =>
               for {
                 datastore <- ctx.dataStoreSpace.dataStore(cid)
+                source <- EntityPersistent._to_provider_record(tc, id.collection, entity)
                 admitted <- binding.rejectManagedPatch(
-                  tc.toStoreRecord(entity),
+                  source,
                   "entity"
                 )
                 initialized <- binding.initializeForCreate(
@@ -325,9 +326,10 @@ private[entity] trait StandardEntityReadSavePart extends EntityStore { self: Sta
       existing <- _raw_record(cid, dsid)
       base <- _required_record(dsid, existing)
       _ <- _reject_logically_deleted_existing(id, Some(base))
+      source <- EntityPersistent._to_provider_record(tc, id.collection, entity)
       admitted <- _admit_typed_mutation(
         revisionbinding,
-        tc.toStoreRecord(entity),
+        source,
         expectedrevision
       )
       effectiveexpected <- _effective_expected_revision(

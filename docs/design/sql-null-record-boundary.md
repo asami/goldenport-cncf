@@ -33,7 +33,11 @@ exit; no exception adapter or shared failure-policy change is needed.
 
 The choice changes logical readback, never physical table/column/cell state.
 The ordinary Record encoder consequently omits the absent key without a new
-wire codec. Nested JSON null retains its existing separate carrier meaning.
+wire codec. Under Phase100 physical activation dated 2026-10-18, nested JSON
+null and empty objects/arrays remain inside exact physical text; explicit
+caller or declared mapper codecs own their logical reconstruction. This
+supersedes only earlier inferred Record/Vector correspondence, preserving
+SQL NULL omission and physical schema/cell ownership.
 
 ## Command markers stay in the SQL write input
 
@@ -46,7 +50,9 @@ Only preparation and root update receive that write-only Record. The outcome
 uses the real required readback after the existing checkpoints and ACK path.
 
 The comparison owner constructs temporary Records, removes exact SetNull
-Fields and applies its existing String decoding. An absent readback attribute
+Fields and retains exact physical Strings under Phase100 R2/R8, including
+valid JSON and lexical whitespace. It performs no inferred JSON equivalence.
+An absent readback attribute
 equals a repeated explicit clear. This permits current WriteIfChanged NoOp
 while stale admission continues to precede equality. Direct/CAS keep their
 existing always-write behavior. No generic merge, transaction, side intent,

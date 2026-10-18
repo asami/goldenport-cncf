@@ -19,13 +19,16 @@ import scala.util.control.NonFatal
  *  version Jul. 26, 2026
  *  version Aug.  5, 2026
  *  version Sep. 29, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 trait DataStore extends CommitParticipant {
   import DataStore.*
 
   def isAccept(cid: CollectionId): Boolean
+
+  /** Record key returned by this provider for an explicitly declared storage name. */
+  def recordKey(storageName: String): String = storageName
 
   def create(
     collection: CollectionId,

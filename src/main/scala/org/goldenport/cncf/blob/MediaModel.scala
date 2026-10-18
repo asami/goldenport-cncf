@@ -13,7 +13,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Built-in media entities layered above Blob storage metadata.
  *
  * @since   May.  3, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 enum MediaKind(val value: String) {
@@ -235,7 +236,7 @@ object MediaRecordCodec {
     )
 
   def toStoreRecord(media: MediaEntity): Record =
-    toRecord(media)
+    toRecord(media).upsertSingle("attributes", Record.data(media.attributes.toVector.sortBy(_._1)*).toJsonString)
 
   def toRecord(media: MediaCreate): Record =
     _record(
@@ -260,7 +261,7 @@ object MediaRecordCodec {
     )
 
   def toStoreRecord(media: MediaCreate): Record =
-    toRecord(media)
+    toRecord(media).upsertSingle("attributes", Record.data(media.attributes.toVector.sortBy(_._1)*).toJsonString)
 
   def fromRecord(record: Record): Consequence[MediaEntity] =
     fromStoreRecord(record)
@@ -277,6 +278,7 @@ object MediaRecordCodec {
       createdat <- _instant(record, "createdAt", "created_at").map(Consequence.success).getOrElse(Consequence.argumentMissing("createdAt"))
       updatedat <- _instant(record, "updatedAt", "updated_at").map(Consequence.success).getOrElse(Consequence.argumentMissing("updatedAt"))
       posterimageid <- _entity_id(record, "posterImageId", "poster_image_id")
+      attributes <- _attributes(record)
     } yield MediaEntity(
       id = id,
       kind = kind,
@@ -295,7 +297,7 @@ object MediaRecordCodec {
       posterImageId = posterimageid,
       createdAt = createdat,
       updatedAt = updatedat,
-      attributes = _attributes(record)
+      attributes = attributes
     )
 
   private def _record(
@@ -380,10 +382,24 @@ object MediaRecordCodec {
       case other => scala.util.Try(Instant.parse(other.toString.trim)).toOption
     }.nextOption()
 
-  private def _attributes(record: Record): Map[String, String] =
+  private def _attributes(record: Record): Consequence[Map[String, String]] =
     record.getAny("attributes") match {
-      case Some(rec: Record) => rec.asMap.map { case (k, v) => k -> v.toString }
-      case Some(map: Map[?, ?]) => map.iterator.collect { case (k: String, v) => k -> v.toString }.toMap
-      case _ => Map.empty
+      case None => Consequence.success(Map.empty)
+      case Some(rec: Record) => Consequence.success(rec.asMap.map { case (k, v) => k -> v.toString })
+      case Some(map: Map[?, ?]) => Consequence.success(map.iterator.collect { case (k: String, v) => k -> v.toString }.toMap)
+      case Some(text: String) =>
+        io.circe.parser.parse(text).fold(
+          _ => Consequence.valueInvalid("Invalid metadata attributes JSON"),
+          json => json.asObject match {
+            case Some(fields) =>
+              fields.toVector.foldLeft(Consequence.success(Map.empty[String, String])) { case (result, (key, value)) =>
+                result.flatMap(values => value.asString match {
+                  case Some(text) => Consequence.success(values.updated(key, text))
+                  case None => Consequence.valueInvalid("Metadata attributes JSON member must be a String")
+                })
+              }
+            case None => Consequence.valueInvalid("Metadata attributes JSON must be an object")
+          })
+      case Some(_) => Consequence.valueInvalid("Invalid metadata attributes value")
     }
 }

@@ -12,7 +12,7 @@ import scala.util.control.ControlThrowable
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 18, 2026
  */
 final class EntityMutationCaptureOutcomeSpec extends AnyWordSpec with UnitOfWorkMutationCaptureFixture.Vocabulary {
   import UnitOfWorkMutationCaptureFixture.*
@@ -65,11 +65,11 @@ final class EntityMutationCaptureOutcomeSpec extends AnyWordSpec with UnitOfWork
       }
       "CMC-02 reject malformed admission-only create receipts before coherence" in {
         representations.foreach { representation =>
-          Given("a valid raw receipt and a finite independent set of missing, duplicate and mismatched boundary shapes")
+          Given("a valid raw receipt and representable absent, missing, duplicate and mismatched metadata alongside foreign root-null input")
           val raw = _raw(representation)
           val binding = EntityRevisionBinding(representation)
           val valid = CreateResult[Unit](_id, Some(raw))
-          val records = Vector(null, Record(null), record("business" -> "secret business", representation.storageFieldName -> 1L),
+          val records = Vector(null, Record.empty, record("business" -> "secret business", representation.storageFieldName -> 1L),
             Record(raw.fields :+ field("id", _id)), Record(raw.fields :+ field(representation.storageFieldName, 1L)),
             Record(raw.fields.filterNot(_.key == representation.storageFieldName)),
             Record(raw.fields.map(value => if (value.key == representation.storageFieldName) field(value.key, "wrong") else value)),

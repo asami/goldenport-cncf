@@ -6,7 +6,7 @@ import org.goldenport.bag.Bag
 import org.goldenport.datatype.ContentType
 import org.goldenport.protocol.Response
 import org.goldenport.protocol.operation.OperationResponse
-import org.goldenport.record.Record
+import org.goldenport.record.{Field, Record}
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalacheck.rng.Seed
 import org.scalatest.GivenWhenThen
@@ -17,13 +17,13 @@ import org.scalatest.wordspec.AnyWordSpec
  * Native owned bytes and closed typed consumer behavior; no CBD/JVM claim.
  *
  * @since   Oct.  4, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.scalatest.tags.Slow
 final class DurableJobOperationResponsePayloadsSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import DurableJobOperationResponsePayloadFixtures.{
-    Fixture, ReadEffects, access, bytes, generatedRecord, generatedWire, prefix,
+    Fixture, ReadEffects, access, bytes, generatedCanonicalWire, generatedRecord, generatedWire, prefix,
     review, reviewFields, reviewWire, sha256, success
   }
 
@@ -559,7 +559,7 @@ final class DurableJobOperationResponsePayloadsSpec extends AnyWordSpec with Mat
 
   "RP12 Generated native result invariants" should _scenario("RP12") {
     "preserve ordered typed Records and independent bytes across native V1 and V2 jobs with ordinary shrinking" in {
-      Given(s"$_spec RP12/R1..R9: bounded generated Boolean/Int/String/List/Vector/JSON Record atoms and existing V1/V2 selection")
+      Given(s"$_spec RP12/R1..R9: bounded generated Boolean/Int/String/Vector/JSON Record atoms, supplied foreign Lists projected by current Record as Vector, and existing V1/V2 selection")
       val generator = for {
         size <- Gen.choose(0, 8)
         values <- Gen.listOfN(size, Gen.choose(-100, 100))
@@ -569,7 +569,7 @@ final class DurableJobOperationResponsePayloadsSpec extends AnyWordSpec with Mat
         DurableJobOperationResponsePayloadFixtures.withFixture { fixture =>
           Given(s"$_spec RP12 generated case: an independent native namespace and ordinary generated domain values with a V2 Running/Pending producer and selected completed consumer legacy=$legacy")
           val expected = generatedRecord(values)
-          val expectedwire = generatedWire(values)
+          val expectedwire = generatedCanonicalWire(values)
           val running = fixture.running("generated")
           When("the generated native Record is published, signed with its real terminal reference and read through the actual adapters")
           val reference = fixture.publish(running, OperationResponse.RecordResponse(expected))
@@ -602,8 +602,57 @@ final class DurableJobOperationResponsePayloadsSpec extends AnyWordSpec with Mat
       When("ScalaCheck runs ordinary tuple/list/scalar shrinking with seed69710022L and minimum24 actual successful cases")
       val checked = Test.check(Test.Parameters.default.withInitialSeed(Seed(69710022L)).withMinSuccessfulTests(24), property)
       Then("the actual checked result passes and reports at least 24 successful native cases")
-      checked.passed shouldBe true
+      withClue(checked.toString) { checked.passed shouldBe true }
       checked.succeeded should be >= 24
+      checked.discarded shouldBe 0
+    }
+
+    Vector(false, true).foreach { legacy =>
+      s"read retained list bytes as an ordered Vector without rewriting native V${if (legacy) 1 else 2} facts" in {
+        DurableJobOperationResponsePayloadFixtures.withFixture { fixture =>
+          Given(s"$_spec RP12/R1..R9: an independent native namespace with retained list wire and a selected V1/V2 completed consumer legacy=$legacy")
+          val values = List(3)
+          val expectedrecord = Record(Vector(Field("k0", Field.Value.Single(Vector(3, 4)))))
+          val retainedwire = """{"format":{"schemaId":"cncf.job-operation-response","version":1},"response":{"kind":"record","fields":[{"key":"k0","value":{"type":"list","values":[{"type":"int","value":3},{"type":"int","value":4}]}}]}}"""
+          val canonicalwire = """{"format":{"schemaId":"cncf.job-operation-response","version":1},"response":{"kind":"record","fields":[{"key":"k0","value":{"type":"vector","values":[{"type":"int","value":3},{"type":"int","value":4}]}}]}}"""
+          val running = fixture.running("retained-list")
+          val reference = fixture.publishBytes(running, bytes(generatedWire(values)))
+          val snapshot = fixture.terminal(running, reference, legacy)
+          val before = fixture.facts(snapshot, reference)
+          val quota = fixture.quota.entries
+          fixture.reset()
+          When("the actual typed native adapter reads the unchanged retained list payload")
+          val result = fixture.read(snapshot)
+          val effects = fixture.effects
+          Then("the canonical Record contains one ordered concrete Vector while exact retained bytes, Published quota and every native fact remain unchanged")
+          generatedRecord(values) shouldBe expectedrecord
+          generatedWire(values) shouldBe retainedwire
+          generatedCanonicalWire(values) shouldBe canonicalwire
+          result.toOption shouldBe Some(OperationResponse.RecordResponse(expectedrecord))
+          val record = result.toOption.get.asInstanceOf[OperationResponse.RecordResponse].record
+          record.getClass shouldBe classOf[Record]
+          record.fields.map(_.key) shouldBe Vector("k0")
+          val value = record.fields.head.value.single
+          value shouldBe Vector(3, 4)
+          value.isInstanceOf[Vector[?]] shouldBe true
+          fixture.physical(reference) shouldBe bytes(retainedwire).toVector
+          reference.contentType shouldBe Some("application/vnd.cncf.job-operation-response+json")
+          reference.byteSize shouldBe bytes(retainedwire).length.toLong
+          reference.sha256 shouldBe sha256(bytes(retainedwire))
+          snapshot.record.format shouldBe (if (legacy) DurableRecordFormat.V1 else DurableRecordFormat.V2)
+          val entry = quota.find(_.blobid == reference.reference).get
+          entry.state shouldBe DurableJobOwnedBlobQuotaState.Published
+          entry.bytesize shouldBe reference.byteSize
+          entry.payloadsha256 shouldBe reference.sha256
+          fixture.quota.entries shouldBe quota
+          effects.gets shouldBe 1
+          effects.opens shouldBe 1
+          effects.closes shouldBe 1
+          effects.consumed shouldBe reference.byteSize
+          _no_writes(effects)
+          fixture.facts(snapshot, reference) shouldBe before
+        }
+      }
     }
   }
 

@@ -11,7 +11,7 @@ import scala.jdk.CollectionConverters.IteratorHasAsScala
 import org.goldenport.Consequence
 import org.goldenport.cncf.blob.{Blob, BlobRepository}
 import org.goldenport.cncf.context.{Capability, ExecutionContext, Principal, PrincipalId, SubjectKind}
-import org.goldenport.cncf.datastore.{DataStore, EntityCompareAndSetMutationPlan, EntityDirectMutationPlan,
+import org.goldenport.cncf.datastore.{DataStore, EntityCompareAndSetMutationPlan, EntityCreatePlan, EntityCreateResult, EntityDirectMutationPlan,
   EntityMutationProviderCapabilities, EntityMutationProviderResult, EntityVersionedMutationPlan,
   EntityVersionedMutationResult, QueryDirective, SearchResult}
 import org.goldenport.cncf.datastore.sql.{SqlDataStore, SqliteDialectDriver}
@@ -25,7 +25,7 @@ import org.scalatest.matchers.should.Matchers
  * Original native Task publication, raw current callers and owned sequential JVMs.
  *
  * @since   Oct.  4, 2026
- * @version Oct.  4, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] object DurableJobOperationResponseQueryFixtures extends Matchers {
@@ -93,6 +93,10 @@ private[job] object DurableJobOperationResponseQueryFixtures extends Matchers {
     }
     override def create(collection: DataStore.CollectionId, id: DataStore.EntryId, record: Record)
         (using ctx: ExecutionContext): Consequence[Unit] = { writes.incrementAndGet(); delegate.create(collection, id, record) }
+    override def createEntity(plan: EntityCreatePlan)
+        (using ctx: ExecutionContext): Consequence[EntityCreateResult] = {
+      writes.incrementAndGet(); delegate.createEntity(plan)
+    }
     override def save(collection: DataStore.CollectionId, id: DataStore.EntryId, record: Record)
         (using ctx: ExecutionContext): Consequence[Unit] = { writes.incrementAndGet(); delegate.save(collection, id, record) }
     override def update(collection: DataStore.CollectionId, id: DataStore.EntryId, changes: Record)

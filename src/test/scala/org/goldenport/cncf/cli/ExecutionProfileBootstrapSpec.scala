@@ -9,7 +9,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 15, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ExecutionProfileBootstrapSpec
@@ -30,7 +31,7 @@ final class ExecutionProfileBootstrapSpec
           |  key: bootstrap-run
           |  time:
           |    mode: manual
-          |    start-at: 2026-07-28T09:00:00Z
+          |    start-at: '2026-07-28T09:00:00Z'
           |  random:
           |    mode: seeded
           |    seed: bootstrap-seed
@@ -68,7 +69,7 @@ final class ExecutionProfileBootstrapSpec
           |  key: unselected-run
           |  time:
           |    mode: manual
-          |    start-at: 2026-07-28T09:00:00Z
+          |    start-at: '2026-07-28T09:00:00Z'
           |  random:
           |    seed: unselected-seed
           |""".stripMargin

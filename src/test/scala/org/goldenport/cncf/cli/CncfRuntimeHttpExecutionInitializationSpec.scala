@@ -25,7 +25,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 16, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeHttpExecutionInitializationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -85,7 +85,7 @@ final class CncfRuntimeHttpExecutionInitializationSpec extends AnyWordSpec with 
         |  key: http-runtime
         |  time:
         |    mode: manual
-        |    start-at: 2026-10-16T00:00:00Z
+        |    start-at: '2026-10-16T00:00:00Z'
         |  random:
         |    mode: seeded
         |    seed: http-runtime

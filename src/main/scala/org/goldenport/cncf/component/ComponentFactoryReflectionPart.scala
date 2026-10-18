@@ -37,7 +37,7 @@ import scala.util.Try
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 private[component] trait ComponentFactoryReflectionPart { self: ComponentFactory =>
@@ -659,17 +659,31 @@ private[component] trait ComponentFactoryReflectionPart { self: ComponentFactory
     bridge: EntityPersistent[Any],
     mapping: Map[String, String]
   ): EntityPersistent[Any] =
-    if (mapping.isEmpty)
+    if (mapping.isEmpty && bridge.storeRowMapping.isEmpty)
       bridge
     else
       new EntityPersistent[Any] {
         def id(e: Any): EntityId = bridge.id(e)
         def toRecord(e: Any): Record = bridge.toRecord(e)
         def fromRecord(r: Record): Consequence[Any] = bridge.fromRecord(r)
+        override def storeRowMapping: Option[org.goldenport.cncf.entity.EntityStoreRowMapping] = bridge.storeRowMapping
+        override def toLogicalStoreRecord(e: Any): Consequence[Record] = bridge.toLogicalStoreRecord(e)
+        override def admitLogicalStoreRecord(r: Record): Consequence[Record] = bridge.admitLogicalStoreRecord(r)
+        override def decodeAdmittedLogicalStoreRecord(r: Record): Consequence[Any] = bridge.decodeAdmittedLogicalStoreRecord(r)
         override def toStoreRecord(e: Any): Record = bridge.toStoreRecord(e)
+        override private[cncf] def admitStoreRecord(r: Record): Consequence[Record] = bridge.admitStoreRecord(r)
+        override private[cncf] def decodeAdmittedStoreRecord(r: Record): Consequence[Any] = bridge.decodeAdmittedStoreRecord(r)
         override def fromStoreRecord(r: Record): Consequence[Any] = bridge.fromStoreRecord(r)
+        override def toViewRecord(e: Any, view: String, fields: Vector[String]): Record = bridge.toViewRecord(e, view, fields)
+        override def securityAttributes(e: Any): Option[org.simplemodeling.model.value.SecurityAttributes] = bridge.securityAttributes(e)
+        override def authorizationRecord(e: Any): Record = bridge.authorizationRecord(e)
+        override def authorizationRecord(e: Any, base: Record): Record = bridge.authorizationRecord(e, base)
         override def storeFieldName(logicalName: String): String =
-          mapping.getOrElse(logicalName, bridge.storeFieldName(logicalName))
+          bridge.storeRowMapping match {
+            case Some(declared) => declared.fields.find(_.logicalName == logicalName)
+              .map(_.storageName).getOrElse(bridge.storeFieldName(logicalName))
+            case None => mapping.getOrElse(logicalName, bridge.storeFieldName(logicalName))
+          }
       }
 
   private[component] def _entity_persistent_store_field_mapping(

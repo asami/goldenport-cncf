@@ -1,6 +1,7 @@
 package org.goldenport.cncf.job
 
 import java.math.{MathContext, RoundingMode}
+import cats.data.NonEmptyVector
 import io.circe.{Json, JsonNumber}
 import io.circe.parser.parse
 import org.goldenport.Consequence
@@ -12,7 +13,7 @@ import DurableJobOperationResponseResourcePolicy.{RenderingBudget, refuse}
 
 /*
  * @since   Oct.  4, 2026
- * @version Oct.  4, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] object DurableJobOperationResponseCodec {
@@ -30,14 +31,13 @@ private[job] object DurableJobOperationResponseCodec {
   def decode(text: String): Consequence[OperationResponse] = _admit {
     if (DurableJobOperationResponseResourcePolicy.validateText(text).isLeft) refuse()
     val root = parse(text).fold(_ => refuse(), identity)
+    if (root.noSpaces != text) refuse()
     _members(root, "format", "response")
     val format = _get(root, "format")
     _members(format, "schemaId", "version")
     if (_string(_get(format, "schemaId")) != "cncf.job-operation-response" ||
         _integer(_get(format, "version"), 1, 1) != 1) refuse()
-    val response = _decode_response(_get(root, "response"))
-    if (_render(response) != text) refuse()
-    response
+    _decode_response(_get(root, "response"))
   }
 
   private def _admit[A](value: => A): Consequence[A] =
@@ -113,7 +113,6 @@ private[job] object DurableJobOperationResponseCodec {
   private def _fields(record: Record, budget: RenderingBudget): Unit = {
     if (record == null || record.getClass != classOf[Record]) refuse()
     val fields = record.fields
-    if (fields == null) refuse()
     budget.begin('[')
     val iterator = fields.iterator
     var first = true
@@ -121,9 +120,9 @@ private[job] object DurableJobOperationResponseCodec {
       if (!first) budget.punctuation(",")
       first = false
       val field = iterator.next()
-      if (field == null || field.getClass != classOf[Field]) refuse()
+      if (field.getClass != classOf[Field]) refuse()
       val value = field.value
-      if (value == null || value.getClass != classOf[Field.Value.Single]) refuse()
+      if (value.getClass != classOf[Field.Value.Single]) refuse()
       budget.begin('{')
       budget.key("key")
       budget.string(field.key)
@@ -139,7 +138,7 @@ private[job] object DurableJobOperationResponseCodec {
     budget.begin('{')
     budget.key("type")
     value match {
-      case null => budget.string("null")
+      case null => refuse()
       case value: String => _typed_string("string", value, budget)
       case value: Boolean => _typed_literal("boolean", if (value) "true" else "false", budget)
       case value: Byte => _typed_literal("byte", java.lang.Byte.toString(value), budget)
@@ -178,6 +177,7 @@ private[job] object DurableJobOperationResponseCodec {
         budget.key("fields")
         _fields(value, budget)
       case value: Vector[?] => _sequence("vector", value.iterator, budget)
+      case value: NonEmptyVector[?] => _sequence("vector", value.toVector.iterator, budget)
       case value: List[?] => _sequence("list", value.iterator, budget)
       case value: Json =>
         budget.string("json")
@@ -402,7 +402,7 @@ private[job] object DurableJobOperationResponseCodec {
 
   private def _members(value: Json, keys: String*): Unit = {
     val objectvalue = value.asObject.getOrElse(refuse())
-    if (objectvalue.size != keys.size || objectvalue.keys.toSet != keys.toSet) refuse()
+    if (objectvalue.keys.toVector != keys.toVector) refuse()
   }
 
   private def _get(value: Json, key: String): Json =
@@ -446,9 +446,14 @@ private[job] object DurableJobOperationResponseCodec {
     }
 
   private def _decode_fields(value: Json): Record = {
-    val fields = value.asArray.getOrElse(refuse()).map { field =>
+    val fields = value.asArray.getOrElse(refuse()).flatMap { field =>
       _members(field, "key", "value")
-      Field(_string(_get(field, "key")), Field.Value.Single(_decode_atom(_get(field, "value"))))
+      val key = _string(_get(field, "key"))
+      val atom = _get(field, "value")
+      if (_string(_get(atom, "type")) == "null") {
+        _members(atom, "type")
+        None
+      } else Some(Field(key, Field.Value.Single(_decode_atom(atom))))
     }
     Record(fields)
   }
@@ -458,7 +463,7 @@ private[job] object DurableJobOperationResponseCodec {
     kind match {
       case "null" =>
         _members(value, "type")
-        null
+        refuse()
       case "bigdecimal" =>
         _members(value, "type", "unscaled", "scale", "precision", "rounding")
         val text = _string(_get(value, "unscaled"))
@@ -473,8 +478,7 @@ private[job] object DurableJobOperationResponseCodec {
         _decode_fields(_get(value, "fields"))
       case "vector" | "list" =>
         _members(value, "type", "values")
-        val values = _get(value, "values").asArray.getOrElse(refuse()).map(_decode_atom)
-        if (kind == "vector") values else values.toList
+        _get(value, "values").asArray.getOrElse(refuse()).map(_decode_atom)
       case _ =>
         _members(value, "type", "value")
         val atom = _get(value, "value")

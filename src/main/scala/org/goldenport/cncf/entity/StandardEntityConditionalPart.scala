@@ -49,7 +49,8 @@ import org.simplemodeling.model.value.NominalScalar
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 29, 2026
+ *  version Sep. 29, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 private[entity] trait StandardEntityConditionalPart extends EntityStore { self: StandardEntityStore =>
@@ -78,9 +79,10 @@ private[entity] trait StandardEntityConditionalPart extends EntityStore { self: 
         for {
           collection <- ctx.entityStoreSpace.dataStoreCollection(id)
           entry <- ctx.entityStoreSpace.dataStoreEntryId(id)
+          source <- EntityPersistentCreate._to_provider_record(createintent.create, id.collection, createintent.candidate)
           initialized <- revisionbinding.initializeForCreate(
               _complement_create_record(
-                createintent.create.toStoreRecord(createintent.candidate),
+                source,
                 id,
                 EntityCreateOptions.default
               )
@@ -195,7 +197,7 @@ private[entity] trait StandardEntityConditionalPart extends EntityStore { self: 
         (for {
           hydratedroot <-
             ContentBodyStoragePolicy.hydrate(request.rootId, rootrecord)
-          admittedroot <- request.rootPersistent.admitStoreRecord(hydratedroot)
+          admittedroot <- EntityPersistent._admit_provider_record(request.rootPersistent, request.rootId.collection, hydratedroot)
           rootvalue <- _conditional_transition_value(
             rootbinding,
             admittedroot
@@ -208,7 +210,7 @@ private[entity] trait StandardEntityConditionalPart extends EntityStore { self: 
           )
           hydratedsuccessor <-
             ContentBodyStoragePolicy.hydrate(successorid, successorrecord)
-          admittedsuccessor <- request.successor.persisted.admitStoreRecord(hydratedsuccessor)
+          admittedsuccessor <- EntityPersistent._admit_provider_record(request.successor.persisted, successorid.collection, hydratedsuccessor)
           successorvalue <- _conditional_transition_value(
             successorbinding,
             admittedsuccessor
@@ -231,7 +233,7 @@ private[entity] trait StandardEntityConditionalPart extends EntityStore { self: 
         for {
           hydratedroot <-
             ContentBodyStoragePolicy.hydrate(request.rootId, existingroot)
-          admittedroot <- request.rootPersistent.admitStoreRecord(hydratedroot)
+          admittedroot <- EntityPersistent._admit_provider_record(request.rootPersistent, request.rootId.collection, hydratedroot)
           rootvalue <- _conditional_transition_value(
             rootbinding,
             admittedroot

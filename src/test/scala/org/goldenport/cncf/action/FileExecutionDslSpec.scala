@@ -25,7 +25,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class FileExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -217,7 +217,7 @@ final class FileExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhe
         |  key: file-runtime
         |  time:
         |    mode: manual
-        |    start-at: 2026-10-15T00:00:00Z
+        |    start-at: '2026-10-15T00:00:00Z'
         |  random:
         |    mode: seeded
         |    seed: file-runtime

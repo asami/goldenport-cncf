@@ -1,7 +1,8 @@
 package org.goldenport.cncf.component
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.entity.EntityPersistent
+import org.goldenport.cncf.entity.{EntityPersistent, EntityStoreField, EntityStoreFieldBinding, EntityStoreRowMapping}
+import org.goldenport.schema.{Multiplicity, ValueDomain, XString}
 import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy}
 import org.goldenport.cncf.component.repository.fixture.impl._ImplBackedComponent
 import org.goldenport.cncf.testutil.TestComponentFactory
@@ -17,7 +18,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 16, 2026
  *  version Apr. 26, 2026
  *  version Jul. 30, 2026
- * @version Sep. 17, 2026
+ *  version Sep. 17, 2026
+ * @version Oct. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryGeneratedSchemaSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -84,6 +86,62 @@ final class ComponentFactoryGeneratedSchemaSpec extends AnyWordSpec with Matcher
       Then("the bridge exposes the physical store field name for datastore queries")
       mapping.get("postedAt") shouldBe Some("posted_at")
       mapping.get("body") shouldBe Some("body")
+    }
+
+    "preserve declared storage names and logical hooks across a typed runtime bridge" in {
+      Given("a declared camel-case storage field with a distinct snake-case input alias")
+      val collection = EntityCollectionId("test", "a", "declared_bridge")
+      val entityid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts(
+        "test", "declared_bridge", collection, entropy = "declared_bridge")
+      val mapping = EntityStoreRowMapping(Vector(EntityStoreField(
+        "postedAt", "postedAt", ValueDomain(XString, Multiplicity.One), EntityStoreFieldBinding.string)))
+      val calls = scala.collection.mutable.ArrayBuffer.empty[String]
+      val declared = new EntityPersistent[Record] {
+        def id(e: Record): EntityId = entityid
+        def toRecord(e: Record): Record = Record.data("postedAt" -> "view")
+        def fromRecord(r: Record): Consequence[Record] = Consequence.argumentInvalid("view decoder is not a logical hook")
+        override def storeRowMapping: Option[EntityStoreRowMapping] = Some(mapping)
+        override def toLogicalStoreRecord(e: Record): Consequence[Record] = {
+          calls += "write"
+          Consequence.success(e)
+        }
+        override def admitLogicalStoreRecord(r: Record): Consequence[Record] = {
+          calls += "admit"
+          Consequence.success(r)
+        }
+        override def decodeAdmittedLogicalStoreRecord(r: Record): Consequence[Record] = {
+          calls += "decode"
+          Consequence.success(r)
+        }
+      }
+      val record = Record.data("postedAt" -> "  {original text}  ")
+
+      When("runtime binding enriches the actual persistent and its typed stages roundtrip a row")
+      val persistent = new ComponentFactory()._as_entity_persistent(declared, Some(_GeneratedStyleEntityModule))
+        .getOrElse(fail("typed persistent was not bound"))
+      val stored = persistent.toStoreRecordC(collection, record)
+      val restored = stored.flatMap(persistent.fromStoreRecordC(collection, _))
+
+      Then("the explicit storage name wins over input aliases and every logical hook runs once")
+      persistent.storeRowMapping shouldBe Some(mapping)
+      persistent.storeFieldName("postedAt") shouldBe "postedAt"
+      persistent.storeFieldName("frameworkField") shouldBe "frameworkField"
+      stored shouldBe Consequence.success(record)
+      restored shouldBe Consequence.success(record)
+      calls.toVector shouldBe Vector("write", "admit", "decode")
+    }
+
+    "retain companion alias compatibility only for a persistent without a row declaration" in {
+      Given("a legacy generated persistent with no typed row mapping")
+      val original = _GeneratedStyleEntityModule.given_EntityPersistent_GeneratedStyleEntity
+
+      When("runtime binding enriches its existing input alias metadata")
+      val persistent = new ComponentFactory()._as_entity_persistent(original, Some(_GeneratedStyleEntityModule))
+        .getOrElse(fail("legacy persistent was not bound"))
+
+      Then("the legacy physical name remains and no typed declaration is fabricated")
+      persistent.storeRowMapping shouldBe None
+      persistent.storeFieldName("postedAt") shouldBe "posted_at"
     }
 
     "prefer explicit store record methods on reflective EntityPersistent bridges" in {

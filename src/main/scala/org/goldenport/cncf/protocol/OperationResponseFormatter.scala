@@ -18,7 +18,7 @@ import io.circe.{Json, Printer}
  *  version May. 31, 2026
  *  version Jun. 29, 2026
  *  version Aug. 12, 2026
- * @version Oct.  5, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationResponseFormatter {
@@ -63,6 +63,10 @@ object OperationResponseFormatter {
             else data
           }
         _record_response(_structured_format(format, shape), payload)
+      case _: OperationResponse.Scalar[?] if format == "json" &&
+          (shape == "envelope" || metadata.inlineCallTree.isDefined) &&
+          executionResponse.exists(_.responseKind == RuntimeContext.ExecutionResponseKind.AcceptedJob) =>
+        _json_envelope_response(request, Json.Null, metadata, executionResponse, interfaceshape = if (metadata.inlineCallTree.isDefined) "none" else "scalar")
       case scalar: OperationResponse.Scalar[?] if shape == "envelope" =>
         val payload = _with_inline_debug(request, _envelope_data(scalar.print, executionResponse), metadata, executionResponse)
           .getOrElse(_envelope_scalar(request, scalar.print, metadata, executionResponse))
@@ -83,12 +87,13 @@ object OperationResponseFormatter {
     request: Request,
     data: Json,
     metadata: RuntimeContext.ExecutionMetadata,
-    executionresponse: Option[RuntimeContext.ExecutionResponseMetadata]
+    executionresponse: Option[RuntimeContext.ExecutionResponseMetadata],
+    interfaceshape: String = "json"
   ): Response = {
     val debug = metadata.inlineCallTree.map(calltree =>
       Record.data("calltree" -> _debug_calltree_payload(calltree)))
     val envelope = _response_envelope(request, null, metadata,
-      _execution_record(request, "json", executionresponse), debug, executionresponse)
+      _execution_record(request, interfaceshape, executionresponse), debug, executionresponse)
     val framework = io.circe.parser.parse(RecordEncoder.json(envelope)).toOption
       .flatMap(_.asObject).getOrElse {
         throw new IllegalStateException("Framework JSON response metadata could not be formatted.")

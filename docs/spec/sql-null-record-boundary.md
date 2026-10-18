@@ -27,15 +27,20 @@ Failure, never a successful partial SearchResult; its existing ResultSet and
 statement cleanup applies on success, typed failure and exceptions.
 
 Only JDBC SQL NULL values are omitted. Every non-NULL decoded Field remains,
-including empty String, numeric zero, the existing numeric Boolean carrier,
-empty Record and empty Vector. Retained Fields construct the Record directly;
+including empty String, numeric zero, the existing numeric Boolean carrier
+and explicitly encoded empty-object/empty-array text. The Phase100 physical
+activation dated 2026-10-18 supersedes the earlier automatic empty Record/Vector
+reconstruction here: [R2/R8](datastore-logical-type-mapping.md#r2-physical-text-and-exact-string)
+requires exact physical Strings; declared logical codecs retain their separate
+Record/array reconstruction responsibility. Retained Fields construct the Record directly;
 an empty-value-removing Record factory is not this boundary. Native columns,
 NULL cells, selected and unrelated rows and body state remain present and
 unchanged. `Option[Record]` denotes row existence: a missing row is None; a
 projection of only NULL business columns still returns the existing row with
 the mandatory id projection. IsNull predicates continue to address physical
 SQL NULL. Serialized readback has no key for the omitted attribute, rather
-than a JSON null key. Existing nested JSON null decoding is unchanged.
+than a JSON null key. Nested JSON null remains inside exact stored JSON text;
+its logical decoding requires an explicitly selected codec.
 
 ## Write command and equality
 
@@ -48,8 +53,10 @@ that write Record; the actual required SQL readback remains authoritative.
 Generic merge, desired-record construction, side intents, transactions,
 checkpoints and acknowledgement policy retain their existing owners.
 
-Comparison-only SQL Records omit exact SetNull Fields and retain the existing
-String-carrier decoder. Clearing non-NULL state is Applied; repeating a clear
+Comparison-only SQL Records omit exact SetNull Fields and retain physical
+Strings verbatim under the current Phase100 contract, without inferred JSON
+equivalence. This explicitly supersedes only the earlier String-carrier
+reconstruction correspondence. Clearing non-NULL state is Applied; repeating a clear
 against absent readback at the current revision is WriteIfChanged NoOp with
 the complete authoritative Record, unchanged revision and no side publication.
 ObservedRequired stale admission precedes equality and preserves complete

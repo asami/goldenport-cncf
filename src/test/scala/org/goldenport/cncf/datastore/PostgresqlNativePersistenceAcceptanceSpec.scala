@@ -6,25 +6,119 @@ import org.goldenport.cncf.datastore.EntityCreateProviderFixture.{DirectSession,
 import org.goldenport.cncf.datastore.sql.{PostgreSqlDialectDriver, SqlDataStore}
 import org.goldenport.cncf.directive.{Query as EntityQuery}
 import org.goldenport.cncf.entity.{EntityCreateFailureSafetyFixture, EntityConcurrencyPolicy, EntityWritePolicy, RevisionPreconditionPolicy}
+import org.goldenport.cncf.entity.{EntityPersistent, EntityStore, EntityStoreRowMapping, Phase100EntityStoreMappingFixture}
 import org.goldenport.cncf.entity.EntityObservedDeleteCanonicalFixture.{reason, success}
 import org.goldenport.record.{Field, Record}
 import org.goldenport.observation.Descriptor
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-import org.simplemodeling.model.datatype.{EntityCollectionId, EntityRevision}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRevision}
 
 /*
  * @since   Oct. 14, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 18, 2026
  */
 final class PostgresqlNativePersistenceAcceptanceSpec extends AnyWordSpec with Matchers with GivenWhenThen with PostgresqlAcceptance {
   import PostgresqlPersistenceFixture.*
 
   "Native PostgreSQL persistence" should {
+    "retain declared mapping correspondence through native identifier conversion" which {
+      Vector(false, true).foreach { normalized =>
+        s"round trip a long Unicode storage name through mapped save and fresh-provider load with normalization $normalized" in {
+          Given("a declared five-value mapping with a native-clipped payload name and a unique collection")
+          with_postgresql { database =>
+            val collection = EntityCollectionId("test", "phase100", database.token("mapped_clip"))
+            val address = DataStore.CollectionId.EntityStore(collection)
+            val entityid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "selected", collection, entropy = "selected")
+            val field = "長" * 30
+            val mapping = Phase100EntityStoreMappingFixture.mapping.copy(
+              fields = Phase100EntityStoreMappingFixture.mapping.fields.map { declared =>
+                if (declared.logicalName == "payload") declared.copy(storageName = field) else declared
+              })
+            given EntityPersistent[Record] = new EntityPersistent[Record] {
+              def id(e: Record): EntityId = Phase100EntityStoreMappingFixture.persistent.id(e)
+              def toRecord(e: Record): Record = Phase100EntityStoreMappingFixture.persistent.toRecord(e)
+              def fromRecord(r: Record): Consequence[Record] = Phase100EntityStoreMappingFixture.persistent.fromRecord(r)
+              override def storeRowMapping: Option[EntityStoreRowMapping] = Some(mapping)
+            }
+            val source = Phase100EntityStoreMappingFixture.row("nativeclip", "  { original formatting }\n雪  ")
+              .upsertSingle("id", entityid.value)
+            val nativefield = database.withConnection { connection =>
+              val statement = connection.prepareStatement("SELECT CAST(? AS pg_catalog.name)::text")
+              try {
+                statement.setString(1, field)
+                val rows = statement.executeQuery()
+                try { rows.next(); rows.getString(1) } finally rows.close()
+              } finally statement.close()
+            }
+            val writer = database.open(normalized)
+
+            When("ordinary mapped save persists the row and the writer is closed")
+            locally {
+              given ExecutionContext = context(writer)
+              try success(EntityStore.standard().save(source))
+              finally success(writer.closeC())
+            }
+
+            When("a separately opened reader and context load the raw and logical rows")
+            val reader = database.open(normalized)
+            given ExecutionContext = context(reader)
+            val physical = success(reader.load(address, DataStore.EntryId(entityid))).get
+            val restored = success(EntityStore.standard().load[Record](entityid)).get
+            val stored = database.snapshotAll()("public" -> address.collectionName)
+
+            Then("the independent native name holds physical String JSON and every declared logical value is restored")
+            nativefield should not be field
+            physical.getAny(nativefield).get shouldBe a[String]
+            physical.getString(nativefield) shouldBe Some(source.getAny("payload").get.asInstanceOf[io.circe.Json].noSpaces)
+            physical.keySet.contains(field) shouldBe false
+            stored.columns.map(_._1) should contain(nativefield)
+            stored.columns.map(_._1) should not contain field
+            Vector("original", "payload", "evidence", "labels", "summary", "number").foreach { name =>
+              withClue(name) { restored.getAny(name) shouldBe source.getAny(name) }
+            }
+          }
+        }
+
+        s"reject complete mapped declarations with clipped native aliases before publication with normalization $normalized" in {
+          Given("distinct payload and evidence storage names sharing the same clipped native prefix")
+          with_postgresql { database =>
+            val collection = EntityCollectionId("test", "phase100", database.token("mapped_clip_alias"))
+            val entityid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "selected", collection, entropy = "selected")
+            val common = "長" * 30
+            val mapping = Phase100EntityStoreMappingFixture.mapping.copy(
+              fields = Phase100EntityStoreMappingFixture.mapping.fields.map { declared =>
+                if (declared.logicalName == "payload" || declared.logicalName == "evidence")
+                  declared.copy(storageName = common + declared.logicalName)
+                else declared
+              })
+            given EntityPersistent[Record] = new EntityPersistent[Record] {
+              def id(e: Record): EntityId = Phase100EntityStoreMappingFixture.persistent.id(e)
+              def toRecord(e: Record): Record = Phase100EntityStoreMappingFixture.persistent.toRecord(e)
+              def fromRecord(r: Record): Consequence[Record] = Phase100EntityStoreMappingFixture.persistent.fromRecord(r)
+              override def storeRowMapping: Option[EntityStoreRowMapping] = Some(mapping)
+            }
+            val writer = database.open(normalized)
+            given ExecutionContext = context(writer)
+            val source = Phase100EntityStoreMappingFixture.row("nativealias", "exact original")
+              .upsertSingle("id", entityid.value)
+            val before = database.snapshotAll()
+
+            When("ordinary mapped save validates the complete provider-projected declaration")
+            val result = EntityStore.standard().save(source)
+
+            Then("the collision is a structured failure and every native schema and row remains unchanged")
+            result shouldBe a[Consequence.Failure[?]]
+            database.snapshotAll() shouldBe before
+          }
+        }
+      }
+    }
+
     "retain generic storage and query correspondence" which {
       Vector(false, true).foreach { normalize =>
-        s"PG-E2 round trip scalars, nested carriers, merge, query, projection and paging with normalization $normalize" in {
+        s"PG-E2 round trip physical scalars and JSON text, merge, query, projection and paging with normalization $normalize" in {
           Given("real independent native writer and reader pools and a legal mixed-case collection identity")
           with_postgresql { database =>
             val writer = database.open(normalize)
@@ -32,9 +126,10 @@ final class PostgresqlNativePersistenceAcceptanceSpec extends AnyWordSpec with M
             given ExecutionContext = context(writer)
             val collection = DataStore.CollectionId(database.token("MixedCaseCrud"))
             val id = DataStore.StringEntryId("a'\\entry")
-            val nested = Record.dataAuto("kind" -> "document", "number" -> 7L)
+            val nested = "{\"kind\":\"document\",\"number\":7}"
+            val sequence = "[\"日\",3,false]"
             val row = Record.dataAuto("displayName" -> "Before", "integral" -> 17L, "boolean" -> true,
-              "floating" -> 1.25d, "structured" -> nested, "sequence" -> Vector("日", 3L, false))
+              "floating" -> 1.25d, "structured" -> nested, "sequence" -> sequence)
             When("the actual native generic create, merge upsert and update execute")
             success(writer.create(collection, id, row))
             success(writer.save(collection, id, Record.dataAuto("displayName" -> "After")))
@@ -53,8 +148,8 @@ final class PostgresqlNativePersistenceAcceptanceSpec extends AnyWordSpec with M
             loaded.getLong("integral") shouldBe Some(19L)
             loaded.getLong("boolean") shouldBe Some(1L)
             loaded.getAny("floating") shouldBe Some(1.25d)
-            loaded.getRecord("structured").map(_.asMap) shouldBe Some(nested.asMap)
-            loaded.getAny("sequence") shouldBe Some(Vector("日", 3L, false))
+            loaded.getAny("structured") shouldBe Some(nested)
+            loaded.getAny("sequence") shouldBe Some(sequence)
             selected.records.map(_.getString("displayName")) shouldBe Vector(Some("Second"), Some("Third"))
             selected.records.forall(_.keySet == Set("id", "displayName", "integral")) shouldBe true
             unbounded.records.map(_.asMap) shouldBe selected.records.map(_.asMap)

@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  1, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 18, 2026
  */
 final class CanonicalRuntimeStorageInitializationSpec extends AnyWordSpec with Matchers {
   private def take[A](result: Consequence[A]): A = result match {
@@ -42,7 +42,7 @@ final class CanonicalRuntimeStorageInitializationSpec extends AnyWordSpec with M
          |  key: canonical-storage-preparation
          |  time:
          |    mode: manual
-         |    start-at: 2026-10-01T00:00:00Z
+         |    start-at: '2026-10-01T00:00:00Z'
          |  random:
          |    mode: seeded
          |    seed: canonical-storage-preparation

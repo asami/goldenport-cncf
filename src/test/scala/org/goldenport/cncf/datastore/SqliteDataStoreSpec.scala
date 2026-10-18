@@ -6,6 +6,7 @@ import org.goldenport.convert.ValueReader
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.{Query as EntityQuery}
 import org.goldenport.cncf.datastore.sql.SqlDataStore
+import org.goldenport.cncf.entity.EntityStoreValueCodec
 import org.goldenport.record.{Record, RecordPresentable}
 import org.goldenport.test.matchers.ConsequenceMatchers
 import org.scalatest.GivenWhenThen
@@ -18,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 26, 2026
  *  version May. 26, 2026
  *  version Jul. 15, 2026
- * @version Oct. 10, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqliteDataStoreSpec
@@ -104,8 +105,8 @@ class SqliteDataStoreSpec
       }
     }
 
-    "encode parent-owned single value objects as JSON text" in {
-      Given("a record with scalar columns, an owned address value object, complete JSON payloads and SQL NULL")
+    "retain explicitly encoded single value objects as physical JSON text" in {
+      Given("a caller explicitly encoding its owned address and selecting structured codecs independently of SQL storage")
       val path = Files.createTempFile("cncf-sqlite-value-object", ".db").toString
       val datastore = SqlDataStore.sqlite(path)
       val collection = DataStore.CollectionId("value_object")
@@ -117,7 +118,7 @@ class SqliteDataStoreSpec
       val record = Record.data(
         "id" -> "vo1",
         "name" -> "alice",
-        "address" -> AddressValue("Tokyo", "100-0001"),
+        "address" -> AddressValue("Tokyo", "100-0001").toRecord().toJsonString,
         "metadata" -> objectfixture,
         "emptyobject" -> "{}",
         "emptyarray" -> "[]",
@@ -132,27 +133,33 @@ class SqliteDataStoreSpec
       datastore.create(collection, entryid, record) should be_success
       val loaded = datastore.load(collection, entryid)
 
-      Then("scalar fields remain columns and the value object is decoded as record-like data")
+      Then("SQL retains exact physical Strings and only the caller-selected codec reconstructs the address")
       loaded should be_success
       loaded match {
         case Consequence.Success(Some(r)) =>
           r.getString("name") shouldBe Some("alice")
-          val address = r.getRecord("address").getOrElse(fail("address should be decoded as Record"))
+          r.getAny("address") shouldBe Some("""{"city":"Tokyo","postal_code":"100-0001"}""")
+          val address = EntityStoreValueCodec.semiStructuredData.decode(r.getAny("address").get)
+            .toOption.getOrElse(fail("the explicitly selected address codec should decode"))
           address.getString("city") shouldBe Some("Tokyo")
           address.getString("postal_code") shouldBe Some("100-0001")
 
-          And("JSON metadata preserves explicit null, empty structures, nested arrays and precise object numbers")
-          val metadata = r.getRecord("metadata").getOrElse(fail("metadata should be decoded as Record"))
-          io.circe.parser.parse(metadata.toJsonString) shouldBe io.circe.parser.parse(objectfixture)
-          metadata.getAny("count") shouldBe Some(BigDecimal(7))
+          And("the explicitly selected raw JSON metadata codec preserves document and array nulls, empty structures and precise numbers")
+          r.getAny("metadata") shouldBe Some(objectfixture)
+          val metadata = EntityStoreValueCodec.json.decode(r.getAny("metadata").get)
+            .toOption.getOrElse(fail("the explicitly selected raw JSON metadata codec should decode"))
+          Right(metadata) shouldBe io.circe.parser.parse(objectfixture)
+          metadata.hcursor.get[BigDecimal]("count") shouldBe Right(BigDecimal(7))
 
           And("root empty JSON structures stay present, text fallbacks remain exact and SQL NULL is omitted")
-          r.getRecord("emptyobject").map(_.fields) shouldBe Some(Vector.empty)
-          r.getVector("emptyarray") shouldBe Some(Vector.empty)
-          r.getString("plain") shouldBe Some("plain text")
-          r.getString("blank") shouldBe Some(" 	 ")
-          r.getString("malformedobject") shouldBe Some(" {broken} ")
-          r.getString("malformedarray") shouldBe Some(" [broken] ")
+          r.getAny("emptyobject") shouldBe Some("{}")
+          r.getAny("emptyarray") shouldBe Some("[]")
+          EntityStoreValueCodec.semiStructuredData.decode(r.getAny("emptyobject").get).toOption.map(_.fields) shouldBe Some(Vector.empty)
+          EntityStoreValueCodec.json.decode(r.getAny("emptyarray").get).toOption.flatMap(_.asArray) shouldBe Some(Vector.empty)
+          r.getAny("plain") shouldBe Some("plain text")
+          r.getAny("blank") shouldBe Some(" 	 ")
+          r.getAny("malformedobject") shouldBe Some(" {broken} ")
+          r.getAny("malformedarray") shouldBe Some(" [broken] ")
           r.getAny("sqlnull") shouldBe None
           r.fields.exists(_.key == "sqlnull") shouldBe false
         case other =>
@@ -160,8 +167,8 @@ class SqliteDataStoreSpec
       }
     }
 
-    "encode parent-owned repeated value objects as JSON array text" in {
-      Given("a record with scalar columns, repeated owned line values, a complete JSON array payload and SQL NULL")
+    "retain explicitly encoded repeated value objects as physical JSON array text" in {
+      Given("a caller explicitly encoding its repeated owned lines and selecting their structured codec separately from SQL")
       val path = Files.createTempFile("cncf-sqlite-value-object-array", ".db").toString
       val datastore = SqlDataStore.sqlite(path)
       val collection = DataStore.CollectionId("value_object_array")
@@ -176,7 +183,7 @@ class SqliteDataStoreSpec
         "lines" -> Vector(
           LineValue("sku-1", 2),
           LineValue("sku-2", 1)
-        ),
+        ).map(_.toRecord().toJsonString).mkString("[", ",", "]"),
         "metadata" -> arrayfixture,
         "sqlnull" -> org.simplemodeling.model.directive.Update.SetNull
       )
@@ -185,17 +192,20 @@ class SqliteDataStoreSpec
       datastore.create(collection, entryid, record) should be_success
       val loaded = datastore.load(collection, entryid)
 
-      Then("scalar fields remain columns and repeated values are decoded as record-like sequence data")
+      Then("SQL retains exact array text and the explicitly selected caller codec reconstructs the owned lines")
       loaded should be_success
       loaded match {
         case Consequence.Success(Some(r)) =>
           r.getString("name") shouldBe Some("order-a")
-          val lines = r.getVector("lines").getOrElse(fail("lines should be decoded as Vector"))
+          r.getAny("lines") shouldBe Some("""[{"sku":"sku-1","quantity":2},{"sku":"sku-2","quantity":1}]""")
+          val lines = EntityStoreValueCodec.array(EntityStoreValueCodec.semiStructuredData).decode(r.getAny("lines").get)
+            .toOption.getOrElse(fail("the explicitly selected lines codec should decode"))
           lines.collect { case rec: Record => rec.getString("sku") } shouldBe Vector(Some("sku-1"), Some("sku-2"))
           lines.collect { case rec: Record => _int_value(rec, "quantity") } shouldBe Vector(Some(2), Some(1))
 
           And("JSON arrays preserve null, empty structures, nested arrays and scalar values while SQL NULL is omitted")
-          io.circe.parser.parse(r.toJsonString).toOption.flatMap(_.hcursor.downField("metadata").focus) shouldBe
+          r.getAny("metadata") shouldBe Some(arrayfixture)
+          EntityStoreValueCodec.json.decode(r.getAny("metadata").get).toOption shouldBe
             io.circe.parser.parse(arrayfixture).toOption
           r.getAny("sqlnull") shouldBe None
           r.fields.exists(_.key == "sqlnull") shouldBe false
@@ -204,33 +214,39 @@ class SqliteDataStoreSpec
       }
     }
 
-    "round-trip repeated scalar values as JSON array data" in {
+    "retain explicitly encoded repeated scalar arrays before caller-selected decoding" in {
       val path = Files.createTempFile("cncf-sqlite-scalar-array", ".db").toString
       val datastore = SqlDataStore.sqlite(path)
       val collection = DataStore.CollectionId("scalar_array")
       val ctx = ExecutionContext.create()
       given ExecutionContext = ctx
 
-      Given("a record with repeated string, numeric, and boolean values")
+      Given("a caller explicitly encoding repeated string, numeric and boolean values as JSON array text")
       val entryid = DataStore.StringEntryId("array1")
       val record = Record.data(
         "id" -> "array1",
-        "methods" -> Vector("official_driver", "ai_web_tools", "museum_or_jp"),
-        "priorities" -> Vector(1, 2),
-        "flags" -> Vector(true, false)
+        "methods" -> io.circe.Json.fromValues(Vector("official_driver", "ai_web_tools", "museum_or_jp").map(io.circe.Json.fromString)).noSpaces,
+        "priorities" -> io.circe.Json.fromValues(Vector(1, 2).map(io.circe.Json.fromInt)).noSpaces,
+        "flags" -> io.circe.Json.fromValues(Vector(true, false).map(io.circe.Json.fromBoolean)).noSpaces
       )
 
       When("creating and loading the record")
       datastore.create(collection, entryid, record) should be_success
       val loaded = datastore.load(collection, entryid)
 
-      Then("each repeated scalar field is decoded as a vector of scalar values")
+      Then("SQL preserves all three exact physical Strings and explicit caller decoding restores their scalar values")
       loaded should be_success
       loaded match {
         case Consequence.Success(Some(r)) =>
-          r.getVector("methods") shouldBe Some(Vector("official_driver", "ai_web_tools", "museum_or_jp"))
-          r.getVector("priorities").map(_.collect { case n: java.lang.Number => n.intValue }) shouldBe Some(Vector(1, 2))
-          r.getVector("flags") shouldBe Some(Vector(true, false))
+          r.getAny("methods") shouldBe Some("""["official_driver","ai_web_tools","museum_or_jp"]""")
+          r.getAny("priorities") shouldBe Some("[1,2]")
+          r.getAny("flags") shouldBe Some("[true,false]")
+          EntityStoreValueCodec.array(EntityStoreValueCodec.string).decode(r.getAny("methods").get).toOption shouldBe
+            Some(Vector("official_driver", "ai_web_tools", "museum_or_jp"))
+          EntityStoreValueCodec.json.decode(r.getAny("priorities").get).toOption.flatMap(_.asArray)
+            .map(_.map(_.asNumber.flatMap(_.toInt))) shouldBe Some(Vector(Some(1), Some(2)))
+          EntityStoreValueCodec.json.decode(r.getAny("flags").get).toOption.flatMap(_.asArray)
+            .map(_.map(_.asBoolean)) shouldBe Some(Vector(Some(true), Some(false)))
         case other =>
           fail(s"unexpected result: $other")
       }
@@ -295,6 +311,7 @@ class SqliteDataStoreSpec
     }
 
     "store physical snake columns and return canonical camel keys" in {
+      Given("a SQLite provider with column-name normalization and one canonical camel-key record")
       val path = Files.createTempFile("cncf-sqlite-normalized", ".db").toString
       val datastore = SqlDataStore.sqlite(path, config = SqlDataStore.Config(normalizeColumnNames = true))
       val collection = DataStore.CollectionId("normalized")
@@ -302,6 +319,7 @@ class SqliteDataStoreSpec
       given ExecutionContext = ctx
 
       val entryid = DataStore.StringEntryId("u1")
+      When("the canonical record is created and loaded through the normalized provider")
       datastore.create(
         collection,
         entryid,
@@ -313,6 +331,7 @@ class SqliteDataStoreSpec
 
       val loaded = datastore.load(collection, entryid)
 
+      Then("readback retains canonical camel keys and omits the physical snake aliases")
       loaded should be_success
       loaded match {
         case Consequence.Success(Some(record)) =>
@@ -373,6 +392,7 @@ class SqliteDataStoreSpec
     }
 
     "push down query expressions into sqlite search" in {
+      Given("three SQLite rows separating recipient equality from case-insensitive body matching")
       val path = Files.createTempFile("cncf-sqlite-query", ".db").toString
       val datastore = SqlDataStore.sqlite(path)
       val collection = DataStore.CollectionId("queryable")
@@ -383,6 +403,7 @@ class SqliteDataStoreSpec
       datastore.create(collection, DataStore.StringEntryId("b2"), Record.data("id" -> "b2", "recipientName" -> "bob", "body" -> "Other text")) should be_success
       datastore.create(collection, DataStore.StringEntryId("c3"), Record.data("id" -> "c3", "recipientName" -> "alice", "body" -> "Hello SQLite")) should be_success
 
+      When("search combines recipient equality and case-insensitive body containment")
       val result = datastore.search(
         collection,
         QueryDirective(
@@ -393,6 +414,7 @@ class SqliteDataStoreSpec
         )
       )
 
+      Then("the exact result contains only the row satisfying both query terms")
       result should be_success
       result match {
         case Consequence.Success(SearchResult(records, ResultRange.Exact, None)) =>
