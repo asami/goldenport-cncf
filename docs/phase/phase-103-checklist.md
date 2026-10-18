@@ -10,19 +10,34 @@ remain open acceptance obligations. S1 local Step acceptance is recorded in
 `ac443ed353cc682251e4d17bf4e64a1285955798`. S2 discovery/query validation and
 independent review are accepted in `2ec6da1265d14430cf522443869a0b9b2647ea00`.
 S3 focused producer validation and independent review passed; S3 is accepted in
-local Step commit `1df07da9be8716edf0e0462bcba221ca8d020c60`. Actual sm-workflow S4
-consumer source admission remains pending.
+local Step commit `1df07da9be8716edf0e0462bcba221ca8d020c60`. October 19: concrete
+sm-workflow Phase 6.2 consumer evidence is available; independent integrated CNCF S4
+review passed and its exact local Step acceptance commit remains pending.
 
-Broader producer repository-full validation has not passed. Targeted non-DB
-reproduction also failed; the connection to the prior Action context/UnitOfWork
-ownership change has no accepted repair. Required PostgreSQL/MySQL flags were
-absent from the first full invocation, and the property/JUnit harness failure
-remains unresolved. Full Phase validation, review and release acceptance remain open.
+The first producer-full invocation failed without the required PostgreSQL/MySQL
+flags, and targeted non-DB reproduction failed. Bounded Action-context and
+Display observer corrections are authored. October 19 closure-focused checks
+passed compilation and 161/161 tests across 19 suites (no failures, aborts,
+canceled or pending tests; SBT/wrapper exit 0; lock released), resolving the
+original seven and additional three failures within that surface, including
+List property/JUnit. Independent integrated S4 review has since passed; its exact local Step acceptance commit remains pending. The subsequent
+full001 invocation enabled PostgreSQL/MySQL and passed compilation, then failed:
+6,853 tests across 861 suites, 6,851 passed and two failed, no suite aborts,
+five canceled, one ignored and 46 pending; SBT/wrapper exit 1, lock released.
+The C3-C2 historical-caller/current-Action no-op oracle and C3-H5 direct SPI
+observer bypass were test observation defects, not native DB failures. Both
+were corrected without weakening ownership, no-replay or full-state assertions.
+Focused004 passed compilation and 173/173 tests across 21 suites, including the
+previous 19 and both failure suites, private helper compilation and actual
+Action/caller history assertions. It had no failures, aborts, canceled, ignored
+or pending tests; SBT/wrapper exit 0, lock released. Required full002 is running
+with explicit Test fork and both native DB flags; its outcome remains UNKNOWN.
+Required full validation, one full Phase review and release remain open.
 
 ## Step P103-S1: declaration interpretation
 
 Stage Status:
-- Current status: CLOSED (accepted local Step)
+- Current status: CLOSED
 - Owner: CNCF Phase 103
 - Update rule: Parent updates evidence after focused validation and independent review.
 - Closure basis: The Step acceptance entries below and remaining Phase VM ledger.
@@ -46,7 +61,7 @@ are tracked below.
 ## Step P103-S2: real scoped ScalaTest discovery and pure selection
 
 Stage Status:
-- Current status: CLOSED (accepted local Step)
+- Current status: CLOSED
 - Owner: CNCF Phase 103
 - Update rule: Parent records focused validation, protected-focused review and acceptance evidence.
 - Closure basis: The connected S2 boundary, without closing Phase VM-01..04.
@@ -68,7 +83,7 @@ invocation evidence. Full Phase validation and review remain open.
 ## Step P103-S3: typed scenario producer and shared normalized handoff
 
 Stage Status:
-- Current status: CLOSED (accepted local Step)
+- Current status: CLOSED
 - Owner: CNCF Phase 103
 - Update rule: Parent records focused validation, independent protected Step review and exact local acceptance.
 - Closure basis: Frozen P103-S3A producer boundary, without closing VM-01..04 or the actual runtime consumer.
@@ -88,20 +103,24 @@ Shared [fixture guide](../fixtures/validation-test-metadata/README.md) and
 - [x] Fresh independent protected-focused Step review accepts the connected S3 boundary: PASS, zero Current Boundary Blockers, Hygiene or Development Candidate findings and no evidence gaps.
 - [x] Parent records exact local S3 acceptance commit: `1df07da9be8716edf0e0462bcba221ca8d020c60`.
 
-## Step P103-S4: actual runtime consumer source admission
+## Step P103-S4: actual runtime consumer connection
 
 Stage Status:
-- Current status: PLANNED (pending explicit consumer source admission)
-- Owner: CNCF Phase103 parent for source admission and coordinated sm-workflow consumer acceptance
-- Update rule: Parent records explicit source admission then actual consumer validation/review/local acceptance.
-- Closure basis: Actual consumer connection only; no reopening/completion of all sm-workflow Phase5.
+- Current status: IN_PROGRESS
+- Owner: CNCF Phase 103 parent for integrated acceptance; sm-workflow Phase 6.2 for consumer implementation
+- Update rule: Parent records actual consumer evidence, integrated CNCF review and exact local S4 acceptance.
+- Closure basis: The S4 entries below; whole sm-workflow Phase completion is not a prerequisite.
 
-- [ ] After producer acceptance, explicitly admit the concrete sm-workflow source fixture and dependency refresh.
-- [ ] Demonstrate actual consumer discovery -> purpose/feature query -> identical exact binding for selected/supplemental references -> typed invocation and outcome consumption.
-- [ ] Record consumer validation/review/acceptance without declaring all sm-workflow Phase 5 complete.
+- [x] Resolve the source-admission prerequisite through consumer-owned sm-workflow Phase 6.2 implementation and dependency refresh; no sm-workflow source edit is authorized or performed by this CNCF task.
+- [x] Demonstrate actual consumer discovery -> purpose/feature query -> identical exact binding for selected/supplemental references -> typed invocation and outcome consumption: K2 COMPLETE ascii/empty/unicode inventory, query-selected ascii and supplemental unicode, ordinary Test 3/3 and both exact TestOnly 1/1; independent consumer accept and isolated Step commit `b69a60a0fc3dd5e9e7df87fd08b2549f41cef220`. L3 Slice-plan accept and isolated Step commit `157388724869c21649936d4b2de7508571507605` supply supplementary integration evidence. See the [handoff](../notes/validation-test-metadata-consumer-handoff.md).
+- [ ] Record consumer validation/review/acceptance through independent CNCF integrated S4 acceptance and its exact local Step commit, without declaring all sm-workflow Phase 5 or 6.2 complete.
 
-No sm-workflow source edit is authorized by S3. The synthetic shared example
-does not replace S4. The cbd-support metadata owner is the
+The isolated consumer commits do not accept the dirty primary sm-workflow
+implementation or release Phase 6.2. Neither whole Phase waits for the other's
+whole completion. Phase 103's accepted binder scope is exact zero-input scenario
+selection; richer typed-input work is separately scoped even if present in the
+current tree. The synthetic shared example does not become runtime evidence.
+The cbd-support metadata owner is the
 [October 6 static-analysis workstream](https://github.com/asami/textus-cbd-support/blob/main/docs/journal/2026/10/2026-10-06-validation-test-metadata-static-analysis.md);
 its closed Phase 14 remains native Job integration. Static application
 implementation is outside producer acceptance.

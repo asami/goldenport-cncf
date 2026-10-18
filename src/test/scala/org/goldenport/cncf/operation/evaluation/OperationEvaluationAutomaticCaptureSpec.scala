@@ -17,6 +17,7 @@ import org.goldenport.cncf.security.OperationAuthorizationRule
 import org.goldenport.cncf.spi.evaluation.{CorpusEvaluationSink, CorpusEvaluationSinkSocket, DeterministicCorpusEvaluationSink}
 import org.goldenport.cncf.subsystem.{GenericSubsystemComponentBinding, GenericSubsystemDescriptor, Subsystem}
 import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.cncf.unitofwork.UnitOfWorkTermination
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.protocol.{Argument, Protocol, Request}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
@@ -33,7 +34,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * chokepoint.
  *
  * @since   Jul. 23, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationEvaluationAutomaticCaptureSpec
@@ -505,7 +507,8 @@ final class OperationEvaluationAutomaticCaptureSpec
       val startfixture = _fixture()
       val terminalfixture = _fixture()
 
-      def _run_(fixture: Fixture, failoncall: Int): org.goldenport.cncf.job.TaskOutcome = {
+      def _run_(fixture: Fixture, terminal: Boolean):
+          (org.goldenport.cncf.job.TaskOutcome, EvaluationFailingClock, Option[ExecutionContext]) = {
         val clock = new EvaluationFailingClock(Clock.fixed(Instant.parse("2026-07-23T01:00:00Z"), ZoneOffset.UTC))
         val context = _context_with_clock(fixture, clock)
         val identity = OperationEvaluationOperationIdentity.fromResolvedRoute("evaluation", "operation", "success")
@@ -513,25 +516,40 @@ final class OperationEvaluationAutomaticCaptureSpec
         val action = EvaluationQueryAction(_request("success"), failure = false)
         val task = ActionTask(ActionId.generate(), action, fixture.component.actionEngine, Some(fixture.component))
         val runtime = new OperationEvaluationDeliveryRuntime()
+        var committedcontext = Option.empty[ExecutionContext]
         try {
-          clock.failOnCall(failoncall)
-          new OperationEvaluationActionTask(
+          if (!terminal) clock.failOnCall(2)
+          val outcome = new OperationEvaluationActionTask(
             task,
             new OperationEvaluationAttemptCapture(identity, runtime),
-            (response, _) => Consequence.success(response)
+            (response, actual) => {
+              committedcontext = Some(actual)
+              if (terminal) clock.failOnCall(1)
+              Consequence.success(response)
+            }
           ).run(prepared)
+          (outcome, clock, committedcontext)
         } finally {
           runtime.close()
         }
       }
 
       When("bookkeeping fails before start delivery or before terminal construction")
-      val startoutcome = _run_(startfixture, 2)
-      val terminaloutcome = _run_(terminalfixture, 3)
+      val (startoutcome, startclock, startcontext) = _run_(startfixture, terminal = false)
+      val (terminaloutcome, terminalclock, terminalcontext) = _run_(terminalfixture, terminal = true)
 
       Then("the business result remains successful and only constructible facts are retained")
       startoutcome shouldBe TaskSucceeded(OperationResponse.Scalar("success"))
       terminaloutcome shouldBe TaskSucceeded(OperationResponse.Scalar("success"))
+      startclock.failureCount shouldBe 1
+      terminalclock.failureCount shouldBe 1
+      Vector(startcontext, terminalcontext).foreach { observed =>
+        observed shouldBe defined
+        val actual = observed.get
+        actual.unitOfWork.lastCommitTermination shouldBe Some(UnitOfWorkTermination.Committed)
+        actual.unitOfWork.lastCommitResult shouldBe Some(Consequence.unit)
+        (actual.unitOfWork.executionContext eq actual) shouldBe true
+      }
       startfixture.sink.facts shouldBe empty
       terminalfixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start")
     }
@@ -1068,7 +1086,10 @@ final class OperationEvaluationAutomaticCaptureSpec
 
 private final class EvaluationFailingClock(delegate: Clock) extends Clock {
   private val _calls = new AtomicInteger(0)
+  private val _failures = new AtomicInteger(0)
   @volatile private var _failure_call = Int.MaxValue
+
+  def failureCount: Int = _failures.get()
 
   def failOnCall(value: Int): Unit = {
     _calls.set(0)
@@ -1078,9 +1099,10 @@ private final class EvaluationFailingClock(delegate: Clock) extends Clock {
   def getZone: ZoneId = delegate.getZone
   override def withZone(zone: ZoneId): Clock = new EvaluationFailingClock(delegate.withZone(zone))
   def instant(): Instant =
-    if (_calls.incrementAndGet() == _failure_call)
+    if (_calls.incrementAndGet() == _failure_call) {
+      _failures.incrementAndGet()
       throw new IllegalStateException("planned capture clock failure")
-    else
+    } else
       delegate.instant()
 }
 

@@ -55,8 +55,28 @@ comparability; the fixture computes no KPI score.
 sm-workflow supplies real artifact scopes/loaders, purpose/feature queries,
 supplemental references and logical workspace IDs. It calls the public exact
 operation binder for either reference source and interprets typed outcomes in
-its own runtime evidence and progression lifecycle. Its actual source fixture
-and dependency refresh remain separately admitted Phase 103 S4 work.
+its own runtime evidence and progression lifecycle. The actual consumer adapter
+and dependency refresh are delivered under
+[sm-workflow Phase 6.2](https://github.com/asami/sm-workflow/blob/main/docs/phase/phase-6.2.md).
+Its K2 CML scenario discovers COMPLETE ascii/empty/unicode inventory, selects
+ascii by purpose/feature query and unicode by explicit supplement through the
+same producer binder, and consumes native typed outcomes (ordinary Test 3/3,
+both exact TestOnly 1/1). Independent consumer acceptance and isolated Step
+commit `b69a60a0fc3dd5e9e7df87fd08b2549f41cef220`, with supplementary L3 Slice-plan
+acceptance at `157388724869c21649936d4b2de7508571507605`, are recorded in the
+[handoff](../../notes/validation-test-metadata-consumer-handoff.md).
+
+Those actual receipts do not execute this synthetic example or promote it into
+runtime proof. Phase 103's accepted binding scope is exact zero-input scenario
+selection; separately scoped nonempty typed-input work may coexist in the tree.
+sm-workflow retains source ownership and whole-Phase acceptance. CNCF's independent S4
+integrated review passed; its exact local Step acceptance commit remains pending. Full001 failed
+and its corrected observation tests passed focused004. Required full002 is
+running with explicit Test fork and both native DB flags; its outcome remains
+UNKNOWN. Required full producer validation, one full Phase review and release
+remain pending under the
+[checklist](../../phase/phase-103-checklist.md); neither whole Phase waits for the
+other's whole completion, and no sm-workflow source edit is authorized by this task.
 
 textus-cbd-support consumes normalized metadata for static comparison under its
 [October 6 static-analysis workstream](https://github.com/asami/textus-cbd-support/blob/main/docs/journal/2026/10/2026-10-06-validation-test-metadata-static-analysis.md).

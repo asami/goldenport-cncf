@@ -89,16 +89,48 @@ Blockers, Hygiene or Development Candidate findings and no evidence gaps.
 S3 is accepted in local Step commit `1df07da9be8716edf0e0462bcba221ca8d020c60`. No runtime consumer
 acceptance is inferred.
 
-Broader producer repository-full validation has not passed. Targeted non-DB
-reproduction also failed; the connection to the prior Action context/UnitOfWork
-ownership change has no accepted repair. Required PostgreSQL/MySQL flags were
-absent from the first full invocation, and the property/JUnit harness failure
-remains unresolved. Full Phase validation, review and release acceptance remain open.
+As of October 19, P103-S4 is IN-PROGRESS. The actual consumer connection is
+delivered by [sm-workflow Phase 6.2](https://github.com/asami/sm-workflow/blob/main/docs/phase/phase-6.2.md),
+which owns its implementation and dependency refresh. The source-admission
+prerequisite is resolved by that consumer-owned delivery; this CNCF task neither
+authorizes nor performs sm-workflow source edits. Neither whole Phase waits for
+the other's whole completion. The [handoff](../notes/validation-test-metadata-consumer-handoff.md)
+records actual discovery -> purpose/feature query -> identical exact producer
+binding for selected/supplemental references -> native typed execution/outcomes.
+The K2 CML scenario has COMPLETE ascii/empty/unicode inventory, query-selected
+ascii and supplemental unicode, ordinary Test 3/3 and both exact TestOnly 1/1.
+Its independent consumer acceptance and isolated Step commit
+`b69a60a0fc3dd5e9e7df87fd08b2549f41cef220`, plus supplementary L3 Slice-plan
+acceptance at `157388724869c21649936d4b2de7508571507605`, establish concrete
+consumer evidence. They do not accept the dirty primary sm-workflow tree or
+release Phase 6.2. Independent CNCF integrated S4 review passed; its exact local
+Step acceptance commit remains pending. The synthetic example remains static input, never runtime proof.
 
-Actual sm-workflow source fixture/dependency refresh remains required separate
-Step P103-S4 under explicit source admission after producer acceptance. Its
-concrete discovery -> query -> exact binding -> typed invocation consumer is
-not replaced by the synthetic fixture or deterministic driver specifications.
+The accepted Phase 103 operation binding is exact zero-input scenario selection.
+Separately scoped nonempty typed-input work may coexist in the current tree;
+its acceptance is not attributed to Phase 103.
+
+The first broader producer validation failed and omitted the required native
+PostgreSQL/MySQL flags; targeted non-DB reproduction also failed. Bounded
+Action-context and Display observer corrections are authored. The October 19
+closure-focused validation passed compilation and 161/161 tests across 19
+suites, with no failures, aborts, canceled or pending tests, SBT/wrapper exit 0
+and the shared lock released. This resolves the original seven and additional
+three failures on that focused surface, including the List property/JUnit
+failure; independent integrated S4 review has since passed, with its exact local Step acceptance commit pending. The subsequent
+full001 invocation enabled PostgreSQL/MySQL and passed compilation, then failed:
+6,853 tests across 861 suites, 6,851 passed and two failed, no suite aborts,
+five canceled, one ignored and 46 pending; SBT/wrapper exit 1, lock released.
+The remaining C3-C2 historical-caller/current-Action no-op oracle and C3-H5
+direct SPI observer bypass were test observation defects, not native DB failures.
+Both were corrected while retaining ownership, no-replay and full-state assertions.
+Focused004 passed compilation and 173/173 tests across 21 suites, including the
+previous 19 and both failure suites, private helper compilation and actual
+Action/caller history assertions. It had no failures, aborts, canceled, ignored
+or pending tests; SBT/wrapper exit 0, lock released. Required full002 is running
+with explicit Test fork and both native DB flags; its outcome remains UNKNOWN.
+Required full validation, one full Phase review and release acceptance remain open.
+
 VM-01..04 and all full Phase checks remain obligations; internal Step handoffs
 do not split the Phase.
 

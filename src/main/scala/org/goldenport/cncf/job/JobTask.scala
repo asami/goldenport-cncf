@@ -52,7 +52,7 @@ import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizer, Observa
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait TaskOutcome {
@@ -148,7 +148,13 @@ final case class ActionTask(
       case _ => JobPersistencePolicy.Persistent
     }
 
-  def run(ctx: ExecutionContext): TaskOutcome = {
+  def run(ctx: ExecutionContext): TaskOutcome =
+    _run_with_execution_context(ctx, _ => ())
+
+  private[cncf] def _run_with_execution_context(
+    ctx: ExecutionContext,
+    observecontext: ExecutionContext => Unit
+  ): TaskOutcome = {
     val call = component.map(ComponentLogic(_).createActionCall(action, ctx)).getOrElse {
       val boundctx = ExecutionContext.withExecutionInvocation(
         ctx,
@@ -162,6 +168,7 @@ final case class ActionTask(
       val core = ActionCall.Core(action, boundctx, component, correlationid)
       action.createCall(core)
     }
+    observecontext(call.executionContext)
     val result = component.flatMap(_.subsystem) match {
       case Some(subsystem) =>
         subsystem._with_managed_datastore_lease_c(_ => actionEngine.execute(call))

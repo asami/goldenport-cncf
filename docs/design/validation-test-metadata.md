@@ -174,7 +174,7 @@ The actual static owner is the cbd-support
 [October 6 journal](https://github.com/asami/textus-cbd-support/blob/main/docs/journal/2026/10/2026-10-06-validation-test-metadata-static-analysis.md).
 Its closed Phase 14 is native Job integration, not metadata ownership. The
 [handoff](../notes/validation-test-metadata-consumer-handoff.md) preserves this
-workstream and the separately admitted actual sm-workflow S4 fixture obligation.
+workstream and the actual sm-workflow consumer connection obligation.
 Static application completion is outside producer acceptance.
 
 ## Remaining connected delivery
@@ -189,7 +189,21 @@ suite (total 80 tests across nine suites, zero failures or aborts, SBT/wrapper
 exit 0, shared lock released). Independent protected-focused S3 Step review
 returned PASS with zero Current Boundary Blockers, Hygiene or Development
 Candidate findings and no evidence gaps. S3 is accepted in local Step commit
-`1df07da9be8716edf0e0462bcba221ca8d020c60`. Actual sm-workflow source fixture and dependency refresh require
-separate S4 admission after producer acceptance. Full Phase validation/review
-remain open. The
-[phase checklist](../phase/phase-103-checklist.md) owns delivery status.
+`1df07da9be8716edf0e0462bcba221ca8d020c60`.
+
+The actual runtime adapter belongs to sm-workflow Phase 6.2: discovery and
+purpose/feature selection feed the same producer exact binder for selected and
+supplemental references, followed by native typed execution and exact outcome
+consumption. Consumer implementation does not require this producer task to
+edit sm-workflow, and neither whole Phase depends on the other's whole closure.
+The [handoff](../notes/validation-test-metadata-consumer-handoff.md) records actual
+K2 CML and supplementary L3 Slice-plan evidence and isolated consumer acceptance.
+That delivery supports exact zero-input scenario selection; acceptance of
+separately scoped nonempty typed-input work is not attributed to Phase 103 even
+when that work coexists in the current tree. The normalized CML and synthetic
+static example contracts above are unchanged. Independent integrated CNCF S4 review
+passed; its exact local Step acceptance commit remains pending. Full001 failed and the corrected
+observation tests passed focused004; required full002 is running with explicit
+Test fork and both native DB flags, with outcome UNKNOWN. Required full
+validation, one full Phase review and release remain open; the
+[phase checklist](../phase/phase-103-checklist.md) owns current delivery status.

@@ -17,7 +17,7 @@ import org.goldenport.protocol.operation.OperationResponse
  * is unavailable, slow, saturated, or failed.
  *
  * @since   Jul. 23, 2026
- * @version Jul. 23, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] final class OperationEvaluationActionTask(
@@ -26,7 +26,7 @@ private[cncf] final class OperationEvaluationActionTask(
   responsebinding: (OperationResponse, ExecutionContext) => Consequence[OperationResponse],
   executionscope: Option[ScopeContext] = None
 ) extends JobTask {
-  import OperationEvaluationActionTask.{CaptureStart, PendingTerminal}
+  import OperationEvaluationActionTask.{CanonicalResult, CaptureStart, PendingTerminal}
 
   private val _pending_terminals = new ConcurrentHashMap[TaskId, PendingTerminal]()
 
@@ -50,7 +50,7 @@ private[cncf] final class OperationEvaluationActionTask(
     attemptcapture._mark_task_execution_started()
     _attempt_context(executioncontext) match {
       case Some(attemptcontext) => _run_attempt(attemptcontext)
-      case None => _run_canonical(executioncontext)
+      case None => _run_canonical(executioncontext).outcome
     }
   }
 
@@ -61,7 +61,7 @@ private[cncf] final class OperationEvaluationActionTask(
   ): Unit = {
     val executioncontext = _bind_context(context)
     _task_id(executioncontext).flatMap(taskid => Option(_pending_terminals.remove(taskid))).foreach { pending =>
-      _complete_terminal(pending, outcome, executioncontext, cancelled)
+      _complete_terminal(pending, outcome, cancelled)
     }
   }
 
@@ -92,9 +92,9 @@ private[cncf] final class OperationEvaluationActionTask(
 
   private def _run_attempt(context: ExecutionContext): TaskOutcome = {
     val pending = _start_capture(context)
-    val outcome = _run_canonical(context)
-    pending.foreach(_stage_or_complete_terminal(_, outcome, context))
-    outcome
+    val canonical = _run_canonical(context)
+    pending.foreach(_stage_or_complete_terminal(_, canonical.outcome, canonical.executioncontext))
+    canonical.outcome
   }
 
   private def _start_capture(context: ExecutionContext): Option[CaptureStart] =
@@ -122,7 +122,7 @@ private[cncf] final class OperationEvaluationActionTask(
     context: ExecutionContext
   ): Unit =
     try {
-      val pending = PendingTerminal(start.startedat, context.clock.instant(), start.correlation)
+      val pending = PendingTerminal(start.startedat, context.clock.instant(), start.correlation, context)
       _task_id(context) match {
         case Some(taskid)
             if context.jobContext.jobId.nonEmpty &&
@@ -130,7 +130,7 @@ private[cncf] final class OperationEvaluationActionTask(
           _pending_terminals.put(taskid, pending)
         case _ =>
           val cancelled = context.jobContext.cancellationScope.exists(_.isCancelled)
-          _complete_terminal(pending, outcome, context, cancelled)
+          _complete_terminal(pending, outcome, cancelled)
       }
     } catch {
       case _: InterruptedException =>
@@ -143,9 +143,9 @@ private[cncf] final class OperationEvaluationActionTask(
   private def _complete_terminal(
     pending: PendingTerminal,
     outcome: TaskOutcome,
-    context: ExecutionContext,
     cancelled: Boolean
-  ): Unit =
+  ): Unit = {
+    val context = pending.executioncontext
     try {
       val (evaluationoutcome, diagnostic) = _evaluation_outcome(outcome, cancelled)
       val terminal = OperationEvaluationTerminalFact.createC(
@@ -177,6 +177,7 @@ private[cncf] final class OperationEvaluationActionTask(
         context.runtime.unitOfWork
           .discardOperationEvaluationSupplemental(pending.correlation.attemptId)
     }
+  }
 
   private def _release_supplemental(
     attemptid: OperationEvaluationAttemptId,
@@ -208,11 +209,12 @@ private[cncf] final class OperationEvaluationActionTask(
       case NonFatal(_) => ()
     }
 
-  private def _run_canonical(context: ExecutionContext): TaskOutcome =
-    try {
-      underlying.run(context) match {
+  private def _run_canonical(context: ExecutionContext): CanonicalResult = {
+    var executioncontext = context
+    val outcome = try {
+      underlying._run_with_execution_context(context, actual => executioncontext = actual) match {
         case TaskSucceeded(response) =>
-          responsebinding(response, context) match {
+          responsebinding(response, executioncontext) match {
             case Consequence.Success(bound) => TaskSucceeded(bound)
             case Consequence.Failure(conclusion) => TaskFailed(conclusion)
           }
@@ -221,6 +223,8 @@ private[cncf] final class OperationEvaluationActionTask(
     } catch {
       case NonFatal(e) => TaskFailed(Conclusion.from(e))
     }
+    CanonicalResult(outcome, executioncontext)
+  }
 
   private def _evaluation_outcome(
     outcome: TaskOutcome,
@@ -257,6 +261,11 @@ private[cncf] final class OperationEvaluationActionTask(
 }
 
 private[cncf] object OperationEvaluationActionTask {
+  private final case class CanonicalResult(
+    outcome: TaskOutcome,
+    executioncontext: ExecutionContext
+  )
+
   private final case class CaptureStart(
     startedat: java.time.Instant,
     correlation: OperationEvaluationCorrelation
@@ -265,7 +274,8 @@ private[cncf] object OperationEvaluationActionTask {
   private final case class PendingTerminal(
     startedat: java.time.Instant,
     completedat: java.time.Instant,
-    correlation: OperationEvaluationCorrelation
+    correlation: OperationEvaluationCorrelation,
+    executioncontext: ExecutionContext
   )
 }
 
@@ -275,7 +285,7 @@ private[cncf] object OperationEvaluationActionTask {
  * identities so Job retries remain observable as separate attempts.
  *
  * @since   Jul. 23, 2026
- * @version Jul. 23, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] final class OperationEvaluationAttemptCapture(

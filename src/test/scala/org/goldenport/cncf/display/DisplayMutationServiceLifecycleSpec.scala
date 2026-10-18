@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 16, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 19, 2026
  */
 final class DisplayMutationServiceLifecycleSpec extends AnyWordSpec with DisplayMutationServiceFixture.Vocabulary {
   import DisplayMutationServiceFixture.*
@@ -405,6 +405,9 @@ final class DisplayMutationServiceLifecycleSpec extends AnyWordSpec with Display
             val wanted = if (create) expectedLifecycleCreate(session, before, lifecycleFields)
               else expectedLifecycleDelete(session, before, 1L, true)
             val active = session.execution(mode, historical = historical)
+            val caller = active.context.unitOfWork
+            val callertermination = caller.lastCommitTermination
+            val callerresult = caller.lastCommitResult
             When("the ordinary ActionEngine captures one actual command and invokes its configured current enclosing commit")
             val attempt = session.execute(session.lifecycleRequest(if (create) Operation.Create else Operation.Delete), active)
             Then("only the actual successful current commit yields a receipt; every other branch retains independent durable effects without replay or invented rollback")
@@ -417,13 +420,21 @@ final class DisplayMutationServiceLifecycleSpec extends AnyWordSpec with Display
               attempt.execution.lifecycleObservers.map(_.writes).sum shouldBe 0
               if (mode == Commit.Noop) {
                 conclusion(attempt.result).observation.taxonomy shouldBe conclusion(DisplayMutationResult.indeterminateC[Unit]()).observation.taxonomy
-                active.uow.lastCommitTermination shouldBe (if (historical) Some(org.goldenport.cncf.unitofwork.UnitOfWorkTermination.Committed) else None)
-                active.uow.lastCommitResult shouldBe (if (historical) Some(Consequence.unit) else None)
+                active.uow.lastCommitTermination shouldBe None
+                active.uow.lastCommitResult shouldBe None
               }
               if (mode == Commit.Reject) active.uow.lastCommitTermination shouldBe Some(org.goldenport.cncf.unitofwork.UnitOfWorkTermination.Aborted)
               if (mode == Commit.Abort) active.uow.lastAbortResult shouldBe Some(Consequence.unit)
               if (mode == Commit.Cleanup) conclusion(attempt.result).observation.taxonomy shouldBe projectionFailure.conclusion.observation.taxonomy
             }
+            And("the original caller retains its bound UoW and independently established historical commit state in every mode")
+            checkActionOwnership(attempt)
+            (active.callerUnitOfWork eq caller) shouldBe true
+            (active.context.unitOfWork eq caller) shouldBe true
+            caller.lastCommitTermination shouldBe callertermination
+            caller.lastCommitResult shouldBe callerresult
+            caller.lastCommitTermination shouldBe (if (historical) Some(org.goldenport.cncf.unitofwork.UnitOfWorkTermination.Committed) else None)
+            caller.lastCommitResult shouldBe (if (historical) Some(Consequence.unit) else None)
             session.log.events.count(_.event == "capture") shouldBe 1
             session.log.events.count(_.event == "commit") shouldBe 1
             session.log.events.foreach(event => (event.uow eq active.uow) shouldBe true)

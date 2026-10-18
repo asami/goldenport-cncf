@@ -7,7 +7,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 19, 2026
  */
 final class DisplayMutationCommitObservationSpec extends AnyWordSpec with DisplayMutationServiceFixture.Vocabulary {
   import DisplayMutationServiceFixture.*
@@ -55,8 +55,11 @@ final class DisplayMutationCommitObservationSpec extends AnyWordSpec with Displa
             Then("transaction-indeterminate contains no receipt or reload and never mistakes historical state for a current witness")
             attempt.result shouldBe a[Consequence.Failure[?]]
             conclusion(attempt.result).observation.taxonomy shouldBe conclusion(DisplayMutationResult.indeterminateC[Unit]()).observation.taxonomy
-            active.uow.lastCommitTermination shouldBe (if (historical) Some(UnitOfWorkTermination.Committed) else None)
-            active.uow.lastCommitResult shouldBe (if (historical) Some(Consequence.unit) else None)
+            active.uow.lastCommitTermination shouldBe None
+            active.uow.lastCommitResult shouldBe None
+            active.callerUnitOfWork.lastCommitTermination shouldBe (if (historical) Some(UnitOfWorkTermination.Committed) else None)
+            active.callerUnitOfWork.lastCommitResult shouldBe (if (historical) Some(Consequence.unit) else None)
+            checkActionOwnership(attempt)
             active.attempts shouldBe 1
             session.log.events.count(_.event == "capture") shouldBe 1
             session.log.events.count(_.event == "find") shouldBe 0

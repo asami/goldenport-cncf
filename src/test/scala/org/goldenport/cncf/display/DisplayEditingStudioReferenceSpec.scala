@@ -1,14 +1,15 @@
 package org.goldenport.cncf.display
 
 import org.scalatest.wordspec.AnyWordSpec
+import org.goldenport.cncf.unitofwork.UnitOfWork
 
 /*
  * @since   Oct. 17, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 19, 2026
  */
 final class DisplayEditingStudioReferenceSpec extends AnyWordSpec with DisplayEditingStudioReferenceFixture.Vocabulary {
   import DisplayEditingStudioReferenceFixture.*
-  import DisplayMutationServiceFixture.{Target, representations, field}
+  import DisplayMutationServiceFixture.{Target, representations, field, json}
 
   "REF-E1 Declared List selection and inert descriptors" should afterWord(
     "in spec:display-editing-studio-reference, example:REF-E1, rules:R1,R2,R5, phase:96") {
@@ -187,6 +188,61 @@ final class DisplayEditingStudioReferenceSpec extends AnyWordSpec with DisplayEd
           query(session, Vector(reviewed.entry, declaration.other))
         } finally session.close()
       }
+    }
+  }
+
+  "Action-owned Display execution" should {
+    "P103-DISPLAY-ACTION-ISOLATION-01 commit two independent Actions while preserving each caller's original transaction" in {
+      Given("the ordinary SQLite reference session, selected Detail and complete independent initial state under R9/R10")
+      val session = openReference()
+      try {
+        val declaration = prepare(session)
+        val selected = select(session, declaration)
+        var resource = selected.resource
+        var entry = declaration.initial
+        var previous = Option.empty[UnitOfWork]
+        for (title <- Vector("First:" + witnessText, "Second:" + witnessText)) {
+          Given("a fresh caller binding and its pre-call commit history, with an independently declared full update delta")
+          val active = session.execution()
+          val caller = active.context.unitOfWork
+          val callertermination = caller.lastCommitTermination
+          val callerresult = caller.lastCommitResult
+          val inputs = Vector(field("title", DisplayValue.Text(title)), field("description", DisplayValue.Text(witnessText)))
+          val before = session.lifecycleSnapshot()
+          val next = changed(entry, inputs, entry.version + 1L)
+          val wanted = DisplayMutationServiceListFixture.expectedUpdate(session, before, inputs, true, next.version)
+          val model = updateModel(session, resource, inputs)
+          val request = updateRequest(session, resource, inputs)
+          resetTrace(session)
+          When("the ordinary update consumes the actual selected resource observation in this caller's context")
+          val attempt = session.execute(request, active)
+          Then("one actual Action writer commits its exact receipt and complete state while its caller remains untouched")
+          val value = json(attempt.result)
+          val result = DisplayMutationCodec.decodeResultC(session.component.inputBinding.selection, definitions(session), model,
+            Some(resource.revision), value.noSpaces).TAKE
+          result.receipt.resource shouldBe next.resource
+          result.receipt.kind shouldBe DisplayMutationResult.OutcomeKind.Updated
+          result.retryCommand shouldBe false
+          checkCommitted(attempt, session, 1)
+          (active.callerUnitOfWork eq caller) shouldBe true
+          (active.context.unitOfWork eq caller) shouldBe true
+          caller.lastCommitTermination shouldBe callertermination
+          caller.lastCommitResult shouldBe callerresult
+          previous.foreach { earlier =>
+            (active.uow eq earlier) shouldBe false
+            (active.uow.executionContext eq earlier.executionContext) shouldBe false
+          }
+          session.log.events.count(_.event == "find") shouldBe 1
+          session.log.queries shouldBe empty
+          checkLifecycleState(session, wanted)
+          checkSemantic(wanted, next)
+          val fresh = value.hcursor.downField("projection").downField("display").focus.get
+          resource = checkDetail(fresh, session, next)
+          checkDetail(selected.detailjson, session, declaration.initial)
+          entry = next
+          previous = Some(active.uow)
+        }
+      } finally session.close()
     }
   }
 }

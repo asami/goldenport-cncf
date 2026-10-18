@@ -16,7 +16,7 @@ import org.simplemodeling.model.datatype.EntityId
 
 /*
  * @since   Oct. 17, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 19, 2026
  */
 /** One development-only connected reference; every writer is an existing ordinary Operation. */
 private[cncf] object DisplayEditingStudioReferenceFixture {
@@ -240,11 +240,13 @@ private[cncf] object DisplayEditingStudioReferenceFixture {
       attempt.execution.lifecycleObservers.map(_.writes).sum shouldBe 0
     }
     def checkCommitted(attempt: Attempt, session: Session, attempts: Int): Unit = {
+      checkActionOwnership(attempt)
       attempt.execution.uow.lastCommitTermination shouldBe Some(UnitOfWorkTermination.Committed)
       attempt.execution.uow.lastCommitResult shouldBe Some(Consequence.unit)
       writeAttempts(attempt) shouldBe attempts
       attempt.execution.lifecycleObservers.map(_.writes).sum shouldBe 0
       session.log.events.count(_.event == "commit") shouldBe 1
+      session.log.events.foreach(event => (event.uow eq attempt.execution.uow) shouldBe true)
       session.log.authorizations should not be empty
       session.log.authorizations.foreach { case (authorization, uow) =>
         (uow eq attempt.execution.uow) shouldBe true
