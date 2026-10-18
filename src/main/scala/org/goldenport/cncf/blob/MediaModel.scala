@@ -384,7 +384,7 @@ object MediaRecordCodec {
 
   private def _attributes(record: Record): Consequence[Map[String, String]] =
     record.getAny("attributes") match {
-      case None | Some(null) => Consequence.success(Map.empty)
+      case None => Consequence.success(Map.empty)
       case Some(rec: Record) => Consequence.success(rec.asMap.map { case (k, v) => k -> v.toString })
       case Some(map: Map[?, ?]) => Consequence.success(map.iterator.collect { case (k: String, v) => k -> v.toString }.toMap)
       case Some(text: String) =>

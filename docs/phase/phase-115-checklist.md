@@ -4,9 +4,26 @@ Status: IN_PROGRESS
 Owner: CNCF DataStore / EntityStore integration
 Plan: [Phase 115](phase-115.md)
 
-Current Step: RCP-MAIN / RCP-MAIN-A; focused validation passed all 51 examples
-across five suites. RCP-MAIN passed independent protected focused Step acceptance;
-consumer migration and final Phase acceptance remain pending. All five items are OPEN. Existing Phase 100 evidence is not acceptance of this change.
+Accepted Step: RCP-MAIN / RCP-MAIN-A; focused validation passed all 51 examples
+across five suites and independent protected focused Step acceptance passed.
+Current Step: RCP-CONSUMERS, connected Core/model/Modeler/CNCF implementation
+and selected focused validation complete; independent complete protected focused
+Step review PASS and local commits pending. Core owns generic conversion/strict readers and
+Record/raw Json meaning; model owns model/nominal/Update/Condition projection;
+Modeler emits declared thin delegates; CNCF owns storage/update and foreign
+input policy. Ordinary Vector and declared NonEmptyVector signatures,
+`Query.createC` application reconstruction and actual generated nominal DATATYPE
+projection are exercised by the new runtime specification. Existing search
+containers/page semantics, explicit SQL clear and raw Json exceptions remain.
+No generated-source hand edit or duplicate Record normalizer is introduced.
+
+[Selected results and retained failed-command history](phase-115.md#selected-focused-validation--2026-10-18)
+cover the complete connected focused scope without adding overlapping counts.
+RCP-MAIN's accepted commit `f7af5c79c50f93a6f36f63b1af86cc0086c9d157` and 51/51
+history remain unchanged. All five items stay OPEN. Independent complete protected
+focused RCP-CONSUMERS Step review passed. Local commits, all four repository full tests, the sole
+comprehensive Phase review and final release/checklist closure remain pending.
+Separate `HYG-CNCF-P115-001` is preserved; no successor is activated.
 
 - [ ] **RCP-01 - Contracts aligned.** Adopted Core Phase 3 dependency and Phase
   100 mapping baseline are identified. Record normalization, typed cardinality,

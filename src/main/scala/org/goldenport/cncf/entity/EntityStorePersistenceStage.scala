@@ -34,7 +34,7 @@ private[cncf] object EntityStorePersistenceStage {
   )(using ctx: ExecutionContext): Consequence[Record] = mapping match {
     case None => Consequence.success(record)
     case _ => _provider_mapping(collection, mapping).flatMap { case (declared, provider) =>
-      if (record == null || record.fields == null || record.fields.exists(_ == null))
+      if (record == null)
         _failure(collection, "<row>", "provider-key", "invalid-row-shape")
       else {
         Consequence {

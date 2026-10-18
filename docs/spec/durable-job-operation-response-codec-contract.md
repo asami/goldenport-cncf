@@ -34,21 +34,31 @@ Atoms have `type` first and the following exact members:
 
 | type | Members after type |
 | --- | --- |
-| null | none |
+| null | none; retained input only, omitted only at an owning Record field |
 | string, boolean | value of the corresponding JSON type |
 | byte, short, int, long | value: exact bounded JSON integer of that width |
 | float, double | value: finite canonical Java toHexString string |
 | bigint | value: canonical signed decimal string |
 | bigdecimal | unscaled: canonical signed decimal string; scale: exact integer; precision: exact integer; rounding: enum string |
 | record | fields: same ordered field array |
-| vector, list | values: ordered typed atom array, preserving immutable collection kind |
+| vector, list | values: ordered typed atom array; retained list and vector decode as Vector |
 | json | value: ordinary Circe JSON |
 
 Only exact concrete native Record, Field and Field.Value.Single classes are
 trusted. Subclasses are refused before their getters are read. Duplicate
-Record keys, field order, null Single, empty Record, nested concrete types and
-List/Vector distinctions survive. Reconstruction uses native constructors,
-never generic Record encoders or normalization. Scalar uses only the five
+Record keys, field order, empty Record, nested concrete types and ordered
+collection elements survive. Core owns native Record construction and recursive
+normalization. At this foreign codec ingress, a retained exactly
+`{"type":"null"}` field atom is validated and omitted before native construction.
+It is refused outside an owning Record field, including every direct or nested
+sequence position; no element is filtered and no position shifts. Both retained
+`list` and `vector` atoms reconstruct as Vector. New actual NonEmptyVector values
+encode incrementally with the existing `vector` atom; declared nonempty types
+are reconstructed through Core typed readers, which refuse empty input.
+Normal semantic native-null atoms refuse; typed Json.Null follows the separate
+raw JSON contract. There is no shadow Record or List restoration. Reconstruction
+uses native constructors, never generic Record encoders or a duplicate
+normalizer. Scalar uses only the five
 existing closed ScalarValue givens. Http, Opaque, arbitrary objects, closures,
 Map/Array/Set/custom Seq, unknown Field.Value and structural nulls refuse.
 
@@ -61,10 +71,18 @@ UNNECESSARY. Reconstruction preserves unscaled/scale/context without rounding.
 Consumer decimal lexemes are bounded before construction. JSON object insertion
 order, array order and number lexemes remain exact, without numeric coercion.
 
-Consumer grammar, version, field sets and types are closed. After reconstruction
-the exact producer rendering must equal the original text. Whitespace, reordered
-descriptors, duplicate JSON object keys, extra fields and alternate spellings
-refuse. Duplicate Record keys remain valid array entries. This canonical domain
+Consumer grammar, version, ordered field sets and types are closed. After text
+resource/Unicode preflight and Circe parsing, `root.noSpaces` must equal the
+original text. Every closed grammar object's member keys must match the exact
+declared order. Whitespace, reordered descriptors, duplicate JSON object keys,
+extra fields and alternate string escapes or typed numeric spellings refuse.
+Raw JSON application object names are not a closed grammar: their insertion
+order, nulls and numeric lexemes remain intact, including empty objects/arrays.
+Duplicate Record keys remain valid ordered array entries. Retained-input syntax
+admission precedes semantic reconstruction; it does not compare the normalized
+response's new encoding to the old text. A retained payload may reencode with
+null-valued Record properties omitted and list tags replaced by vector tags,
+without a new format/version/tag or live-data rewrite. This canonical domain
 format check provides no workflow artifact immutability certificate.
 
 ## Closed Circe numeric admission
@@ -156,6 +174,53 @@ uses trace `spec:durable-job-operation-response-codec phase:69.7 slice:JM69-10B1
 | ORC10 | Independent plain/scientific layout table, negative mirrors, zero and full Int scale extremes | authored_test_pending |
 | ORC11 | Exact full-wire native/stored numeric byte capacities, one over and pre-conversion giant coefficient refusal | authored_test_pending |
 | ORC12 | Malformed unsafe numeric lexemes and hostile raw JDK wrappers refused without codec-time capability reads | authored_test_pending |
+
+## Phase 115 retained-input and collection adoption — 2026-10-18
+
+status=focused_validated_independent_step_review_pass_local_commits_pending
+step=RCP-CONSUMERS
+slice=B1
+initial_authoring_status=authored_test_pending
+execution=selected_focused_validation_passed
+review=independent_complete_protected_focused_step_review_pass
+
+The current working semantics above adopt Core's canonical Record contract.
+The dated Phase69.7 execution receipts below remain historical evidence for
+their original subjects; they do not establish this adoption's validation or
+acceptance. ORC1–ORC12, including the ordinary shrinking ORC8 law with at least
+100 successes, remain required. The following table retains initial authoring
+status; the current selected execution paragraph below supersedes its pending
+status without changing those scenarios:
+
+| Scenario | Required behavior | Evidence |
+| --- | --- | --- |
+| ORC13 | Independently handwritten full retained format1 input normalizes nested field nulls and old lists, retaining duplicates, empties, raw JSON nulls/order/exact lexemes; independent canonical new wire | authored_test_pending |
+| ORC14 | Actual nested NonEmptyVector uses vector wire, decodes to Vector and reconstructs declared nonempty types through Core; empty nonempty read refuses | authored_test_pending |
+| ORC15 | Root and direct/nested sequence null atoms refuse without filtering; malformed null atoms, unknown tags and reordered closed members refuse | authored_test_pending |
+| ORC16 | Ordinary shrinking connected retained-shape law, seed 11516001L, at least 100 successes and zero discards, independently specified normalized values and new wire | authored_test_pending |
+
+Current selected adoption execution: original Consumer B1 passed the 17/17
+codec representatives, including ORC13–ORC16; its subsequent regression still
+aborted with exit 255 and has no final regression total. Later Information
+owner validation passed 17/17 in three suites. The original native regression
+ran 58 (33 passed, 25 failed); missing `createEntity` forwarding in two measured
+test wrappers was repaired. The selected native create repair ran 61 (60 passed,
+one RP12 producer-wire expectation failed), with all original quota bootstrap
+failures resolved and three native measured/direct quota routes passing. The
+sole affected payload suite then passed 14/14, retaining its original 12 and
+two explicit V1/V2 completed-consumer cases. The retained List golden remains
+unchanged; the current producer's expected Vector wire is explicit separately.
+Actual old-list native reads return Vector with physical bytes/rows/quota
+unchanged. Genuine native SQL and write counts remain observed. Failed command
+entries stay failed and these overlapping scopes are not summed.
+
+Independent complete protected focused RCP-CONSUMERS Step review passed. Local
+commits, all four repository full tests, the sole comprehensive Phase 115 review
+and final release/checklist closure remain pending. All five RCP obligations
+remain OPEN and Phase 115 IN_PROGRESS. The independent Phase69.7 obligations
+below remain untouched. The original resource/numeric/Unicode bounds, constant refusal, exact concrete trust guards,
+hostile zero-observation obligations and unrelated historical integration
+requirements remain in force.
 
 ## Original integration obligations
 

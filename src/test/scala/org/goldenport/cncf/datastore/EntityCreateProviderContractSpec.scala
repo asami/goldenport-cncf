@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 14, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 18, 2026
  */
 final class EntityCreateProviderContractSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import EntityCreateProviderFixture.*
@@ -109,7 +109,7 @@ final class EntityCreateProviderContractSpec extends AnyWordSpec with Matchers w
 
     "admit well-shaped plans before provider invocation" which {
       Vector("null-plan", "null-collection", "null-entry", "null-record", "null-effects", "null-effect",
-        "null-save-record", "duplicate-keys", "blank-key", "control-key", "null-field", "null-value-wrapper", "wrong-record-id",
+        "null-save-record", "duplicate-keys", "blank-key", "control-key", "wrong-record-id",
         "blank-entry", "null-entry-value", "control-entry", "null-side-collection", "null-side-entry", "wrong-side-id").foreach { mode =>
         s"reject $mode with complete real-state retention" in {
           Given("a qualified real delegate and an independently malformed create plan")
@@ -130,8 +130,6 @@ final class EntityCreateProviderContractSpec extends AnyWordSpec with Matchers w
             case "duplicate-keys" => original.copy(record = Record(original.record.fields ++ original.record.fields))
             case "blank-key" => original.copy(record = original.record ++ Record.dataAuto(" " -> "value"))
             case "control-key" => original.copy(record = original.record ++ Record.dataAuto("bad\nkey" -> "value"))
-            case "null-field" => original.copy(record = Record(Vector(null)))
-            case "null-value-wrapper" => original.copy(record = Record(Vector(Field("business", null))))
             case "blank-entry" => original.copy(entryId = DataStore.StringEntryId(" "))
             case "null-entry-value" => original.copy(entryId = DataStore.StringEntryId(null))
             case "control-entry" => original.copy(entryId = DataStore.StringEntryId("fresh\n"))
@@ -149,6 +147,26 @@ final class EntityCreateProviderContractSpec extends AnyWordSpec with Matchers w
           provider.genericWrites shouldBe 0
           setup.snapshot() shouldBe before
         }
+      }
+
+      "reject invalid Field construction before invoking strict create on the qualified provider" in {
+        Given("a valid create plan, a seeded real delegate and invalid null-Field and null-value-wrapper inputs")
+        val actual = DataStore.inMemory()
+        val setup = new DirectSession("invalid_construction", actual)
+        setup.seed()
+        val provider = new QualifiedStore(actual)
+        val before = setup.snapshot()
+        val original = setup.plan()
+
+        When("public Record construction is composed with the actual native create route")
+        val results = Vector(Record.fromFieldsC(Vector(null)), Record.fromFieldsC(Vector(Field("business", null))))
+          .map(_.flatMap(row => setup.createC(original.copy(record = row), provider)))
+
+        Then("both typed construction failures prevent provider calls and retain the complete real snapshot")
+        results.foreach(_ shouldBe a[Consequence.Failure[?]])
+        provider.createAttempts shouldBe 0
+        provider.genericWrites shouldBe 0
+        setup.snapshot() shouldBe before
       }
     }
 

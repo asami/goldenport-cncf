@@ -59,6 +59,54 @@ request fields are optional so omission can mean no update.
 An ordinary JSON empty array remains an ordinary collection value. CNCF does
 not reinterpret it as an operand-less command.
 
+## JSON Body Ownership And Null Policy
+
+The canonical REST JSON body adapter resolves the selected Operation's actual
+Core `ParameterDefinition` collection. A parameter is raw JSON only when its
+datatype is the canonical `XJson` object. Parameter names and declared aliases
+use the existing normalized naming contract. A CML datatype string, a type's
+leaf name, or an application type named `Json` does not establish raw ownership.
+
+Scalar raw Json parameters retain their original JSON node, including present
+`Json.Null` and arrays containing null positions. Multiple raw Json parameters
+require a syntax array and retain its ordered children as `Vector[Json]`, with
+all duplicates, null positions and exact number lexemes. Source multiplicity
+comes from matching generated update metadata when present, otherwise from the
+actual protocol parameter. Optional generated request multiplicity must not
+hide a multiple source field; typed construction continues to validate required
+and bounded cardinality.
+
+Plain raw parameters and the existing explicit/adaptive/value-operation carriers
+retain their original keys and raw values. `__update_command` stays ordinary
+command text. The adapter preserves every carrier and conflict for the existing
+request normalizer and typed mapper, which own command legality and final base
+parameter binding.
+
+Core Record JSON conversion owns the remaining ordered object. It omits nested
+null-valued semantic object properties and retains empty objects and arrays.
+A null semantic sequence position fails conversion; it must not disappear,
+become an empty patch, or fall back to an opaque body. Final property order is
+the original JSON object order after semantic omission. Malformed and non-object
+JSON alone retain the existing opaque Bag fallback behavior.
+
+For `ENTITY_UPDATE`, JSON syntax null at an ordinary root assignment or a
+command/value carrier is a structured argument-policy error with an
+`explicit-clear-required` reason, returned as HTTP 400 before ActionCall or
+mutation. It is never converted to a zero-length string or implicit SQL clear.
+A true declared scalar raw Json plain/value `Json.Null` remains a document
+assignment. A raw collection null root fails the required array shape; null
+positions inside its array remain valid document values. SQL clearing requires
+the existing `__update_command=null` carrier and its later metadata validation.
+Only a zero-length String operand selects an adaptive clear/null command, with
+the established explicit-value and whitespace rules above. Ordinary non-update
+semantic object null properties continue to follow Core omission.
+
+The adapter's failure result uses the existing HTTP error projection. Normal
+method, If-Match/revision transport, header/context/authentication/session,
+ActionCall/UnitOfWork execution and the DisplayMutation raw-body bypass retain
+their existing ownership and behavior. Form contracts and command spellings are
+unchanged.
+
 ## Conflict Rules
 
 For one target parameter, a request contains at most one effective directive.
@@ -132,6 +180,8 @@ when the user selects a command; they do not submit hidden dummy values.
 
 ## Executable Specifications
 
+- [OperationJsonBodyDecoderSpec](../../src/test/scala/org/goldenport/cncf/http/OperationJsonBodyDecoderSpec.scala) — selected focused validation 52/52
+- [Phase115JsonBodyDispatchSpec](../../src/test/scala/org/goldenport/cncf/http/Phase115JsonBodyDispatchSpec.scala) — selected continuation 19/19
 - `org.goldenport.cncf.http.OperationUpdateDirectiveNormalizerSpec`
 - `org.goldenport.cncf.http.OperationTypedUpdateMapperSpec`
 - `org.goldenport.cncf.http.OperationUpdateRequestNormalizerSpec`
@@ -139,6 +189,20 @@ when the user selects a command; they do not submit hidden dummy values.
   HTTP-to-ActionCall carrier binding scenarios
 - `org.goldenport.cncf.directive.UpdateCodecSpec`
 - `org.goldenport.cncf.directive.UpdateSpec`
+
+### Current Phase 115 adoption status — 2026-10-18
+
+The original B2 and owner-validation commands each passed decoder 52/52 but
+failed five HTTP oracle cases after the expected status 400; the existing error
+projection was HTML, not JSON. Those commands remain failed. The selected owner
+continuation passed 106/106 in nine suites: HTTP dispatch 19, actual generated
+policy 15, six existing HTTP regression suites 71 and native quota witness 1.
+Overlapping decoder runs are not summed. These results establish selected focused
+validation of this unchanged contract. Independent complete protected focused
+RCP-CONSUMERS Step review passed. Local commits, all four affected repository
+full tests, the sole comprehensive Phase 115 review and final release/checklist
+closure remain pending; all five RCP obligations remain OPEN and Phase 115
+IN_PROGRESS. Earlier authoring-pending status is historical.
 
 The downstream generated-code acceptance driver is
 `textus-art-scene/scripts/acceptance/check-component-api-assembly.sh`.

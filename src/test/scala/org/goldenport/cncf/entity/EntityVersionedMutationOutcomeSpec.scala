@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 14, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 18, 2026
  */
 final class EntityVersionedMutationOutcomeSpec extends AnyWordSpec with EntityVersionedMutationOutcomeFixture.Vocabulary {
   import EntityVersionedMutationOutcomeFixture.*
@@ -173,19 +173,18 @@ final class EntityVersionedMutationOutcomeSpec extends AnyWordSpec with EntityVe
     "admit metadata and contain only the optional projection boundary" which {
       "VO-E5 reject tampered raw identities and revisions before any callback or effect" in {
         representations.foreach { representation =>
-          Given("a complete independently read Record obtained from one actual memory provider Applied result")
+          Given("an independently read actual Applied Record with representable tampered metadata, normalized missing null attributes and foreign root-null input")
           val current = session(_token(), representation, new org.goldenport.cncf.action.AggregateObservedSnapshotFixture.MemoryStore())
           current.seed()
           val supplied = success(current.mutate("After", revision(1L)))
           val observed = current.rows(current.setup.provider)
           val record = observed.selected.get
           val idfield = record.fields.find(_.key == "id").get
-          val invalidrecords = Vector[Record](null, Record(null), Record(Vector(null)),
+          val invalidrecords = Vector[Record](null, Record.empty,
             Record(record.fields.filterNot(_.key == "id")),
             Record(record.fields :+ idfield),
             record.upsertSingle("id", current.setup.unrelatedId.value),
             Record(record.fields.map(field => if (field.key == "id") Field("id", Field.Value.Single(null)) else field)),
-            Record(record.fields.map(field => if (field.key == "id") Field("id", null) else field)),
             record.upsertSingle("id", Vector(current.setup.id.value)),
             Record(record.fields.filterNot(_.key == current.setup.revisionField)),
             record.upsertSingle(current.setup.revisionField, "private malformed revision"),

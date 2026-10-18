@@ -1,0 +1,48 @@
+# ENTITY
+
+## RecordPolicy115
+
+### ATTRIBUTE
+
+| name              | type                | multiplicity |
+|-------------------+---------------------+--------------|
+| id                | entityid            | 1            |
+| title             | String              | 1            |
+| evidence          | XSemiStructuredData | 1            |
+| optionalEvidence  | XSemiStructuredData | ?            |
+| evidences         | XSemiStructuredData | *            |
+| requiredEvidences | XSemiStructuredData | +            |
+| payload           | XJson               | 1            |
+| payloads          | XJson               | *            |
+| requiredPayloads  | XJson               | +            |
+
+## ApplicationPolicy115
+
+### ATTRIBUTE
+
+| name  | type            | multiplicity |
+|-------+-----------------+--------------|
+| id    | entityid        | 1            |
+| items | ChildPolicy115  | *            |
+| code  | ScalarCode115   | ?            |
+
+# VALUE
+
+## ChildPolicy115
+
+### ATTRIBUTE
+
+| name  | type   | multiplicity |
+|-------+--------+--------------|
+| label | String | 1            |
+| count | Int    | 1            |
+
+# DATATYPE
+
+## ScalarCode115
+
+### ATTRIBUTE
+
+| name  | type   | multiplicity |
+|-------+--------+--------------|
+| value | String | 1            |

@@ -87,8 +87,8 @@ final class EntityStoreRowMappingSpec extends AnyWordSpec with Matchers with Giv
     "ROW-03 preserve present structured values" should afterWord(
       "in spec:entity-store-row-mapping, example:ROW-03, rules:R3,R4,R7,R8, phase:100"
     ) {
-      "retain every Json shape, empty Records, nested nulls and exact numbers" in {
-        Given("docs/spec/entity-store-row-mapping.md R3,R4,R7,R8 ROW-03: canonical Json shapes and empty or nested-null Records")
+      "retain every Json shape, empty Records, normalized absence and exact numbers" in {
+        Given("docs/spec/entity-store-row-mapping.md R3,R4,R7,R8 ROW-03: canonical Json shapes and Records whose native-null members normalize to absence")
         val integer = BigInt("12345678901234567890123456789012345678901234567890")
         val decimal = new BigDecimal(new java.math.BigDecimal(
           "12345678901234567890.12345678901234567890123456789"), MathContext.UNLIMITED)
@@ -105,14 +105,15 @@ final class EntityStoreRowMappingSpec extends AnyWordSpec with Matchers with Giv
         val recorddecoded = recordencoded.map(_.flatMap(recordmapping.decode(_collection, _)))
         val canonicalrecords = recorddecoded.map(_.flatMap(x => XSemiStructuredData.toJson(_value(x, "value").asInstanceOf[Record])))
         val expectedrecords = records.map(XSemiStructuredData.toJson)
-        Then("null is JSON text, empty objects remain present and numeric meaning remains exact")
+        Then("raw JSON null is text, native-null Record members are absent, empty objects remain present and numbers stay exact")
         jsondecoded.map(x => _value(x.get.get, "value")) shouldBe jsonvalues
         _value(jsonencoded.head.get.get, "stored") shouldBe "null"
         _value(recordencoded.head.get.get, "stored") shouldBe "{}"
         recorddecoded.foreach(_.get.get.fields.size shouldBe 1)
         canonicalrecords.map(_.get) shouldBe expectedrecords.map(_.get)
         _values(_value(recorddecoded.head.get.get, "value").asInstanceOf[Record]) shouldBe Vector.empty
-        _value(_value(recorddecoded.last.get.get, "value").asInstanceOf[Record], "null") shouldBe (null: Any)
+        records.last.getAny("null") shouldBe None
+        _value(recorddecoded.last.get.get, "value").asInstanceOf[Record].getAny("null") shouldBe None
         _value(_value(recorddecoded.last.get.get, "value").asInstanceOf[Record], "integer") shouldBe
           new BigDecimal(new java.math.BigDecimal(integer.bigInteger), MathContext.UNLIMITED)
         _value(_value(recorddecoded.last.get.get, "value").asInstanceOf[Record], "decimal") shouldBe decimal
@@ -216,8 +217,8 @@ final class EntityStoreRowMappingSpec extends AnyWordSpec with Matchers with Giv
     "ROW-15 represent invalid setup as structured outcomes" should afterWord(
       "in spec:entity-store-row-mapping, example:ROW-15, rules:R1,R10, phase:100"
     ) {
-      "reject null metadata, non-Single values, unsupported multiplicities and invalid ranges without setup throws" in {
-        Given("docs/spec/entity-store-row-mapping.md R1,R10 ROW-15: missing metadata and invalid scalar/array domain declarations")
+      "reject invalid metadata and root rows while Core rejects invalid Field construction" in {
+        Given("docs/spec/entity-store-row-mapping.md R1,R10 ROW-15: missing metadata, invalid domains, a foreign root-null row and invalid Field inputs")
         val field = _field("value", "stored", EntityStoreFieldBinding.string)
         val array = EntityStoreFieldBinding.array(EntityStoreFieldBinding.string)
         val maps = Vector(EntityStoreRowMapping(null), EntityStoreRowMapping(Vector(field), null),
@@ -238,15 +239,17 @@ final class EntityStoreRowMappingSpec extends AnyWordSpec with Matchers with Giv
           EntityStoreRowMapping(Vector(field.copy(storageName = " "))))
         val mapping = EntityStoreRowMapping(Vector(field))
         val nonsingle = new Field.Value { def single: Any = "x"; def print: String = "fixture" }
-        val badrows = Vector[Record](null, Record(null), Record(Vector(null)),
-          Record(Vector(Field("value", null))), Record(Vector(Field("value", nonsingle))))
-        When("public validation and row conversion interpret invalid setup")
+        val badrows = Vector[Record](null)
+        When("public configuration and row validation run and Core admits the invalid construction inputs")
+        val constructionresults = Vector(Record.fromFieldsC(null), Record.fromFieldsC(Vector(null)),
+          Record.fromFieldsC(Vector(Field("value", null))), Record.fromFieldsC(Vector(Field("value", nonsingle))))
         val missingresults = maps.map(_.validate(_collection)) :+ mapping.validate(null)
         val invalidresults = invalid.map(_.validate(_collection))
         val rowresults = badrows.flatMap(x => Vector(mapping.encode(_collection, x),
           mapping.encodePatch(_collection, x), mapping.decode(_collection, x)))
         val nullcollection = mapping.encode(null, Record.empty)
-        Then("each invalid setup returns an existing typed failure rather than throwing from construction or operation")
+        Then("Core construction fails structurally and genuine foreign root-null rows retain invalid-row-shape")
+        constructionresults.foreach(_ shouldBe a[Consequence.Failure[?]])
         missingresults.foreach(x => _expect_reason(x, "missing-mapping"))
         invalidresults.foreach(x => _expect_reason(x, "incompatible-mapping"))
         rowresults.foreach(x => _expect_reason(x, "invalid-row-shape"))
@@ -256,28 +259,27 @@ final class EntityStoreRowMappingSpec extends AnyWordSpec with Matchers with Giv
   }
 
   "Row presence and normalized changes" should {
-    "ROW-06 retain absence and explicit native null according to multiplicity" should afterWord(
+    "ROW-06 interpret normalized absence according to multiplicity" should afterWord(
       "in spec:entity-store-row-mapping, example:ROW-06, rules:R7,R10, phase:100"
     ) {
-      "reject required absence or SQL null and preserve optional absence or a present null Field" in {
+      "reject required absence and omit optional native-null fields" in {
         Given("docs/spec/entity-store-row-mapping.md R7,R10 ROW-06: required scalars, required arrays and an optional scalar")
         val required = Vector(
           EntityStoreRowMapping(Vector(_field("value", "stored", EntityStoreFieldBinding.string))),
           EntityStoreRowMapping(Vector(_field("value", "stored", EntityStoreFieldBinding.array(EntityStoreFieldBinding.string), Multiplicity.OneMore))))
         val optional = EntityStoreRowMapping(Vector(_field("value", "stored", EntityStoreFieldBinding.string, Multiplicity.ZeroOne)))
-        When("full row conversion interprets missing or native-null fields")
+        When("full row conversion receives missing fields or constructor-normalized native-null attributes")
         val absent = required.flatMap(x => Vector(x.encode(_collection, Record.empty), x.decode(_collection, Record.empty)))
         val nulls = required.flatMap(x => Vector(x.encode(_collection, Record.createFull(Vector("value" -> null))),
           x.decode(_collection, Record.createFull(Vector("stored" -> null)))))
         val optionalabsent = Vector(optional.encode(_collection, Record.empty), optional.decode(_collection, Record.empty))
         val optionalnulls = Vector(optional.encode(_collection, Record.createFull(Vector("value" -> null))),
           optional.decode(_collection, Record.createFull(Vector("stored" -> null))))
-        Then("required presence failures stay distinct while optional nulls remain actual Fields")
+        Then("required fields fail missing-required-field and optional fields remain absent in either direction")
         absent.foreach(x => _expect_reason(x, "missing-required-field"))
-        nulls.foreach(x => _expect_reason(x, "null-not-allowed"))
+        nulls.foreach(x => _expect_reason(x, "missing-required-field"))
         optionalabsent.foreach(_.get.get.fields shouldBe Vector.empty)
-        _values(optionalnulls.head.get.get) shouldBe Vector("stored" -> null)
-        _values(optionalnulls.last.get.get) shouldBe Vector("value" -> null)
+        optionalnulls.foreach(_.get.get.fields shouldBe Vector.empty)
       }
     }
 
@@ -312,23 +314,23 @@ final class EntityStoreRowMappingSpec extends AnyWordSpec with Matchers with Giv
         val patch = Record.createFull(Vector("title" -> Update.SetValue("  exact {}  "), "evidence" -> Update.SetNull))
         val noop = Record.createFull(Vector("title" -> Update.Noop, "evidence" -> Update.Noop))
         val badpatches = Vector(Record.createFull(Vector("title" -> Update.SetNull)),
-          Record.createFull(Vector("evidence" -> null)), Record.createFull(Vector("evidence" -> Update.Noop)),
+          Record.createFull(Vector("evidence" -> Update.Noop)),
           Record.createFull(Vector("title" -> Update.SetValue("x"))))
         When("normalized changes pass through the declared patch mapping")
         val changed = mapping.encodePatch(_collection, Update.toChangesRecord(patch))
         val unchanged = Vector(mapping.encodePatch(_collection, Record.empty),
           mapping.encodePatch(_collection, Update.toChangesRecord(noop)),
-          mapping.encodePatch(_collection, Record.createFull(Vector("evidence" -> None))))
+          mapping.encodePatch(_collection, Record.createFull(Vector("evidence" -> None))),
+          mapping.encodePatch(_collection, Record.createFull(Vector("evidence" -> null))))
         val failures = badpatches.map(mapping.encodePatch(_collection, _))
         val fullmarkers = Vector(mapping.encode(_collection, patch),
           mapping.decode(_collection, Record.createFull(Vector("title_text" -> "x", "evidence_json" -> Update.SetNull))))
-        Then("changed text uses its codec and the nullable clear marker keeps its physical key")
+        Then("normalized null omission makes no change and only typed clear retains its physical key")
         _values(changed.get.get) shouldBe Vector("title_text" -> "  exact {}  ", "evidence_json" -> Update.SetNull)
         changed.get.get.fields.exists(x => x.key == "evidence_json" && x.value.single == Update.SetNull) shouldBe true
         unchanged.foreach(_.get.get.fields shouldBe Vector.empty)
         _expect_reason(failures(0), "null-not-allowed")
-        _expect_reason(failures(1), "explicit-clear-required")
-        failures.drop(2).foreach(x => _expect_reason(x, "invalid-row-shape"))
+        failures.tail.foreach(x => _expect_reason(x, "invalid-row-shape"))
         fullmarkers.foreach(x => _expect_reason(x, "invalid-row-shape"))
       }
     }
@@ -363,8 +365,8 @@ final class EntityStoreRowMappingSpec extends AnyWordSpec with Matchers with Giv
     "ROW-09 enforce root array cardinality" should afterWord(
       "in spec:entity-store-row-mapping, example:ROW-09, rules:R6,R7,R10, phase:100"
     ) {
-      "admit only declared counts and adapt Seq or NonEmptyVector without guessing other collections" in {
-        Given("docs/spec/entity-store-row-mapping.md R6,R7,R10 ROW-09: array cardinalities and declared Scala representations")
+      "admit declared counts with constructor-owned Array and ordered Seq or NonEmptyVector values" in {
+        Given("docs/spec/entity-store-row-mapping.md R6,R7,R10 ROW-09: array cardinalities, constructor-owned native Arrays and declared ordered representations")
         val binding = EntityStoreFieldBinding.array(EntityStoreFieldBinding.string)
         val domains = Vector[Multiplicity](Multiplicity.ZeroMore, Multiplicity.OneMore, Multiplicity.Range(0, 2),
           Multiplicity.Range(2, 3), Multiplicity.Ranges(List(NonEmptyList.of(Multiplicity.Range(0, 0), Multiplicity.Range(2, 3)))))
@@ -372,9 +374,10 @@ final class EntityStoreRowMappingSpec extends AnyWordSpec with Matchers with Giv
         val counts = Vector(0, 1, 2, 3, 4)
         val admitted = Vector(Set(0, 1, 2, 3, 4), Set(1, 2, 3, 4), Set(0, 1, 2), Set(2, 3), Set(0, 2, 3))
         val values = Vector("first", "雪", "last")
-        val representations = Vector[Any](values, values.toList, NonEmptyVector.of("first", "雪", "last"))
-        val unsupported = Vector[Any](Set("x"), Array("x"), Map("x" -> "y"))
-        When("root arrays encode and decode under each declared multiplicity")
+        val representations = Vector[Any](values, values.toList, NonEmptyVector.of("first", "雪", "last"),
+          Array("first", "雪", "last"))
+        val unsupported = Vector[Any](Set("x"), Map("x" -> "y"))
+        When("Core-owned ordered values encode and decode under each declared multiplicity")
         val encoded = maps.map(x => counts.map(n => x.encode(_collection,
           Record.createFull(Vector("values" -> Vector.fill(n)("x"))))))
         val decoded = maps.map(x => counts.map(n => x.decode(_collection,
@@ -384,7 +387,7 @@ final class EntityStoreRowMappingSpec extends AnyWordSpec with Matchers with Giv
         val rejected = unsupported.map(x => maps.head.encode(_collection, Record.createFull(Vector("values" -> x))))
         val absent = maps.map(_.encode(_collection, Record.empty))
         val nulls = maps.map(_.decode(_collection, Record.createFull(Vector("stored" -> null))))
-        Then("only root cardinality is constrained and accepted representations share ordered Vector readback")
+        Then("root cardinality is constrained and constructor-owned Arrays share exact ordered Vector readback")
         maps.indices.foreach { i =>
           counts.indices.foreach { j =>
             encoded(i)(j).isSuccess shouldBe admitted(i).contains(counts(j))
@@ -406,8 +409,8 @@ final class EntityStoreRowMappingSpec extends AnyWordSpec with Matchers with Giv
     "ROW-10 retain recursive element declarations" should afterWord(
       "in spec:entity-store-row-mapping, example:ROW-10, rules:R6,R7, phase:100"
     ) {
-      "retain empty nested arrays, application classes and Json null while rejecting other null children with indices" in {
-        Given("docs/spec/entity-store-row-mapping.md R6,R7 ROW-10: recursive String, application and Json array bindings")
+      "retain nested values while Core rejects native null children and physical codecs retain null indices" in {
+        Given("docs/spec/entity-store-row-mapping.md R6,R7 ROW-10: recursive bindings, raw Json.Null and invalid native versus physical null children")
         val nested = EntityStoreRowMapping(Vector(_field("value", "stored",
           EntityStoreFieldBinding.array(EntityStoreFieldBinding.array(EntityStoreFieldBinding.string)), Multiplicity.ZeroMore)))
         val summaries = EntityStoreRowMapping(Vector(_field("value", "stored",
@@ -418,14 +421,15 @@ final class EntityStoreRowMappingSpec extends AnyWordSpec with Matchers with Giv
           _field("value", "stored", EntityStoreFieldBinding.array(x), Multiplicity.ZeroMore))))
         val nestedvalue = Vector[Any](Vector.empty[String], NonEmptyVector.of("first", "", "雪"), Vector("last"))
         val classvalue = NonEmptyVector.of(Vector.empty[Summary], NonEmptyVector.of(Summary("A", 1), Summary("B", 2)))
-        When("recursive rows roundtrip and selected child codecs encounter null elements")
+        When("recursive rows roundtrip, Core admits a native null sequence and physical child codecs decode null elements")
+        val invalidsequence = Record.createC(Vector("value" -> Vector(null)))
         val encoded = nested.encode(_collection, Record.createFull(Vector("value" -> nestedvalue)))
         val decoded = encoded.flatMap(nested.decode(_collection, _))
         val classes = summaries.encode(_collection, Record.createFull(Vector("value" -> classvalue))).flatMap(summaries.decode(_collection, _))
         val jsonnull = json.encode(_collection, Record.createFull(Vector("value" -> Vector(Json.Null, Json.True)))).flatMap(json.decode(_collection, _))
-        val rejected = rejecting.flatMap(x => Vector(x.decode(_collection, Record.createFull(Vector("stored" -> "[null]"))),
-          x.encode(_collection, Record.createFull(Vector("value" -> Vector(null))))))
-        Then("recursive adaptation preserves order and class identity and null rejection retains index context")
+        val rejected = rejecting.map(x => x.decode(_collection, Record.createFull(Vector("stored" -> "[null]"))))
+        Then("Core construction rejects native null children while physical rejection retains its exact index and nested values survive")
+        invalidsequence shouldBe a[Consequence.Failure[?]]
         _value(decoded.get.get, "value") shouldBe Vector(Vector.empty, Vector("first", "", "雪"), Vector("last"))
         _value(classes.get.get, "value") shouldBe Vector(Vector.empty, Vector(Summary("A", 1), Summary("B", 2)))
         _value(jsonnull.get.get, "value") shouldBe Vector(Json.Null, Json.True)

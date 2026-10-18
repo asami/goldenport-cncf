@@ -28,7 +28,7 @@ R4/R7, [row mapping specification](../spec/entity-store-row-mapping.md) and
 [persistence stages](../spec/entity-store-persistence-stages.md) now describe
 Core Phase 3 normalization. Phase 100 test/review receipts remain historical.
 
-Current Step: **RCP-MAIN / RCP-MAIN-A** implements the connected typed entity
+Accepted Step: **RCP-MAIN / RCP-MAIN-A** implements the connected typed entity
 save/read/update/search route and SQL ingress adoption. Selected Core input is
 `simplemodeling-lib` commit `53b1612faadf43840a75cf7d1c6d54ea5f248015`;
 original CNCF base is `11d4e2843f03a787d5a4f5900e97ed04e4b63276`.
@@ -38,6 +38,84 @@ acceptance. Consumer migration and final Phase acceptance remain pending.
 All RCP-01 through RCP-05 remain OPEN. Generated ordinary Vector/NonEmptyVector
 signature evidence and foreign bare-null patch caller migration belong to
 RCP-CONSUMERS and are not established by this Step.
+
+Current Step: **RCP-CONSUMERS — focused-validated; independent complete protected
+focused Step review PASS; local commits pending**. The connected Step now spans Core,
+model, SimpleModeler and CNCF. Core owns generic external conversion, strict
+collection readers, canonical Record normalization and the distinct raw Json
+contract. The model library owns explicit model-group, nominal scalar,
+Update and Condition projections. SimpleModeler emits thin calls selected by
+declared type, multiplicity and aliases. CNCF retains storage/update policy
+and foreign-input admission; no duplicate Record normalizer or generated-source
+hand edit is introduced.
+
+The ordinary CML fixture and
+[Phase115GeneratedCollectionPolicySpec](../../src/test/scala/org/goldenport/cncf/entity/Phase115GeneratedCollectionPolicySpec.scala)
+exercise generated Vector/declared NonEmptyVector through memory and test-owned
+SQLite create/save/load/update/search and reopen, plus actual ordinary
+`Query.createC`/Condition application reconstruction and generated `ScalarCode115`
+DATATYPE scalar projection. CountryCode/PostalCode VALUE fixtures are not
+nominal-scalar evidence. Search containers/page metadata retain their existing
+semantics. Raw Json nulls remain document values; SQL clear requires the existing
+explicit instruction. HTTP, Durable Job, Information, Blob/Media and native
+consumer migrations have selected focused evidence below.
+
+### Selected focused validation — 2026-10-18
+
+These are the selected command results, not an additive test total. Earlier
+failed invocations remain failed; later commands validate their affected repairs.
+Detailed execution evidence stays in the private Phase run.
+
+| Selected scope | Actual result |
+| --- | --- |
+| Core conversion repair | 79/79, six suites |
+| Model conversion repair | 54/54, ten suites |
+| Modeler delegation repair | 33/33, three suites |
+| Forced model regeneration | Actual 11 regenerated/compiled thin delegates inspected; 54/54, ten suites, overlapping model coverage |
+| Consumer A library integration | 11 representative plus 216 regressions = 227/227, eight suites |
+| Original Consumer B1 | Representative 17/17; subsequent regression aborted with exit 255, no final regression total |
+| Consumer owner validation | Information 17/17 in three suites and decoder 52/52 passed; the command still failed five HTTP oracle cases |
+| Consumer owner continuation | 106/106 in nine suites: HTTP 19, generated 15, six HTTP regression suites 71, native quota witness 1 |
+| Native create repair | 61 run, 60 passed, one RP12 producer-wire expectation failed; all original quota bootstrap failures and three measured/direct quota routes passed |
+| Native wire repair | Affected payload suite 14/14: original 12 plus two retained V1/V2 cases |
+| Model presentation repair | 56/56, ten suites: 26 model conversion specification cases including two added precedence scenarios, plus original nine suites with 30 cases |
+| Consumer presentation integration | 44/44, five suites; actual generated Information external and stored status are selected strings |
+
+The parent readiness cross-check found generated Powertype/StateMachine values
+with competing Record presentation. The model adapter now selects their existing
+`Presentable.print` scalar meaning before generic RecordPresentable, while
+NominalScalar remains first and database `dbValue` remains storage-specific.
+Throwing or null prints fail without Record fallback. The tested model
+0.2.2-SNAPSHOT local refresh succeeded before the actual generated Information
+integration. Earlier 54/54 model and forced-regeneration results remain historical,
+overlapping scoped evidence; these counts are not summed. This correction adds
+no Core, generator or application registry, and changes no storage/wire contract.
+
+The original B2 command also passed decoder 52/52 before five HTTP oracle
+failures; its generated and HTTP regression scopes had not run. Its decoder
+coverage overlaps owner validation. The original native regression's 58 run,
+33 passed and 25 failures narrowed to missing `createEntity` forwarding in two
+measured test wrappers. The repair and three-route witness preserve genuine
+native SQL and write counts. The unchanged original List golden is retained;
+the current producer expectation explicitly uses Vector. Actual old-list native
+reads yield Vector while physical bytes, rows and quota remain unchanged.
+
+KnowledgeNodeId/RdfNodeName now use existing NominalScalar and
+ExternalKnowledgeIdentifier/KnowledgeEntityBinding use existing RecordPresentable
+APIs. Their established scalar/Record wire remains; Core gains no application
+classes. All selected dependency local refreshes succeeded at unchanged
+development coordinates: Core 0.4.3-SNAPSHOT, model 0.2.2-SNAPSHOT,
+Modeler 1.1.26-SNAPSHOT and CNCF 0.5.3-SNAPSHOT. No public publication is claimed.
+
+RCP-MAIN's accepted local commit
+`f7af5c79c50f93a6f36f63b1af86cc0086c9d157` and 51/51 history remain unchanged.
+All five RCP-01 through RCP-05 obligations remain OPEN and Phase IN_PROGRESS.
+Independent complete protected focused RCP-CONSUMERS Step review passed;
+local commits, full validation of all four affected repositories, the sole
+comprehensive Phase review and final release/checklist closure remain pending. Existing `HYG-CNCF-P115-001` stays
+separate; no successor is activated. The
+[adoption journal](../journal/2026/10/2026-10-18-phase-115-record-policy-adoption.md)
+records producer ownership and retained-value handling.
 
 ## Required behavior
 

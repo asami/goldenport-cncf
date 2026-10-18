@@ -336,12 +336,12 @@ final class EntityPersistentStoreMappingSpec extends AnyWordSpec with Matchers w
             "original" -> Update.SetValue(original), "evidence" -> Update.SetValue(Record.empty),
             "labels" -> Update.SetValue(Vector.empty[String]), "absent" -> None))
           val requiredclear = Record.createFull(Vector("required" -> Update.SetNull))
-          val barenull = Record.createFull(Vector("optional" -> null))
+          val nullvalue = Record.createFull(Vector("optional" -> Update.SetValue(null)))
           val nested = Record.createFull(Vector("original" -> Update.SetValue(Update.SetValue("twice"))))
           When("public strict update produces physical changes for valid and invalid raw instructions")
           val encoded = update.toStoreChangesRecordC(_collection, raw)
           val clearresult = update.toStoreChangesRecordC(_collection, requiredclear)
-          val nullresult = update.toStoreChangesRecordC(_collection, barenull)
+          val nullresult = update.toStoreChangesRecordC(_collection, nullvalue)
           val nestedresult = update.toStoreChangesRecordC(_collection, nested)
           Then("one normalization preserves the clear marker and structured presence without concealing forbidden values")
           _values(encoded.get.get) shouldBe Vector("optional_text" -> Update.SetNull, "original_text" -> original,
@@ -356,29 +356,33 @@ final class EntityPersistentStoreMappingSpec extends AnyWordSpec with Matchers w
       "STAGE-07 check raw structure before omission" should afterWord(
         "in spec:entity-store-persistence-stages, example:STAGE-07, rules:R1,R7,R10, phase:100"
       ) {
-        "reject duplicate undeclared null and non-Single fields without normalization throws or partial conversion" in {
-          Given("raw rows whose invalid fields would disappear or throw if native normalization ran first")
+        "contain invalid hook construction and reject duplicate or undeclared rows before encoding" in {
+          Given("a foreign root-null row, valid duplicate and undeclared rows, and deferred invalid public Record constructions")
           var encodes = 0
           val binding = _summary_binding(Encoder.instance[Summary] { value => encodes += 1; _summary_encoder(value) }, _summary_decoder)
           val mapping = EntityStoreRowMapping(Vector(_field("summary", "summary_json", binding),
             _field("required", "required_text", EntityStoreFieldBinding.string)))
           val validfield = Field("summary", Field.Value.Single(Update.SetValue(Summary("kept", 1))))
           val nonsingle = new Field.Value { def single: Any = Update.Noop; def print: String = "fixture" }
-          val rows = Vector[Record](null, Record(null), Record(Vector(null)), Record(Vector(Field("required", null))),
-            Record(Vector(Field("required", nonsingle))),
+          val constructors = Vector[() => Record](() => Record(null), () => Record(Vector(null)),
+            () => Record(Vector(Field("required", null))), () => Record(Vector(Field("required", nonsingle))))
+          val rows = Vector[Record](null,
             Record(Vector(validfield, Field("required", Field.Value.Single(Update.Noop)),
               Field("required", Field.Value.Single(Update.Noop)))))
           val unknown = Record(Vector(validfield, Field("undeclared", Field.Value.Single(Update.Noop))))
           val update = _update(Some(mapping))
-          When("the public strict update validates every raw row before native normalization")
+          When("public strict update contains failed writing-hook construction and validates representable raw rows")
           val invalid = rows.map(update.toStoreChangesRecordC(_collection, _))
+          val hookfailures = constructors.map(thunk => _update(Some(mapping), writing = _ =>
+            Consequence.success(thunk())).toStoreChangesRecordC(_collection, Record.empty))
           val undeclared = update.toStoreChangesRecordC(_collection, unknown)
-          Then("typed structure and declaration failures precede any application encoding or partial patch")
+          Then("hook construction failures, duplicate structure and missing declarations precede all application encoding")
           _expect_reason(invalid.head, "application-hook-failure")
+          hookfailures.foreach(x => _expect_reason(x, "application-hook-failure"))
           invalid.tail.foreach(x => _expect_reason(x, "invalid-row-shape"))
           _expect_reason(undeclared, "missing-mapping")
           _facets(undeclared) should contain(Descriptor.Facet.FieldPath("undeclared"))
-          (invalid :+ undeclared).foreach(_.get shouldBe None)
+          (invalid ++ hookfailures :+ undeclared).foreach(_.get shouldBe None)
           encodes shouldBe 0
         }
       }
@@ -424,10 +428,10 @@ final class EntityPersistentStoreMappingSpec extends AnyWordSpec with Matchers w
         }
       }
 
-      "STAGE-11 preserve declared null and empty presence" should afterWord(
+      "STAGE-11 distinguish normalized absence from present structured values" should afterWord(
         "in spec:entity-store-persistence-stages, example:STAGE-11, rules:R3,R4,R6,R7,R9, phase:100"
       ) {
-        "distinguish required native null optional native null JSON null and present structured empties" in {
+        "omit native null attributes and retain JSON null and present structured empties" in {
           Given("required and nullable declarations, nested arrays, exact framework values and an unlisted field")
           val mapping = EntityStoreRowMapping(Vector(_field("required", "required_text", EntityStoreFieldBinding.string),
             _field("optional", "optional_text", EntityStoreFieldBinding.string, Multiplicity.ZeroOne),
@@ -445,7 +449,7 @@ final class EntityPersistentStoreMappingSpec extends AnyWordSpec with Matchers w
           })
           val missing = Record(logical.fields.filterNot(_.key == "required"))
           val unknown = Record(logical.fields :+ Field("unlisted", Field.Value.Single(Update.Noop)))
-          When("strict full stages interpret null empty and unknown-key value spaces")
+          When("strict full stages interpret normalized absence, present empties and unknown keys")
           val encoded = persistent.toStoreRecordC(_collection, logical)
           val decoded = encoded.flatMap(persistent.fromStoreRecordC(_collection, _))
           val nullwrite = persistent.toStoreRecordC(_collection, requirednull)
@@ -455,17 +459,18 @@ final class EntityPersistentStoreMappingSpec extends AnyWordSpec with Matchers w
             }))
           val absent = persistent.toStoreRecordC(_collection, missing)
           val undeclared = persistent.toStoreRecordC(_collection, unknown)
-          Then("native null remains a present nullable Field and structured null or empties retain their selected values")
+          Then("required normalized absence fails while optional fields disappear and structured values remain present")
           _values(decoded.get.get) shouldBe _values(logical)
-          _value(encoded.get.get, "optional_text") shouldBe (null: Any)
+          encoded.get.get.getAny("optional_text") shouldBe None
+          decoded.get.get.getAny("optional") shouldBe None
           _value(encoded.get.get, "json_text") shouldBe "null"
           _value(encoded.get.get, "record_text") shouldBe "{}"
           _value(encoded.get.get, "nested_text") shouldBe "[[],[null,{}]]"
           Vector("id", "revision", "permission", "contentBody").foreach { key =>
             _value(encoded.get.get, key) shouldBe _value(logical, key)
           }
-          _expect_reason(nullwrite, "null-not-allowed")
-          _expect_reason(nullread, "null-not-allowed")
+          _expect_reason(nullwrite, "missing-required-field")
+          _expect_reason(nullread, "missing-required-field")
           _expect_reason(absent, "missing-required-field")
           _expect_reason(undeclared, "missing-mapping")
         }

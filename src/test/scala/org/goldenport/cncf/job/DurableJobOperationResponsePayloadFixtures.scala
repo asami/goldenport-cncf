@@ -16,7 +16,7 @@ import org.goldenport.cncf.blob.{
 }
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.{
-  DataStore, EntityCompareAndSetMutationPlan, EntityDirectMutationPlan,
+  DataStore, EntityCompareAndSetMutationPlan, EntityCreatePlan, EntityCreateResult, EntityDirectMutationPlan,
   EntityMutationProviderCapabilities, EntityMutationProviderResult, QueryDirective,
   EntityVersionedMutationPlan, EntityVersionedMutationResult, SearchResult
 }
@@ -30,7 +30,7 @@ import org.simplemodeling.model.datatype.EntityId
  * Measured native managed adapters; faults are explicit fixture actions only.
  *
  * @since   Oct.  4, 2026
- * @version Oct.  4, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 private[job] object DurableJobOperationResponsePayloadFixtures {
@@ -83,6 +83,10 @@ private[job] object DurableJobOperationResponsePayloadFixtures {
     override def create(collection: DataStore.CollectionId, id: DataStore.EntryId, record: Record)
         (using ctx: ExecutionContext): Consequence[Unit] = {
       writes.incrementAndGet(); delegate.create(collection, id, record)
+    }
+    override def createEntity(plan: EntityCreatePlan)
+        (using ctx: ExecutionContext): Consequence[EntityCreateResult] = {
+      writes.incrementAndGet(); delegate.createEntity(plan)
     }
     override def save(collection: DataStore.CollectionId, id: DataStore.EntryId, record: Record)
         (using ctx: ExecutionContext): Consequence[Unit] = {
@@ -319,6 +323,21 @@ private[job] object DurableJobOperationResponsePayloadFixtures {
         case 1 => s"{\"type\":\"int\",\"value\":$number}"
         case 2 => s"{\"type\":\"string\",\"value\":\"界$number\"}"
         case 3 => s"{\"type\":\"list\",\"values\":[{\"type\":\"int\",\"value\":$number},{\"type\":\"int\",\"value\":${number + 1}}]}"
+        case 4 => s"{\"type\":\"vector\",\"values\":[{\"type\":\"boolean\",\"value\":true},{\"type\":\"string\",\"value\":\"v$number\"}]}"
+        case 5 => s"{\"type\":\"json\",\"value\":{\"n\":$number}}"
+      }
+      s"{\"key\":\"k${index % 2}\",\"value\":$atom}"
+    }
+    prefix + "{\"kind\":\"record\",\"fields\":[" + fields.mkString(",") + "]}}"
+  }
+
+  def generatedCanonicalWire(values: List[Int]): String = {
+    val fields = values.zipWithIndex.map { case (number, index) =>
+      val atom = Math.floorMod(number, 6) match {
+        case 0 => s"{\"type\":\"boolean\",\"value\":${number % 2 == 0}}"
+        case 1 => s"{\"type\":\"int\",\"value\":$number}"
+        case 2 => s"{\"type\":\"string\",\"value\":\"界$number\"}"
+        case 3 => s"{\"type\":\"vector\",\"values\":[{\"type\":\"int\",\"value\":$number},{\"type\":\"int\",\"value\":${number + 1}}]}"
         case 4 => s"{\"type\":\"vector\",\"values\":[{\"type\":\"boolean\",\"value\":true},{\"type\":\"string\",\"value\":\"v$number\"}]}"
         case 5 => s"{\"type\":\"json\",\"value\":{\"n\":$number}}"
       }

@@ -29,7 +29,6 @@ import org.http4s.server.websocket.WebSocketBuilder2
 import org.http4s.websocket.WebSocketFrame
 import org.typelevel.ci.CIString
 import org.goldenport.record.{Record, RecordFormat, RecordKeyNaming}
-import org.goldenport.record.io.RecordDecoder
 import org.goldenport.record.io.RecordExportEncoder
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.http.{HttpContext, HttpPath, HttpRequest, HttpResponse, HttpStatus}
@@ -69,7 +68,7 @@ import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
  *  version Aug. 14, 2026
  *  version Aug. 15, 2026
  *  version Sep. 29, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -516,7 +515,8 @@ final class Http4sHttpServer(
           val started = System.nanoTime()
           for {
             raw <- _to_http_request(req, Some(_rest_execution_path(req)))
-            res <- _rest_mutation_request_with_original_method(req, raw, originalmethod.getOrElse(req.method)) match {
+            res <- raw.flatMap(core =>
+              _rest_mutation_request_with_original_method(req, core, originalmethod.getOrElse(req.method))) match {
               case Consequence.Success(core) =>
                 _to_http_execution_response(
                   engine.executeWithExecutionResponse(_canonicalize_presentation_component_request(core)),
@@ -7499,7 +7499,7 @@ final class Http4sHttpServer(
   private def _to_http_request(
     req: org.http4s.Request[IO],
     pathoverride: Option[String] = None
-  ): IO[HttpRequest] = {
+  ): IO[Consequence[HttpRequest]] = {
     val method = req.method match {
       case org.http4s.Method.GET => HttpRequest.GET
       case org.http4s.Method.POST => HttpRequest.POST
@@ -7519,7 +7519,7 @@ final class Http4sHttpServer(
     val contenttypeheader = req.headers.get[`Content-Type`]
 
     if (_is_multipart(contenttypeheader))
-      _to_multipart_http_request(req, method, path, query, header, context)
+      _to_multipart_http_request(req, method, path, query, header, context).map(Consequence.success(_))
     else
       _to_regular_http_request(req, method, path, query, header, context, contenttypeheader)
   }
@@ -7577,7 +7577,7 @@ final class Http4sHttpServer(
     header: Record,
     context: HttpContext,
     contenttypeheader: Option[`Content-Type`]
-  ): IO[HttpRequest] =
+  ): IO[Consequence[HttpRequest]] =
     req.body.compile.to(Array).map { bytes =>
       val isformurlencoded = contenttypeheader.exists { header =>
         header.mediaType.mainType.equalsIgnoreCase("application") &&
@@ -7592,32 +7592,48 @@ final class Http4sHttpServer(
           case selected: org.goldenport.cncf.display.DisplayMutationHttpOperation => selected._raw_mutation_body
           case _ => false
         }
-      val (bodyoption, formrecord) =
+      val decoded: Consequence[(Option[Bag], Record)] =
         if (bytes.isEmpty) {
-          (None, Record.empty)
+          Consequence.success((None, Record.empty))
         } else if (rawmutation) {
-          (Some(Bag.binary(bytes.toArray)), Record.empty)
+          Consequence.success((Some(Bag.binary(bytes.toArray)), Record.empty))
         } else if (isformurlencoded) {
           val text = new String(bytes, java.nio.charset.StandardCharsets.UTF_8)
-          (None, HttpRequest.parseQuery(text))
+          Consequence.success((None, HttpRequest.parseQuery(text)))
         } else if (isjson) {
           val text = new String(bytes, java.nio.charset.StandardCharsets.UTF_8)
-          new RecordDecoder().json(text).toOption match {
+          val segments = path.split("/").toVector.filter(_.nonEmpty)
+          val operation = segments match {
+            case Vector(app, service, opname) =>
+              _component(app).flatMap(component => _protocol_operation_definition_for_route(component, service, opname))
+            case _ => None
+          }
+          val metadata = segments match {
+            case Vector(app, service, opname) => _operation_definition_for_route(app, service, opname)
+            case _ => None
+          }
+          OperationJsonBodyDecoder.decode(
+            text,
+            operation.map(_.specification.request.parameters).getOrElse(Seq.empty),
+            metadata
+          ).map {
             case Some(record) => (None, record)
             case None => (Some(Bag.binary(bytes.toArray)), Record.empty)
           }
         } else {
-          (Some(Bag.binary(bytes.toArray)), Record.empty)
+          Consequence.success((Some(Bag.binary(bytes.toArray)), Record.empty))
         }
-      HttpRequest.fromPath(
-        method = method,
-        path = path,
-        query = query,
-        header = header,
-        body = bodyoption,
-        context = context,
-        form = formrecord
-      )
+      decoded.map { case (bodyoption, formrecord) =>
+        HttpRequest.fromPath(
+          method = method,
+          path = path,
+          query = query,
+          header = header,
+          body = bodyoption,
+          context = context,
+          form = formrecord
+        )
+      }
     }
 
   private def _to_multipart_http_request(

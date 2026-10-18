@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   May.  4, 2026
  *  version Sep. 17, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -130,8 +130,8 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers with 
   }
 
   "ContentBody field ownership" should {
-    "hydrate overflow over an existing SQL NULL while preserving every nonowned field" in {
-      Given("a saved overflow body and a root with SQL NULL content, business and audit fields")
+    "hydrate overflow over normalized absence while preserving every present nonowned field" in {
+      Given("a saved overflow body and native-null content, business and audit attributes omitted by public Record construction")
       given ExecutionContext = ExecutionContext.create()
       val id = _id("sqlnull")
       val text = "日本語の本文"
@@ -146,8 +146,10 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers with 
       When("the logical content is hydrated from the saved overflow")
       val hydrated = _success(ContentBodyStoragePolicy.hydrate(id, sqlrecord))
 
-      Then("one authoritative nonnull content replaces all logical content aliases and other NULLs remain")
+      Then("one authoritative content is restored, business/audit null attributes stay absent and all present nonowned fields survive")
       hydrated.getString("content") shouldBe Some(text)
+      hydrated.getAny("business_null") shouldBe None
+      hydrated.getAny("audit_null") shouldBe None
       hydrated.fields.filter(field => _normalize(field.key) == "content") shouldBe
         Vector(Field("content", Field.Value.Single(text)))
       hydrated.fields.filter(field => nonowned.exists(_.key == field.key)) shouldBe nonowned
@@ -161,7 +163,7 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers with 
         nexttext <- Vector("b", "変更した長い本文")
       } {
         s"retain one current metadata set across ${oldtext.length} to ${nexttext.length} character preparation" in {
-          Given("an existing inline or overflow root with old body metadata and business/audit SQL NULLs")
+          Given("an existing inline or overflow root with old body metadata and normalized business/audit absence")
           val id = _id("metadata")
           val config = ContentBodyStoragePolicy.Config(inlineByteThreshold = 8)
           val first = _success(ContentBodyStoragePolicy.planForVersionedSave(id,
@@ -279,7 +281,7 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers with 
         preserve <- Vector(false, true)
       } {
         s"plan $input with preserve-existing-overflow $preserve without changing the saved body" in {
-          Given("an already saved overflow body with raw whitespace and complete business/audit NULL Fields")
+          Given("an already saved overflow body with raw whitespace, present business/audit fields and normalized null absence")
           given ExecutionContext = ExecutionContext.create()
           val id = _id("blankpolicy")
           val text = " \t以前の本文\r\n "
@@ -333,7 +335,7 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers with 
       Vector(("snake", "content_storage", "content_ref"), ("camel", "contentStorage", "contentRef")).foreach {
         case (label, storagekey, refkey) =>
           s"restore padded multilingual text through $label metadata at a nondefault reference" in {
-            Given("a real memory body saved at an exact nondefault reference and ordered root NULL, security and audit Fields")
+            Given("a real memory body at an exact nondefault reference and ordered security/audit fields with native-null root attributes omitted")
             given ExecutionContext = ExecutionContext.create()
             val id = _id("decodedhydrate")
             val ref = s"${id.value}:selected-body"
@@ -350,7 +352,7 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers with 
             val hydrated = _success(ContentBodyStoragePolicy.hydrate(id, candidate))
             val after = _load_referenced_body(ref)
 
-            Then("one exact padded content value replaces only the logical placeholders and every other ordered Field is retained")
+            Then("one exact padded content value fills logical absence and every present nonowned ordered Field is retained")
             hydrated.getString("content") shouldBe Some(text)
             (hydrated.fields == retained :+ Field("content", Field.Value.Single(text))) shouldBe true
             (after.map(_.fields) == Some(body.fields)) shouldBe true
@@ -376,7 +378,7 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers with 
             val hydrated = _success(ContentBodyStoragePolicy.hydrate(id, candidate))
             val after = _load_referenced_body(defaultref)
 
-            Then("the original raw object and every ordered nullable Field remain unchanged with the saved default body intact")
+            Then("the original normalized object and every present ordered Field remain unchanged with the saved default body intact")
             (hydrated eq candidate) shouldBe true
             (hydrated.fields == candidate.fields) shouldBe true
             _load_referenced_body(ref).isDefined shouldBe false
@@ -533,7 +535,7 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers with 
   }
 
   private def _require_payload_round_trip(text: String, charset: String, threshold: Int): Unit = {
-    Given("a nonblank raw payload, padded charset metadata and ordered business/audit SQL NULL Fields")
+    Given("a nonblank raw payload, padded charset metadata and ordered present business/audit Fields with normalized null absence")
     given ExecutionContext = ExecutionContext.create()
     val id = _id("payload")
     val config = ContentBodyStoragePolicy.Config(inlineByteThreshold = threshold)
@@ -582,7 +584,7 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers with 
       save.collection.collectionName shouldBe "cncf_content_body_overflow"
       (save.record.fields == expectedside.get.fields) shouldBe true
     }
-    And("every nonowned Field retains its complete ordered value, including both raw SQL NULLs")
+    And("every present nonowned Field retains its complete ordered value and native-null business/audit attributes stay absent")
     Vector(planned.record, stored, hydrated, repeatedplan.record, repeated, repeatedhydrated).foreach { record =>
       withClue(s"nonowned keys=${_payload_nonowned(record).map(_.key)}: ") {
         (_payload_nonowned(record) == nonowned) shouldBe true
@@ -615,11 +617,11 @@ final class ContentBodyStoragePolicySpec extends AnyWordSpec with Matchers with 
   }
 
   private val _owned_keys = Set("contentbytesize", "contentdigest", "contentcharset", "contentstorage", "contentref")
-  private val _business_fields = Vector(
+  private val _business_fields = Record(Vector(
     Field("title", Field.Value.Single("Retained business")),
     Field("business_null", Field.Value.Single(null)),
     Field("audit_null", Field.Value.Single(null)),
-    Field("audit_number", Field.Value.Single(41L)))
+    Field("audit_number", Field.Value.Single(41L)))).fields
 
   private def _normalize(name: String): String =
     name.filter(_.isLetterOrDigit).toLowerCase(java.util.Locale.ROOT)
