@@ -3,7 +3,12 @@
 Date: 2026-10-19
 Status: P103-S3 producer accepted in local Step commit `1df07da9be8716edf0e0462bcba221ca8d020c60`; concrete
 sm-workflow consumer evidence is available. P103-S4 independent integrated CNCF review
-passed; its exact local Step acceptance commit remains pending. Phase 103 stays in progress.
+passed and S4 is accepted in local Step commit `c456f09c9ddd67f3746500381d8f7b30be538d57`.
+All four Steps are accepted locally; Phase 103 is CLOSED after required full
+validation and its sole comprehensive review passed. At preparation of this
+closure record, the final local release commit is pending parent execution and
+committed-tree verification; its actual outcome belongs to the native commit
+receipt.
 
 The public [metadata specification](../spec/validation-test-metadata.md) and
 [design](../design/validation-test-metadata.md) own declaration, discovery and
@@ -124,7 +129,7 @@ rejects nonpositive or overflowing nanos before `FiniteDuration` construction.
 Cozy retains ownership of syntax, parsing and generation; CNCF adds none of
 those mechanisms and no independent merge or requirement policy.
 
-## Compatibility and remaining gates
+## Compatibility and producer closure
 
 `SbtTarget(workspaceId)` source construction remains valid via the defaulted
 scenario field. Case-class extractor arity changes from one to two; extractor
@@ -136,7 +141,8 @@ Independent protected-focused S3 Step review returned PASS with zero Current
 Boundary Blockers, Hygiene or Development Candidate findings and no evidence
 gaps. S3 is accepted in local Step commit `1df07da9be8716edf0e0462bcba221ca8d020c60`.
 Actual consumer evidence is available; independent CNCF integrated S4 review
-passed and its exact local Step acceptance commit remains pending. October 19 producer closure-focused
+passed and S4 is accepted in local Step commit `c456f09c9ddd67f3746500381d8f7b30be538d57`.
+October 19 producer closure-focused
 validation passed compilation and 161/161 tests across 19 suites (no failures,
 aborts, canceled or pending tests; SBT/wrapper exit 0; shared lock released).
 The earlier failed full invocation omitted native DB flags. Subsequent full001
@@ -149,10 +155,20 @@ were corrected without weakening ownership, no-replay or full-state assertions.
 Focused004 passed compilation and 173/173 tests across 21 suites, including the
 previous 19 and both failure suites, private helper compilation and actual
 Action/caller history assertions. It had no failures, aborts, canceled, ignored
-or pending tests; SBT/wrapper exit 0 and lock released. Required full002 is
-running with explicit Test fork and both native DB flags; its outcome remains
-UNKNOWN. Required full
-producer validation, one full Phase review and release acceptance remain open.
+or pending tests; SBT/wrapper exit 0 and lock released. Required full002 subsequently
+passed compilation and 6,853/6,853 tests across 861 suites, with zero failures or
+suite aborts, five canceled, one ignored and 46 pending. Both native PostgreSQL
+and MySQL suites ran with explicit Test fork and both flags true; SBT/wrapper
+exit 0 and lock released. Five accepted nonblocking Hygiene dispositions are
+recorded in the [Hygiene journal](../journal/2026/10/2026-10-18-phase-103-hygiene-follow-up.md).
+The sole comprehensive Phase review passed on October 19 with no Current
+Boundary Blockers or evidence gaps; producer Phase 103 and VM-01..04 are CLOSED.
+The Hygiene records remain OPEN separate follow-ups, with no Development or
+unpersisted accepted findings. At preparation of this closure record, the final
+local release commit is pending parent execution and committed-tree verification;
+its actual outcome belongs to the native commit receipt.
 The [checklist](../phase/phase-103-checklist.md) owns current acceptance status.
 This handoff grants no execution permission and computes no cost KPI; its
-consumer evidence establishes no whole consumer or producer Phase completion.
+consumer evidence establishes no whole consumer Phase completion. Producer
+closure additionally rests on CNCF's four accepted Steps, required full
+validation and sole comprehensive review.

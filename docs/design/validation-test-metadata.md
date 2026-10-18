@@ -177,7 +177,7 @@ Its closed Phase 14 is native Job integration, not metadata ownership. The
 workstream and the actual sm-workflow consumer connection obligation.
 Static application completion is outside producer acceptance.
 
-## Remaining connected delivery
+## Accepted connected delivery
 
 P103-S1 is accepted in `ac443ed353cc682251e4d17bf4e64a1285955798`.
 P103-S2 is accepted in `2ec6da1265d14430cf522443869a0b9b2647ea00`. The in-process
@@ -202,8 +202,18 @@ That delivery supports exact zero-input scenario selection; acceptance of
 separately scoped nonempty typed-input work is not attributed to Phase 103 even
 when that work coexists in the current tree. The normalized CML and synthetic
 static example contracts above are unchanged. Independent integrated CNCF S4 review
-passed; its exact local Step acceptance commit remains pending. Full001 failed and the corrected
-observation tests passed focused004; required full002 is running with explicit
-Test fork and both native DB flags, with outcome UNKNOWN. Required full
-validation, one full Phase review and release remain open; the
+passed and S4 is accepted in local Step commit `c456f09c9ddd67f3746500381d8f7b30be538d57`;
+all four declared Steps are accepted locally. Full001 failed and the corrected
+observation tests passed focused004. Required full002 subsequently passed
+compilation and 6,853/6,853 tests across 861 suites, with zero failures or suite
+aborts, five canceled, one ignored and 46 pending. Both native PostgreSQL and
+MySQL suites ran with explicit Test fork and both flags true; SBT/wrapper exit 0
+and lock released. Five accepted nonblocking Hygiene dispositions are recorded
+in the [Hygiene journal](../journal/2026/10/2026-10-18-phase-103-hygiene-follow-up.md).
+The sole comprehensive Phase review passed on October 19 with no Current
+Boundary Blockers or evidence gaps. Producer Phase 103 and VM-01..04 are CLOSED;
+the Hygiene records remain OPEN separate follow-ups, with no Development or
+unpersisted accepted findings. At preparation of this closure record, the final
+local release commit is pending parent execution and committed-tree verification;
+its actual outcome belongs to the native commit receipt. The
 [phase checklist](../phase/phase-103-checklist.md) owns current delivery status.

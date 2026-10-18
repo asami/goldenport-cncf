@@ -1,18 +1,19 @@
 # Phase 103 Checklist — Validation/Test Metadata ABI and Discovery
 
-status=in-progress
+status=closed
 Phase: [103](phase-103.md)
 Contract input: [ABI proposal](../notes/validation-test-metadata-abi-proposal.md)
 
 Step P103-S1 declaration implementation and Executable Specifications passed
-focused validation and independent protected conformance review. Unchecked Phase items
-remain open acceptance obligations. S1 local Step acceptance is recorded in
+focused validation and independent protected conformance review. The Phase items
+below are closed by the connected acceptance evidence. S1 local Step acceptance is recorded in
 `ac443ed353cc682251e4d17bf4e64a1285955798`. S2 discovery/query validation and
 independent review are accepted in `2ec6da1265d14430cf522443869a0b9b2647ea00`.
 S3 focused producer validation and independent review passed; S3 is accepted in
 local Step commit `1df07da9be8716edf0e0462bcba221ca8d020c60`. October 19: concrete
 sm-workflow Phase 6.2 consumer evidence is available; independent integrated CNCF S4
-review passed and its exact local Step acceptance commit remains pending.
+review passed and its exact local Step acceptance commit is
+`c456f09c9ddd67f3746500381d8f7b30be538d57`. All four declared Steps are accepted locally.
 
 The first producer-full invocation failed without the required PostgreSQL/MySQL
 flags, and targeted non-DB reproduction failed. Bounded Action-context and
@@ -20,7 +21,8 @@ Display observer corrections are authored. October 19 closure-focused checks
 passed compilation and 161/161 tests across 19 suites (no failures, aborts,
 canceled or pending tests; SBT/wrapper exit 0; lock released), resolving the
 original seven and additional three failures within that surface, including
-List property/JUnit. Independent integrated S4 review has since passed; its exact local Step acceptance commit remains pending. The subsequent
+List property/JUnit. Independent integrated S4 review and its exact local Step
+acceptance have since completed. The subsequent
 full001 invocation enabled PostgreSQL/MySQL and passed compilation, then failed:
 6,853 tests across 861 suites, 6,851 passed and two failed, no suite aborts,
 five canceled, one ignored and 46 pending; SBT/wrapper exit 1, lock released.
@@ -30,9 +32,19 @@ were corrected without weakening ownership, no-replay or full-state assertions.
 Focused004 passed compilation and 173/173 tests across 21 suites, including the
 previous 19 and both failure suites, private helper compilation and actual
 Action/caller history assertions. It had no failures, aborts, canceled, ignored
-or pending tests; SBT/wrapper exit 0, lock released. Required full002 is running
-with explicit Test fork and both native DB flags; its outcome remains UNKNOWN.
-Required full validation, one full Phase review and release remain open.
+or pending tests; SBT/wrapper exit 0, lock released. Required full002 subsequently
+passed compilation and 6,853/6,853 tests across 861 suites, with zero failures or
+suite aborts, five canceled, one ignored and 46 pending. Both native PostgreSQL
+and MySQL suites ran with explicit Test fork and both flags true; SBT/wrapper
+exit 0 and lock released. Five accepted nonblocking Hygiene dispositions are
+recorded in the [Hygiene journal](../journal/2026/10/2026-10-18-phase-103-hygiene-follow-up.md).
+The sole comprehensive Phase review passed on October 19 with no Current
+Boundary Blockers or evidence gaps. VM-01..04 and all four Steps are CLOSED.
+The accepted Hygiene records remain OPEN separate follow-ups; no Development
+findings or unpersisted accepted findings remain. At preparation of this closure
+record, the distinct final local release commit is pending parent execution and
+committed-tree verification; its actual outcome belongs to the native commit
+receipt. No final release hash is asserted here.
 
 ## Step P103-S1: declaration interpretation
 
@@ -78,7 +90,8 @@ Source: [discovery ABI](../../src/main/scala/org/goldenport/cncf/validation/Vali
 - [x] Parent records S2 acceptance and exact local Step commit evidence: `2ec6da1265d14430cf522443869a0b9b2647ea00`.
 
 The authored in-process ScalaTest selector specification is not CNCF process
-invocation evidence. Full Phase validation and review remain open.
+invocation evidence. Full Phase validation and review were still open at the
+S2 handoff and are now satisfied by the connected closure evidence above.
 
 ## Step P103-S3: typed scenario producer and shared normalized handoff
 
@@ -106,14 +119,14 @@ Shared [fixture guide](../fixtures/validation-test-metadata/README.md) and
 ## Step P103-S4: actual runtime consumer connection
 
 Stage Status:
-- Current status: IN_PROGRESS
+- Current status: CLOSED
 - Owner: CNCF Phase 103 parent for integrated acceptance; sm-workflow Phase 6.2 for consumer implementation
 - Update rule: Parent records actual consumer evidence, integrated CNCF review and exact local S4 acceptance.
 - Closure basis: The S4 entries below; whole sm-workflow Phase completion is not a prerequisite.
 
 - [x] Resolve the source-admission prerequisite through consumer-owned sm-workflow Phase 6.2 implementation and dependency refresh; no sm-workflow source edit is authorized or performed by this CNCF task.
 - [x] Demonstrate actual consumer discovery -> purpose/feature query -> identical exact binding for selected/supplemental references -> typed invocation and outcome consumption: K2 COMPLETE ascii/empty/unicode inventory, query-selected ascii and supplemental unicode, ordinary Test 3/3 and both exact TestOnly 1/1; independent consumer accept and isolated Step commit `b69a60a0fc3dd5e9e7df87fd08b2549f41cef220`. L3 Slice-plan accept and isolated Step commit `157388724869c21649936d4b2de7508571507605` supply supplementary integration evidence. See the [handoff](../notes/validation-test-metadata-consumer-handoff.md).
-- [ ] Record consumer validation/review/acceptance through independent CNCF integrated S4 acceptance and its exact local Step commit, without declaring all sm-workflow Phase 5 or 6.2 complete.
+- [x] Record consumer validation/review/acceptance through independent CNCF integrated S4 acceptance and exact local Step commit `c456f09c9ddd67f3746500381d8f7b30be538d57`, without declaring all sm-workflow Phase 5 or 6.2 complete.
 
 The isolated consumer commits do not accept the dirty primary sm-workflow
 implementation or release Phase 6.2. Neither whole Phase waits for the other's
@@ -127,56 +140,56 @@ implementation is outside producer acceptance.
 
 ## VM-01: Contract
 
-- [ ] Define versioned public/normalized metadata for SMOKE, FOCUSED, ADMISSION,
+- [x] Define versioned public/normalized metadata for SMOKE, FOCUSED, ADMISSION,
       FULL and HEAVY, extensible feature IDs, expected duration, duration class
       and binding to existing execution requirements.
-- [ ] Fix absent versus explicitly empty operation declaration semantics;
+- [x] Fix absent versus explicitly empty operation declaration semantics;
       purposes override class defaults when present, features form a union,
       operation duration/class override defaults. Specify invalid duration and
       incompatible execution requirements as typed interpretation errors.
-- [ ] Specify stable component/specification/operation identity, provenance and
+- [x] Specify stable component/specification/operation identity, provenance and
       revision references, including parameterized/scenario-level execution for
       the supported test framework. Feature additions are data, not ABI changes.
-- [ ] Define Cozy-owned CML property mapping to the same model without making
+- [x] Define Cozy-owned CML property mapping to the same model without making
       generated Scala a second source of truth. Promote spec/design normally.
 
-- [ ] Freeze scoped feature references/mappings, discovery COMPLETE/PARTIAL/UNKNOWN
+- [x] Freeze scoped feature references/mappings, discovery COMPLETE/PARTIAL/UNKNOWN
       semantics, unannotated-operation visibility and source/operation revisions.
       Keep explicit target feature populations separate from test-observed tags.
-- [ ] Specify expected-duration unit and operation measurement scope, distinct
+- [x] Specify expected-duration unit and operation measurement scope, distinct
       from sm-workflow observation intervals and aggregate query duration.
 
 ## VM-02: ABI and discovery
 
-- [ ] Provide public Scala class/specification and operation/scenario metadata
+- [x] Provide public Scala class/specification and operation/scenario metadata
       declarations and deterministic resolved discovery over admitted artifacts.
-- [ ] Make normalized metadata and operation identities usable by runtime and
+- [x] Make normalized metadata and operation identities usable by runtime and
       static consumers without their own annotation-text parsing or merge logic.
-- [ ] Bind discovered operations to existing typed execution paths; metadata
+- [x] Bind discovered operations to existing typed execution paths; metadata
       does not supply arbitrary executable/argv. An unannotated operation is
       distinguishable from invalid metadata and is not silently assigned a purpose.
-- [ ] Retain declared source facts separately from runtime observations; no pass/
+- [x] Retain declared source facts separately from runtime observations; no pass/
       fail, last-duration, Candidate state or convergence counters in annotations.
 
 ## VM-03: Executable Specification acceptance
 
-- [ ] Given class defaults and operation overrides, discovery produces the
+- [x] Given class defaults and operation overrides, discovery produces the
       specified purposes, union features and duration/class/requirement values.
-- [ ] One operation can belong to several purposes without duplicating code;
+- [x] One operation can belong to several purposes without duplicating code;
       HEAVY-only override does not accidentally inherit ADMISSION/FULL membership.
-- [ ] Same-named scenarios in different components retain distinct stable IDs;
+- [x] Same-named scenarios in different components retain distinct stable IDs;
       supported parameterized/scenario execution is discoverable and invocable.
-- [ ] Absent/empty declarations, malformed duration and unsupported required ABI
+- [x] Absent/empty declarations, malformed duration and unsupported required ABI
       semantics have explicit outcomes; no silent fallback or fuzzy interpretation.
-- [ ] Repeated deterministic discovery yields the same normalized declarations;
+- [x] Repeated deterministic discovery yields the same normalized declarations;
       adding a feature ID needs no ABI revision, and metadata changes are visible
       as ordinary architecture deltas without hashes or copied-file certificates.
-- [ ] Equivalent Scala declarations and CML-mapping fixtures yield equivalent
+- [x] Equivalent Scala declarations and CML-mapping fixtures yield equivalent
       normalized metadata; no Cozy parser implementation is required in CNCF.
-- [ ] Exercise an actual sm-workflow consumer fixture for project purpose queries
+- [x] Exercise an actual sm-workflow consumer fixture for project purpose queries
       and FOCUSED plus selected feature union, with operation-level binding.
 
-- [ ] Share complete/partial inventory fixtures, including unannotated operations
+- [x] Share complete/partial inventory fixtures, including unannotated operations
       and a sole ADMISSION declaration removed from baseline to Candidate. Static
       consumers see 1 -> 0 only within complete comparable scope; runtime status
       remains Unknown without evidence, and no tested-feature-only denominator
@@ -184,20 +197,20 @@ implementation is outside producer acceptance.
 
 ## VM-04: Handoff and closure
 
-- [ ] Deliver ABI version/API usage, supported declaration/merge examples,
+- [x] Deliver ABI version/API usage, supported declaration/merge examples,
       operation identities, invalid-input cases and discovery fixtures to
       sm-workflow Phase 5 and the Mac mini cbd-support workstream.
-- [ ] Static-consumer fixtures expose purpose/feature coverage and metadata
+- [x] Static-consumer fixtures expose purpose/feature coverage and metadata
       changes; actual duration remains referenced runtime evidence. CNCF does
       not compute KPI scores or depend on the Mac mini application being done.
-- [ ] Record focused/required producer validation and independent review for the
+- [x] Record focused/required producer validation and independent review for the
       connected change; record runtime consumer acceptance without declaring its
       entire phase complete. Do not repeat unchanged validation per helper.
-- [ ] Update producer spec/design, phase evidence and consumer handoff references;
+- [x] Update producer spec/design, phase evidence and consumer handoff references;
       close only after required implementation/review/validation is complete.
 
 
-- [ ] Consumer handoff demonstrates the same stable typed operation binding for
+- [x] Consumer handoff demonstrates the same stable typed operation binding for
       metadata-selected and explicitly referenced supplemental operations, without
       modifying purpose membership or weakening execution requirements. The Slice
       plan/file lifecycle remains sm-workflow-owned.
