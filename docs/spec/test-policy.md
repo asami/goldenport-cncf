@@ -161,11 +161,30 @@ metadata and should be removed from the semantic comparison. Reusing one
 mutable runtime is not sufficient replay evidence.
 
 ----------------------------------------------------------------------
-5. Normal FULL and opt-in Job HEAVY (2026-10-13)
+5. Normal FULL and opt-in HEAVY (updated 2026-10-19)
 ----------------------------------------------------------------------
 
 Normal repository `test` is FULL for its declared selection, not exhaustive Job
-acceptance. Other subsystems retain their existing policy. Job management uses
+or external-service acceptance. FULL must not depend on an independently running
+server or start/stop Docker containers, including MySQL and PostgreSQL. An
+environment variable enabling live tests must not change this FULL boundary.
+Keep in-memory providers, embedded SQLite and small test-owned loopback HTTP
+servers running in the same JVM in FULL; loopback fixtures own their ports and
+cleanup and must not assume a separately running server. Pure protocol/dialect
+tests using fake providers remain FULL even when they mention an external DB.
+This execution policy does not exclude HEAVY sources from Test compilation or
+claim that normal build dependency resolution is offline.
+
+External-service and Docker acceptance uses the existing ScalaTest Slow tag,
+in addition to any existing explicit live-environment opt-in. Whole external
+suites must be excluded before lifecycle setup, not canceled after contacting
+the service. In mixed suites, tag only the live cases and acquire their external
+resources inside those cases: a suite-wide beforeAll must not start Docker for
+the remaining SQLite/in-memory cases. Tests whose one scenario compares several
+real database providers remain HEAVY as a whole; standalone SQLite coverage stays
+FULL. Preserve real-provider assertions and report unexecuted coverage as NOT RUN.
+
+Job management uses
 five representative suites: InMemoryJobEngineSpec, JobPrimaryResultSpec,
 JobQueryReadModelSpec, DurableJobLifecycleWriteBridgeSpec and JobControlComponentSpec.
 These cover submission/completion, primary versus async results, queries, durable

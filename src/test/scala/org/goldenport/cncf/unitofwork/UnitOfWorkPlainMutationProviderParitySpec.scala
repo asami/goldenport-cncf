@@ -26,10 +26,7 @@ import org.goldenport.cncf.entity.*
 import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.security.EntityAccessMode
 import org.goldenport.record.Record
-import org.scalatest.{
-  BeforeAndAfterAll,
-  GivenWhenThen
-}
+import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.simplemodeling.model.datatype.{
@@ -44,34 +41,15 @@ import org.testcontainers.utility.DockerImageName
 /*
  * @since   Jul. 26, 2026
  *  version Jul. 30, 2026
- * @version Sep. 17, 2026
+ *  version Sep. 17, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkPlainMutationProviderParitySpec
     extends AnyWordSpec
     with Matchers
-    with GivenWhenThen
-    with BeforeAndAfterAll {
+    with GivenWhenThen {
   import UnitOfWorkPlainMutationProviderParitySpec.*
-
-  private var _mysql_container: Option[LiveMysqlContainer] = None
-
-  override protected def beforeAll(): Unit = {
-    super.beforeAll()
-    if (_live_mysql_enabled) {
-      val container = new LiveMysqlContainer()
-      container.start()
-      _mysql_container = Some(container)
-    }
-  }
-
-  override protected def afterAll(): Unit =
-    try {
-      _mysql_container.foreach(_.stop())
-      _mysql_container = None
-    } finally {
-      super.afterAll()
-    }
 
   "UnitOfWork plain mutation provider parity" should {
     "preserve revision stale-writer and cache coherence with in-memory storage" in {
@@ -100,7 +78,7 @@ final class UnitOfWorkPlainMutationProviderParitySpec
       evidence shouldBe _expected_evidence
     }
 
-    "preserve revision stale-writer and cache coherence with MySQL storage" in {
+    "preserve revision stale-writer and cache coherence with MySQL storage" taggedAs org.scalatest.tagobjects.Slow in {
       _with_live_mysql { database =>
         Given("one None-concurrency SimpleEntity on the live MySQL provider")
         val datasource = new MysqlDataSource()
@@ -311,21 +289,15 @@ final class UnitOfWorkPlainMutationProviderParitySpec
 
   private def _with_live_mysql[A](
     body: LiveDatabase => A
-  ): A =
-    _mysql_container match {
-      case Some(container) =>
-        body(
-          LiveDatabase(
-            container.getJdbcUrl,
-            container.getUsername,
-            container.getPassword
-          )
-        )
-      case None =>
-        cancel(
-          s"Set $LIVE_MYSQL_ENV=true to run the MySQL provider-parity specification."
-        )
-    }
+  ): A = {
+    if (!_live_mysql_enabled)
+      cancel(s"Set $LIVE_MYSQL_ENV=true to run the MySQL provider-parity specification.")
+    val container = new LiveMysqlContainer()
+    try {
+      container.start()
+      body(LiveDatabase(container.getJdbcUrl, container.getUsername, container.getPassword))
+    } finally container.stop()
+  }
 
   private def _patch_persistent(
     collectionid: EntityCollectionId

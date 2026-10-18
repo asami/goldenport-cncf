@@ -30,13 +30,15 @@ import org.testcontainers.utility.DockerImageName
 
 /*
  * Opt-in executable specification for Phase 49 shared-provider acceptance.
- * Normal test runs cancel this suite before contacting Docker.
+ * Normal FULL excludes this suite before contacting Docker.
  *
  * @since   Jul. 24, 2026
  *  version Jul. 25, 2026
- * @version Jul. 26, 2026
+ *  version Jul. 26, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class MysqlConditionalTransitionAcceptanceSpec
     extends AnyWordSpec
     with Matchers

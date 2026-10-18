@@ -7,8 +7,9 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 17, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 19, 2026
  */
+@org.scalatest.tags.Slow
 final class PostgresqlDisplayEditingStudioReferenceAcceptanceSpec extends AnyWordSpec
     with DisplayEditingStudioReferenceFixture.Vocabulary with PostgresqlAcceptance {
   import DisplayEditingStudioReferenceFixture.*

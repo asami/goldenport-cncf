@@ -6,12 +6,13 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * Opt-in executable specification for the real Docker service-container
- * lifecycle. Normal test runs cancel this suite before contacting Docker.
+ * lifecycle. Normal FULL excludes this suite before contacting Docker.
  *
  * @since   Jul. 20, 2026
- * @version Jul. 20, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
+@org.scalatest.tags.Slow
 final class DockerServiceContainerGatewayLiveSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Docker managed service-container live integration" should {
     "create reuse probe and remove one framework-owned HTTP service" in {
