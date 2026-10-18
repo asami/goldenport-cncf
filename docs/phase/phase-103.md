@@ -86,8 +86,14 @@ one suite (total 80 tests across nine suites, zero failures or aborts).
 SBT/wrapper exit codes were 0 and the shared lock was released. Independent
 protected-focused S3 Step review returned PASS with zero Current Boundary
 Blockers, Hygiene or Development Candidate findings and no evidence gaps.
-S3 is accepted pending its exact local Step commit. No runtime consumer
+S3 is accepted in local Step commit `1df07da9be8716edf0e0462bcba221ca8d020c60`. No runtime consumer
 acceptance is inferred.
+
+Broader producer repository-full validation has not passed. Targeted non-DB
+reproduction also failed; the connection to the prior Action context/UnitOfWork
+ownership change has no accepted repair. Required PostgreSQL/MySQL flags were
+absent from the first full invocation, and the property/JUnit harness failure
+remains unresolved. Full Phase validation, review and release acceptance remain open.
 
 Actual sm-workflow source fixture/dependency refresh remains required separate
 Step P103-S4 under explicit source admission after producer acceptance. Its

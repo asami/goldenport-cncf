@@ -1,7 +1,7 @@
 # Validation/Test Metadata V1 consumer handoff
 
 Date: 2026-10-18
-Status: P103-S3 producer accepted pending exact local Step commit; concrete
+Status: P103-S3 producer accepted in local Step commit `1df07da9be8716edf0e0462bcba221ca8d020c60`; concrete
 sm-workflow S4 acceptance remains pending. Phase 103 stays in progress.
 
 The public [metadata specification](../spec/validation-test-metadata.md) and
@@ -98,7 +98,7 @@ their accepted contracts. Existing class-only TestOnly behavior remains.
 
 Independent protected-focused S3 Step review returned PASS with zero Current
 Boundary Blockers, Hygiene or Development Candidate findings and no evidence
-gaps. S3 is accepted pending the exact local Step commit owned by the parent.
+gaps. S3 is accepted in local Step commit `1df07da9be8716edf0e0462bcba221ca8d020c60`.
 The actual sm-workflow S4 fixture, full connected repository
 validation, one full Phase review and Phase release acceptance remain open.
 This handoff supplies no execution permission, runtime proof, cost KPI,

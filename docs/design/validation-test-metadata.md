@@ -188,8 +188,8 @@ separate real top-level literal parameter selection passed one test in one
 suite (total 80 tests across nine suites, zero failures or aborts, SBT/wrapper
 exit 0, shared lock released). Independent protected-focused S3 Step review
 returned PASS with zero Current Boundary Blockers, Hygiene or Development
-Candidate findings and no evidence gaps. S3 is accepted pending its exact local
-Step commit. Actual sm-workflow source fixture and dependency refresh require
+Candidate findings and no evidence gaps. S3 is accepted in local Step commit
+`1df07da9be8716edf0e0462bcba221ca8d020c60`. Actual sm-workflow source fixture and dependency refresh require
 separate S4 admission after producer acceptance. Full Phase validation/review
 remain open. The
 [phase checklist](../phase/phase-103-checklist.md) owns delivery status.

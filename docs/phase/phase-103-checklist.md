@@ -9,9 +9,15 @@ focused validation and independent protected conformance review. Unchecked Phase
 remain open acceptance obligations. S1 local Step acceptance is recorded in
 `ac443ed353cc682251e4d17bf4e64a1285955798`. S2 discovery/query validation and
 independent review are accepted in `2ec6da1265d14430cf522443869a0b9b2647ea00`.
-S3 producer validation and independent review passed; S3 is accepted pending
-the exact local Step commit. The separately admitted actual sm-workflow S4
-consumer remains open.
+S3 focused producer validation and independent review passed; S3 is accepted in
+local Step commit `1df07da9be8716edf0e0462bcba221ca8d020c60`. Actual sm-workflow S4
+consumer source admission remains pending.
+
+Broader producer repository-full validation has not passed. Targeted non-DB
+reproduction also failed; the connection to the prior Action context/UnitOfWork
+ownership change has no accepted repair. Required PostgreSQL/MySQL flags were
+absent from the first full invocation, and the property/JUnit harness failure
+remains unresolved. Full Phase validation, review and release acceptance remain open.
 
 ## Step P103-S1: declaration interpretation
 
@@ -62,7 +68,7 @@ invocation evidence. Full Phase validation and review remain open.
 ## Step P103-S3: typed scenario producer and shared normalized handoff
 
 Stage Status:
-- Current status: ACCEPTED (pending exact local Step commit)
+- Current status: CLOSED (accepted local Step)
 - Owner: CNCF Phase 103
 - Update rule: Parent records focused validation, independent protected Step review and exact local acceptance.
 - Closure basis: Frozen P103-S3A producer boundary, without closing VM-01..04 or the actual runtime consumer.
@@ -80,12 +86,12 @@ Shared [fixture guide](../fixtures/validation-test-metadata/README.md) and
 - [x] Author GWT/should/property specifications and consumer responsibility/compatibility documentation.
 - [x] Parent focused serialized SBT accumulator passes 79 tests across eight suites; separate real top-level literal parameter-fixture selection passes one test in one suite (total 80 tests across nine suites, zero failures or aborts, SBT/wrapper exit 0, shared lock released).
 - [x] Fresh independent protected-focused Step review accepts the connected S3 boundary: PASS, zero Current Boundary Blockers, Hygiene or Development Candidate findings and no evidence gaps.
-- [ ] Parent records exact local S3 acceptance commit.
+- [x] Parent records exact local S3 acceptance commit: `1df07da9be8716edf0e0462bcba221ca8d020c60`.
 
 ## Step P103-S4: actual runtime consumer source admission
 
 Stage Status:
-- Current status: PLANNED (pending producer acceptance and explicit consumer source admission)
+- Current status: PLANNED (pending explicit consumer source admission)
 - Owner: CNCF Phase103 parent for source admission and coordinated sm-workflow consumer acceptance
 - Update rule: Parent records explicit source admission then actual consumer validation/review/local acceptance.
 - Closure basis: Actual consumer connection only; no reopening/completion of all sm-workflow Phase5.

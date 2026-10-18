@@ -403,8 +403,8 @@ suites; separate real top-level literal parameter selection passed one test in
 one suite (total 80 tests across nine suites, zero failures or aborts,
 SBT/wrapper exit 0, shared lock released). Independent protected-focused S3
 Step review returned PASS with zero Current Boundary Blockers, Hygiene or
-Development Candidate findings and no evidence gaps. S3 is accepted pending
-its exact local Step commit. Actual sm-workflow source fixture/dependency
+Development Candidate findings and no evidence gaps. S3 is accepted in local
+Step commit `1df07da9be8716edf0e0462bcba221ca8d020c60`. Actual sm-workflow source fixture/dependency
 refresh remains required separate S4 under explicit source admission after the
 producer is accepted. Full connected producer validation and
 [Phase 103](../phase/phase-103.md) acceptance remain open. Static-consumer
