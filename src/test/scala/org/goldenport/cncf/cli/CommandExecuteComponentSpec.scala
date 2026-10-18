@@ -32,7 +32,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version May.  2, 2026
  *  version Jun. 29, 2026
  *  version Aug. 15, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 class CommandExecuteComponentSpec
@@ -1064,7 +1064,7 @@ class CommandExecuteComponentSpec
         |  key: command-execute-component-spec
         |  time:
         |    mode: manual
-        |    start-at: 2026-08-11T00:00:00Z
+        |    start-at: '2026-08-11T00:00:00Z'
         |  random:
         |    mode: seeded
         |    seed: command-execute-component-spec

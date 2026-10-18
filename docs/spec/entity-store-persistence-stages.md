@@ -1,5 +1,11 @@
 # EntityStore persistence stages
 
+HISTORICAL Phase 100 prerequisite validation snapshot — 2026-10-05:
+Earlier scoped validation/protected-review-pending statements retained in this
+document describe their original prerequisite subjects. They are not claims
+that those pending reviews subsequently passed; current Phase 115 adoption is
+recorded separately below. Normative requirements remain in force.
+
 ## Current status
 
 The historical Phase 100 public producer hook/stage ABI is independently accepted and frozen. Its selected focused
@@ -20,9 +26,16 @@ results remain separate prerequisite evidence. The current five-suite command
 validates the new hooks and narrow raw Update entry with the row/value/projection
 and collection-identity compatibility accumulator.
 
-Current semantic adoption: Phase 115 / RCP-MAIN / RCP-MAIN-A is IN_PROGRESS;
-all five acceptance items remain OPEN. Historical evidence below does not
-establish the Core Phase 3 behavior.
+Phase 115 adoption is CLOSED with all five RCP obligations DONE, on the
+[final Phase acceptance](../phase/phase-115.md#final-phase-acceptance--2026-10-18)
+and [checklist](../phase/phase-115-checklist.md). Both connected Steps were
+independently reviewed and committed locally; the sole original Phase full
+review, retained Modeler repair1 focused closure and combined repair2–6 focused
+closure passed. The selected CNCF full gate passed 6716 tests in 824 suites,
+zero failed/aborted, with 5 canceled, 1 ignored and 46 pending. The Phase ledger
+records all four selected full gates separately and retains earlier failures.
+Closure takes effect through the local release commit containing
+`phase115-final-closure-20261018-01@1`.
 
 ## Owner
 
@@ -193,7 +206,7 @@ The package raw row entry itself rejects a null Record as invalid row shape.
 | `Update.SetValue(value)` | Unwrap once and apply declared binding |
 | Nullable `Update.SetNull` | Preserve actual marker under storage name |
 | Required `Update.SetNull` | `null-not-allowed` |
-| Foreign bare native null | `explicit-clear-required` before semantic construction; caller migration remains OPEN |
+| Foreign bare native null | `explicit-clear-required` before semantic construction; caller migration accepted in RCP-CONSUMERS |
 | `Update.SetValue(null)` | `explicit-clear-required` at raw Update adapter |
 | Optional `None` | Omitted; no change |
 | Remaining nested Update marker | Reject under accepted row policy |

@@ -37,7 +37,9 @@ final class Phase100JobEntityStoreMappingSpec extends AnyWordSpec with Matchers 
           try {
             val raw = _take(fresh.load(collection, DataStore.EntryId(entity.id))).get
             Then("fresh physical values are exact Strings")
-            raw.getAny("debugParameters") shouldBe Some("""{"literal":"  {literal} 雪  ","empty":{},"null":null}""")
+            raw.getAny("debugParameters") shouldBe Some("""{"literal":"  {literal} 雪  ","empty":{}}""")
+            entity.record.getRecord("debugParameters").get.fields.exists(_.key == "null") shouldBe false
+            entity.record.getRecord("debugParameters").get.getRecord("empty") shouldBe Some(Record.empty)
             raw.getAny("continuationTaskIds") shouldBe Some("""["first","  {literal} 雪  ",""]""")
             raw.getAny("continuationTasks") shouldBe Some("""[{"taskId":"first","status":"ready"}]""")
             When("the selected persistent reconstructs the reopened physical row")
@@ -46,6 +48,8 @@ final class Phase100JobEntityStoreMappingSpec extends AnyWordSpec with Matchers 
             decoded.id shouldBe entity.id
             decoded.record.getAny("requestSummary") shouldBe Some("  {literal} 雪  ")
             _json(decoded.record.getRecord("debugParameters").get) shouldBe _json(entity.record.getRecord("debugParameters").get)
+            decoded.record.getRecord("debugParameters").get.fields.exists(_.key == "null") shouldBe false
+            decoded.record.getRecord("debugParameters").get.getRecord("empty") shouldBe Some(Record.empty)
             decoded.record.getVector("continuationTaskIds") shouldBe Some(Vector("first", "  {literal} 雪  ", ""))
             decoded.record.getVector("continuationTasks").get.map {
               case record: Record => _json(record)

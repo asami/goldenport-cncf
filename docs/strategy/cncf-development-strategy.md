@@ -5397,8 +5397,19 @@ recovery-full/focused closure and local release binding
 `phase100-final-closure-20261018-01@1`. The historical preimplementation ABI
 ordering remains UNPROVEN under the explicit human replacement. Source-only
 Workbench migration and isolated recovery are complete within that boundary;
-no existing production DB was migrated. Phase 115 remains planned for Core
-Phase 3 Record/collection adoption and the retained static List Query issue.
+no existing production DB was migrated. [Phase 115](../phase/phase-115.md) and
+[its checklist](../phase/phase-115-checklist.md) are CLOSED on 2026-10-18 with
+all five RCP obligations DONE. Core Phase 3 Record/collection adoption and the
+coordinated declaration/producer/caller migration are accepted through actual
+generated persistence and Query reconstruction. The original static List Query
+finding remains historical evidence. Both connected Steps were independently
+reviewed and committed locally; the sole original Phase full review, retained
+Modeler repair1 and combined repair2–6 focused closures and all four selected
+final full gates passed. [Final acceptance](../phase/phase-115.md#final-phase-acceptance--2026-10-18)
+records each gate's counts and retained failures. Closure takes effect through
+the local release commit containing `phase115-final-closure-20261018-01@1`.
+Two OPEN nonblocking Hygiene records stay separate. This source-only boundary
+closes Phase 115 only, not whole Workbench migration; no successor is started.
 
 ## Status Navigation Erratum — 2026-09-28
 

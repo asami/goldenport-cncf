@@ -12,7 +12,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  6, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeLaunchFailureSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -215,7 +216,7 @@ final class RuntimeLaunchFailureSpec extends AnyWordSpec with Matchers with Give
             |  key: phase12-malformed-profile-launch
             |  time:
             |    mode: manual
-            |    start-at: 2026-08-06T00:00:00Z
+            |    start-at: '2026-08-06T00:00:00Z'
             |  random:
             |    mode: seeded
             |    seed: phase12-malformed-profile-launch

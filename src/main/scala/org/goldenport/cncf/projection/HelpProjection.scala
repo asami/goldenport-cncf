@@ -12,7 +12,8 @@ import org.goldenport.datatype.I18nString
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
  *  version May. 31, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 object HelpProjection {
@@ -198,7 +199,7 @@ object HelpProjection {
   def project(base: Component, selector: Option[String] = None): Record = {
     val model = projectModel(base, selector)
     val details = Record.create(model.details.toVector.map { case (k, v) => k -> v })
-    Record.data(
+    Record.dataAuto(
       "type" -> model.`type`,
       "name" -> model.name,
       "summary" -> model.summary,
@@ -240,7 +241,7 @@ object HelpProjection {
     component.operationDefinitions
       .find(x => NamingConventions.equivalentByNormalized(x.name, operation.name))
       .map { x =>
-        Record.data(
+        Record.dataAuto(
           "commandKind" -> x.commandKind,
           "commandExecutionProperties" -> x.commandExecutionProperties,
           "commandExecutionPolicy" -> x.commandExecutionPolicyRecord,
@@ -528,7 +529,7 @@ object HelpProjection {
     )
 
   private def _use_case_record(p: HelpUseCaseModel): Record =
-    Record.data(
+    Record.dataAuto(
       "name" -> p.name,
       "summary" -> p.summary,
       "actor" -> p.actor,
@@ -543,28 +544,28 @@ object HelpProjection {
     )
 
   private def _context_record(p: HelpContextModel): Record =
-    Record.data(
+    Record.dataAuto(
       "name" -> p.name,
       "summary" -> p.summary,
       "description" -> p.description
     )
 
   private def _system_context_record(p: HelpSystemContextModel): Record =
-    Record.data(
+    Record.dataAuto(
       "name" -> p.name,
       "summary" -> p.summary,
       "description" -> p.description
     )
 
   private def _context_map_record(p: HelpContextMapModel): Record =
-    Record.data(
+    Record.dataAuto(
       "name" -> p.name,
       "summary" -> p.summary,
       "description" -> p.description
     )
 
   private def _use_case_scenario_record(p: HelpUseCaseScenarioModel): Record =
-    Record.data(
+    Record.dataAuto(
       "name" -> p.name,
       "summary" -> p.summary,
       "description" -> p.description,

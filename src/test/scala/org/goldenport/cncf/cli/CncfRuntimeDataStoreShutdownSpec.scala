@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug.  2, 2026
- * @version Aug.  2, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeDataStoreShutdownSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -32,7 +32,7 @@ final class CncfRuntimeDataStoreShutdownSpec extends AnyWordSpec with Matchers w
               |  key: phase-54-dsp06
               |  time:
               |    mode: manual
-              |    start-at: 2026-08-02T00:00:00Z
+              |    start-at: '2026-08-02T00:00:00Z'
               |  random:
               |    mode: seeded
               |    seed: phase-54-dsp06
@@ -135,7 +135,7 @@ final class CncfRuntimeDataStoreShutdownSpec extends AnyWordSpec with Matchers w
          |  key: $key
          |  time:
          |    mode: manual
-         |    start-at: 2026-08-02T00:00:00Z
+         |    start-at: '2026-08-02T00:00:00Z'
          |  random:
          |    mode: seeded
          |    seed: $key

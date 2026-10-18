@@ -144,12 +144,12 @@ class SqliteDataStoreSpec
           address.getString("city") shouldBe Some("Tokyo")
           address.getString("postal_code") shouldBe Some("100-0001")
 
-          And("JSON metadata preserves explicit null, empty structures, nested arrays and precise object numbers")
+          And("the explicitly selected raw JSON metadata codec preserves document and array nulls, empty structures and precise numbers")
           r.getAny("metadata") shouldBe Some(objectfixture)
-          val metadata = EntityStoreValueCodec.semiStructuredData.decode(r.getAny("metadata").get)
-            .toOption.getOrElse(fail("the explicitly selected metadata codec should decode"))
-          io.circe.parser.parse(metadata.toJsonString) shouldBe io.circe.parser.parse(objectfixture)
-          metadata.getAny("count") shouldBe Some(BigDecimal(7))
+          val metadata = EntityStoreValueCodec.json.decode(r.getAny("metadata").get)
+            .toOption.getOrElse(fail("the explicitly selected raw JSON metadata codec should decode"))
+          Right(metadata) shouldBe io.circe.parser.parse(objectfixture)
+          metadata.hcursor.get[BigDecimal]("count") shouldBe Right(BigDecimal(7))
 
           And("root empty JSON structures stay present, text fallbacks remain exact and SQL NULL is omitted")
           r.getAny("emptyobject") shouldBe Some("{}")

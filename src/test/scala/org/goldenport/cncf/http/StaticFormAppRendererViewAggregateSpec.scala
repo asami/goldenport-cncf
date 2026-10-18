@@ -73,7 +73,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererViewAggregateSpec extends AnyWordSpec with Matchers with GivenWhenThen with StaticFormAppRendererSpecFixtures {
@@ -570,7 +570,7 @@ final class StaticFormAppRendererViewAggregateSpec extends AnyWordSpec with Matc
       val viewblobid = _register_external_blob(viewsubsystem, "view-image.png", "https://example.test/view-image.png")
       val viewnoblobrecord = _admin_record_response(viewsubsystem, "view", "read", "component" -> _notice_board_component_name, "view" -> "notice-view", "id" -> viewid)
       viewnoblobrecord.getAny("images") shouldBe Some(Vector.empty)
-      viewnoblobrecord.getAny("representativeImage") shouldBe Some(None)
+      viewnoblobrecord.getAny("representativeImage") shouldBe None
       val viewsourceentityid = viewnoblobrecord.getString("sourceEntityId").getOrElse(fail("view sourceEntityId is missing"))
       _success(viewsubsystem.executeOperationResponse(_blob_request(
         "admin_attach_blob_to_entity",

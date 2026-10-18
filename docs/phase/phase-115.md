@@ -1,6 +1,6 @@
 # Phase 115 - Canonical Record Collection and Null Policy Adoption
 
-Status: IN_PROGRESS
+Status: CLOSED
 Owner: CNCF DataStore / EntityStore integration
 Created: 2026-10-18
 Checklist: [Phase 115 checklist](phase-115-checklist.md)
@@ -28,6 +28,8 @@ R4/R7, [row mapping specification](../spec/entity-store-row-mapping.md) and
 [persistence stages](../spec/entity-store-persistence-stages.md) now describe
 Core Phase 3 normalization. Phase 100 test/review receipts remain historical.
 
+Historical Main Step acceptance snapshot — 2026-10-18 (before consumer acceptance):
+
 Accepted Step: **RCP-MAIN / RCP-MAIN-A** implements the connected typed entity
 save/read/update/search route and SQL ingress adoption. Selected Core input is
 `simplemodeling-lib` commit `53b1612faadf43840a75cf7d1c6d54ea5f248015`;
@@ -39,8 +41,8 @@ All RCP-01 through RCP-05 remain OPEN. Generated ordinary Vector/NonEmptyVector
 signature evidence and foreign bare-null patch caller migration belong to
 RCP-CONSUMERS and are not established by this Step.
 
-Current Step: **RCP-CONSUMERS — focused-validated; independent complete protected
-focused Step review PASS; local commits pending**. The connected Step now spans Core,
+Accepted connected Step: **RCP-CONSUMERS — focused-validated; independent complete protected
+focused Step review PASS; all four local commits complete**. The connected Step now spans Core,
 model, SimpleModeler and CNCF. Core owns generic external conversion, strict
 collection readers, canonical Record normalization and the distinct raw Json
 contract. The model library owns explicit model-group, nominal scalar,
@@ -109,13 +111,81 @@ Modeler 1.1.26-SNAPSHOT and CNCF 0.5.3-SNAPSHOT. No public publication is claime
 
 RCP-MAIN's accepted local commit
 `f7af5c79c50f93a6f36f63b1af86cc0086c9d157` and 51/51 history remain unchanged.
-All five RCP-01 through RCP-05 obligations remain OPEN and Phase IN_PROGRESS.
-Independent complete protected focused RCP-CONSUMERS Step review passed;
-local commits, full validation of all four affected repositories, the sole
-comprehensive Phase review and final release/checklist closure remain pending. Existing `HYG-CNCF-P115-001` stays
-separate; no successor is activated. The
+All five RCP-01 through RCP-05 obligations are DONE and Phase 115 is CLOSED
+under the final acceptance below. Both connected Steps retain independent
+protected focused acceptance and local commits. Existing `HYG-CNCF-P115-001`
+and `HYG-CNCF-P115-002` stay separate and nonblocking; no successor is activated. The
 [adoption journal](../journal/2026/10/2026-10-18-phase-115-record-policy-adoption.md)
 records producer ownership and retained-value handling.
+
+### Accepted connected Step commits — 2026-10-18
+
+The complete RCP-CONSUMERS Step passed independent protected focused review and
+was committed locally in dependency order. These are Step acceptance commits;
+the final Phase acceptance below completes all five obligations.
+
+| Repository | Accepted local commit |
+| --- | --- |
+| simplemodeling-lib | `51b3a95a8e4048125579e1f0b650cfb784d7ccf4` |
+| simplemodeling-model | `b638ba27e269f25e489f1d67a57dc7a479b15d15` |
+| simple-modeler | `52aea03a624d723213c2cf54ef18a67fc7e56a31` |
+| cloud-native-component-framework | `f4513e79d7ea1dcc3493145538c8f9a9189c9130` |
+
+## Final Phase acceptance — 2026-10-18
+
+Status: CLOSED. All five RCP-01 through RCP-05 obligations are DONE. Closure
+takes effect through the local release commit containing
+`phase115-final-closure-20261018-01@1`. RCP-MAIN and the connected RCP-CONSUMERS
+Step each passed independent protected focused acceptance and were committed
+locally; their native commit identities above are retained.
+
+The sole original comprehensive Phase review passed. The Modeler repair1
+focused closure and combined repair2–6 independent focused closure also passed;
+these continue that original review rather than adding another full review.
+The original Goal, authority, start, binding and epoch remain unchanged, with
+Step repair count 9, Phase repair count 6, full-review count 1 and consecutive
+nonconverging count 0.
+
+Selected final repository-full gates all passed. Each row is its own actual
+result; overlapping focused/full scopes are not summed.
+
+| Selected full gate | Completed suites | Succeeded | Failed | Canceled | Ignored | Pending |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Core, repair2 | 159 | 602 | 0 | 0 | 0 | 125 |
+| model | 31 | 123 | 0 | 0 | 0 | 0 |
+| Modeler, repair1 | 21 | 118 | 0 | 3 | 0 | 0 |
+| CNCF, repair6 | 824 | 6716 | 0 | 5 | 1 | 46 |
+
+All four selected gates had zero aborted suites. Existing canceled, ignored and
+pending cases remain explicit limits. Earlier Core full validation passed
+601 tests in 158 suites with 125 pending; the later selected gate includes the
+Conclusion regression. Original Modeler full validation remains a failure
+(117 succeeded, 1 failed of 118, 21 suites, 3 canceled). Original CNCF full
+validation ended with exit 255 and no final counts. CNCF full repair4 remains
+6707 succeeded, 9 failed, 824 suites, 5 canceled, 1 ignored and 46 pending;
+it is not a successful gate. Later repair5 focused validation remains 66/67,
+with its startup failure followed by the accepted repair6 expectation and
+successful selected final full gate. Earlier failed/unknown invocations and
+all historical focused results below retain their original outcomes.
+
+Final adoption repairs retain existing contracts: Modeler's delimiter oracle
+was corrected without changing generator behavior; known Option producers use
+existing `Record.dataAuto`; accepted-job presentation uses raw Json to retain
+explicit `data:null` and original metadata. `Conclusion.simple` supplies one
+original Message facet. Typed fixture identifiers use `id.print`, and controlled
+YAML timestamps are quoted. The Admin representative Option producer and old
+Some(None) oracle follow canonical omission. Six existing specifications
+adopt canonical null, limit and structured-error expectations; two working
+specifications clarify those existing contracts. Startup import regression
+observes the existing SystemCorrupted/IllegalStateException wrapper and inner
+format-error marker, without changing the production wrapper.
+
+This is a source-only Workbench migration with no existing Workbench database;
+test-owned retained values establish read normalization and subsequent saves.
+This closes Phase 115 only. Whole Workbench migration and successor execution
+are not accepted here. `HYG-CNCF-P115-001` and `HYG-CNCF-P115-002` remain OPEN,
+nonblocking, in the separate canonical Hygiene journal. No live rewrite, push,
+public publication or deployment is part of this closure.
 
 ## Required behavior
 

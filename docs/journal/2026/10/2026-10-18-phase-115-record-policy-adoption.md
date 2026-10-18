@@ -1,16 +1,18 @@
 # Phase 115 connected Record policy adoption — 2026-10-18
 
-Status: RCP-CONSUMERS focused-validated; independent complete protected focused
-Step review PASS; local commits pending. Phase 115 remains IN_PROGRESS, with all five
-RCP checklist obligations OPEN. This journal records the adoption; it introduces
+Status: CLOSED. All five RCP checklist obligations are DONE. Both connected
+Steps passed independent protected focused review and were committed locally. This journal records the adoption; it introduces
 no normative contract or acceptance decision.
 
 [Phase 115](../../../phase/phase-115.md) and [its checklist](../../../phase/phase-115-checklist.md)
 retain RCP-MAIN's accepted 51/51 history and local commit
 `f7af5c79c50f93a6f36f63b1af86cc0086c9d157`. The connected consumer Step retains
-the original Goal/authority/start/epoch and repair history. The sole Phase full
-review, full tests in all four affected repositories and final release/checklist
-closure remain pending. HYG-CNCF-P115-001 stays separate; no successor starts.
+the original Goal/authority/start/epoch and repair history. The sole original Phase full
+review, Modeler repair1 focused closure, combined repair2–6 focused closure and
+all four selected final full gates passed. Closure takes effect through the
+local release commit containing `phase115-final-closure-20261018-01@1`.
+HYG-CNCF-P115-001 and HYG-CNCF-P115-002 remain OPEN and nonblocking in their
+separate canonical journal; no successor starts.
 
 ## Producer ownership and selected baselines
 
@@ -118,7 +120,36 @@ requires generated Information external and stored status to be selected strings
 These selected results overlap earlier model/consumer evidence and are not
 summed. This corrects existing print-contract selection without adding a Core,
 generator or application registry or changing storage/wire meaning. All five
-RCP obligations remain OPEN and Phase IN_PROGRESS; independent complete protected
-focused RCP-CONSUMERS Step review passed. Local commits, all four full tests, the sole comprehensive Phase
-review and final release remain pending. HYG-CNCF-P115-001 stays separate, with
-no successor activated.
+RCP obligations are DONE and Phase 115 is CLOSED on the final acceptance basis.
+Both nonblocking Hygiene records remain separate, with no successor activated.
+
+The four connected Step acceptance commits are recorded in the
+[Phase commit table](../../../phase/phase-115.md#accepted-connected-step-commits--2026-10-18).
+Their native parents, messages and exact selected paths were read back, with
+all four roots clean immediately after commit. The preceding producer adoption
+paragraphs retain their accepted Step evidence. The
+[final Phase acceptance](../../../phase/phase-115.md#final-phase-acceptance--2026-10-18)
+records the four successful full gates separately: Core 602 tests/159 suites,
+125 pending; model 123/31 suites; Modeler 118/21 suites, 3 existing canceled;
+CNCF 6716/824 suites, 5 canceled, 1 ignored, 46 pending. All have zero failed
+and aborted cases; all other canceled/ignored/pending counts are zero. These
+are not additive with focused scopes. Original Modeler 117/118, CNCF exit255
+with unknown final counts, CNCF repair4 6707 passed/9 failed and focused repair5
+66/67 remain failures, distinguished from successful follow-ups. Final repairs
+retain canonical Option omission, accepted-job raw Json `data:null` and original
+metadata, one original Conclusion Message facet, typed identifier/quoted YAML
+fixtures, and canonical null/limit/structured-error expectations. The startup
+regression observes the existing SystemCorrupted/IllegalStateException wrapper
+and inner format-error marker without changing production wrapper behavior.
+The sole full review and focused continuations retain the original epoch,
+Step repair count 9, Phase repair count 6 and full-review count 1. This closes
+Phase 115 only; whole Workbench migration is not accepted here.
+
+## HISTORICAL pre-closure snapshot — 2026-10-18
+
+This earlier snapshot is superseded by the final acceptance above. At that
+snapshot, RCP-CONSUMERS focused validation and independent complete protected
+focused Step review had passed. All five RCP obligations were OPEN and Phase
+115 was IN_PROGRESS; local commits, all four repository full-test gates, the
+sole comprehensive Phase review and final release remained pending. These are
+retained former status statements, not the current acceptance state.

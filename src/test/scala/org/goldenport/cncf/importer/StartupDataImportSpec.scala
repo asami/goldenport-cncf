@@ -8,13 +8,14 @@ import org.goldenport.cncf.cli.CncfRuntime
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.{DataStore, Query, QueryDirective}
 import org.goldenport.record.Record
+import org.goldenport.observation.Taxonomy
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 27, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StartupDataImportSpec
@@ -241,7 +242,13 @@ final class StartupDataImportSpec
           case Consequence.Success(_) =>
             fail("expected startup import to fail")
           case Consequence.Failure(conclusion) =>
-            conclusion.show should (include("failed to load yaml") or include("while parsing"))
+            conclusion.observation.taxonomy shouldBe
+              Taxonomy(Taxonomy.Category.System, Taxonomy.Symptom.Corrupted)
+            conclusion.getException match {
+              case Some(error: IllegalStateException) =>
+                error.getMessage should include("value.format-error")
+              case _ => fail("Expected startup import failure to retain its wrapped YAML format error")
+            }
         }
       } finally {
         runtime.closeEmbedding()

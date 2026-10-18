@@ -147,8 +147,8 @@ final class EntityStoreValueCodecSpec
     "E7 retain nested structure, numbers and member order" should afterWord(
       "in spec:datastore-logical-type-mapping, example:E7, rules:R4,R7,R8, phase:100"
     ) {
-      "roundtrip both canonical Record and explicitly supplied JSON objects" in {
-        Given("docs/spec/datastore-logical-type-mapping.md R4,R7,R8 E7: full Record construction with nulls, empties and exact decimals")
+      "omit null attributes recursively while preserving canonical object structure and rejecting null sequence positions" in {
+        Given("docs/spec/datastore-logical-type-mapping.md R4,R7,R8 E7 and Phase 115: null attributes, nonnull ordered sequences, empties and exact numbers")
         val decimal = new BigDecimal(new java.math.BigDecimal(
           "123456789012345678901234567890.12345678901234567890123456789"), MathContext.UNLIMITED)
         val integer = BigInt("900719925474099312345678901234567890")
@@ -156,22 +156,31 @@ final class EntityStoreValueCodecSpec
           "nullMember" -> null,
           "emptyObject" -> Record.empty,
           "emptyArray" -> Vector.empty,
-          "nested" -> Record.createFull(Vector("items" -> Vector("雪", null, Record.empty))),
+          "nested" -> Record.createFull(Vector("nullMember" -> null, "items" -> Vector("雪", Record.empty))),
           "integer" -> integer, "decimal" -> decimal))
-        val expected = Json.obj("nullMember" -> Json.Null, "emptyObject" -> Json.obj(),
+        val expected = Json.obj("emptyObject" -> Json.obj(),
           "emptyArray" -> Json.arr(), "nested" -> Json.obj(
-            "items" -> Json.arr(Json.fromString("雪"), Json.Null, Json.obj())),
+            "items" -> Json.arr(Json.fromString("雪"), Json.obj())),
           "integer" -> Json.fromBigInt(integer), "decimal" -> Json.fromBigDecimal(decimal))
+        val jsoninput = Json.obj("nullMember" -> Json.Null, "emptyObject" -> Json.obj(),
+          "emptyArray" -> Json.arr(), "nested" -> Json.obj("nullMember" -> Json.Null,
+            "items" -> Json.arr(Json.fromString("雪"), Json.obj())),
+          "integer" -> Json.fromBigInt(integer), "decimal" -> Json.fromBigDecimal(decimal))
+        val nullsequence = Json.obj("items" -> Json.arr(Json.fromString("雪"), Json.Null, Json.obj()))
         val codec = EntityStoreValueCodec.semiStructuredData
-        When("the semi-structured codec roundtrips Record and JSON-object inputs through storage")
+        When("the semi-structured codec normalizes Record and JSON-object inputs and rejects a null sequence position")
         val encoded = codec.encode(record)
-        val decoded = codec.decode(expected.noSpaces)
+        val decoded = codec.decode(jsoninput.noSpaces)
         val roundtrip = decoded.flatMap(codec.encode).flatMap(EntityStoreValueCodec.json.decode)
-        val normalized = codec.encode(expected)
-        Then("the complete JSON value space and original object member order are retained")
+        val normalized = codec.encode(jsoninput)
+        val invalidencoded = codec.encode(nullsequence)
+        val invaliddecoded = codec.decode(nullsequence.noSpaces)
+        Then("null attributes are omitted recursively, exact numbers, empties and member order remain, and null sequence positions fail")
         encoded.get shouldBe Some(expected.noSpaces)
         normalized.get shouldBe encoded.get
+        decoded.get shouldBe Some(record)
         roundtrip.get shouldBe Some(expected)
+        Vector(invalidencoded, invaliddecoded).foreach(_expect_invalid)
         decoded.map(_.fields.map(_.key)).get shouldBe Some(expected.asObject.get.keys.toVector)
         roundtrip.map(_.asObject.get.keys.toVector).get shouldBe Some(expected.asObject.get.keys.toVector)
       }

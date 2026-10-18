@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.datatype.Identifier
+import org.goldenport.observation.{Cause, Descriptor}
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -18,7 +19,8 @@ import org.simplemodeling.model.datatype.{
 /*
  * @since   Jul. 24, 2026
  *  version Jul. 25, 2026
- * @version Sep. 17, 2026
+ *  version Sep. 17, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DataStoreConditionalTransitionSpec
@@ -311,8 +313,10 @@ final class DataStoreConditionalTransitionSpec
             .take(
               EntityConditionalTransitionSupport.MAX_COLLECTION_VALUES + 64
             )
+        val canonicaloverlimit = Record.dataAuto("values" -> lazyoverlimit)
+        val constructionevaluations = sequenceevaluation.get()
 
-        When("the factories admit each exact maximum and reject its first over-limit value")
+        When("the factories admit each exact maximum and bound admission of the prepared canonical Record")
         val admittedvalue = DataStoreConditionalValue.from(maximumtext)
         val admittedplan =
           root.flatMap(
@@ -386,12 +390,9 @@ final class DataStoreConditionalTransitionSpec
               )(index => s"change_$index" -> index)*
             )
           )
-        val boundedlazyfailure =
-          _root_with_changes_(
-            Record.dataAuto("values" -> lazyoverlimit)
-          )
+        val boundedlazyfailure = _root_with_changes_(canonicaloverlimit)
 
-        Then("all exact maxima succeed and every first-over-limit value fails with bounded evaluation")
+        Then("all exact maxima succeed and over-limit admission fails structurally without evaluating the original source further")
         admittedvalue shouldBe a[Consequence.Success[?]]
         admittedplan shouldBe a[Consequence.Success[?]]
         admittedsequence shouldBe a[Consequence.Success[?]]
@@ -401,9 +402,24 @@ final class DataStoreConditionalTransitionSpec
         oversizedsequence shouldBe a[Consequence.Failure[?]]
         oversizeddepth shouldBe a[Consequence.Failure[?]]
         oversizedrecord shouldBe a[Consequence.Failure[?]]
-        boundedlazyfailure shouldBe a[Consequence.Failure[?]]
-        sequenceevaluation.get() shouldBe
-          EntityConditionalTransitionSupport.MAX_COLLECTION_VALUES + 1
+        constructionevaluations shouldBe
+          EntityConditionalTransitionSupport.MAX_COLLECTION_VALUES + 64
+        sequenceevaluation.get() shouldBe constructionevaluations
+        boundedlazyfailure match {
+          case Consequence.Failure(conclusion) =>
+            conclusion.observation.cause.kind shouldBe Some(Cause.Kind.Limit)
+            val facets = conclusion.observation.cause.descriptor.facets
+            facets should contain(Descriptor.Facet.Actual(
+              EntityConditionalTransitionSupport.MAX_COLLECTION_VALUES + 1
+            ))
+            facets should contain(Descriptor.Facet.Limit(
+              EntityConditionalTransitionSupport.MAX_COLLECTION_VALUES
+            ))
+            facets should contain(Descriptor.Facet.Policy(
+              "entity-conditional-transition.collection-values"
+            ))
+          case _ => fail("Expected structured collection admission limit failure")
+        }
       }
     }
   }

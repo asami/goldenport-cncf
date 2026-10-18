@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 18, 2026
  */
 final class CncfRuntimeStorageInitializationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](result: Consequence[A]): A = result match {
@@ -47,7 +47,7 @@ final class CncfRuntimeStorageInitializationSpec extends AnyWordSpec with Matche
         |  key: storage-runtime
         |  time:
         |    mode: manual
-        |    start-at: 2026-10-02T00:00:00Z
+        |    start-at: '2026-10-02T00:00:00Z'
         |  random:
         |    mode: seeded
         |    seed: storage-runtime

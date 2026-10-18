@@ -27,7 +27,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep.  7, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentActivationLifecycleSpec
@@ -885,7 +886,7 @@ final class ComponentActivationLifecycleSpec
            |  key: component-activation-lifecycle-spec
            |  time:
            |    mode: manual
-           |    start-at: 2026-09-07T00:00:00Z
+           |    start-at: '2026-09-07T00:00:00Z'
            |  random:
            |    mode: seeded
            |    seed: component-activation-lifecycle-spec""".stripMargin

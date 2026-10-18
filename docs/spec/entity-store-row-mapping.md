@@ -1,5 +1,11 @@
 # EntityStore field and row mapping
 
+HISTORICAL Phase 100 prerequisite validation snapshot — 2026-10-05:
+Earlier scoped validation/protected-review-pending statements retained in this
+document describe their original prerequisite subjects. They are not claims
+that those pending reviews subsequently passed; current Phase 115 adoption is
+recorded separately below. Normative requirements remain in force.
+
 Status: historical Phase 100 field/row slice accepted independently; selected row/codec/projection
 focused validation passed 42/42 tests and
 `tkw-cncf-row-mapping-step-review-20261005@1` PASS is recorded independently.
@@ -27,9 +33,16 @@ metadata, provider activation, all mutation/query/readback routes and recovery
 remain required continuation work. Workbench and each producer/project keep
 their separate acceptance gates.
 
-Current semantic adoption: Phase 115 / RCP-MAIN / RCP-MAIN-A is IN_PROGRESS.
-Historical validation does not establish this policy; all Phase 115 items remain
-OPEN. Core Phase 3 owns valid Record/Field construction. Malformed constructed
+Phase 115 adoption is CLOSED with all five RCP obligations DONE, on the
+[final Phase acceptance](../phase/phase-115.md#final-phase-acceptance--2026-10-18)
+and [checklist](../phase/phase-115-checklist.md). Both connected Steps were
+independently reviewed and committed locally; the sole original Phase full
+review, retained Modeler repair1 focused closure and combined repair2–6 focused
+closure passed. The selected CNCF full gate passed 6716 tests in 824 suites,
+zero failed/aborted, with 5 canceled, 1 ignored and 46 pending. The Phase ledger
+records all four selected full gates separately and retains earlier failures.
+Closure takes effect through the local release commit containing
+`phase115-final-closure-20261018-01@1`. Core Phase 3 owns valid Record/Field construction. Malformed constructed
 Record/Field fixtures are not semantic inputs and do not justify weaker Core
 constructors. Raw wire malformation is tested at its actual input adapter.
 
@@ -224,8 +237,8 @@ rejects absence. JDBC wraps getObject immediately in Option and retains all
 labels through duplicate validation before flattening present values. All
 transformed rows retain input order. Core construction preserves empty Records
 and arrays while omitting null attributes recursively. Bare-null foreign patch
-callers must validate before this construction; their complete migration remains
-an OPEN consumer-Step obligation.
+callers must validate before this construction; their complete migration was
+accepted in RCP-CONSUMERS.
 
 ## R2–R8: Selected values
 

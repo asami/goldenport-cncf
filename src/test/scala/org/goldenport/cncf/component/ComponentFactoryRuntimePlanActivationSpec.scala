@@ -25,7 +25,8 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 24, 2026
  *  version May.  3, 2026
  *  version Aug. 19, 2026
- * @version Sep. 17, 2026
+ *  version Sep. 17, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryRuntimePlanActivationSpec
@@ -228,7 +229,7 @@ final class ComponentFactoryRuntimePlanActivationSpec
         |  key: component-factory-runtime-plan-activation-spec
         |  time:
         |    mode: manual
-        |    start-at: 2026-08-11T00:00:00Z
+        |    start-at: '2026-08-11T00:00:00Z'
         |  random:
         |    mode: seeded
         |    seed: component-factory-runtime-plan-activation-spec

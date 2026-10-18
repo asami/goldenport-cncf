@@ -1,20 +1,44 @@
 # EntityStore native scalar mapping
 
-Status: additive ABI and executable specification authored; current focused
-validation passed 85/85 tests across eight suites, with SBT/wrapper exit 0 and
-serial lock released. Complete eighteen-path independent protected review remains
-pending. No Step or Phase acceptance is claimed.
+Historical prerequisite assurance snapshot (2026-10-05): additive ABI and
+executable specification authored; focused validation passed 85/85 tests across
+eight suites, with SBT/wrapper exit 0 and serial lock released. Complete
+eighteen-path independent protected review was pending in that snapshot.
+This records historical evidence without claiming that pending review passed
+or establishing current Phase 115 acceptance.
 The accepted prerequisite producer stages retain 61/61 focused tests across five
 suites, SBT/wrapper exit 0 and serial lock released, plus complete eleven-path
 independent protected review `tkw-cncf-persistence-stage-step-review-20261005@1`
 PASS. That evidence predates and does not validate this new binding.
 
-Owner: CNCF Phase 100 DSM-100-02; Workbench Phase 1 / Step 2 prerequisite
-PREREQ-CNCF-NATIVE-SCALAR.
+Historical prerequisite owner: CNCF Phase 100 DSM-100-02; Workbench Phase 1 /
+Step 2 prerequisite PREREQ-CNCF-NATIVE-SCALAR.
 
 Normative dependencies: [DataStore logical type mapping](datastore-logical-type-mapping.md)
 R1–R12, [EntityStore field and row mapping](entity-store-row-mapping.md), and
 [EntityStore persistence stages](entity-store-persistence-stages.md).
+
+## Current Phase 115 canonical Record policy
+
+The [field and row mapping contract](entity-store-row-mapping.md) and
+[Phase 115](../phase/phase-115.md) govern canonical Record ingress. Native-null
+attributes are omitted at root and nested Record construction. A required
+field omitted this way fails row admission as `missing-required-field`;
+optional omission follows the existing presence policy. Finite sequences are
+owned as canonical Vector-family values. Native-null sequence elements fail at
+Core construction, before row mapping; invalid physical JSON child kinds still
+produce the existing indexed codec failures without changing element positions.
+Raw JSON retains its separate all-shape, explicit-null contract.
+
+A bare foreign patch null MUST be rejected at its raw input adapter before
+Record construction can omit it. A bare-null attribute passed through the
+public Record constructor becomes absent and is not a clearing instruction.
+The raw Update adapter rejects `Update.SetValue(null)` as
+`explicit-clear-required`; `Update.SetNull` is the explicit nullable-field clear
+marker, and required-field clear still fails. This changes no ABI, signature,
+codec representation, numeric precision, authorization or revision policy.
+Current acceptance is recorded only in the canonical
+[Phase 115 checklist](../phase/phase-115-checklist.md).
 
 ## Explicit declaration and exact ABI
 
@@ -121,8 +145,9 @@ numbers. No child Text is parsed as JSON or serialized/parsed twice.
 Nested arrays retain explicit children, order and empty arrays. Each actual
 element invokes the captured application encoder/decoder once. Missing child
 metadata fails before traversal even when there are no elements. Null or wrong
-elements aggregate causal failures in element order, with existing recursive
-index FieldPath context; no partial Vector or row succeeds.
+physical JSON child kinds aggregate causal failures in element order, with
+existing recursive index FieldPath context; no partial Vector or row succeeds.
+Native-null sequence positions are rejected earlier by Core Record construction.
 
 ## Presence and failures
 
@@ -131,14 +156,16 @@ absent/None/Some handling, SQL/native outer null, patch markers, framework
 passthrough and logical admission. A present native scalar `Json.Null` or
 native-null encoder Json result is `wrong-structured-shape`, as are objects,
 arrays and a different selected scalar kind. It is not a present native scalar
-value. A nullable outer native null continues to use the existing row presence
-policy without calling an application codec. Generic `application` and `json`
-bindings retain their original explicit JSON-null policies.
+value. Native-null Record attributes are omitted by canonical construction
+before row presence policy runs, without calling an application codec.
+Generic `application` and `json` bindings retain their original explicit
+JSON-null policies.
 
 Raw Update validation and native normalization occur under the existing strict
 stage exactly once: Noop omits, SetValue unwraps once, nullable SetNull remains
 the actual marker under the storage name, and bare patch null cannot clear.
-Required null/absence and unlisted keys still fail; no framework whitelist is
+Required null omitted by Record ingress and other required absence fail as
+`missing-required-field`; unlisted keys still fail. No framework whitelist is
 widened to bypass scalar declarations.
 
 Representation failures use existing `Consequence.valueInvalid` and Descriptor
@@ -204,11 +231,13 @@ object NativeCandidatePersistence {
 }
 ```
 
-This complete-row caller constructs actual Field vectors so empty/native-null
-presence is not omitted. Production entity admission still owns domain constraints
-and identity, authorization, revision, ContentBody, OCC and transaction policy.
+This complete-row caller constructs actual Field vectors through the same
+public canonical Record constructor: empty structures remain present and
+native-null attributes are omitted. Production entity admission still owns
+domain constraints and identity, authorization, revision, ContentBody, OCC and
+transaction policy.
 
-## Executable authoring and required continuation
+## Executable authoring and historical prerequisite continuation
 
 [EntityStoreNativeScalarMappingSpec](../../src/test/scala/org/goldenport/cncf/entity/EntityStoreNativeScalarMappingSpec.scala)
 authors NATIVE-01–NATIVE-12: actual Core Name, canonical primitives, exact numbers,
@@ -216,15 +245,20 @@ numeric physical classes/ranges/nonfinite values, Boolean zero/one, Text versus
 Number text, sanitized scalar/application failures, complete recursive captures,
 native arrays, presence/Update/framework policy, ordered causal context/domain
 mismatch, and public strict-stage exact String PBT requesting at least 200
-successful adversarial cases. The current eight-suite generation/native/persistence
-accumulator passed 85/85 tests. Fresh complete eighteen-path independent protected
-review remains pending.
+successful adversarial cases. In the historical 2026-10-05 snapshot, the
+eight-suite generation/native/persistence accumulator passed 85/85 tests and
+complete eighteen-path independent protected review was pending. No later
+review result is implied here.
 
-The current SQL `SqlDataStore._column_value` converts native BigDecimal to Double
-and loses native decimal precision. Provider read guessing, JDBC precision,
-queries and restart are not established by this pure conversion. Required same-Goal
-continuation includes SQL provider cutover, generator logical records/metadata,
+The following continuation records that historical prerequisite boundary rather
+than current unfulfilled Phase 115 requirements. At that time SQL
+`SqlDataStore._column_value` converted native BigDecimal to Double and lost
+native decimal precision; provider read guessing, JDBC precision, queries and
+restart were not established by the pure conversion. The recorded same-Goal
+continuation included SQL provider cutover, generator logical records/metadata,
 all seven native mutation/readback route owners, runtime Collection and seed
 forwarding, generated write/read/restart coverage, both Workbench proposal
-fixtures, recovery, and separate producer/project/Step/Phase acceptance. Existing
-legacy physical hooks are preserved and are not the final integration solution.
+fixtures, recovery, and separate producer/project/Step/Phase acceptance. Legacy
+physical hooks were preserved rather than established as the final integration
+solution. Current continuation and acceptance belong to Phase 115 and its
+checklist linked above.

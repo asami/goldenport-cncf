@@ -199,10 +199,18 @@ continuation passed 106/106 in nine suites: HTTP dispatch 19, actual generated
 policy 15, six existing HTTP regression suites 71 and native quota witness 1.
 Overlapping decoder runs are not summed. These results establish selected focused
 validation of this unchanged contract. Independent complete protected focused
-RCP-CONSUMERS Step review passed. Local commits, all four affected repository
-full tests, the sole comprehensive Phase 115 review and final release/checklist
-closure remain pending; all five RCP obligations remain OPEN and Phase 115
-IN_PROGRESS. Earlier authoring-pending status is historical.
+RCP-CONSUMERS Step review passed.
+Phase 115 adoption is CLOSED with all five RCP obligations DONE, on the
+[final Phase acceptance](../phase/phase-115.md#final-phase-acceptance--2026-10-18)
+and [checklist](../phase/phase-115-checklist.md). Both connected Steps were
+independently reviewed and committed locally; the sole original Phase full
+review, retained Modeler repair1 focused closure and combined repair2–6 focused
+closure passed. The selected CNCF full gate passed 6716 tests in 824 suites,
+zero failed/aborted, with 5 canceled, 1 ignored and 46 pending. The Phase ledger
+records all four selected full gates separately and retains earlier failures.
+Closure takes effect through the local release commit containing
+`phase115-final-closure-20261018-01@1`.
+Earlier authoring-pending status is historical.
 
 The downstream generated-code acceptance driver is
 `textus-art-scene/scripts/acceptance/check-component-api-assembly.sh`.

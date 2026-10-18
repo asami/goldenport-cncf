@@ -38,7 +38,7 @@ import org.goldenport.configuration.ConfigurationTrace
  *  version May. 25, 2026
  *  version Jul. 31, 2026
  *  version Aug. 27, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -2996,7 +2996,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
          |  key: $key
          |  time:
          |    mode: manual
-         |    start-at: 2026-08-06T00:00:00Z
+         |    start-at: '2026-08-06T00:00:00Z'
          |  random:
          |    mode: seeded
          |    seed: $key

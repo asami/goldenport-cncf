@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification of docs/spec/entity-store-native-scalar-mapping.md.
  *
  * @since   Oct.  5, 2026
- * @version Oct.  5, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreNativeScalarMappingSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -156,6 +156,7 @@ final class EntityStoreNativeScalarMappingSpec extends AnyWordSpec with Matchers
           new java.math.BigInteger("7"), new java.math.BigDecimal("7"))
         val invalidints = Vector[Any](BigDecimal("1.5"), BigInt(Int.MaxValue) + 1, Long.MaxValue)
         val unsupported = Vector[Any](null, Json.fromInt(7), Vector(7), new Object, true)
+        val unsupportedrecords = unsupported.map(value => _record("stored" -> value))
         val nonfinite = Vector[Any](Float.NaN, Float.PositiveInfinity, Float.NegativeInfinity,
           Double.NaN, Double.PositiveInfinity, Double.NegativeInfinity)
         val enormous = parser.parse("1e2147483649").toOption.get
@@ -166,15 +167,16 @@ final class EntityStoreNativeScalarMappingSpec extends AnyWordSpec with Matchers
         When("public row conversion interprets admitted classes and modeled numeric failures")
         val admitted = classes.map(value => integral.decode(_collection, _record("stored" -> value)))
         val fractional = invalidints.map(value => integral.decode(_collection, _record("stored" -> value)))
-        val rejected = unsupported.map(value => integral.decode(_collection, _record("stored" -> value)))
+        val rejected = unsupportedrecords.map(integral.decode(_collection, _))
         val finite = Vector[Any](1.25f, 1.25d).map(value => decimal.decode(_collection, _record("stored" -> value)))
         val nonfiniteresults = nonfinite.map(value => decimal.decode(_collection, _record("stored" -> value)))
         val unrepresentable = huge.encode(_collection, _record("value" -> BigDecimal(1)))
-        Then("exact numeric classes return typed values and no invalid or nonfinite value falls back to text")
+        Then("canonical native-null omission fails as missing required while numeric classes stay exact and invalid values never fall back to text")
+        unsupportedrecords.head.fields.exists(_.key == "stored") shouldBe false
         admitted.foreach(_ shouldBe Consequence.success(_record("value" -> 7)))
         finite.foreach(_ shouldBe Consequence.success(_record("value" -> BigDecimal("1.25"))))
         fractional.foreach(_expect_reason(_, "application-codec-failure"))
-        _expect_reason(rejected.head, "null-not-allowed")
+        _expect_reason(rejected.head, "missing-required-field")
         rejected.tail.foreach(_expect_reason(_, "wrong-physical-value"))
         (nonfiniteresults :+ unrepresentable).foreach(_expect_reason(_, "unsupported-external-value"))
       }
@@ -189,16 +191,18 @@ final class EntityStoreNativeScalarMappingSpec extends AnyWordSpec with Matchers
           new java.math.BigInteger("1"), new java.math.BigDecimal("1.00"), 1.0f, 1.0d, "1")
         val others = Vector[Any](2, -1L, BigDecimal("0.5"), "true", "false", "01", " 1", "1.0",
           Json.True, Map("value" -> 1), Vector(1), Float.NaN, Double.PositiveInfinity)
-        When("row read decodes each physical value under the selected Boolean declaration")
+        val storednull = _record("stored" -> null)
+        When("row read decodes each physical value under the selected Boolean declaration after canonical null omission")
         val falses = zeros.map(value => mapping.decode(_collection, _record("stored" -> value)))
         val trues = ones.map(value => mapping.decode(_collection, _record("stored" -> value)))
         val rejected = others.map(value => mapping.decode(_collection, _record("stored" -> value)))
-        val nullresult = mapping.decode(_collection, _record("stored" -> null))
-        Then("only exact zero and one become Boolean values and no truthiness or String guessing succeeds")
+        val nullresult = mapping.decode(_collection, storednull)
+        Then("canonical native-null omission fails as missing required and only exact zero and one become Boolean values")
+        storednull.fields.exists(_.key == "stored") shouldBe false
         falses.foreach(_ shouldBe Consequence.success(_record("value" -> false)))
         trues.foreach(_ shouldBe Consequence.success(_record("value" -> true)))
         rejected.foreach(_expect_reason(_, "wrong-physical-value"))
-        _expect_reason(nullresult, "null-not-allowed")
+        _expect_reason(nullresult, "missing-required-field")
       }
 
       "NATIVE-06 parse only explicitly Number-selected text" in {
@@ -397,17 +401,19 @@ final class EntityStoreNativeScalarMappingSpec extends AnyWordSpec with Matchers
         val numbers = Vector(BigDecimal("1.2345678901234567890123456789"), BigDecimal(7))
         val logical = _record("texts" -> texts, "flags" -> Vector(true, false), "numbers" -> numbers)
         val persistent = _persistent(mapping)
-        val wronglogical = _record("texts" -> Vector(Vector[Any](7, null)), "flags" -> Vector.empty[Boolean], "numbers" -> Vector.empty[BigDecimal])
+        val wronglogical = _record("texts" -> Vector(Vector[Any](7, true)), "flags" -> Vector.empty[Boolean], "numbers" -> Vector.empty[BigDecimal])
         val wrongphysical = _record("stored_texts" -> "[[1,null]]", "stored_flags" -> "[]", "stored_numbers" -> "[]")
         val empty = _record("texts" -> Vector.empty[Vector[String]], "flags" -> Vector.empty[Boolean], "numbers" -> Vector.empty[BigDecimal])
-        When("strict stages roundtrip recursive native arrays and interpret invalid elements without partial rows")
+        When("Core rejects native null sequence positions before mapping and strict stages interpret recursive native arrays and other invalid elements")
+        val invalidsequence = Record.createC(Vector("texts" -> Vector(Vector[Any]("valid", null))))
         val encoded = persistent.toStoreRecordC(_collection, logical)
         val restored = encoded.flatMap(persistent.fromStoreRecordC(_collection, _))
         val emptyencoded = persistent.toStoreRecordC(_collection, empty)
         val emptyrestored = emptyencoded.flatMap(persistent.fromStoreRecordC(_collection, _))
         val writefailure = persistent.toStoreRecordC(_collection, wronglogical)
         val readfailure = persistent.fromStoreRecordC(_collection, wrongphysical)
-        Then("arrays retain order and empty children, store scalar JSON kinds and aggregate both indexed failures")
+        Then("Core rejects native null positions while mapped arrays retain order, empty children, scalar JSON kinds and both indexed failures")
+        invalidsequence shouldBe a[Consequence.Failure[?]]
         restored shouldBe Consequence.success(logical)
         emptyrestored shouldBe Consequence.success(empty)
         encodes shouldBe 5
@@ -429,7 +435,7 @@ final class EntityStoreNativeScalarMappingSpec extends AnyWordSpec with Matchers
       }
 
       "NATIVE-10 retain optional required Update and framework field presence rules" in {
-        Given("required and optional native scalar fields with an explicit framework whitelist and raw Update instructions")
+        Given("required and optional native scalar fields with canonical native-null omission, an explicit framework whitelist and explicit raw Update clear instructions")
         var encodes = 0
         val number = EntityStoreFieldBinding.nativeScalar[Int](XInt, EntityStoreScalarRepresentation.Number, "update-int")(
           using summon[ClassTag[Int]], Encoder.instance { value => encodes += 1; Json.fromInt(value) }, Decoder.decodeInt)
@@ -444,28 +450,32 @@ final class EntityStoreNativeScalarMappingSpec extends AnyWordSpec with Matchers
           _record("required" -> Update.SetValue(8), "optional" -> Update.SetNull),
           _record("required" -> Update.Noop, "optional" -> None))
         val invalidfull = Vector(_record("optional" -> "text"), _record("required" -> null), _record("required" -> None))
-        val invalidpatch = Vector(_record("required" -> Update.SetNull), _record("optional" -> null),
+        val barenullpatch = _record("optional" -> null)
+        val invalidpatch = Vector(_record("required" -> Update.SetNull), _record("optional" -> Update.SetValue(null)),
           _record("required" -> Update.SetValue(Update.SetValue(9))), _record("unlisted" -> Update.Noop))
-        When("strict full and raw Update stages preserve declared presence and reject invalid required or unknown fields")
+        When("strict full and raw Update stages preserve omission, distinguish explicit clear and reject invalid required or unknown fields")
         val encoded = fullrows.map(persistent.toStoreRecordC(_collection, _))
         val restored = encoded.map(_.flatMap(persistent.fromStoreRecordC(_collection, _)))
         val patches = raw.map(update.toStoreChangesRecordC(_collection, _))
         val fullfailures = invalidfull.map(persistent.toStoreRecordC(_collection, _))
         val patchfailures = invalidpatch.map(update.toStoreChangesRecordC(_collection, _))
+        val barenullchanges = update.toStoreChangesRecordC(_collection, barenullpatch)
         val unknownfull = persistent.toStoreRecordC(_collection, _record("required" -> 7, "unlisted" -> "text"))
         val unknownread = persistent.fromStoreRecordC(_collection, _record("stored_required" -> BigDecimal(7), "unlisted" -> "text"))
         val readabsence = persistent.fromStoreRecordC(_collection, _record("stored_optional" -> "text"))
-        Then("None omits once, outer null survives, text null stays present and SetValue converts exactly once")
+        Then("None and native null omit, text null stays present, only SetNull clears and SetValue converts exactly once")
         encoded.head.get.get.fields.map(_.key) shouldBe Vector("stored_required", "revision")
-        _value(restored(1).get.get, "optional") shouldBe (null: Any)
+        restored(1).get.get.fields.exists(_.key == "optional") shouldBe false
         _value(restored(2).get.get, "optional") shouldBe "null"
         _value(restored(3).get.get, "optional") shouldBe ""
         restored.foreach(result => _value(result.get.get, "revision") shouldBe 3L)
         patches(0) shouldBe Consequence.success(_record("stored_optional" -> " {broken} ", "revision" -> 4L))
         patches(1) shouldBe Consequence.success(_record("stored_required" -> BigDecimal(8), "stored_optional" -> Update.SetNull))
         patches(2) shouldBe Consequence.success(Record.empty)
+        barenullpatch shouldBe Record.empty
+        barenullchanges shouldBe Consequence.success(Record.empty)
         encodes shouldBe 5
-        fullfailures.zip(Vector("missing-required-field", "null-not-allowed", "wrong-logical-value")).foreach {
+        fullfailures.zip(Vector("missing-required-field", "missing-required-field", "wrong-logical-value")).foreach {
           case (result, reason) => _expect_reason(result, reason)
         }
         patchfailures.zip(Vector("null-not-allowed", "explicit-clear-required", "invalid-row-shape", "missing-mapping")).foreach {

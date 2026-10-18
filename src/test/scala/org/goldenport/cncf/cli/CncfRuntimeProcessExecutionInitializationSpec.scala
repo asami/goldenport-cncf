@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /** Owning-runtime SPI specs. These are not workflow semantic acceptance or a product SBT bridge. */
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeProcessExecutionInitializationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -50,7 +50,7 @@ final class CncfRuntimeProcessExecutionInitializationSpec extends AnyWordSpec wi
         |  key: process-runtime
         |  time:
         |    mode: manual
-        |    start-at: 2026-10-06T00:00:00Z
+        |    start-at: '2026-10-06T00:00:00Z'
         |  random:
         |    mode: seeded
         |    seed: process-runtime

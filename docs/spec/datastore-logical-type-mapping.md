@@ -1,5 +1,11 @@
 # DataStore logical type mapping
 
+HISTORICAL Phase 100 prerequisite validation snapshot — 2026-10-05:
+Earlier scoped validation/protected-review-pending statements retained in this
+document describe their original prerequisite subjects. They are not claims
+that those pending reviews subsequently passed; current Phase 115 adoption is
+recorded separately below. Normative requirements remain in force.
+
 Status: Historical Phase 100 pure value-codec slice accepted independently: 26/26 focused tests
 and `tkw-cncf-codec-focused-closure-20261005@1` PASS.
 Field/row ABI is frozen in [EntityStore field and row mapping](entity-store-row-mapping.md).
@@ -17,9 +23,16 @@ integration and independent project Phase acceptance remain pending.
 Owner: Phase 100 DSM-100-02.
 Rules: R1 through R12.
 
-Current semantic adoption: Phase 115 / RCP-MAIN / RCP-MAIN-A is IN_PROGRESS.
-The Phase 100 results below are historical evidence, not validation of this
-Core Phase 3 policy. All five Phase 115 acceptance items remain OPEN.
+Phase 115 adoption is CLOSED with all five RCP obligations DONE, on the
+[final Phase acceptance](../phase/phase-115.md#final-phase-acceptance--2026-10-18)
+and [checklist](../phase/phase-115-checklist.md). Both connected Steps were
+independently reviewed and committed locally; the sole original Phase full
+review, retained Modeler repair1 focused closure and combined repair2–6 focused
+closure passed. The selected CNCF full gate passed 6716 tests in 824 suites,
+zero failed/aborted, with 5 canceled, 1 ignored and 46 pending. The Phase ledger
+records all four selected full gates separately and retains earlier failures.
+Closure takes effect through the local release commit containing
+`phase115-final-closure-20261018-01@1`.
 
 This specifies the behavior to implement at the existing EntityPersistent /
 EntityStore mapping boundary. It does not claim that the current SQL provider
@@ -145,7 +158,7 @@ An R4 null-valued member is omitted inside its present object and does not clear
 the outer field. Empty Record and array values remain present. Noop and optional
 None omit the patch field. Bare-null patch input must fail explicit-clear-required
 at foreign ingress before semantic Record construction can omit it; complete
-foreign-caller migration remains an OPEN consumer-Step obligation. SetValue(null)
+foreign-caller migration is accepted in RCP-CONSUMERS. SetValue(null)
 is rejected at the raw Update adapter before Update.toChangesRecord. The mapping does not
 reinterpret omission as Update.SetNull or bypass managed-field protection.
 

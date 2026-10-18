@@ -12,9 +12,9 @@ recorded_at=2026-10-04
 The package-private pure `DurableJobOperationResponseCodec` exposes
 `encode(OperationResponse): Consequence[String]` and
 `decode(String): Consequence[OperationResponse]`. This contract was initially
-authored before its executable specification with execution pending. Current
-selected B1 execution is recorded below; independent whole-Step review and
-acceptance remain pending.
+authored before its executable specification with execution pending. HISTORICAL
+Phase 69.7 B1 execution and its then-pending independent whole-Step review and
+acceptance are recorded below; current Phase 115 adoption is separate.
 
 ## Closed canonical wire
 
@@ -177,7 +177,7 @@ uses trace `spec:durable-job-operation-response-codec phase:69.7 slice:JM69-10B1
 
 ## Phase 115 retained-input and collection adoption — 2026-10-18
 
-status=focused_validated_independent_step_review_pass_local_commits_pending
+status=phase115_closed_all_five_rcp_done
 step=RCP-CONSUMERS
 slice=B1
 initial_authoring_status=authored_test_pending
@@ -214,15 +214,22 @@ Actual old-list native reads return Vector with physical bytes/rows/quota
 unchanged. Genuine native SQL and write counts remain observed. Failed command
 entries stay failed and these overlapping scopes are not summed.
 
-Independent complete protected focused RCP-CONSUMERS Step review passed. Local
-commits, all four repository full tests, the sole comprehensive Phase 115 review
-and final release/checklist closure remain pending. All five RCP obligations
-remain OPEN and Phase 115 IN_PROGRESS. The independent Phase69.7 obligations
+Independent complete protected focused RCP-CONSUMERS Step review passed.
+Phase 115 adoption is CLOSED with all five RCP obligations DONE, on the
+[final Phase acceptance](../phase/phase-115.md#final-phase-acceptance--2026-10-18)
+and [checklist](../phase/phase-115-checklist.md). Both connected Steps were
+independently reviewed and committed locally; the sole original Phase full
+review, retained Modeler repair1 focused closure and combined repair2–6 focused
+closure passed. The selected CNCF full gate passed 6716 tests in 824 suites,
+zero failed/aborted, with 5 canceled, 1 ignored and 46 pending. The Phase ledger
+records all four selected full gates separately and retains earlier failures.
+Closure takes effect through the local release commit containing
+`phase115-final-closure-20261018-01@1`. The independent Phase69.7 obligations
 below remain untouched. The original resource/numeric/Unicode bounds, constant refusal, exact concrete trust guards,
 hostile zero-observation obligations and unrelated historical integration
 requirements remain in force.
 
-## Original integration obligations
+## HISTORICAL Phase 69.7 integration obligations — 2026-10-04
 
 B1 changes no signed DurableJobRecord, public API, query/management facade,
 provider or runtime lifecycle. Framework-owned result publication, physical
@@ -236,7 +243,7 @@ process matrix, downstream, compatibility, ancestry, complete-Step and Phase
 closure obligations in the [cross-process contract](job-cross-process-acceptance-contract.md)
 remain open. JM69-09 DONE; JM69-10 OPEN; Phase69.7 IN_PROGRESS.
 
-## Current B1 selected execution and B2 authored companion — 2026-10-04
+## HISTORICAL B1 selected execution and B2 authored companion — 2026-10-04
 
 B1 subject5 is focused_validated_independent_review_pending. The parent records
 `PH697-JM10B1-REP-005`: three completed suites, 32 succeeded, zero failures,
@@ -271,7 +278,7 @@ remain mandatory. Existing raw/getResult/queryVisible/management compatibility
 and rejection of the component shadow-store spike remain intact. JM69-09 DONE;
 JM69-10 OPEN; Phase69.7 IN_PROGRESS. No push/publication/deployment/successor.
 
-## JM69-10B2 current selected execution — 2026-10-04
+## HISTORICAL JM69-10B2 selected execution — 2026-10-04
 
 status=focused_validated_independent_review_pending
 subject_revision=3
