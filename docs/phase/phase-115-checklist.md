@@ -1,10 +1,12 @@
 # Phase 115 Checklist - Canonical Record Policy Adoption
 
-Status: PLANNED
+Status: IN_PROGRESS
 Owner: CNCF DataStore / EntityStore integration
 Plan: [Phase 115](phase-115.md)
 
-All items are OPEN. Existing Phase 100 evidence is not acceptance of this change.
+Current Step: RCP-MAIN / RCP-MAIN-A; focused validation passed all 51 examples
+across five suites. RCP-MAIN passed independent protected focused Step acceptance;
+consumer migration and final Phase acceptance remain pending. All five items are OPEN. Existing Phase 100 evidence is not acceptance of this change.
 
 - [ ] **RCP-01 - Contracts aligned.** Adopted Core Phase 3 dependency and Phase
   100 mapping baseline are identified. Record normalization, typed cardinality,

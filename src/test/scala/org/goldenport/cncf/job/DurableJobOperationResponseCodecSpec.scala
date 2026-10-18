@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  4, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.scalatest.tags.Slow
@@ -72,7 +72,7 @@ final class DurableJobOperationResponseCodecSpec extends AnyWordSpec with Matche
 
   "Native nested typed atoms" should _scenario("ORC3") {
     "retain widths, duplicates, collections, finite bits and raw decimal context at their boundaries" in {
-      Given("ORC3: ordered duplicate/null/empty nested Records, List and Vector, all numeric widths, finite extreme bits and a nondefault unrounded decimal context")
+      Given("ORC3: ordered duplicate/empty nested Records and Core-canonical collections, all numeric widths, finite extreme bits and a nondefault unrounded decimal context")
       val context = new MathContext(2, RoundingMode.DOWN)
       val decimal = new BigDecimal(new java.math.BigDecimal(new java.math.BigInteger("1234500"), 4), context)
       val numbers: Vector[Any] = Vector(Byte.MinValue, Byte.MaxValue, Short.MinValue, Short.MaxValue,
@@ -80,7 +80,7 @@ final class DurableJobOperationResponseCodecSpec extends AnyWordSpec with Matche
         -0.0d, Double.MinPositiveValue, Double.MaxValue, BigInt("9" * 1024), decimal,
         new BigDecimal(new java.math.BigDecimal(java.math.BigInteger.ONE, -16384), new MathContext(1024, RoundingMode.UNNECESSARY)),
         new BigDecimal(new java.math.BigDecimal(java.math.BigInteger.ONE, 16384), MathContext.UNLIMITED))
-      val record = Record(Vector(Field("dup", Field.Value.Single(null)), Field("dup", Field.Value.Single(Record())),
+      val record = Record(Vector(Field("dup", Field.Value.Single("first")), Field("dup", Field.Value.Single(Record())),
         Field("list", Field.Value.Single(List("x", Vector(1.toByte)))), Field("vector", Field.Value.Single(Vector("x", List(1.toByte))))) ++
         numbers.zipWithIndex.map { case (value, index) => Field(s"n$index", Field.Value.Single(value)) })
       val response = OperationResponse.RecordResponse(record)
@@ -99,9 +99,26 @@ final class DurableJobOperationResponseCodecSpec extends AnyWordSpec with Matche
     }
   }
 
+  "Core-owned Record construction" should {
+    "omit null attributes and canonicalize sequence containers before codec admission" in {
+      Given("public Core inputs containing a null attribute, ordered duplicate keys, an empty child and nested List values")
+      val fields = Vector("absent" -> null, "dup" -> "first", "dup" -> Record.empty,
+        "items" -> List("x", Vector("x")))
+      When("the Core C constructor admits those inputs")
+      val constructed = Record.createC(fields)
+      Then("the valid Record has no null property and keeps ordered duplicates, empty structures and Vector sequences")
+      constructed.isSuccess shouldBe true
+      val record = constructed.toOption.get
+      record.fields.map(_.key) shouldBe Vector("dup", "dup", "items")
+      record.getAny("absent") shouldBe None
+      record.fields(1).value.single shouldBe Record.empty
+      record.getAny("items") shouldBe Some(Vector("x", Vector("x")))
+    }
+  }
+
   "Hostile unsupported values" should _scenario("ORC4") {
     "refuse without invoking observation, getter, provider or conversion capabilities" in {
-      Given("ORC4: unsupported response families, untrusted subclasses, unknown Single-like values and arbitrary atoms with throwing counting methods")
+      Given("ORC4: genuine hostile response families and opaque hostile atoms held by valid public Record construction, with throwing counting methods")
       val counter = new Counter
       val unknown = new Object {
         override def toString: String = counter.touch()
@@ -112,35 +129,11 @@ final class DurableJobOperationResponseCodecSpec extends AnyWordSpec with Matche
         override def display: String = counter.touch()
         override def show: String = counter.touch()
       }
-      val record = new Record(Vector.empty) {
-        override def print: String = counter.touch()
-        override def getAny(key: String): Option[Any] = counter.touch()
-      }
-      val field = new Field("private-key", Field.Value.Single("private-body")) {
-        override def print: String = counter.touch()
-      }
-      val single = new Field.Value.Single("private-body") {
-        override def print: String = counter.touch()
-      }
-      val fieldvalue = new Field.Value {
-        def single: Any = counter.touch()
-        def print: String = counter.touch()
-      }
       val closure = () => counter.touch()
-      val customseq = new scala.collection.immutable.AbstractSeq[Any] {
-        def length: Int = counter.touch()
-        def apply(index: Int): Any = counter.touch()
-        def iterator: Iterator[Any] = counter.touch()
-      }
       val values: Vector[OperationResponse] = Vector(null, OperationResponse.Opaque(unknown), OperationResponse.Http(null), response,
-        OperationResponse.RecordResponse(record), OperationResponse.RecordResponse(Record(Vector(field))),
-        OperationResponse.RecordResponse(Record(Vector(Field("x", single)))),
-        OperationResponse.RecordResponse(Record(Vector(Field("x", fieldvalue)))),
-        OperationResponse.RecordResponse(null), OperationResponse.RecordResponse(Record(null)),
-        OperationResponse.RecordResponse(Record(Vector(null))), OperationResponse.RecordResponse(Record(Vector(Field(null, Field.Value.Single(1))))),
-        OperationResponse.RecordResponse(Record(Vector(Field("x", null)))), OperationResponse.Json(null), OperationResponse.Yaml(null),
+        OperationResponse.RecordResponse(null), OperationResponse.Json(null), OperationResponse.Yaml(null),
         OperationResponse.Scalar(null.asInstanceOf[String]), OperationResponse.Scalar(1)(using null)) ++
-        Vector[Any](unknown, closure, Map("x" -> 1), Array(1), Set(1), customseq, Some(1), (), 'x',
+        Vector[Any](unknown, closure, Map("x" -> 1), Set(1), Some(1), (), 'x',
           new java.math.BigInteger("1"), java.math.BigDecimal.ONE).map(_record_response)
       When("each hostile value is offered to the closed producer")
       val results = values.map(DurableJobOperationResponseCodec.encode)
@@ -152,7 +145,7 @@ final class DurableJobOperationResponseCodecSpec extends AnyWordSpec with Matche
 
   "Closed canonical consumer admission" should _scenario("ORC5") {
     "refuse malformed, noncanonical, numerically invalid and Unicode-invalid text" in {
-      Given("ORC5: independently handwritten hostile under-limit bodies, wrong descriptors, duplicate keys and bounded numeric or surrogate violations")
+      Given("ORC5: actual malformed field/wire shapes, hostile under-limit bodies, wrong descriptors, duplicate keys and bounded numeric or surrogate violations")
       val valid = _prefix + """{"kind":"void"}}"""
       val bodies = Vector("""{"kind":"other"}""", """{"kind":"void","extra":1}""", """{}""",
         """{"kind":1}""", """{"kind":"void","kind":"void"}""", """{"kind":"scalar"}""",
@@ -174,6 +167,9 @@ final class DurableJobOperationResponseCodecSpec extends AnyWordSpec with Matche
         """{"kind":"record","fields":[{"key":"x","value":{"type":"bigdecimal","unscaled":"1","scale":0,"precision":1025,"rounding":"UP"}}]}""",
         """{"kind":"record","fields":[{"key":"x","value":{"type":"bigdecimal","unscaled":"1","scale":0,"precision":0,"rounding":"other"}}]}""",
         """{"kind":"record","fields":[{"key":"x"}]}""", """{"kind":"record","fields":null}""",
+        """{"kind":"record","fields":[null]}""", """{"kind":"record","fields":[{"key":null,"value":{"type":"int","value":1}}]}""",
+        """{"kind":"record","fields":[{"key":"x","value":null}]}""",
+        """{"kind":"record","fields":[{"key":"x","value":{}}]}""",
         """{"kind":"json","value":{"k":"\ud800"}}""", """{"kind":"json","value":{"\udc00":0}}""",
         """{"kind":"yaml","value":"\ud800"}""", """{"kind":"yaml","value":"\u0061"}""",
         """{"kind":"yaml","value":"""" + '\ud800' + "\"}",
@@ -461,7 +457,7 @@ final class DurableJobOperationResponseCodecSpec extends AnyWordSpec with Matche
 
   private def _atom_generator(depth: Int): Gen[Any] = {
     val primitive: Gen[Any] = Gen.oneOf(
-      Gen.const(null: Any), _string_generator.map(value => value: Any), Gen.oneOf(true, false).map(value => value: Any),
+      _string_generator.map(value => value: Any), Gen.oneOf(true, false).map(value => value: Any),
       Gen.choose(Byte.MinValue.toInt, Byte.MaxValue.toInt).map(value => value.toByte: Any),
       Gen.choose(Short.MinValue.toInt, Short.MaxValue.toInt).map(value => value.toShort: Any),
       Gen.choose(Int.MinValue, Int.MaxValue).map(value => value: Any),

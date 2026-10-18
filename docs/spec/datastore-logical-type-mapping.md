@@ -1,6 +1,6 @@
 # DataStore logical type mapping
 
-Status: Phase 100 pure value-codec slice accepted independently: 26/26 focused tests
+Status: Historical Phase 100 pure value-codec slice accepted independently: 26/26 focused tests
 and `tkw-cncf-codec-focused-closure-20261005@1` PASS.
 Field/row ABI is frozen in [EntityStore field and row mapping](entity-store-row-mapping.md).
 Its prior selected row/codec/projection focused validation passed 42/42 tests;
@@ -16,6 +16,10 @@ and complete eighteen-path independent protected review pending. Generator/provi
 integration and independent project Phase acceptance remain pending.
 Owner: Phase 100 DSM-100-02.
 Rules: R1 through R12.
+
+Current semantic adoption: Phase 115 / RCP-MAIN / RCP-MAIN-A is IN_PROGRESS.
+The Phase 100 results below are historical evidence, not validation of this
+Core Phase 3 policy. All five Phase 115 acceptance items remain OPEN.
 
 This specifies the behavior to implement at the existing EntityPersistent /
 EntityStore mapping boundary. It does not claim that the current SQL provider
@@ -72,16 +76,19 @@ declared String instead. JSON number values must not be reduced to Double.
 
 `org.goldenport.schema.XSemiStructuredData` is the canonical semi-structured
 logical datatype. Its normalized application value is Record. Accepted JSON
-input has an object at the root. Nested objects, arrays, strings, booleans,
-exact decimal numbers, null members and empty objects/arrays are retained.
+input has an object at the root. Nested objects, arrays, strings, booleans, exact decimal numbers and empty
+objects/arrays are retained. Null-valued object attributes are omitted recursively.
+A null sequence element fails conversion rather than changing element positions.
 Top-level arrays/scalars/null fail with a wrong-shape outcome; they do not
 normalize to an empty Record.
 
 An empty root object normalizes to Record.empty and persists as a present
-`{}` value, not absent data. Nested Record construction must retain null members
-and empty objects. `Record.createFull` already supplies that representation;
-do not introduce a new Record implementation or change ordinary application
-Record.dataAuto semantics to achieve it.
+`{}` value, not absent data. Core Phase 3 owns Record construction and normalization, including
+`Record.createC` / `Record.fromFieldsC`. Empty objects and arrays stay present;
+untyped arrays are Vector. Declared NonEmptyVector is reconstructed by the
+existing Core ValueReader and rejects empty input. Constructed malformed Record
+or Field fixtures are no longer valid semantic inputs; do not weaken Core
+constructors or introduce a CNCF normalizer.
 
 ## R5: Explicit external formats
 
@@ -97,10 +104,9 @@ or omit those values. Format selection does not inspect a filename or content
 to choose another decoder. The storage codec must not resolve external files,
 environment values or includes while reconstructing a stored JSON value.
 
-The existing Core RecordDecoder and RecordSourceLoader are reuse candidates,
-not evidence of compliance: current object conversion omits null/empty-object
-members, and current HOCON loading uses resolved configuration entry paths.
-Reuse requires preserving the declared value space and conversion boundaries.
+Use the adopted Core XSemiStructuredData APIs for these explicit formats.
+Conversion follows R4; external loader behavior must not redefine the value space
+or resolve external resources while reading stored JSON.
 
 ## R6: Class and array mappings
 
@@ -119,21 +125,28 @@ JSON array text, without parsing/stringifying each Text element twice.
 
 A declared array uses JSON array storage with element conversions selected
 from its declared element type. Element order and empty arrays are retained.
-An object or scalar in place of the declared root array fails. Null elements
-are accepted only where the element declaration permits null. Nested arrays
-retain element declarations at every level.
+An object or scalar in place of the declared root array fails. Present Json.Null
+elements are accepted only where the selected child declaration permits JSON
+null. Native-null sequence elements fail at Core Record construction; they are
+not nullable semantic elements. Nested arrays retain element declarations at
+every level. Readback is Vector; typed entity admission uses Core ValueReader
+for explicitly declared NonEmptyVector and rejects empty input.
 
 ## R7: Presence, null and patches
 
 An absent patch field means no change. An explicit native Update.SetNull means
 SQL NULL and follows the existing nullability and managed-field policies.
 Required fields reject SQL NULL or absence during entity reconstruction.
-Optional fields preserve absence/null according to their declared multiplicity.
+Provider SQL NULL becomes Option absence immediately at JDBC ingress. Optional
+semantic fields are absent; required absence fails missing-required-field.
 
 Json.Null is a present XJson value stored as JSON text `null`, not SQL NULL.
-An R4 null member is inside a present structured object and does not clear the
-outer field. Conversion must occur before convenience row construction that
-would otherwise omit an empty Record or null member. The mapping does not
+An R4 null-valued member is omitted inside its present object and does not clear
+the outer field. Empty Record and array values remain present. Noop and optional
+None omit the patch field. Bare-null patch input must fail explicit-clear-required
+at foreign ingress before semantic Record construction can omit it; complete
+foreign-caller migration remains an OPEN consumer-Step obligation. SetValue(null)
+is rejected at the raw Update adapter before Update.toChangesRecord. The mapping does not
 reinterpret omission as Update.SetNull or bypass managed-field protection.
 
 ## R8: Numeric fidelity and invalid values
@@ -283,9 +296,9 @@ Structured decode requires a physical String and parses JSON explicitly.
 XJson normalization on encode accepts Json only and retains every JSON shape,
 including Json.Null. XSemiStructuredData encode uses its canonical normalizer
 and `toJson`; decode uses `fromJson`, retaining Record as the result. Canonical
-Record or JSON-object inputs preserve null members, nested empty values, member
-order and exact numbers; unsupported members fail. These conversions do not
-use ordinary omission-oriented Record encoders or decoders.
+Record or JSON-object inputs omit null attributes recursively and preserve nested
+empty values, retained member order and exact numbers; unsupported members and
+null sequence elements fail. Core owns these conversions.
 
 An application declaration captures ClassTag, Encoder and Decoder explicitly.
 The encoder receives only a nonnull compatible application value, and decoding
@@ -480,7 +493,8 @@ array; continuationTasks is an ordered XSemiStructuredData array. The
 JobDefinition normalizedProfile is optional XSemiStructuredData. These selected
 codecs encode physical JSON text and reconstruct their declared logical values.
 Missing optional values and empty arrays keep the existing row-mapping rules;
-JSON null/empty members are not SQL NULL or an omitted attribute.
+Record null attributes are omitted recursively, while empty members remain
+present and raw XJson null remains JSON; none implies SQL clearing.
 
 Every other literal projection field has a fixed physical scalar declaration,
 with the established managed/security/ContentBody aliases. The whitelist is

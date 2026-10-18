@@ -1,6 +1,6 @@
 # EntityStore field and row mapping
 
-Status: prior field/row slice accepted independently; selected row/codec/projection
+Status: historical Phase 100 field/row slice accepted independently; selected row/codec/projection
 focused validation passed 42/42 tests and
 `tkw-cncf-row-mapping-step-review-20261005@1` PASS is recorded independently.
 The package raw Update entry and producer stages passed 61/61 focused tests
@@ -26,6 +26,12 @@ new native scalar acceptance remains pending. Generated
 metadata, provider activation, all mutation/query/readback routes and recovery
 remain required continuation work. Workbench and each producer/project keep
 their separate acceptance gates.
+
+Current semantic adoption: Phase 115 / RCP-MAIN / RCP-MAIN-A is IN_PROGRESS.
+Historical validation does not establish this policy; all Phase 115 items remain
+OPEN. Core Phase 3 owns valid Record/Field construction. Malformed constructed
+Record/Field fixtures are not semantic inputs and do not justify weaker Core
+constructors. Raw wire malformation is tested at its actual input adapter.
 
 ## R1: Exact public declarations and ownership
 
@@ -133,8 +139,9 @@ fail. A logical name may equal another field's storage name: each direction
 uses only its own namespace. Encode reads exact logical names and emits exact
 storage names; decode reads exact storage names and emits exact logical names.
 There is no alias fallback. Input keys must be unique, valid and declared in
-the chosen direction or explicitly whitelisted. Only actual `Field.Value.Single`
-is admitted. Metadata and row-structure failures precede value conversion.
+the chosen direction or explicitly whitelisted. Core supplies actual `Field.Value.Single` values. Mapping checks the root Record,
+key policy and declarations before conversion; it does not repeat Core field
+vector/value construction invariants.
 
 ## R6/R7: Datatype, shape and cardinality
 
@@ -148,22 +155,23 @@ of its declared closed intervals. Unsupported combinations fail
 Root-array cardinality is checked before encoding and after decoding.
 `ZeroMore` admits every count, `OneMore` admits positive counts, and Range/Ranges
 admit only declared counts. The minimum admitted count determines outer
-nullability: zero permits absent/native-null full fields; positive minima reject
-them. Nested child arrays keep the pure array value space, including empty
+nullability: zero permits absent full fields; positive minima reject absence.
+Provider native null is converted to absence at ingress. Nested child arrays keep the pure array value space, including empty
 children, independently of the outer field cardinality.
 
 Array writes accept Scala Seq. Under a declared array binding only,
 `cats.data.NonEmptyVector` adapts to Vector. Adaptation follows the declared
 child bindings recursively and preserves every scalar/custom member for its
 selected codec. Set, native Array, Map and arbitrary Iterable are not inferred
-as arrays. Readback is ordered Vector. `array(json)` retains present Json.Null;
+as arrays. Readback is ordered Vector. Existing Core ValueReader reconstructs explicitly
+declared NonEmptyVector at typed entity admission, rejecting empty input. `array(json)` retains present Json.Null;
 String, Record and array children reject JSON null with index context. Explicit
 application codecs own their JSON-null policy and must return a nonnull value
 of the captured application class.
 
 Native scalar children require the exact selected non-null scalar Json kind,
 including under nested arrays. Their captured conversion runs once per actual
-element; outer nullable null stays with this row policy. Null supplied native
+element; outer optional absence stays with this row policy. Null supplied native
 datatype fails `missing-mapping`, and missing representation/captures fail
 `missing-codec-binding` before any hook, even for empty arrays.
 
@@ -173,8 +181,8 @@ datatype fails `missing-mapping`, and missing representation/captures fail
 | --- | --- | --- | --- |
 | Required mapped key absent | missing-required-field | missing-required-field | No change; stays absent |
 | Nullable mapped key absent | Stays absent | Stays absent | No change; stays absent |
-| Required mapped native null | null-not-allowed | null-not-allowed | explicit-clear-required |
-| Nullable mapped native null | Present native-null Field | Present native-null Field | explicit-clear-required |
+| Provider SQL NULL | Required absence fails | Optional field absent; required absence fails | Output of explicit SetNull only |
+| Foreign bare-null patch | Validate before Record construction | Not a semantic value | explicit-clear-required at ingress |
 | `ZeroOne` logical `None` | Omitted field | No Option reconstruction | Omitted field; no change |
 | `ZeroOne` logical `Some(value)` | Unwrap once, selected codec | No Option reconstruction | Unwrap once, selected codec |
 | Required scalar Option | Selected codec rejects wrong logical value | Selected codec requires its physical representation | Selected codec rejects wrong logical value |
@@ -196,33 +204,36 @@ The narrow package `_encode_update` entry admits the raw logical Update Record
 from the strict update producer stage. It validates complete metadata and raw
 row structure before native `Update.toChangesRecord` runs exactly once, then
 reuses `encodePatch`. The pre-normalization flag bypasses only marker rejection:
-null rows/field vectors/fields/values, non-Single values, duplicate keys and
-undeclared keys still fail before normalization. Duplicate or undeclared Noop
-fields cannot be concealed by omission and non-Single fields cannot reach the
-native normalizer's partial match. Required Noop omits a field; SetValue unwraps
+an absent root Record, invalid/duplicate keys and undeclared keys still fail
+before normalization. Core owns field vector/value invariants. Duplicate or
+undeclared Noop fields cannot be concealed by omission. SetValue(null) fails
+explicit-clear-required before normalization; construction failures from nested
+sequence values are captured as Consequence failures. Required Noop omits a field; SetValue unwraps
 once; nullable SetNull remains the actual physical marker; remaining nested
-markers fail the existing normalized-row policy. No public row signature or
-successful value space changes. This package path passed the selected five-suite focused command, 61/61
+markers fail the existing normalized-row policy. Public row signatures are unchanged.
++The historical Phase 100 package path passed the selected five-suite focused command, 61/61
 tests with SBT/wrapper exit 0 and serial lock released, plus complete eleven-path
 independent protected review `tkw-cncf-persistence-stage-step-review-20261005@1`
 PASS, distinct from prior accepted row evidence and pending native scalar
 acceptance. Null successful application hook values fail in the producer adapter
 before reaching this raw-row entry.
 
-Full decode returns plain logical values or explicit native-null Fields for
-authoritative entity admission; it does not reconstruct Some. Required full
-conversion rejects absence or native null. All transformed rows retain input
-order using actual Field vectors; `Record.createFull` is the caller-side
-construction contract. Omission-oriented accessors/builders must not erase
-successful empty Records, empty arrays or explicit nulls.
+Full decode returns plain logical values for authoritative entity admission; it
+does not reconstruct Some or carry native-null Fields. Required full conversion
+rejects absence. JDBC wraps getObject immediately in Option and retains all
+labels through duplicate validation before flattening present values. All
+transformed rows retain input order. Core construction preserves empty Records
+and arrays while omitting null attributes recursively. Bare-null foreign patch
+callers must validate before this construction; their complete migration remains
+an OPEN consumer-Step obligation.
 
 ## R2–R8: Selected values
 
 String conversion accepts only actual String and retains every character,
 including empty, whitespace, Unicode, escaped, JSON-looking and malformed text.
 Json conversion retains every canonical Json shape with exact numeric meaning.
-Record conversion retains an empty root, nested null/empty members and exact
-numbers through the accepted canonical Core conversion. Numeric semantics,
+Record conversion retains an empty root, nested empty members and exact
+numbers, omitting null-valued attributes recursively, through the accepted canonical Core conversion. Numeric semantics,
 rather than a particular numeric wrapper class or JSON lexical formatting, are
 the structured roundtrip law. Application conversion uses only its captured
 explicit ClassTag/Encoder/Decoder. Unsupported values never call toString as a

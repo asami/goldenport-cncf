@@ -12,7 +12,7 @@ import org.simplemodeling.model.directive.Update
  * Pure declared logical-field / physical-row conversion. No provider activation.
  *
  * @since   Oct.  5, 2026
- * @version Oct.  5, 2026
+ * @version Oct. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class EntityStoreRowMapping(
@@ -33,7 +33,22 @@ final case class EntityStoreRowMapping(
   private[entity] def _encode_update(collection: EntityCollectionId, record: Record): Consequence[Record] = {
     _validate(collection, "encode-patch").flatMap { _ =>
       _validate_row(collection, record, "encode-patch", rawupdate = true).flatMap { _ =>
-        encodePatch(collection, Update.toChangesRecord(record))
+        val invalidvalues = record.fields.flatMap { input =>
+          input.value.single match {
+            case Update.SetValue(null) =>
+              val declaration = fields.find(_.logicalName == input.key)
+              Some(declaration match {
+                case Some(field) => _failure[Unit](collection, Some(field), "encode-patch", "explicit-clear-required")
+                case None => _decorate_names(_invalid[Unit]("explicit-clear-required", "encode-patch"),
+                  collection, input.key, input.key, None, "encode-patch")
+              })
+            case _ => None
+          }
+        }
+        Consequence.zipN(invalidvalues).flatMap { _ =>
+          _decorate(Consequence(Update.toChangesRecord(record)), collection, None, "encode-patch")
+            .flatMap(encodePatch(collection, _))
+        }
       }
     }
   }
@@ -144,10 +159,9 @@ final case class EntityStoreRowMapping(
     stage: String,
     rawupdate: Boolean = false
   ): Consequence[Unit] = {
-    if (record == null || record.fields == null) {
+    if (record == null) {
       _failure(collection, None, stage, "invalid-row-shape")
-    } else if (record.fields.exists(x => x == null || !_name_valid(x.key) ||
-      !x.value.isInstanceOf[Field.Value.Single]) ||
+    } else if (record.fields.exists(x => !_name_valid(x.key)) ||
       record.fields.map(_.key).distinct.size != record.fields.size) {
       _failure(collection, None, stage, "invalid-row-shape")
     } else {
@@ -156,8 +170,8 @@ final case class EntityStoreRowMapping(
       val undeclared = record.fields.filterNot(x => declarednames.contains(x.key) || physicalFields.contains(x.key))
       Consequence.zipN(undeclared.map { input =>
         // An undeclared key is known declaration context, never a payload value.
-        _failure[Unit](collection, Some(EntityStoreField(
-          input.key, input.key, null, null)), stage, "missing-mapping")
+        _decorate_names(_invalid[Unit]("missing-mapping", stage), collection,
+          input.key, input.key, None, stage)
       }).flatMap { _ =>
         val invalidmarkers = if (rawupdate) Vector.empty else record.fields.flatMap { input =>
           fields.find(x => (if (reading) x.storageName else x.logicalName) == input.key).flatMap { field =>
@@ -206,11 +220,6 @@ final case class EntityStoreRowMapping(
         if (nullable) Consequence.success(Some(Update.SetNull))
         else _failure(collection, Some(field), stage, "null-not-allowed")
       case _: Update[?] => _failure(collection, Some(field), stage, "invalid-row-shape")
-      case null if stage == "encode-patch" =>
-        _failure(collection, Some(field), stage, "explicit-clear-required")
-      case null =>
-        if (nullable) Consequence.success(Some(null))
-        else _failure(collection, Some(field), stage, "null-not-allowed")
       case _ =>
         val converted = if (stage == "decode") {
           field.binding._decode(value).flatMap { decoded =>
@@ -283,6 +292,17 @@ final case class EntityStoreRowMapping(
     val storagename = declaration.map(x => Option(x.storageName).getOrElse("<missing-storage-name>"))
       .getOrElse(if (field.isDefined) "<missing-field>" else "<mapping>")
     val algorithm = declaration.flatMap(x => Option(x.binding)).map(_.storageCodecIdentity)
+    _decorate_names(result, collection, logicalname, storagename, algorithm, stage)
+  }
+
+  private def _decorate_names[A](
+    result: Consequence[A],
+    collection: EntityCollectionId,
+    logicalname: String,
+    storagename: String,
+    algorithm: Option[String],
+    stage: String
+  ): Consequence[A] = {
     val facets = Vector[Descriptor.Facet](
       Descriptor.Facet.Policy("entity.store.logical-type"),
       Descriptor.Facet.Id(Option(collection).map(_.print).getOrElse("<missing-collection>")),

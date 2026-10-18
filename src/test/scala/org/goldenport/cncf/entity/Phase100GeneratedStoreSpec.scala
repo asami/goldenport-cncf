@@ -98,9 +98,9 @@ final class Phase100GeneratedStoreSpec extends AnyWordSpec with Matchers with Gi
 
   "Explicit external formats through generated durable persistence" should {
     "normalize each selected syntax before SQL storage and reconstruct its declared Record after reopen" in {
-      Given("three explicitly selected external syntaxes with one independently expected structured value")
+      Given("three explicitly selected external syntaxes containing nullable:null with an independently expected null-omitted Record value")
       val expectedjson = io.circe.parser.parse(
-        """{"caption":"雪","empty":{},"items":[1,2],"nullable":null,"precise":9007199254740993.1234567890123456789}""")
+        """{"caption":"雪","empty":{},"items":[1,2],"precise":9007199254740993.1234567890123456789}""")
         .fold(error => fail(error.message), identity)
       val representations = Vector(
         StructuredDataFormat.Json -> """  {"caption":"雪","empty":{},"items":[1,2],"nullable":null,"precise":9007199254740993.1234567890123456789}  """,
@@ -142,7 +142,7 @@ final class Phase100GeneratedStoreSpec extends AnyWordSpec with Matchers with Gi
           val restored = _take(EntityStore.standard().load[Proposal](entity.id)).get
           val restoredjson = _take(XSemiStructuredData.toJson(restored.evidence))
 
-          Then("SQL retains the exact original syntax as String and separate JSON text while declared readback restores Record and Json")
+          Then("SQL retains the exact original syntax as String while Record JSON omits only nullable and preserves empty and numeric meaning")
           raw.getAny("originalProposal") shouldBe Some(text)
           raw.getAny("evidence").get shouldBe a[String]
           physicaljson shouldBe expectedjson

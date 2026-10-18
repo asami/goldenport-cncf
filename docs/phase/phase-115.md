@@ -1,6 +1,6 @@
 # Phase 115 - Canonical Record Collection and Null Policy Adoption
 
-Status: PLANNED
+Status: IN_PROGRESS
 Owner: CNCF DataStore / EntityStore integration
 Created: 2026-10-18
 Checklist: [Phase 115 checklist](phase-115-checklist.md)
@@ -23,12 +23,21 @@ Use the actually delivered Phase 100 APIs and the adopted Core Phase 3 result.
 Planning may proceed now; dependent implementation uses those available
 baselines without copying or replacing unfinished work.
 
-The current working [logical type mapping specification](../spec/datastore-logical-type-mapping.md)
-R4/R7 and [row mapping specification](../spec/entity-store-row-mapping.md)
-retain null members in semi-structured objects. They are explicit migration
-targets, not evidence that Phase 115 already works. Keep existing Phase 100
-history, test results and uncommitted work attributable to that phase. Update
-affected specifications with the implementation when this phase executes.
+The working [logical type mapping specification](../spec/datastore-logical-type-mapping.md)
+R4/R7, [row mapping specification](../spec/entity-store-row-mapping.md) and
+[persistence stages](../spec/entity-store-persistence-stages.md) now describe
+Core Phase 3 normalization. Phase 100 test/review receipts remain historical.
+
+Current Step: **RCP-MAIN / RCP-MAIN-A** implements the connected typed entity
+save/read/update/search route and SQL ingress adoption. Selected Core input is
+`simplemodeling-lib` commit `53b1612faadf43840a75cf7d1c6d54ea5f248015`;
+original CNCF base is `11d4e2843f03a787d5a4f5900e97ed04e4b63276`.
+Focused validation passed: 12 representative examples and 39 affected regression
+examples across five suites. RCP-MAIN passed independent protected focused Step
+acceptance. Consumer migration and final Phase acceptance remain pending.
+All RCP-01 through RCP-05 remain OPEN. Generated ordinary Vector/NonEmptyVector
+signature evidence and foreign bare-null patch caller migration belong to
+RCP-CONSUMERS and are not established by this Step.
 
 ## Required behavior
 
@@ -137,6 +146,5 @@ TTL gates, repeated boundary checks or compatibility branch retaining the old
 canonical null-preserving Record policy. Existing data is read through the
 new declared normalization contract; raw JSON stays raw JSON.
 
-Planning creates no product change, dependency publication, live data migration
-or Phase execution. Core Phase 3 can close independently after its usable
+This Step authorizes no live data migration or remote publication. Core Phase 3 can close independently after its usable
 handoff; CNCF Phase 115 closes only against its own checklist and evidence.

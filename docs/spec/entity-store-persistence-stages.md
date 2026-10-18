@@ -2,7 +2,7 @@
 
 ## Current status
 
-The public producer hook/stage ABI is independently accepted and frozen. Its selected focused
+The historical Phase 100 public producer hook/stage ABI is independently accepted and frozen. Its selected focused
 validation passed 61/61 tests across five suites, with SBT/wrapper exit 0 and the
 serial lock released. Complete eleven-path independent protected accumulator
 review `tkw-cncf-persistence-stage-step-review-20261005@1` is PASS. This document
@@ -19,6 +19,10 @@ released and `tkw-cncf-row-mapping-step-review-20261005@1` PASS. Those accepted
 results remain separate prerequisite evidence. The current five-suite command
 validates the new hooks and narrow raw Update entry with the row/value/projection
 and collection-identity compatibility accumulator.
+
+Current semantic adoption: Phase 115 / RCP-MAIN / RCP-MAIN-A is IN_PROGRESS;
+all five acceptance items remain OPEN. Historical evidence below does not
+establish the Core Phase 3 behavior.
 
 ## Owner
 
@@ -174,9 +178,12 @@ Update's logical hook returns the actual raw logical Update Record. The narrow
 `private[entity] EntityStoreRowMapping._encode_update(collection, record)`
 validates complete metadata and raw structure/known unique Single keys before
 calling actual `Update.toChangesRecord` exactly once, then reuses `encodePatch`.
-Only pre-normalization marker rejection is bypassed. Null field vectors, null
-fields/values, non-Single values, duplicates and undeclared keys fail before
-normalization, even if invalid Noop fields would otherwise disappear. A null
+Only pre-normalization marker rejection is bypassed. Core owns valid field
+vectors and Single values; malformed constructed Record/Field fixtures are no
+longer semantic inputs. Invalid/duplicate keys and undeclared keys fail before
+normalization, even if invalid Noop fields would otherwise disappear.
+SetValue(null) fails explicit-clear-required before Update.toChangesRecord.
+Nested sequence construction failures are captured as Consequence failures. A null
 successful logical hook value is an application-hook failure before row entry.
 The package raw row entry itself rejects a null Record as invalid row shape.
 
@@ -186,7 +193,8 @@ The package raw row entry itself rejects a null Record as invalid row shape.
 | `Update.SetValue(value)` | Unwrap once and apply declared binding |
 | Nullable `Update.SetNull` | Preserve actual marker under storage name |
 | Required `Update.SetNull` | `null-not-allowed` |
-| Bare native null | `explicit-clear-required` |
+| Foreign bare native null | `explicit-clear-required` before semantic construction; caller migration remains OPEN |
+| `Update.SetValue(null)` | `explicit-clear-required` at raw Update adapter |
 | Optional `None` | Omitted; no change |
 | Remaining nested Update marker | Reject under accepted row policy |
 
@@ -215,7 +223,11 @@ stays ordered within a field.
 
 This application-owned declaration uses actual canonical values and explicit
 captured codecs. Rows are constructed with `Record.createFull`; field vectors
-preserve null/empty values and row order. It is a producer example, not provider
+preserve empty values and row order while Core omits null attributes recursively.
+Untyped arrays read as Vector; Core ValueReader reconstructs declared
+NonEmptyVector, rejecting empty input. JDBC SQL NULL is absence at ingress;
+required absence fails. Typed SetNull reaches native null only at SQL output.
+Raw XJson Json.Null remains present JSON. It is a producer example, not provider
 or generated route activation.
 
 ```scala

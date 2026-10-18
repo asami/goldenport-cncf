@@ -95,8 +95,7 @@ private[sql] final class SqlDataStoreRecordCodec(config: SqlDataStore.Config, po
             RecordKeyNaming.toCanonicalCamelName(rawname)
           else
             rawname
-        val rawvalue = resultSet.getObject(i)
-        val value = rawvalue
+        val value = Option(resultSet.getObject(i))
         name -> value
       }
     }.flatMap { values =>
@@ -106,8 +105,9 @@ private[sql] final class SqlDataStoreRecordCodec(config: SqlDataStore.Config, po
         val ordered = if (postgresql) values.sortBy { case (name, _) =>
           if (name == "id") 0 else if (name == "revision" || name == "cncf_revision") 1 else 2
         } else values
-        Record(ordered.filterNot { case (_, value) => java.util.Objects.isNull(value) }
-          .map { case (name, value) => Field(name, Field.Value.Single(value)) })
+        Record(ordered.flatMap { case (name, value) =>
+          value.map(present => Field(name, Field.Value.Single(present)))
+        })
       }
     }
 
