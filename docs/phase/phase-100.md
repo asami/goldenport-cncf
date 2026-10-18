@@ -1,6 +1,8 @@
 # Phase 100: DataStore Logical Types, Storage Mapping and Recovery
 
-status=in-progress
+status=closed
+closed_at=2026-10-18
+release_binding=phase100-final-closure-20261018-01@1
 resumed_at=2026-10-17
 planned_at=2026-10-03
 renumbered_at=2026-10-05
@@ -10,9 +12,9 @@ producer_handoff=asami/cozy Phase 78
 
 Renumbered on 2026-10-05 from the local, uncommitted DataStore Phase 97 plan.
 GitHub Phase 97 (AI Audit) is authoritative; GitHub Phases 98 and 99 retain
-their existing allocations. The DataStore requirements and OPEN status are unchanged.
+their existing allocations. That renumbering preserved the DataStore requirements and their original OPEN status.
 
-## Current migration execution — 2026-10-17
+## Migration execution history — 2026-10-17
 
 The user requests Phase 100 completion within the Workbench mac mini ->
 asamiair migration and reports Phase 96 complete/pushed. Canonical CNCF main
@@ -55,27 +57,31 @@ its application runtime adoption remains with NICT. See the
 Original comparison closure, the sole recovery-full review, all owning checklist
 requirements and release records remain required. No closure is claimed here.
 
-## Current checklist projection — 2026-10-18
+## Closure — 2026-10-18
 
-The owning checklist now records 44 of 47 items satisfied from the completed
-independent assessment and actual final validation. Impact inventory, provider
-integration, consumer transition and isolated recovery groups are CLOSED.
-The historical preimplementation ABI handoff criterion and final review/release
-items remain OPEN pending focused review and release. No current test proves
-the historical ordering. The user explicitly replaced that historical condition
-on 2026-10-18 with current frozen ABI/generated-fixture conformance, completed
-functional validation and independent assessment, retaining the old order as
-UNPROVEN in the checklist and dated journal. Earlier planning-only OPEN statements below
-describe the original allocation, not the current checklist projection.
+The owning checklist records all 47 items satisfied. The original comparison
+chain and the sole recovery-full review are closed through focused review;
+accepted follow-ups remain in the original Hygiene/Development Candidate journals.
+Original bases, Phase 96, Workbench Phase 1 history, unknown historical counters
+and the separate reassessment lineage are preserved.
 
-Core, Cozy, SimpleModeler and Workbench source integrations are committed.
-CNCF's merge remains pending after the registered integrity check rejected final
-blank lines in four unchanged producer-generated fixtures. The user subsequently
-approved a persistent exact-path Git convention, now applied without changing
-fixture bytes. Both parent-relative checks pass under that changed policy;
-the new CNCF-only integration is pending. Existing successful commits and
-CNCF's staged tree are retained. No Phase closure or Phase 115 start
-is claimed. The sole full-review use and original review/repair history remain.
+The user explicitly replaced item 02.02's historical ordering condition with
+current frozen ABI/generated-fixture conformance, completed functional validation
+and independent assessment. The original preimplementation revision/order remains
+UNPROVEN. Its original wording and dated decision remain in the checklist/journal;
+this closure does not backdate evidence or claim historical proof.
+
+Core, Cozy, SimpleModeler, Workbench and CNCF source integrations are committed.
+Modeler and Workbench retain three ordered parents; CNCF retains both parents in
+`507a864507d8`. The approved exact-path Git convention preserves unchanged generated
+fixture bytes. The earlier consumed partial attempt is retained.
+
+The final local release binds this checklist and management projection to actual
+completed validation, the closed review chain and canonical follow-up records.
+This is source-only migration with isolated test stores, not an original DB
+cutover or completion of the whole Workbench application. Phase 115 remains
+planned and owns Core Phase 3 Record/collection adoption and the retained static
+List Query migration. No remote push or public publication is implied.
 
 ## Goal
 
@@ -92,9 +98,9 @@ OR-mapping route, and eliminate that workaround from the active route.
 Preserving its behavior through `XSemiStructuredData` is required; deleting or
 renaming the marker alone is not completion.
 
-This allocates one independent Phase. It does not start implementation, accept
-the current working tree, reopen an existing Phase or authorize a live database
-migration. All work groups remain OPEN in the checklist.
+The original allocation alone did not start implementation, accept a working
+tree, reopen another Phase or authorize a live database migration. Subsequent
+execution and the current closure are recorded above and in the owning checklist.
 
 The plan was initially prepared without implementation authority. On
 2026-10-05 the user instructed dedicated-checkout development of CNCF Phase 100

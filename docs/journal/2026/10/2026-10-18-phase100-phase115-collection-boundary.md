@@ -1,7 +1,7 @@
 # Phase 100 / Phase 115 collection boundary — 2026-10-18
 
-Status: user-directed ownership disposition with independent read-only
-assessment; Phase 100 comparison and Phase acceptance remain open.
+Status: retained user-directed ownership disposition with independent assessment;
+Phase 100 closure is recorded in the final dated section below.
 
 ## Authority and completion order
 
@@ -76,7 +76,7 @@ NICT source remains outside the five-repository repair scope. No fabricated
 descriptor, blind STYLE choice, suppressed provenance or generated-source patch
 is part of this disposition.
 
-## Evidence retained and gates still open
+## Original evidence assessment and open gates
 
 Whole-framework validation, the later composed external-format SQL case,
 Workbench original-text/human-edit persistence and provider reopen, and NICT
@@ -124,3 +124,24 @@ remain. The original partial integration request stays consumed; completed
 SimpleModeler/Workbench commits are preserved. A fresh CNCF-only request and
 focused closure of the existing review chain are still required. This record
 is the actual human disposition, not a Phase closure or new full review.
+
+Subsequent source-integration outcome: the newly authorized CNCF-only execution
+completed as `507a864507d8`, preserving its two ordered parents and all selected
+paths. The fixed integrity check passed under the approved four-path policy.
+The earlier consumed partial request was not replayed; Modeler/Workbench commits
+remain intact. Final focused closure and Phase release remain separate gates.
+
+## Phase 100 final closure — 2026-10-18
+
+The final focused continuation accepted the explicitly approved item 02.02
+replacement and closed the remaining historical-evidence finding. The original
+chronology stays UNPROVEN. No new finding, full review, history reconstruction
+or functional waiver was introduced; all 15 accepted follow-up records remain
+in the original journals. The owning checklist records all 47 items satisfied.
+
+The local release binding is `phase100-final-closure-20261018-01@1`. It carries
+the actual applicable full/focused validation and native source integrations,
+closed primary documents and final management projection. The final commit's
+native closure receipt is retained privately. Phase 115 remains planned and
+does not inherit a claim that its static Query defect or Core Phase 3 adoption
+was implemented here. Workbench Phase 1 and NICT/CAR readiness remain separate.

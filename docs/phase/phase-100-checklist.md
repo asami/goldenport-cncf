@@ -1,6 +1,8 @@
 # Phase 100 Checklist: DataStore Logical Types, Storage Mapping and Recovery
 
-status=in-progress
+status=closed
+closed_at=2026-10-18
+release_binding=phase100-final-closure-20261018-01@1
 phase=[Phase 100](phase-100.md)
 
 ## DSM-100-01: Impact and recovery inventory
@@ -20,12 +22,12 @@ Stage Status:
 ## DSM-100-02: Logical and physical contract
 
 Stage Status:
-- Current status: OPEN
+- Current status: CLOSED
 - Owner: CNCF DataStore/Entity contract owners
 - Update rule: Close only when canonical specs/design and executable contracts fix the mapping boundary. The checklist below is the closure basis.
 
 - [x] Bind the approved `XSemiStructuredData` and `XJson` types and the selected declaration producer to the OR mapper used by DataStore consumers and EntityStore operations.
-- [ ] Freeze the producer-facing logical datatype/storage-mapping ABI and expected generated fixture for `asami/cozy` Phase 78; record the exact handoff revision before producer implementation.
+- [x] Freeze the producer-facing logical datatype/storage-mapping ABI and expected generated fixture for `asami/cozy` Phase 78; record the exact handoff revision before producer implementation. (Original historical ordering UNPROVEN; accepted under the explicit 2026-10-18 replacement recorded below.)
 - [x] Define `XSemiStructuredData` with Record values and `XJson` with JSON values in the existing canonical type system, with normalization and structured failures; reject name-only `Named` substitutes as the final route.
 - [x] Specify explicit JSON/YAML/HOCON format selection and conversion to Record for `XSemiStructuredData`, including accepted shapes and unsupported format-specific values, independently of the DB storage format.
 - [x] Distinguish application type, JSON intermediate value, serialized JSON text and physical column type; specify codec/version and field-name normalization without losing mapping identity.
@@ -82,7 +84,7 @@ Stage Status:
 ## DSM-100-06: Integration and closure
 
 Stage Status:
-- Current status: OPEN
+- Current status: CLOSED
 - Owner: CNCF and workbench validation owners
 - Update rule: Close only after required tests, recovery rehearsal, independent review and release evidence. The checklist below is the closure basis.
 
@@ -95,31 +97,39 @@ Stage Status:
 - [x] Prove an EntityStore entry-point roundtrip through the OR mapper and SQL TEXT, including restart, for String, XJson and XSemiStructuredData; codec-only tests do not establish the integration route.
 - [x] Validate direct reads, queries/projections, partial updates and mutation readback, plus all identified durable consumers.
 - [x] Complete selected focused, full-suite and required downstream checks through the normal execution gates.
-- [ ] Complete independent review and retain migration/compatibility evidence and any explicitly assigned follow-up work.
-- [ ] Record Phase release and closure only after all in-scope ledger items are satisfied.
+- [x] Complete independent review and retain migration/compatibility evidence and any explicitly assigned follow-up work.
+- [x] Record Phase release and closure only after all in-scope ledger items are satisfied.
 
-## Completion evidence and remaining gates — 2026-10-18
+## Completion and explicit historical disposition — 2026-10-18
 
-Checked items project the sole recovery-full review's item-level assessment,
-the independently closed specification fixture correction, completed current
-CNCF validation and subsequent ordinary dependency refresh, Workbench generation,
-runtime preparation and full validation. Detailed native evidence remains in
-private workflow storage; the original reviews and failed attempts are retained.
-The source-only/no-existing-DB decision and the
-[Phase100/115 boundary disposition](../journal/2026/10/2026-10-18-phase100-phase115-collection-boundary.md)
-remain applicable. This projection changes no requirement or historical counter.
+All 47 items are satisfied in the admitted source-only Phase 100 boundary.
+The original comparison findings and the sole recovery-full chain are closed
+through their focused continuations. Accepted Hygiene and Development Candidate
+records remain in their original journals with separate owners and targets.
+Detailed command/review evidence and the unchanged historical counters remain
+in private workflow storage; no missing startup history is reconstructed.
 
-DSM-100-02 item 02.02 remains OPEN pending focused review of the explicit
-2026-10-18 human disposition: the original preimplementation revision/order
-remains UNPROVEN. For this resumed Phase only, the user replaced that historical
-ordering condition with current frozen ABI/generated-fixture conformance,
-completed functional validation and independent assessment. The original item
-and history remain, without backdating or a claim of historical proof. See the
-[dated decision](../journal/2026/10/2026-10-18-phase100-phase115-collection-boundary.md#explicit-historical-abi-criterion-disposition--2026-10-18).
-Final review closure and Phase release remain OPEN. The user also approved the
-four exact generated-fixture paths' persistent blank-at-EOF convention; the
-root .gitattributes is applied and both parent-relative Git checks pass under
-that changed policy. Generated fixture bytes remain intact. The newly
-authorized CNCF-only integration has not yet executed. The completed Modeler and Workbench integration
-commits remain retained. Phase 100 is in progress, with 44 of 47 items satisfied;
-this is not Phase acceptance, release, push or Phase 115 implementation.
+Item 02.02 retains the original requirement text as history. The exact
+preimplementation handoff revision/order remains UNPROVEN. The user explicitly
+replaced that historical ordering condition with current frozen producer ABI,
+generated fixture/consumer conformance, completed functional validation and
+independent assessment. The final focused review accepted this replacement;
+it did not prove the original chronology or waive functional validation. See
+the [dated human disposition](../journal/2026/10/2026-10-18-phase100-phase115-collection-boundary.md#explicit-historical-abi-criterion-disposition--2026-10-18).
+
+Original text, declared logical types, physical SQL TEXT, generated metadata,
+durable consumers, explicit format normalization, SQL restart/readback and
+isolated recovery are supported by their executed specifications and admitted
+review. The final full run predates only the independently closed fixture-owner
+relocation, whose affected specifications passed separately; later ordinary
+artifact refresh, Workbench generation/runtime preparation and full validation
+also completed. No existing production DB was transferred or modified.
+
+All selected source histories are integrated. The approved four-path Git
+whitespace convention preserves the unchanged generated fixture bytes. The
+earlier partial integration remains retained, without replay or rollback.
+The final local release binds these closed documents to the recorded review
+and validation through the release binding above. Phase 115 remains planned;
+the retained static List Query issue and Core Phase 3 adoption belong there.
+Workbench Phase 1, NICT startup and existing CAR lint follow-ups retain their
+separate owners. No push or public publication is part of this closure.

@@ -19,7 +19,7 @@ Current baseline:
   adopt goldenport-core Phase 3 Record collection/null normalization through
   Phase 100's delivered DataStore/EntityStore mapping. Preserve empty structures,
   explicit SQL clearing and XJson semantics. This is a separate successor
-  acceptance boundary and does not expand active Phase 100 completion criteria.
+  acceptance boundary and does not reopen Phase 100 acceptance.
 
 - [Phase 106](phase-106.md) / [checklist](phase-106-checklist.md) is PLANNED:
   generic Review Evidence/Admission integration driven by sm-workflow Phase 6,
@@ -55,12 +55,12 @@ Current baseline:
   by this navigation update.
 - [Phase 97](phase-97.md) / [checklist](phase-97-checklist.md) is the
   GitHub-authoritative AI Audit and Interaction Evidence plan, status planned.
-- [Phase 100](phase-100.md) / [checklist](phase-100-checklist.md) allocates
-  DataStore logical-type declarations, storage mappings and existing-data
-  recovery, driven by workbench. It is planned, not started; the OR mapper
-  restores declared application types while DataStore handles physical values.
-  JSON-looking text is not a type declaration. The phase includes
-  consumer migration and recovery rehearsal without changing active Phase scope.
+- [Phase 100](phase-100.md) / [checklist](phase-100-checklist.md) is CLOSED
+  on 2026-10-18 under `phase100-final-closure-20261018-01@1`: declared logical
+  mappings, physical SQL TEXT, generated consumers, Workbench restart and isolated
+  recovery are accepted in the source-only migration. The historical ABI ordering
+  remains UNPROVEN under its explicit human replacement. Phase 115 remains the
+  separate planned Record/collection successor; no original DB cutover is claimed.
 - [Phase 96](phase-96.md) and its [checklist](phase-96-checklist.md) are closed
   for the target-neutral Display/Projection/DisplayService contract, under
   `phase96-final-closure-20261017-001@1`. The [acceptance journal](../journal/2026/10/2026-10-17-phase-96-final-acceptance.md)

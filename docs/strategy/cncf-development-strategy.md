@@ -5375,7 +5375,7 @@ renumbered or marked accepted, and no closed Phase 77 ledger is changed.
 
 Allocated on 2026-10-03 and renumbered on 2026-10-05 as
 [Phase 100](../phase/phase-100.md), with its
-[open checklist](../phase/phase-100-checklist.md). The application declares
+[closed checklist](../phase/phase-100-checklist.md). The application declares
 String, class X, semi-structured Record, JSON or array semantics. The OR mapper
 owns their application codecs and JSON-text storage mapping; DataStore handles
 physical values and returns String from the text backend. SQL TEXT syntax is not application type
@@ -5391,8 +5391,14 @@ transaction/OCC semantics and the closed Phase 69.7 Job contracts. The new Phase
 depend on Phase 94 shared transactions or Phase 95/96 UI completion.
 
 The [allocation evidence](../journal/2026/10/2026-10-03-datastore-logical-type-mapping-phase.md)
-records current implementation limits and data ambiguity. Status is planned;
-no implementation, acceptance or live migration is authorized by this entry.
+retains the original implementation limits and data ambiguity. Phase 100 is
+CLOSED on 2026-10-18 with its 47-item checklist, completed validation, sole
+recovery-full/focused closure and local release binding
+`phase100-final-closure-20261018-01@1`. The historical preimplementation ABI
+ordering remains UNPROVEN under the explicit human replacement. Source-only
+Workbench migration and isolated recovery are complete within that boundary;
+no existing production DB was migrated. Phase 115 remains planned for Core
+Phase 3 Record/collection adoption and the retained static List Query issue.
 
 ## Status Navigation Erratum — 2026-09-28
 
