@@ -1,9 +1,11 @@
 package org.goldenport.cncf.validation
 
 import java.nio.file.Path
+import io.circe.Json
 import org.goldenport.Consequence
 import org.goldenport.cncf.observability.ConclusionDiagnostics
 import org.goldenport.cncf.processexecution.{SbtOperation, SbtScenarioSelection, SbtTarget}
+import org.goldenport.cncf.processexecution.SbtScenarioParameters.Value
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.workspace.WorkspaceId
 import org.scalacheck.{Gen, Prop, Test}
@@ -15,7 +17,7 @@ import ValidationMetadataV1.{FeatureReference, Purpose}
 
 /** Public exact binding over real discovery, without acquiring execution authority.
  * @since   Oct. 18, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ValidationOperationBindingV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -111,6 +113,80 @@ final class ValidationOperationBindingV1Spec extends AnyWordSpec with Matchers w
       Then("binding preserves provenance while revisions remain outside stable logical references")
       checked.passed shouldBe true
     }
+  }
+
+  "E6 Discovered typed invocation variants" must afterWord(
+    "in spec:validation-test-metadata, example:E6, rules:R2,R4,R5, phase:6.2"
+  ) {
+    "bind two variants of the same real discovered operation without execution authority" in {
+      Given("docs/spec/validation-test-metadata.md R2,R4,R5 E6: actual scoped trusted provider discovery")
+      val inventory = _inputs_inventory()
+      val operation = inventory.operations.head
+      val schema = operation.metadata.get.inputSchema
+      val first = Map("count" -> Json.fromLong(2), "enabled" -> Json.False, "label" -> Json.fromString("first case"))
+      val second = Map("count" -> Json.fromLong(3), "enabled" -> Json.True, "label" -> Json.fromString("second case"))
+      When("both typed input variants bind the same exact logical reference")
+      val bound = Vector(first, second).map(ValidationOperationBindingV1.bindC(inventory, operation.reference,
+        _workspace_id, _).toOption.get)
+      val defaulted = ValidationOperationBindingV1.bindC(inventory, operation.reference, _workspace_id).toOption.get
+      Then("actual normalized schema is visible and pure intents retain distinct named typed values")
+      inventory.completeness shouldBe Completeness.COMPLETE
+      inventory.operations should have size 1
+      schema shouldBe Vector(
+        ValidationInputsV1.Parameter("count", ValidationInputsV1.Kind.Integer, defaultValue = Some(Value.Integer(1))),
+        ValidationInputsV1.Parameter("enabled", ValidationInputsV1.Kind.BooleanValue,
+          defaultValue = Some(Value.BooleanValue(true))),
+        ValidationInputsV1.Parameter("label", ValidationInputsV1.Kind.Text,
+          defaultValue = Some(Value.Text("default case"))))
+      bound.map(_.operation) shouldBe Vector(operation, operation)
+      bound.map(_.parameters) shouldBe Vector(
+        Map("count" -> Value.Integer(2), "enabled" -> Value.BooleanValue(false), "label" -> Value.Text("first case")),
+        Map("count" -> Value.Integer(3), "enabled" -> Value.BooleanValue(true), "label" -> Value.Text("second case")))
+      bound.foreach { value =>
+        value.parameters shouldBe value.intent.target.scenario.get.parameters
+        value.intent.target.workspaceId shouldBe _workspace_id
+        value.intent.operation shouldBe SbtOperation.TestOnly
+        value.operation.provenance shouldBe operation.provenance
+        value.operation.metadata shouldBe operation.metadata
+      }
+      bound.head.intent.target should not be bound.last.intent.target
+      defaulted.parameters shouldBe Map("count" -> Value.Integer(1), "enabled" -> Value.BooleanValue(true),
+        "label" -> Value.Text("default case"))
+    }
+
+    "reject wrong, unknown and missing inputs and reject noncanonical discovered schemas" in {
+      Given("docs/spec/validation-test-metadata.md R2,R4,R5 E6: real discovery and explicit malformed variants")
+      val inventory = _inputs_inventory()
+      val operation = inventory.operations.head
+      val metadata = operation.metadata.get
+      val required = operation.copy(metadata = Some(metadata.copy(inputSchema = metadata.inputSchema.map { parameter =>
+        if (parameter.name == "count") parameter.copy(defaultValue = None) else parameter
+      })))
+      val requiredinventory = inventory.copy(operations = Vector(required))
+      val invalidschema = inventory.copy(operations = Vector(operation.copy(metadata =
+        Some(metadata.copy(inputSchema = metadata.inputSchema.reverse)))))
+      val emptyinventory = _inventory()
+      val zeroinput = emptyinventory.operations.find(_.reference.operation == "parameter:1").get
+      When("the pure public binder admits supplied values and actual metadata")
+      val outcomes = Vector(
+        ValidationOperationBindingV1.bindC(inventory, operation.reference, _workspace_id, Map("count" -> Json.fromString("2"))),
+        ValidationOperationBindingV1.bindC(inventory, operation.reference, _workspace_id, Map("unknown" -> Json.True)),
+        ValidationOperationBindingV1.bindC(inventory, operation.reference, _workspace_id, Map("label" -> Json.Null)),
+        ValidationOperationBindingV1.bindC(requiredinventory, operation.reference, _workspace_id),
+        ValidationOperationBindingV1.bindC(invalidschema, operation.reference, _workspace_id),
+        ValidationOperationBindingV1.bindC(emptyinventory, zeroinput.reference, _workspace_id, Map("count" -> Json.fromLong(1))))
+      Then("invalid values cannot produce intent and discovery validates the canonical schema")
+      outcomes.foreach(_.isFaillure shouldBe true)
+      outcomes.take(4).foreach(x => _policy(x) shouldBe Some("validation.inputs"))
+      _policy(outcomes(4)) shouldBe Some("validation.discovery.metadata")
+    }
+  }
+
+  private def _inputs_inventory(): Inventory = {
+    val root = Path.of(getClass.getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath()
+    val artifact = ArtifactScope("component:typed-inputs", "artifact:typed-inputs", "artifact-1", "source-1", root,
+      "org.goldenport.cncf.validation.fixtures.phase62inputs")
+    discoverC(DiscoveryScope("typed-inputs-fixture", "scope-1", Vector(artifact)), getClass.getClassLoader).toOption.get
   }
 
   private def _inventory(invalid: Boolean = false): Inventory = {

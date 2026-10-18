@@ -4,16 +4,20 @@ import org.goldenport.Consequence
 
 /** Exact framework coordinates, admitted again against the current host allowlist.
  * @since   Oct. 18, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
-final case class SbtScenarioSelection(suiteClassName: String, testName: String) {
+final case class SbtScenarioSelection(
+  suiteClassName: String,
+  testName: String,
+  parameters: Map[String, SbtScenarioParameters.Value] = Map.empty
+) {
   def validateC: Consequence[SbtScenarioSelection] =
     if (SbtTestSelectionPolicy.validClasses(Vector(suiteClassName)) &&
         testName != null && testName.nonEmpty && testName == testName.trim &&
         testName.length <= 512 && !testName.exists(_.isControl) &&
         !testName.exists(x => x == '"' || x == '\\' || x == ';'))
-      Consequence.success(this)
+      SbtScenarioParameters.validateC(parameters).map(_ => this)
     else
       Consequence.argumentPolicyViolation("scenario", "sbt.execution.scenario",
         "exact admitted class and bounded literal test name without quote, backslash or semicolon", "invalid")

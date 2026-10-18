@@ -8,11 +8,11 @@ import ValidationMetadataV1.*
 
 /** Pure admission and composition of the V1 declaration contract.
  * @since   Oct. 18, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 19, 2026
  */
 private[validation] object ValidationMetadataResolution {
   private val _required_semantics = Set(
-    "purposes", "features", "expectedDuration", "durationClass", "executionRequirement"
+    "purposes", "features", "expectedDuration", "durationClass", "executionRequirement", "inputSchema"
   )
 
   def validateFeatureC(feature: FeatureReference): Consequence[FeatureReference] =
@@ -29,7 +29,7 @@ private[validation] object ValidationMetadataResolution {
     if (declaration == null) {
       _failure("declaration", "declaration", "declaration", "null")
     } else {
-      Consequence.map6(
+      val fields = Consequence.map6(
         _compatibility(declaration),
         _optional(declaration.purposes, "purposes")(_purposes),
         _features(declaration.features),
@@ -41,6 +41,10 @@ private[validation] object ValidationMetadataResolution {
           purposes = purposes, features = features, expectedDuration = duration,
           durationClass = durationclass, executionRequirement = requirement
         )
+      }
+      fields.flatMap { normalized =>
+        _optional(declaration.inputSchema, "inputSchema")(ValidationInputsV1.validateSchemaC)
+          .map(schema => normalized.copy(inputSchema = schema))
       }
     }
 
@@ -61,7 +65,8 @@ private[validation] object ValidationMetadataResolution {
           overrides.expectedDuration.orElse(defaults.expectedDuration),
           overrides.durationClass.orElse(defaults.durationClass).getOrElse(DurationClass.NORMAL),
           requirement,
-          Origins(specification.nonEmpty, operation.nonEmpty)
+          Origins(specification.nonEmpty, operation.nonEmpty),
+          overrides.inputSchema.orElse(defaults.inputSchema).getOrElse(Vector.empty)
         )
       }
     }
@@ -81,7 +86,11 @@ private[validation] object ValidationMetadataResolution {
       _failure[Unit]("requiredSemantics", "required-semantics", "known required semantic names", "null")
     } else {
       val unknown = value.requiredSemantics.filter(x => x == null || !_required_semantics.contains(x))
-      if (unknown.isEmpty) Consequence.unit
+      if (unknown.isEmpty && value.inputSchema != null &&
+          value.inputSchema.exists(schema => schema != null && schema.nonEmpty) &&
+          !value.requiredSemantics.contains("inputSchema"))
+        _failure[Unit]("requiredSemantics", "required-semantics", "inputSchema for nonempty schema", "missing")
+      else if (unknown.isEmpty) Consequence.unit
       else _failure[Unit]("requiredSemantics", "required-semantics",
         _required_semantics.toVector.sorted, unknown.toVector.map(x => String.valueOf(x)).sorted)
     }
