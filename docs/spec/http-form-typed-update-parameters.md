@@ -82,12 +82,19 @@ command text. The adapter preserves every carrier and conflict for the existing
 request normalizer and typed mapper, which own command legality and final base
 parameter binding.
 
-Core Record JSON conversion owns the remaining ordered object. It omits nested
-null-valued semantic object properties and retains empty objects and arrays.
-A null semantic sequence position fails conversion; it must not disappear,
-become an empty patch, or fall back to an opaque body. Final property order is
-the original JSON object order after semantic omission. Malformed and non-object
-JSON alone retain the existing opaque Bag fallback behavior.
+Core Record JSON conversion owns nested ordinary semantic structures. It omits
+nested null-valued semantic object properties and retains empty objects and
+arrays. A null semantic sequence position fails conversion; it must not
+disappear, become an empty patch, or fall back to an opaque body.
+
+At the HTTP object root, the adapter preserves every original property, including
+ordinary and undeclared fields whose explicit null value remains a singular
+`io.circe.Json.Null` in the received Record. It preserves root spelling, order
+and presence; an absent property stays absent. Nested semantic omission does not
+remove root presence. The selected Operation still owns key and type validation.
+This boundary follows [HTTP JSON Body Admission](http-json-body-admission.md).
+Malformed and non-object JSON alone retain the existing opaque Bag fallback
+behavior.
 
 For `ENTITY_UPDATE`, JSON syntax null at an ordinary root assignment or a
 command/value carrier is a structured argument-policy error with an
@@ -99,7 +106,8 @@ positions inside its array remain valid document values. SQL clearing requires
 the existing `__update_command=null` carrier and its later metadata validation.
 Only a zero-length String operand selects an adaptive clear/null command, with
 the established explicit-value and whitespace rules above. Ordinary non-update
-semantic object null properties continue to follow Core omission.
+nested semantic object null properties continue to follow Core omission;
+explicit null at the HTTP object root retains the presence contract above.
 
 The adapter's failure result uses the existing HTTP error projection. Normal
 method, If-Match/revision transport, header/context/authentication/session,

@@ -15,7 +15,7 @@ import org.goldenport.schema.{Multiplicity, XJson}
  * Foreign JSON syntax admission for the selected Operation's actual parameters.
  *
  * @since   Oct. 18, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 private[http] object OperationJsonBodyDecoder {
@@ -67,8 +67,8 @@ private[http] object OperationJsonBodyDecoder {
       nullpolicy.flatMap { _ =>
         val remainder = Json.fromJsonObject(JsonObject.fromIterable(ordered.filterNot(entry => rawindex.contains(entry._1))))
         new RecordDecoder().json(remainder.noSpaces).map { normalized =>
-          Record.create(ordered.flatMap { case (key, _) =>
-            rawindex.get(key).orElse(normalized.getAny(key)).map(key -> _)
+          Record.create(ordered.flatMap { case (key, value) =>
+            rawindex.get(key).orElse(if (value.isNull) Some(Json.Null) else normalized.getAny(key)).map(key -> _)
           })
         }
       }
