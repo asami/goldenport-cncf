@@ -6191,7 +6191,7 @@ final class Http4sHttpServer(
     form: Record = Record.empty
   ): Record = {
     val base = req.headers.headers
-      .filterNot(h => _is_raw_session_header(h.name.toString))
+      .filterNot(h => _is_raw_session_header(h.name.toString) || ConclusionDisclosure.isCookieMetadata(h.name.toString))
       .map(h => h.name.toString -> h.value).toVector
     val enriched =
       _session_id_(req, query, form) match {
@@ -6202,6 +6202,10 @@ final class Http4sHttpServer(
       }
     Record.create(enriched)
   }
+
+  private def _disclosure_header_record(req: org.http4s.Request[IO]): Record =
+    ConclusionDisclosure.withCookieCredentials(_request_header_record(req),
+      req.headers.headers.filter(_.name.toString.equalsIgnoreCase("Cookie")).map(_.value).toVector)
 
   private def _is_raw_session_header(name: String): Boolean =
     val lower = name.trim.toLowerCase(java.util.Locale.ROOT)
@@ -7396,7 +7400,7 @@ final class Http4sHttpServer(
   ): IO[HResponse[IO]] = {
     _to_http_request(req).map { decoded =>
       val physical = decoded.toOption.getOrElse(HttpRequest.fromPath(HttpRequest.GET, req.uri.path.renderString,
-        query = _query_record(req), header = _request_header_record(req),
+        query = _query_record(req), header = _disclosure_header_record(req),
         context = HttpContext(None, None, Some(req.uri.renderString))))
       val confidentiality = (for {
         name <- error.component
@@ -7510,7 +7514,7 @@ final class Http4sHttpServer(
       case _ => HttpRequest.GET
     }
     val query = _query_record(req)
-    val header = _request_header_record(req)
+    val header = _disclosure_header_record(req)
     val origin = _request_origin(req)
     val context = HttpContext(
       scheme = req.uri.scheme.map(_.value).orElse(origin.map(_._1)),

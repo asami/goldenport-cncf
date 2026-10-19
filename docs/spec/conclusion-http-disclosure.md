@@ -63,6 +63,19 @@ Free text redacts labeled JSON, YAML and form credentials and Bearer/Basic
 spellings. Available physical authorization, cookies and sensitive parameters
 also provide literal credential values to redact from innocent text. Unknown
 payloads are explicitly redacted without arbitrary toString or reflection.
+Physical Http4s normalization preserves the original Cookie header strings as
+server-owned, diagnostic-only evidence in its internal request source. All
+Cookie headers contribute their full strings and every nonempty cookie value
+to literal redaction, including opaque non-session cookies. Normalized
+authentication headers and session precedence remain independent: raw Cookie
+and Set-Cookie headers are still suppressed, and diagnostic evidence cannot
+become provider attributes, application properties or arguments, persistence
+data, or response headers. Clients cannot supply or replace this private
+evidence through any casing of an incoming header or equivalent property name.
+Regular and multipart ingress and structured decode-failure projection use the
+same custody rule; credential assembly adds no body read or execution. This adds
+no public header, wire schema, authentication capability or disclosure control.
+
 Unknown exception messages are always redacted. HTTP also redacts exception
 class/stack, source/origin/environment/endpoint/database/file/call-tree internals.
 Logs may retain safe exception type and stack-location structure. Approved
@@ -93,6 +106,9 @@ Log retention, sink access and deployment policy remain deployment concerns.
 diagnostics, bounded recursion and immutable generated payloads.
 `DisplayAuthenticatedHttpTransportSpec` extends the real Bearer-authenticated
 SQLite transport with semantic 4xx/no-write, amount/logging and YAML/plain
-contracts. `HttpFailureTransportMetadataSpec` retains legacy fallback contracts
+contracts, physical non-session Cookie secrecy across every retained backend,
+and rejection of forged private diagnostic headers. `ConclusionDisclosureSpec`
+also fixes immutable server-owned Cookie assembly and direct core Cookie
+compatibility. `HttpFailureTransportMetadataSpec` retains legacy fallback contracts
 and specifies internal marker stripping and JSON/YAML passthrough. Validation
 and acceptance are parent-owned; this document records no executed result.

@@ -2274,6 +2274,8 @@ final class Subsystem(
   ): Boolean =
     if (name == null)
       false
+    else if (ConclusionDisclosure.isCookieMetadata(name))
+      true
     else if (_is_job_input_property(name))
       false
     else if (_is_operation_origin_slot_property(name))
@@ -2319,7 +2321,8 @@ final class Subsystem(
       false
     else {
       val lower = name.toLowerCase(java.util.Locale.ROOT)
-      name.startsWith("textus.") ||
+      ConclusionDisclosure.isCookieMetadata(name) ||
+        name.startsWith("textus.") ||
         name.startsWith("cncf.") ||
         lower == "x-textus-session" ||
         lower.startsWith("x-textus-debug-") ||
@@ -2758,13 +2761,15 @@ final class Subsystem(
     val businesssession = declarednames.contains(AuthenticationRequest.normalizeToken("sessionId"))
     def _is_business_session_(name: String): Boolean =
       businesssession && AuthenticationRequest.normalizeToken(name) == AuthenticationRequest.normalizeToken("sessionId")
-    val properties = request.properties.foldLeft(Map.empty[String, String]) { (z, property) =>
+    val properties = request.properties.filterNot(property => ConclusionDisclosure.isCookieMetadata(property.name))
+      .foldLeft(Map.empty[String, String]) { (z, property) =>
       val value = Option(property.value).map(_.toString).getOrElse("")
       if (property.name.nonEmpty && value.nonEmpty && !_is_business_session_(property.name))
         z.updated(property.name, value)
       else z
     }
-    request.arguments.foldLeft(properties) { (z, argument) =>
+    request.arguments.filterNot(argument => ConclusionDisclosure.isCookieMetadata(argument.name))
+      .foldLeft(properties) { (z, argument) =>
       val value = Option(argument.value).map(_.toString).getOrElse("")
       if (argument.name.nonEmpty && value.nonEmpty && !_is_business_session_(argument.name))
         z.updated(argument.name, value)

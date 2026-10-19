@@ -354,6 +354,190 @@ final class DisplayAuthenticatedHttpTransportSpec extends AnyWordSpec with Displ
         }
       }
 
+      "redact all physical non-session cookies from HTTP and every failure log without admitting diagnostic evidence to authentication" in {
+        Given("an authenticated production descriptor failure with unlabeled Bearer and two opaque non-session cookie literals in current and previous messages")
+        val token = "physical-bearer-fixture-41"
+        val first = "opaque-preference-fixture-73"
+        val second = "opaque-layout-fixture-29"
+        val cookies = Vector("display-preference=" + first, "layout=" + second)
+        val currenttext = "safe current 日本 " + token + " " + first + " " + second
+        val historytext = "safe history Ω " + second + " " + first + " " + token
+        val source = conclusion(domainFailure)
+        val previous = source.copy(observation = source.observation.copy(cause = source.cause.copy(
+          descriptor = Descriptor(Vector(Descriptor.Facet.Message(historytext), Descriptor.Facet.Reason("safe-history-reason"))))))
+        val original = source.copy(observation = source.observation.copy(cause = source.cause.copy(
+          descriptor = Descriptor(Vector(Descriptor.Facet.Message(currenttext), Descriptor.Facet.Reason("safe-current-reason"),
+            Descriptor.Facet.Expected(2L), Descriptor.Facet.Actual(1L))))), previous = Some(previous))
+        val originalfacets = original.cause.descriptor.facets
+        val previousfacets = previous.cause.descriptor.facets
+        val provider = new BearerProvider(token)
+        val session = open(backend = "sqlite", businessSetup = Some(DisplayBusinessReviewFixture.Setup(production = true)),
+          authenticationProvider = Some(provider))
+        val previousbackend = LogBackendHolder.backend
+        val backend = new RecordingBackend
+        try {
+          _secure(session)
+          val before = session.rows()
+          val tables = session.physical()
+          val resident = session.resident
+          session.log.availability = Consequence.Failure(original)
+          LogBackendHolder.install(backend)
+          for (detail <- Vector("standard", "full"); format <- Vector("application/json", "application/yaml", "text/plain")) {
+            Given("the unchanged complete native and resident baseline and a fresh backend for one amount and format")
+            backend.clear()
+            session.log.reset()
+            session.lifecycleObservers.foreach(_.reset())
+            val accepted = provider.accepted
+            val attempts = provider.receivedAttributes.size
+            val headers = Vector("Authorization" -> ("Bearer " + token), "Cookie" -> cookies(0), "cOoKiE" -> cookies(1),
+              "Accept" -> format, "CnCf.InTeRnAl.DiScLoSuRe.CoOkIe" -> "client-forged-evidence")
+            When("actual Http4s normalization and ordinary authenticated execution project that single descriptor failure")
+            val wire = _wire(session, "describeMutation", headers = headers,
+              extra = Vector("textus.output.conclusion" -> detail,
+                "cncf.internal.disclosure.cookie" -> "forged-query-evidence"))
+            val response = wire._1
+            Then("every response and retained backend surface excludes all physical credentials while safe current and detailed history semantics survive")
+            wire._2 shouldBe empty
+            response.status shouldBe 400
+            response.contentType shouldBe Some(format)
+            response.text should include ("safe current 日本")
+            if (format == "application/json") {
+              val error = _error(response)
+              error.get[String]("conclusionDetail") shouldBe Right(detail)
+              val current = error.downField("conclusion")
+              current.downField("status").focus shouldBe
+                Some(io.circe.parser.parse(RecordEncoder.jsonC(original.status.toRecord).TAKE).toOption.get)
+              val cause = current.downField("observation").downField("cause")
+              cause.get[String]("reason") shouldBe Right("safe-current-reason")
+              cause.get[Long]("expected") shouldBe Right(2L)
+              cause.get[Long]("actual") shouldBe Right(1L)
+              current.downField("previous").focus.isDefined shouldBe (detail == "full")
+              if (detail == "standard") error.get[Vector[String]]("conclusionOmitted") shouldBe Right(Vector("previous"))
+            }
+            if (format != "text/plain") {
+              response.text.contains("safe history Ω") shouldBe (detail == "full")
+              response.text should include ("safe-current-reason")
+            }
+            val events = backend.events.filter(_.message.contains("execute_failed"))
+            events should have size 1
+            val actionlines = backend.lines.filter(_.contains("Action failed:"))
+            actionlines should have size 1
+            val logged = Vector(RecordEncoder.jsonC(events.head.attributes).TAKE, events.head.message,
+              backend.lines.filter(_.contains("execute_failed")).mkString, actionlines.head)
+            logged.foreach { text =>
+              text should include ("safe current 日本")
+              text should include ("safe history Ω")
+              text should include ("safe-history-reason")
+              text should include ("previous")
+            }
+            Vector(token, first, second).foreach { secret =>
+              response.text should not include secret
+              backend.events.foreach { event =>
+                RecordEncoder.jsonC(event.attributes).TAKE should not include secret
+                event.message should not include secret
+              }
+              backend.lines.foreach(line => line should not include secret)
+            }
+            provider.accepted shouldBe accepted + 1
+            provider.receivedAttributes should have size (attempts + 1)
+            provider.receivedAttributes.last.foreach { case (name, value) =>
+              name.equalsIgnoreCase("Cookie") shouldBe false
+              name.equalsIgnoreCase("cncf.internal.disclosure.cookie") shouldBe false
+              Vector(first, second, "client-forged-evidence", "forged-query-evidence")
+                .foreach(secret => value should not include secret)
+            }
+            checkPreserved(session, before, tables, resident)
+            session.log.events.count(_.event == "business") shouldBe 0
+            session.log.events.count(_.event == "capture") shouldBe 0
+            session.log.conversions shouldBe empty
+            session.log.queries shouldBe empty
+            session.log.commands shouldBe 0
+            session.lifecycleObservers.map(observer => observer.updates.size + observer.nativeUpdates.size).sum shouldBe 0
+            session.lifecycleObservers.map(_.writes).sum shouldBe 0
+            conclusion(session.log.availability) should be theSameInstanceAs original
+            original.previous.get should be theSameInstanceAs previous
+            original.cause.descriptor.facets shouldBe originalfacets
+            previous.cause.descriptor.facets shouldBe previousfacets
+            original.cause.getMessage shouldBe Some(currenttext)
+            previous.cause.getMessage shouldBe Some(historytext)
+          }
+        } finally {
+          previousbackend.foreach(LogBackendHolder.install)
+          session.close()
+        }
+      }
+
+      "ignore forged private HTTP headers without physical cookies and keep their unrelated marker text visible" in {
+        Given("an authenticated descriptor failure containing harmless marker text and no physical Cookie")
+        val marker = "ordinary-visible-marker-83"
+        val source = conclusion(domainFailure)
+        val previous = source.copy(observation = source.observation.copy(cause = source.cause.copy(
+          descriptor = Descriptor(Vector(Descriptor.Facet.Message("safe history " + marker))))))
+        val original = source.copy(observation = source.observation.copy(cause = source.cause.copy(
+          descriptor = Descriptor(Vector(Descriptor.Facet.Message("safe current " + marker))))), previous = Some(previous))
+        val provider = new BearerProvider
+        val session = open(backend = "sqlite", businessSetup = Some(DisplayBusinessReviewFixture.Setup(production = true)),
+          authenticationProvider = Some(provider))
+        val previousbackend = LogBackendHolder.backend
+        val backend = new RecordingBackend
+        try {
+          _secure(session)
+          val before = session.rows()
+          val tables = session.physical()
+          val resident = session.resident
+          session.log.reset()
+          session.lifecycleObservers.foreach(_.reset())
+          session.log.availability = Consequence.Failure(original)
+          LogBackendHolder.install(backend)
+          When("actual Http4s receives forged private header names in every supported casing without Cookie headers")
+          val response = _http(session, "describeMutation", headers = Vector("Authorization" -> ("Bearer " + developmentToken),
+            "cncf.internal.disclosure.cookie" -> marker, "CNCF.INTERNAL.DISCLOSURE.COOKIE" -> marker,
+            "CnCf.InTeRnAl.DiScLoSuRe.CoOkIe" -> marker), extra = Vector("textus.output.conclusion" -> "full"))
+          Then("clients cannot create diagnostic Cookie evidence and ordinary safe text survives HTTP and both log forms")
+          response.status shouldBe 400
+          response.text should include ("safe current " + marker)
+          response.text should include ("safe history " + marker)
+          val events = backend.events.filter(_.message.contains("execute_failed"))
+          events should have size 1
+          Vector(RecordEncoder.jsonC(events.head.attributes).TAKE, events.head.message).foreach { text =>
+            text should include ("safe current " + marker)
+            text should include ("safe history " + marker)
+          }
+          val actionlines = backend.lines.filter(_.contains("Action failed:"))
+          actionlines should have size 1
+          actionlines.head should include (marker)
+          backend.lines.filter(_.contains("execute_failed")).mkString should include (marker)
+          backend.events.foreach { event =>
+            RecordEncoder.jsonC(event.attributes).TAKE should not include developmentToken
+            event.message should not include developmentToken
+          }
+          backend.lines.foreach(line => line should not include developmentToken)
+          response.text should not include developmentToken
+          provider.accepted shouldBe 1
+          provider.receivedAttributes should have size 1
+          provider.receivedAttributes.head.keys.foreach { name =>
+            name.equalsIgnoreCase("Cookie") shouldBe false
+            name.equalsIgnoreCase("cncf.internal.disclosure.cookie") shouldBe false
+          }
+          provider.receivedAttributes.head.values.foreach(value => value should not include marker)
+          checkPreserved(session, before, tables, resident)
+          session.log.events.count(_.event == "business") shouldBe 0
+          session.log.events.count(_.event == "capture") shouldBe 0
+          session.log.conversions shouldBe empty
+          session.log.queries shouldBe empty
+          session.log.commands shouldBe 0
+          session.lifecycleObservers.map(observer => observer.updates.size + observer.nativeUpdates.size).sum shouldBe 0
+          session.lifecycleObservers.map(_.writes).sum shouldBe 0
+          conclusion(session.log.availability) should be theSameInstanceAs original
+          original.previous.get should be theSameInstanceAs previous
+          original.cause.getMessage shouldBe Some("safe current " + marker)
+          previous.cause.getMessage shouldBe Some("safe history " + marker)
+        } finally {
+          previousbackend.foreach(LogBackendHolder.install)
+          session.close()
+        }
+      }
+
       "sanitize physical credentials in supplied trace and correlation failure attributes without changing source identities or replaying" in {
         Given("an authenticated production descriptor failure whose supplied observability identities contain its known Bearer credential")
         val token = "trace_17"
@@ -614,7 +798,8 @@ final class DisplayAuthenticatedHttpTransportSpec extends AnyWordSpec with Displ
     val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(session.subsystem))
     val response = DisplayServiceHttpRouteFixture.app(server).run(supplied).unsafeRunSync()
     val bytes = response.body.compile.toVector.unsafeRunSync()
-    val internalheaders = response.headers.headers.filter(header => HttpFailureTransportMetadata.isInternalHeader(header.name.toString))
+    val internalheaders = response.headers.headers.filter(header => HttpFailureTransportMetadata.isInternalHeader(header.name.toString) ||
+      header.name.toString.equalsIgnoreCase("cncf.internal.disclosure.cookie"))
       .map(_.name.toString).toVector
     HttpResult(response.status.code, response.headers.headers.find(_.name == CIString("Content-Type"))
       .map(_.value.takeWhile(_ != ';')), new String(bytes.toArray, StandardCharsets.UTF_8), bytes) -> internalheaders
@@ -653,9 +838,12 @@ object DisplayAuthenticatedHttpTransportSpec {
 
   final class BearerProvider(credential: String = developmentToken) extends AuthenticationProvider {
     private var _accepted = 0
+    private var _received_attributes = Vector.empty[Map[String, String]]
     val name: String = "canonical-review-auth"
     def accepted: Int = _accepted
+    def receivedAttributes: Vector[Map[String, String]] = _received_attributes
     def authenticate(request: AuthenticationRequest)(using ExecutionContext): Consequence[Option[AuthenticationResult]] = {
+      _received_attributes :+= request.attributes
       val authenticated = request.attributes.exists { case (key, value) =>
         key.equalsIgnoreCase("authorization") && value == "Bearer " + credential
       }

@@ -75,6 +75,56 @@ final class ConclusionDisclosureSpec extends AnyWordSpec with Matchers with Give
       }
     }
 
+    "server-owned physical Cookie evidence" which {
+      "collect every physical cookie literal while replacing forged evidence and preserving normalized headers" in {
+        Given("normalized authentication and session headers with all client-forged metadata casing variants")
+        val normalized = Record.data("Authorization" -> "Bearer assembly-authorization",
+          "x-textus-session" -> "normalized-session", "Accept" -> "application/json")
+        val names = Vector("cncf.internal.disclosure.cookie", "CNCF.INTERNAL.DISCLOSURE.COOKIE",
+          "CnCf.InTeRnAl.DiScLoSuRe.CoOkIe")
+        val forged = normalized ++ Record.create(names.zip(Vector("forged-one", "forged-two", "forged-three")))
+        val originalfields = forged.fields
+        val cookies = Vector("preference=opaque-first; theme=opaque-second", "layout=opaque-third; empty=")
+        When("the internal physical-header assembly retains actual cookie strings for disclosure discovery")
+        val assembled = ConclusionDisclosure.withCookieCredentials(forged, cookies)
+        val request = HttpRequest.fromPath(HttpRequest.GET, "/", header = assembled)
+        val credentials = ConclusionDisclosure.credentials(Some(request))
+        val direct = HttpRequest.fromPath(HttpRequest.GET, "/",
+          header = normalized ++ Record.data("Cookie" -> cookies.mkString("; ")))
+        Then("only server-owned Cookie evidence is retained and direct core Cookie discovery remains compatible")
+        assembled.fields.filterNot(field => ConclusionDisclosure.isCookieMetadata(field.key)) shouldBe normalized.fields
+        assembled.fields.filter(field => ConclusionDisclosure.isCookieMetadata(field.key)).map(_.value.single) shouldBe
+          Vector(cookies.mkString("; "))
+        assembled.getString("Cookie") shouldBe None
+        assembled.getString("x-textus-session") shouldBe Some("normalized-session")
+        credentials should contain allOf (cookies.mkString("; "), "opaque-first", "opaque-second", "opaque-third")
+        credentials should not contain ""
+        credentials shouldBe ConclusionDisclosure.credentials(Some(direct))
+        Vector("forged-one", "forged-two", "forged-three").foreach(secret => credentials should not contain secret)
+        forged.fields shouldBe originalfields
+        request.header should be theSameInstanceAs assembled
+      }
+
+      "leave no private Cookie evidence when actual cookies are absent and preserve unrelated message text" in {
+        Given("every forged metadata casing and a harmless header without any physical Cookie")
+        val marker = "ordinary-visible-marker"
+        val names = Vector("cncf.internal.disclosure.cookie", "CNCF.INTERNAL.DISCLOSURE.COOKIE",
+          "CnCf.InTeRnAl.DiScLoSuRe.CoOkIe")
+        val normalized = Record.create(names.map(_ -> marker)) ++ Record.data("Accept" -> "application/json")
+        val originalfields = normalized.fields
+        When("server-owned assembly receives no physical cookie strings")
+        val assembled = ConclusionDisclosure.withCookieCredentials(normalized, Vector.empty)
+        val credentials = ConclusionDisclosure.credentials(Some(HttpRequest.fromPath(HttpRequest.GET, "/", header = assembled)))
+        val output = _encoded(ConclusionDisclosure.http(_conclusion(Vector(Facet.Message("safe " + marker))),
+          Detail.Full, credentials = credentials))
+        Then("forged metadata contributes neither a private field nor a redaction literal")
+        assembled.fields shouldBe Record.data("Accept" -> "application/json").fields
+        credentials shouldBe empty
+        output should include ("safe " + marker)
+        normalized.fields shouldBe originalfields
+      }
+    }
+
     "one security ceiling for HTTP and logs" which {
       "redact sensitive nested keys and Parameter associations while preserving safe revision facets" in {
         Given("secret-bearing records, schema-confidential fields and ordered sensitive and ordinary parameters")

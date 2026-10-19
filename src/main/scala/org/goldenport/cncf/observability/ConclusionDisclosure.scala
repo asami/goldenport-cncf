@@ -18,6 +18,17 @@ import org.goldenport.schema.DataConfidentiality
  */
 /** Pure internal disclosure projection; neither amount nor transport metadata grants authority. */
 private[cncf] object ConclusionDisclosure {
+  private val _cookie_metadata_name = "cncf.internal.disclosure.cookie"
+
+  def isCookieMetadata(name: String): Boolean =
+    _cookie_metadata_name.equalsIgnoreCase(name)
+
+  def withCookieCredentials(normalizedHeaders: Record, cookieHeaders: Vector[String]): Record = {
+    val retained = Record(normalizedHeaders.fields.filterNot(field => isCookieMetadata(field.key)))
+    if (cookieHeaders.isEmpty) retained
+    else retained ++ Record.data(_cookie_metadata_name -> cookieHeaders.mkString("; "))
+  }
+
   enum Detail(val name: String) {
     case Standard extends Detail("standard")
     case Full extends Detail("full")
@@ -104,7 +115,7 @@ private[cncf] object ConclusionDisclosure {
       field.value.single match {
         case value: String if field.key.equalsIgnoreCase("Authorization") =>
           Vector(value) ++ value.split("\\s+", 2).drop(1).toVector
-        case value: String if field.key.equalsIgnoreCase("Cookie") =>
+        case value: String if field.key.equalsIgnoreCase("Cookie") || isCookieMetadata(field.key) =>
           Vector(value) ++ value.split(";").toVector.flatMap(part => part.split("=", 2).drop(1).map(_.trim))
         case value: String if DiagnosticPayloadSummary.isSensitiveKey(field.key, confidentiality) => Vector(value)
         case _ => Vector.empty
