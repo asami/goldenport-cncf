@@ -33,7 +33,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * chokepoint.
  *
  * @since   Jul. 23, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationEvaluationAutomaticCaptureSpec
@@ -501,11 +502,12 @@ final class OperationEvaluationAutomaticCaptureSpec
     }
 
     "isolate capture bookkeeping failures from the canonical Task outcome" in {
-      Given("capture clocks that fail while creating the start and terminal facts")
+      Given("clocks that fail at auxiliary start or terminal capture, or at canonical transaction creation")
       val startfixture = _fixture()
       val terminalfixture = _fixture()
+      val canonicalfixture = _fixture()
 
-      def _run_(fixture: Fixture, failoncall: Int): org.goldenport.cncf.job.TaskOutcome = {
+      def _run_(fixture: Fixture, failoncall: Int): (org.goldenport.cncf.job.TaskOutcome, Option[Int]) = {
         val clock = new EvaluationFailingClock(Clock.fixed(Instant.parse("2026-07-23T01:00:00Z"), ZoneOffset.UTC))
         val context = _context_with_clock(fixture, clock)
         val identity = OperationEvaluationOperationIdentity.fromResolvedRoute("evaluation", "operation", "success")
@@ -515,23 +517,29 @@ final class OperationEvaluationAutomaticCaptureSpec
         val runtime = new OperationEvaluationDeliveryRuntime()
         try {
           clock.failOnCall(failoncall)
-          new OperationEvaluationActionTask(
+          val outcome = new OperationEvaluationActionTask(
             task,
             new OperationEvaluationAttemptCapture(identity, runtime),
             (response, _) => Consequence.success(response)
           ).run(prepared)
+          (outcome, clock.observedFailureCall)
         } finally {
           runtime.close()
         }
       }
 
-      When("bookkeeping fails before start delivery or before terminal construction")
-      val startoutcome = _run_(startfixture, 2)
-      val terminaloutcome = _run_(terminalfixture, 3)
+      When("the clock fails at start capture call 2, terminal capture call 4, or canonical transaction call 3")
+      val (startoutcome, startfailurecall) = _run_(startfixture, 2)
+      val (terminaloutcome, terminalfailurecall) = _run_(terminalfixture, 4)
+      val (canonicaloutcome, canonicalfailurecall) = _run_(canonicalfixture, 3)
 
-      Then("the business result remains successful and only constructible facts are retained")
+      Then("auxiliary capture failures preserve success and constructible facts while canonical transaction failure remains a Task failure")
       startoutcome shouldBe TaskSucceeded(OperationResponse.Scalar("success"))
       terminaloutcome shouldBe TaskSucceeded(OperationResponse.Scalar("success"))
+      startfailurecall shouldBe Some(2)
+      terminalfailurecall shouldBe Some(4)
+      canonicaloutcome shouldBe a[TaskFailed]
+      canonicalfailurecall shouldBe Some(3)
       startfixture.sink.facts shouldBe empty
       terminalfixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start")
     }
@@ -1069,19 +1077,26 @@ final class OperationEvaluationAutomaticCaptureSpec
 private final class EvaluationFailingClock(delegate: Clock) extends Clock {
   private val _calls = new AtomicInteger(0)
   @volatile private var _failure_call = Int.MaxValue
+  @volatile private var _observed_failure_call: Option[Int] = None
 
   def failOnCall(value: Int): Unit = {
     _calls.set(0)
+    _observed_failure_call = None
     _failure_call = value
   }
 
+  def observedFailureCall: Option[Int] = _observed_failure_call
+
   def getZone: ZoneId = delegate.getZone
   override def withZone(zone: ZoneId): Clock = new EvaluationFailingClock(delegate.withZone(zone))
-  def instant(): Instant =
-    if (_calls.incrementAndGet() == _failure_call)
+  def instant(): Instant = {
+    val call = _calls.incrementAndGet()
+    if (call == _failure_call) {
+      _observed_failure_call = Some(call)
       throw new IllegalStateException("planned capture clock failure")
-    else
+    } else
       delegate.instant()
+  }
 }
 
 private final class EvaluationBlockingTerminalSink(

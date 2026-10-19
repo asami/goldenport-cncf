@@ -75,7 +75,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 12, 2026
  *  version May. 27, 2026
  *  version Jun. 19, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen with StaticFormAppRendererSpecFixtures {
@@ -928,7 +929,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "render structured Blob admin delete failure and allow forced delete" in {
-      Given("the prerequisites for render structured Blob admin delete failure and allow forced delete")
+      Given("an attached Blob whose deletion requires explicit force under the existing conflict rule")
       val subsystem = HttpRuntimeBindingAdmissionFixture.default(Some("server"))
       val blob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
         "register_blob",
@@ -948,18 +949,18 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       )))
       val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
+      When("the attached Blob is deleted without and then with explicit force")
       val rejected = server.routes(null).orNotFound.run(_post_form_request(
         s"/web/blob/admin/blobs/${java.net.URLEncoder.encode(id, StandardCharsets.UTF_8)}/delete",
         "force=false"
       )).unsafeRunSync()
-      When("render structured Blob admin delete failure and allow forced delete is exercised")
       val forced = server.routes(null).orNotFound.run(_post_form_request(
         s"/web/blob/admin/blobs/${java.net.URLEncoder.encode(id, StandardCharsets.UTF_8)}/delete",
         "force=true"
       )).unsafeRunSync()
 
-      Then("the observable contract for render structured Blob admin delete failure and allow forced delete holds")
-      rejected.status.code shouldBe 400
+      Then("attached deletion returns Conflict 409 while forced deletion succeeds and removes the Blob")
+      rejected.status.code shouldBe 409
       rejected.as[String].unsafeRunSync() should include ("<strong>Status:</strong>")
       forced.status.code shouldBe 200
       forced.as[String].unsafeRunSync() should include ("Blob Deleted")

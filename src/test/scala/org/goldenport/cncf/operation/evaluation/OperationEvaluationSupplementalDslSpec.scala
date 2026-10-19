@@ -1,6 +1,6 @@
 package org.goldenport.cncf.operation.evaluation
 
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import scala.collection.mutable.ArrayBuffer
 import cats.data.NonEmptyVector
@@ -51,7 +51,7 @@ import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec
 import org.goldenport.observation.Cause
 import org.goldenport.schema.DataConfidentiality
-import org.goldenport.cncf.unitofwork.{UnitOfWorkResource, UnitOfWorkTermination}
+import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkResource, UnitOfWorkTermination}
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.{BeforeAndAfterEach, GivenWhenThen}
 import org.scalatest.matchers.should.Matchers
@@ -61,7 +61,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for transaction-aware supplemental evaluation DSL.
  *
  * @since   Jul. 23, 2026
- * @version Aug. 12, 2026
+ *  version Aug. 12, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationEvaluationSupplementalDslSpec
@@ -515,10 +516,11 @@ final class OperationEvaluationSupplementalDslSpec
     val subsystem = _track(TestComponentFactory.admittedEmptySubsystem("evaluation-supplemental-corpus"))
     val sink = _success(DeterministicCorpusEvaluationSink.createC("evaluation_corpus", "test-corpus"))
     val commitstates = new AtomicReference(Vector.empty[Boolean])
-    val observingsink = CommitObservingCorpusEvaluationSink(sink, commitstates)
-    val component = _initialize_component(
+    val component = new SupplementalCorpusComponent
+    val observingsink = CommitObservingCorpusEvaluationSink(sink, commitstates, component.unitOfWorkForAttempt)
+    _initialize_component(
       subsystem,
-      new SupplementalCorpusComponent,
+      component,
       "evaluation_corpus",
       Vector(
         SupplementalOperation("corpusFunctional", SupplementalMode.CorpusFunctional),
@@ -680,7 +682,17 @@ private enum SupplementalMode {
 
 private final class SupplementalCorpusComponent
     extends Component
-    with CorpusEvaluationSinkSocket
+    with CorpusEvaluationSinkSocket {
+  private val _action_unit_of_work_by_attempt = new ConcurrentHashMap[OperationEvaluationAttemptId, UnitOfWork]
+
+  def observeActionContext(context: ExecutionContext): Unit =
+    context.operationEvaluation.correlation.foreach { correlation =>
+      _action_unit_of_work_by_attempt.put(correlation.attemptId, context.unitOfWork)
+    }
+
+  def unitOfWorkForAttempt(attemptId: OperationEvaluationAttemptId): Option[UnitOfWork] =
+    Option(_action_unit_of_work_by_attempt.get(attemptId))
+}
 
 private final class SupplementalExperimentComponent
     extends Component
@@ -688,7 +700,8 @@ private final class SupplementalExperimentComponent
 
 private final case class CommitObservingCorpusEvaluationSink(
   underlying: CorpusEvaluationSink,
-  commitstates: AtomicReference[Vector[Boolean]]
+  commitstates: AtomicReference[Vector[Boolean]],
+  unitofworkforattempt: OperationEvaluationAttemptId => Option[UnitOfWork]
 ) extends CorpusEvaluationSink {
   override val sinkIdentityOption = underlying.sinkIdentityOption
 
@@ -701,18 +714,20 @@ private final case class CommitObservingCorpusEvaluationSink(
     fact: OperationEvaluationTerminalFact
   )(using context: ExecutionContext): Consequence[OperationEvaluationDeliveryResult] =
     if (fact.outcome == OperationEvaluationOutcome.Failure)
-      _record_commit_state()
+      _record_commit_state(fact.correlation.attemptId)
     underlying.recordTerminal(fact)
 
   def submitCandidate(
     fact: CorpusCandidateFact
   )(using context: ExecutionContext): Consequence[OperationEvaluationDeliveryResult] = {
-    _record_commit_state()
+    _record_commit_state(fact.correlation.attemptId)
     underlying.submitCandidate(fact)
   }
 
-  private def _record_commit_state()(using context: ExecutionContext): Unit = {
-    val committed = context.runtime.unitOfWork.lastCommitTermination.contains(UnitOfWorkTermination.Committed)
+  private def _record_commit_state(attemptid: OperationEvaluationAttemptId): Unit = {
+    val committed = unitofworkforattempt(attemptid).exists(
+      _.lastCommitTermination.contains(UnitOfWorkTermination.Committed)
+    )
     commitstates.updateAndGet(_ :+ committed)
   }
 }
@@ -764,13 +779,16 @@ private final case class SupplementalQueryAction(
   request: Request,
   mode: SupplementalMode
 ) extends QueryAction {
-  def createCall(core: ActionCall.Core): ActionCall =
+  def createCall(core: ActionCall.Core): ActionCall = {
+    core.component.collect { case component: SupplementalCorpusComponent => component }
+      .foreach(_.observeActionContext(core.executionContext))
     mode match {
       case SupplementalMode.CorpusFunctional =>
         SupplementalFunctionalActionCall(core)
       case _ =>
         SupplementalProcedureActionCall(core, mode)
     }
+  }
 }
 
 private final case class SupplementalBlockingAction(

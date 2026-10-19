@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 16, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 19, 2026
  */
 final class DisplayMutationServiceLifecycleSpec extends AnyWordSpec with DisplayMutationServiceFixture.Vocabulary {
   import DisplayMutationServiceFixture.*
@@ -48,6 +48,11 @@ final class DisplayMutationServiceLifecycleSpec extends AnyWordSpec with Display
             val attempt = session.execute(session.lifecycleRequest(Operation.Create, fields))
             Then("the actual provider acknowledgement produces INITIAL Created, one contextual Detail and no generic write or replay")
             checkLifecycleResult(attempt, session, true, 1L)
+            And("the committed Action has its own self-bound UnitOfWork while the original caller remains untouched")
+            attempt.execution.uow should not be theSameInstanceAs(attempt.execution.parentUnitOfWork)
+            attempt.execution.uow.executionContext.unitOfWork should be theSameInstanceAs attempt.execution.uow
+            attempt.execution.parentUnitOfWork.lastCommitTermination shouldBe None
+            attempt.execution.context.unitOfWork should be theSameInstanceAs attempt.execution.parentUnitOfWork
             session.log.idCalls shouldBe (if (supplied) Vector.empty else Vector(session.component.collectionId -> "entity-create"))
             session.log.conversions shouldBe DisplayMutationServiceDomain.fieldIds.filter(name => fields.exists(_.location.fieldId == name))
             session.log.validations shouldBe 1
@@ -417,8 +422,12 @@ final class DisplayMutationServiceLifecycleSpec extends AnyWordSpec with Display
               attempt.execution.lifecycleObservers.map(_.writes).sum shouldBe 0
               if (mode == Commit.Noop) {
                 conclusion(attempt.result).observation.taxonomy shouldBe conclusion(DisplayMutationResult.indeterminateC[Unit]()).observation.taxonomy
-                active.uow.lastCommitTermination shouldBe (if (historical) Some(org.goldenport.cncf.unitofwork.UnitOfWorkTermination.Committed) else None)
-                active.uow.lastCommitResult shouldBe (if (historical) Some(Consequence.unit) else None)
+                And("the current Noop Action is uncommitted independently of the untouched caller's prior successful history")
+                active.uow should not be theSameInstanceAs(active.parentUnitOfWork)
+                active.uow.lastCommitTermination shouldBe None
+                active.uow.lastCommitResult shouldBe None
+                active.parentUnitOfWork.lastCommitTermination shouldBe (if (historical) Some(org.goldenport.cncf.unitofwork.UnitOfWorkTermination.Committed) else None)
+                active.parentUnitOfWork.lastCommitResult shouldBe (if (historical) Some(Consequence.unit) else None)
               }
               if (mode == Commit.Reject) active.uow.lastCommitTermination shouldBe Some(org.goldenport.cncf.unitofwork.UnitOfWorkTermination.Aborted)
               if (mode == Commit.Abort) active.uow.lastAbortResult shouldBe Some(Consequence.unit)

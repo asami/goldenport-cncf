@@ -47,8 +47,7 @@ import org.typelevel.ci.CIString
 
 /*
  * @since   Oct. 15, 2026
- *  version Oct. 17, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 19, 2026
  */
 /** Real ordinary component assembly; no fixture-owned resource map or result writer. */
 private[cncf] object DisplayMutationServiceFixture {
@@ -830,7 +829,9 @@ private[cncf] object DisplayMutationServiceFixture {
 
   final class Execution(session: Session, val mode: Commit = Commit.Normal, principal: String = "owner", historical: Boolean = false,
     authenticated: Boolean = true) {
-    val space = new ObservedSpace(session.log, () => context, session.provider, session.component.id, session.component.lifecycleSetup)
+    private var _active_unit_of_work: Option[UnitOfWork] = None
+    private def _bound_context: ExecutionContext = _active_unit_of_work.map(_.executionContext).getOrElse(context)
+    val space = new ObservedSpace(session.log, () => _bound_context, session.provider, session.component.id, session.component.lifecycleSetup)
     private val _commit_store = new CommitStore(mode)
     private val _entities = new EntityStoreSpace().addEntityStore(EntityStore.standard())
     private val _root_scope = ScopeContext(ScopeKind.Runtime, "normal-update-root", None, observability)
@@ -840,10 +841,11 @@ private[cncf] object DisplayMutationServiceFixture {
         observabilityContext = _root_scope.observabilityContext, httpDriverOption = None,
         datastore = Some(new DataStoreContext(space)), entitystore = Some(new EntityStoreContext(_entities)),
         entityspace = Some(new EntitySpaceContext(session.component.entitySpace))),
-      unitofworksupplier = () => uow, unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
-        def apply[A](operation: UnitOfWorkOp[A]): Consequence[A] = new UnitOfWorkInterpreter(uow).interpret(operation)
+      unitofworksupplier = () => _parent_unit_of_work, unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
+        def apply[A](operation: UnitOfWorkOp[A]): Consequence[A] = new UnitOfWorkInterpreter(_parent_unit_of_work).interpret(operation)
       }, commitaction = active => {
-        session.log.record("commit", context)
+        _active_unit_of_work = Some(active)
+        session.log.record("commit", active.executionContext)
         mode match {
           case Commit.Noop => ()
           case Commit.Abort => success(active.abort()); ()
@@ -851,7 +853,11 @@ private[cncf] object DisplayMutationServiceFixture {
           case Commit.Dispose => success(active.dispose()); ()
           case _ => active.commit(); ()
         }
-      }, abortaction = active => { session.log.record("abort", context); success(active.abort()); () },
+      }, abortaction = active => {
+        _active_unit_of_work = Some(active)
+        session.log.record("abort", active.executionContext)
+        success(active.abort()); ()
+      },
       disposeaction = _ => (), token = "normal-update", operationMode = OperationMode.Test,
       transitionValidationHook = new TransitionValidationHook {
         private def _admit: Consequence[Unit] = if (session.log.rejectTransition) projectionFailure else Consequence.unit
@@ -876,7 +882,16 @@ private[cncf] object DisplayMutationServiceFixture {
         def opaqueId(purpose: String): String = "lifecycle-" + purpose
       })
     }
-    lazy val uow: UnitOfWork = new UnitOfWork(context, org.goldenport.cncf.event.EventEngine.noop(_commit_store))
+    private lazy val _parent_unit_of_work: UnitOfWork = new UnitOfWork(context, org.goldenport.cncf.event.EventEngine.noop(_commit_store)) {
+      override def withContext(ctx: ExecutionContext): UnitOfWork = {
+        val rebound = super.withContext(ctx)
+        _active_unit_of_work = Some(rebound)
+        if (mode == Commit.Cleanup) rebound.stagePostCommitC(projectionFailure)
+        rebound
+      }
+    }
+    def uow: UnitOfWork = _active_unit_of_work.getOrElse(_parent_unit_of_work)
+    def parentUnitOfWork: UnitOfWork = _parent_unit_of_work
     def bind(): Unit = {
       success(session.subsystem.bindManagedApplicationDataStoreC(space,
         ComponentDataStore.Environment(context.runtime.resolvedParameters, Some(session.subsystem.configuration)),
@@ -884,9 +899,8 @@ private[cncf] object DisplayMutationServiceFixture {
     }
     def prepare(): Unit = {
       bind()
-      if (historical) success(uow.commit())
+      if (historical) success(_parent_unit_of_work.commit())
       _commit_store.arm()
-      if (mode == Commit.Cleanup) uow.stagePostCommitC(projectionFailure)
       space.observing(true)
     }
     def attempts: Int = space.observers.map(_.attempts).sum

@@ -11,7 +11,7 @@ import org.goldenport.record.Record
 import org.goldenport.schema.DataType
 import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentInstanceMetadata, ComponentOrigin}
-import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.context.{ExecutionContext, ScopeKind}
 import org.goldenport.cncf.event.DomainEvent
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.operation.evaluation.{OperationEvaluationName, OperationEvaluationStartFact, OperationEvaluationTerminalFact}
@@ -25,7 +25,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jul. 11, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpiInvokerSpec
@@ -90,6 +91,10 @@ final class SpiInvokerSpec
       Given("an assembly-admitted provider with an exact instance and a component operation")
       val fixture = InvocationFixture.create()
       given ExecutionContext = ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.create(), enabled = true)
+      val caller = summon[ExecutionContext]
+      val parentruntime = caller.runtime
+      val parentuow = caller.unitOfWork
+      val parenttermination = parentuow.lastCommitTermination
       val secret = "not-for-calltree"
       val request = Record.create(Vector(
         "tag" -> "first",
@@ -107,12 +112,22 @@ final class SpiInvokerSpec
         Some(socket)
       )
 
-      Then("the Record fields and caller ExecutionContext reach the provider without materializing the typed service")
+      Then("the Record fields reach a fresh self-bound Action context inheriting caller facilities without materializing the typed service")
       result shouldBe a[Consequence.Success[_]]
       result.toOption.get.asMap.get("tag").collect {
         case values: Seq[?] => values.toVector.map(_.toString)
       } shouldBe Some(Vector("first", "second"))
-      fixture.provider.observedExecutionContext.exists(_.runtime eq summon[ExecutionContext].runtime) shouldBe true
+      val observed = fixture.provider.observedExecutionContext.getOrElse(fail("provider ExecutionContext missing"))
+      observed.runtime should not be theSameInstanceAs(parentruntime)
+      observed.unitOfWork should not be theSameInstanceAs(parentuow)
+      observed.unitOfWork.executionContext should be theSameInstanceAs observed
+      observed.cncfCore.scope.kind shouldBe ScopeKind.Action
+      observed.security shouldBe caller.security
+      observed.observability shouldBe caller.observability
+      observed.runtime.context shouldBe parentruntime.context
+      caller.runtime should be theSameInstanceAs parentruntime
+      caller.unitOfWork should be theSameInstanceAs parentuow
+      parentuow.lastCommitTermination shouldBe parenttermination
       fixture.provider.typedProviderMaterializationCount shouldBe fixture.materializationsAfterAssembly
 
       And("safe selection metadata is visible in CallTree without request values")
