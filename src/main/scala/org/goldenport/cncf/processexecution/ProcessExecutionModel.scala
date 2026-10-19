@@ -1078,6 +1078,7 @@ enum ProcessExecutionStream {
 
 enum ProcessExecutionTermination {
   case Exited(exitCode: Int)
+  case NotStarted
   case LaunchFailed
   case TimedOut
   case Cancelled

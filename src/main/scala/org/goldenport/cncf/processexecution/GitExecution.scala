@@ -10,7 +10,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GitTarget(workspaceId: WorkspaceId)
@@ -83,6 +83,9 @@ enum GitOperationKind(val wireName: String) {
   case StageSelected extends GitOperationKind("stage-selected")
   case StageSelectedAll extends GitOperationKind("stage-selected-all")
   case CommitSelected extends GitOperationKind("commit-selected")
+  case CheckSelectedIndex extends GitOperationKind("check-selected-index")
+  case SelectedIndexChanges extends GitOperationKind("selected-index-changes")
+  case TreeChanges extends GitOperationKind("tree-changes")
 
   private[cncf] def permission: WorkspacePermission = this match {
     case StageFullState | IndexTree | Fetch | FastForward | PendingMerge | CommitPending | Push |
@@ -96,7 +99,7 @@ enum GitOperationKind(val wireName: String) {
   }
 
   private[cncf] def selected: Boolean = this match {
-    case StageSelected | StageSelectedAll | CommitSelected => true
+    case StageSelected | StageSelectedAll | CommitSelected | CheckSelectedIndex | SelectedIndexChanges => true
     case _ => false
   }
 }
@@ -132,6 +135,9 @@ enum GitOperation[A] {
   case StageSelected(selectionId: GitSelectionId) extends GitOperation[Unit]
   case StageSelectedAll(selectionId: GitSelectionId) extends GitOperation[Unit]
   case CommitSelected(selectionId: GitSelectionId) extends GitOperation[Unit]
+  case CheckSelectedIndex(selectionId: GitSelectionId, parent: GitObjectId) extends GitOperation[GitIndexCheck]
+  case SelectedIndexChanges(selectionId: GitSelectionId, parent: GitObjectId) extends GitOperation[Vector[GitTreeChange]]
+  case TreeChanges(before: GitObjectId, after: GitObjectId) extends GitOperation[Vector[GitTreeChange]]
 
   def kind: GitOperationKind = this match {
     case Branch => GitOperationKind.Branch
@@ -164,12 +170,17 @@ enum GitOperation[A] {
     case StageSelected(_) => GitOperationKind.StageSelected
     case StageSelectedAll(_) => GitOperationKind.StageSelectedAll
     case CommitSelected(_) => GitOperationKind.CommitSelected
+    case CheckSelectedIndex(_, _) => GitOperationKind.CheckSelectedIndex
+    case SelectedIndexChanges(_, _) => GitOperationKind.SelectedIndexChanges
+    case TreeChanges(_, _) => GitOperationKind.TreeChanges
   }
 
   private[cncf] def selectionIdOption: Option[GitSelectionId] = this match {
     case StageSelected(id) => Some(id)
     case StageSelectedAll(id) => Some(id)
     case CommitSelected(id) => Some(id)
+    case CheckSelectedIndex(id, _) => Some(id)
+    case SelectedIndexChanges(id, _) => Some(id)
     case _ => None
   }
 }
@@ -186,7 +197,10 @@ enum GitIndexStage {
 final case class GitIndexEntry(mode: String, blob: GitObjectId, stage: GitIndexStage, path: GitPath)
 final case class GitBlobContent(bytes: Vector[Byte], text: Option[String])
 final case class GitDiff(text: String, isBinary: Boolean)
-final case class GitIndexCheck(findingKeys: Set[String]) {
+final case class GitTreeChange(oldMode: String, newMode: String, oldBlob: Option[GitObjectId],
+  newBlob: Option[GitObjectId], status: String, path: GitPath)
+final case class GitIndexCheck(findingKeys: Set[String], eofBlankLinePaths: Set[GitPath] = Set.empty,
+  onlyEofBlankLines: Boolean = false) {
   def isClean: Boolean = findingKeys.isEmpty
 }
 object GitIndexCheck {
@@ -203,12 +217,24 @@ object GitIndexCheck {
       Either.cond(stdout.isEmpty && stderr.isEmpty, GitIndexCheck(Set.empty), "Unexpected clean Git index-check output")
     else if (exitCode == 2) {
       val keys = stdout.split("\n", -1).filter(line => line.nonEmpty && !line.startsWith("+")).toSet
-      Either.cond(stderr.isEmpty && keys.nonEmpty, GitIndexCheck(keys), "Missing or contradictory Git index-check findings")
+      val paths = keys.toVector.map(_eof_blank_line_path)
+      val eofonly = keys.nonEmpty && paths.forall(_.isDefined)
+      Either.cond(stderr.isEmpty && keys.nonEmpty,
+        GitIndexCheck(keys, if (eofonly) paths.flatten.toSet else Set.empty, eofonly),
+        "Missing or contradictory Git index-check findings")
     } else Left("Unsupported Git index-check exit")
   }
 
   private def _valid_text(text: String): Boolean =
     text != null && !text.contains('\u0000') && StandardCharsets.UTF_8.newEncoder().canEncode(text)
+
+  private def _eof_blank_line_path(line: String): Option[GitPath] = {
+    val diagnostic = "^(.+):[1-9][0-9]*: new blank line at EOF\\.$".r
+    line match {
+      case diagnostic(path) if !path.exists(c => c.isControl || c == '"' || c == '\\') => GitPath.parseC(path).toOption
+      case _ => None
+    }
+  }
 }
 
 enum GitExecutionOutcome {
@@ -244,7 +270,8 @@ private[cncf] final case class GitProgramMetadata(
   endpoint: String,
   commitIdentity: Option[GitCommitIdentity],
   selectedPath: Option[GitPath],
-  commitMessage: Option[String]
+  commitMessage: Option[String],
+  selectedPaths: Vector[GitPath] = Vector.empty
 ) {
   def trackingRef: String = s"refs/remotes/$remote/${remoteBranch.value}"
 }
@@ -271,17 +298,18 @@ private[cncf] object GitProgramDefinition {
     selectedPath: Option[GitPath],
     commitMessage: Option[String],
     limits: ProcessExecutionLimits,
-    environment: Map[String, String]
+    environment: Map[String, String],
+    selectedPaths: Vector[GitPath] = Vector.empty
   ): Consequence[ProcessProgramDefinition] = for {
     _ <- if (binding != null && kind != null) Consequence.unit else invalidC
     _ <- if (safeProgramIdentity != null && safeProgramIdentity.matches("[a-z][a-z0-9-]{0,63}") &&
       capability != null && capability.value.matches("[a-z][a-z0-9-]{0,63}")) Consequence.unit else invalidC
     _ <- binding.workingDirectoryC
-    _ <- _validate_host_c(kind, localBranch, remote, remoteBranch, endpoint, commitIdentity, selectionId, selectedPath, commitMessage)
+    _ <- _validate_host_c(kind, localBranch, remote, remoteBranch, endpoint, commitIdentity, selectionId, selectedPath, commitMessage, selectedPaths)
     executable <- _executable_c(gitExecutable)
     _ <- if (environment != null && environment.keySet.subsetOf(Set("PATH", "SSH_AUTH_SOCK", "TMPDIR"))) Consequence.unit else invalidC
     metadata = GitProgramMetadata(binding, kind, selectionId, localBranch, remote, remoteBranch, endpoint,
-      commitIdentity, selectedPath, commitMessage)
+      commitIdentity, selectedPath, commitMessage, selectedPaths)
     slots = _slots(metadata)
     boundary = slots.indexWhere { case _: ProcessArgumentSlot.LowerHex => true; case _ => false }
     fixed = if (boundary < 0) slots.map { case ProcessArgumentSlot.Literal(text) => text; case _ => "" }
@@ -294,7 +322,7 @@ private[cncf] object GitProgramDefinition {
 
   private def _validate_host_c(kind: GitOperationKind, localbranch: GitBranchName, remote: String,
     remotebranch: GitBranchName, endpoint: String, identity: Option[GitCommitIdentity],
-    selection: Option[GitSelectionId], path: Option[GitPath], message: Option[String]): Consequence[Unit] = for {
+    selection: Option[GitSelectionId], path: Option[GitPath], message: Option[String], paths: Vector[GitPath]): Consequence[Unit] = for {
     _ <- if (localbranch != null && remotebranch != null) Consequence.unit else invalidC
     _ <- GitBranchName.parseC(localbranch.value)
     _ <- GitBranchName.parseC(remotebranch.value)
@@ -308,6 +336,12 @@ private[cncf] object GitProgramDefinition {
     _ <- identity.fold(Consequence.unit)(x => if (x != null && _identity_text(x.name) && _identity_text(x.email)) Consequence.unit else invalidC)
     _ <- selection.fold(Consequence.unit)(x => if (x == null) invalidC else GitSelectionId.parseC(x.value).map(_ => ()))
     _ <- path.fold(Consequence.unit)(x => if (x == null) invalidC else GitPath.parseC(x.value).map(_ => ()))
+    _ <- if (paths != null && (kind match {
+      case GitOperationKind.CommitSelected | GitOperationKind.CheckSelectedIndex | GitOperationKind.SelectedIndexChanges =>
+        paths.nonEmpty && paths.size <= 256 && paths.distinct.size == paths.size &&
+          paths.forall(x => x != null && GitPath.parseC(x.value).isSuccess)
+      case _ => paths.isEmpty
+    })) Consequence.unit else invalidC
     _ <- message.fold(Consequence.unit)(x => if (x != null && !x.contains('\u0000') && x.getBytes(StandardCharsets.UTF_8).length <= 4096 &&
       x.nonEmpty) Consequence.unit else invalidC)
   } yield ()
@@ -362,7 +396,14 @@ private[cncf] object GitProgramDefinition {
       case GitOperationKind.PendingPaths => _l_("diff", "--cached", "--no-ext-diff", "--no-textconv", "--no-renames", "--name-only", "-z") ++ Vector(oid, Literal("--"))
       case GitOperationKind.StageSelected => _l_("--literal-pathspecs", "add", "--", metadata.selectedPath.get.value)
       case GitOperationKind.StageSelectedAll => _l_("--literal-pathspecs", "add", "--all", "--", metadata.selectedPath.get.value)
-      case GitOperationKind.CommitSelected => identity ++ _l_("commit", "--no-verify", "--no-gpg-sign", "-m", metadata.commitMessage.get)
+      case GitOperationKind.CommitSelected => identity ++ _l_("--literal-pathspecs", "commit", "--only", "--no-verify", "--no-gpg-sign", "-m", metadata.commitMessage.get, "--") ++
+        metadata.selectedPaths.map(x => Literal(x.value))
+      case GitOperationKind.CheckSelectedIndex => _l_("--literal-pathspecs", "diff", "--cached", "--no-ext-diff", "--no-textconv", "--check") ++
+        Vector(oid, Literal("--")) ++ metadata.selectedPaths.map(x => Literal(x.value))
+      case GitOperationKind.SelectedIndexChanges => _l_("--literal-pathspecs", "diff", "--cached", "--no-ext-diff", "--no-textconv", "--raw", "--no-abbrev", "--no-renames", "-z") ++
+        Vector(oid, Literal("--")) ++ metadata.selectedPaths.map(x => Literal(x.value))
+      case GitOperationKind.TreeChanges => _l_("diff-tree", "--no-commit-id", "--no-ext-diff", "--no-textconv", "--raw", "--no-abbrev", "--no-renames", "-r", "-z") ++
+        Vector(oid, oid, Literal("--"))
     }
     prefix.map(Literal.apply) ++ command
   }
@@ -385,6 +426,9 @@ private[cncf] object GitProgramDefinition {
       case GitOperation.CheckPendingIndex(parent) => _oid_(parent).map(x => Vector(x, "--"))
       case GitOperation.PendingDiff(parent) => _oid_(parent).map(x => Vector(x, "--"))
       case GitOperation.PendingPaths(parent) => _oid_(parent).map(x => Vector(x, "--"))
+      case GitOperation.CheckSelectedIndex(_, parent) => _oid_(parent).map(x => Vector(x, "--") ++ metadata.selectedPaths.map(_.value))
+      case GitOperation.SelectedIndexChanges(_, parent) => _oid_(parent).map(x => Vector(x, "--") ++ metadata.selectedPaths.map(_.value))
+      case GitOperation.TreeChanges(before, after) => for { b <- _oid_(before); a <- _oid_(after) } yield Vector(b, a, "--")
       case _ => Consequence.success(Vector.empty)
     }
   }
@@ -421,7 +465,7 @@ private[cncf] object GitExecutionAdmission {
     val metadata = execution.definition._git_metadata.get
     val decoded: (GitExecutionOutcome, Option[A]) = result.termination match {
       case ProcessExecutionTermination.Exited(code) =>
-        if (operation.kind == GitOperationKind.CheckPendingIndex && (code == 0 || code == 2))
+        if ((operation.kind == GitOperationKind.CheckPendingIndex || operation.kind == GitOperationKind.CheckSelectedIndex) && (code == 0 || code == 2))
           GitOutputParser.parseIndexCheck(result.stdout, result.stderr, code) match {
             case Right(value) => GitExecutionOutcome.Succeeded -> Some(value.asInstanceOf[A])
             case Left(reason) => GitExecutionOutcome.InvalidOutput(reason) -> None
@@ -451,7 +495,7 @@ private[cncf] object GitOutputParser {
   def parse[A](operation: GitOperation[A], metadata: GitProgramMetadata, capture: ProcessExecutionCapture,
     exitCode: Int): Either[String, A] = {
     val complete = !capture.truncated && capture.byteCount == capture.content.size.toLong
-    val result: Either[String, Any] = if (operation.kind == GitOperationKind.CheckPendingIndex)
+    val result: Either[String, Any] = if (operation.kind == GitOperationKind.CheckPendingIndex || operation.kind == GitOperationKind.CheckSelectedIndex)
         parseIndexCheck(capture, ProcessExecutionCapture(Vector.empty, 0L, false), exitCode)
       else if (!complete) Left("Incomplete Git stdout capture")
       else if (operation.kind == GitOperationKind.BlobContent && exitCode == 0) {
@@ -522,6 +566,7 @@ private[cncf] object GitOutputParser {
     } yield counts
     case GitOperationKind.Status => _status(text)
     case GitOperationKind.UnmergedIndex => _index(text)
+    case GitOperationKind.SelectedIndexChanges | GitOperationKind.TreeChanges => _tree_changes(text)
     case GitOperationKind.CommitMetadata => for {
       lines <- _lines(text)
       _ <- Either.cond(lines.size == 3, (), "Invalid commit metadata")
@@ -582,5 +627,33 @@ private[cncf] object GitOutputParser {
       }
     })
     _ <- Either.cond(entries.map(x => x.path -> x.stage).distinct.size == entries.size, (), "Duplicate unmerged index stage")
+  } yield entries
+
+  private def _tree_changes(text: String): Either[String, Vector[GitTreeChange]] = for {
+    fields <- _nul_fields(text)
+    _ <- Either.cond(fields.size % 2 == 0, (), "Incomplete Git raw diff record")
+    entries <- _sequence(fields.grouped(2).map { record =>
+      val header = record(0).split(" ", -1)
+      for {
+        _ <- Either.cond(header.length == 5 && header(0).matches(":[0-7]{6}") && header(1).matches("[0-7]{6}") &&
+          Set("A", "D", "M", "T").contains(header(4)), (), "Invalid Git raw diff metadata")
+        oldid <- _oid(header(2))
+        newid <- _oid(header(3))
+        _ <- Either.cond(oldid.value.length == newid.value.length, (), "Mixed Git raw diff object lengths")
+        oldmode = header(0).drop(1)
+        newmode = header(1)
+        oldzero = oldid.value.forall(_ == '0')
+        newzero = newid.value.forall(_ == '0')
+        _ <- Either.cond(oldzero == (oldmode == "000000") && newzero == (newmode == "000000"), (), "Inconsistent Git raw diff absent object")
+        _ <- Either.cond(header(4) match {
+          case "A" => oldzero && !newzero
+          case "D" => !oldzero && newzero
+          case _ => !oldzero && !newzero
+        }, (), "Inconsistent Git raw diff status")
+        path <- _path(record(1))
+      } yield GitTreeChange(oldmode, newmode, if (oldzero) None else Some(oldid),
+        if (newzero) None else Some(newid), header(4), path)
+    }.toVector)
+    _ <- Either.cond(entries.map(_.path).distinct.size == entries.size, (), "Duplicate Git raw diff filename")
   } yield entries
 }

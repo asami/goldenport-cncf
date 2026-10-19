@@ -22,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -139,8 +139,9 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
     }
 
     "retain TestOnly terminal facts and refuse success from unsupported zero-exit reports" in {
-      Given("all terminal categories, with a positive report present even for nonzero and incomplete outcomes")
+      Given("all terminal categories, with a positive report present even for nonzero, unexecuted and incomplete outcomes")
       val terminals = Vector(ProcessExecutionTermination.Exited(0), ProcessExecutionTermination.Exited(5),
+        ProcessExecutionTermination.NotStarted,
         ProcessExecutionTermination.LaunchFailed, ProcessExecutionTermination.TimedOut, ProcessExecutionTermination.Cancelled,
         ProcessExecutionTermination.OutputLimitExceeded(ProcessExecutionStream.Stdout),
         ProcessExecutionTermination.OutputLimitExceeded(ProcessExecutionStream.Stderr), ProcessExecutionTermination.ArtifactLimitExceeded)
@@ -156,9 +157,12 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
         results.map(_.outcome) shouldBe terminals.map {
           case ProcessExecutionTermination.Exited(0) => SbtExecutionOutcome.Succeeded
           case ProcessExecutionTermination.Exited(code) => SbtExecutionOutcome.Failed(code)
+          case ProcessExecutionTermination.NotStarted => SbtExecutionOutcome.NotExecuted
           case terminal => SbtExecutionOutcome.Incomplete(terminal)
         }
         results.map(_.processResult) shouldBe fixtures.map(_.result)
+        results.map(_.target) shouldBe fixtures.map(_.target)
+        results.map(_.operation) shouldBe Vector.fill(fixtures.size)(SbtOperation.TestOnly)
         results.tail.foreach(_.testSelection shouldBe None)
         unverified.outcome shouldBe SbtExecutionOutcome.UnverifiedTests(SbtTestSelectionFailure.IncompleteCapture)
         unverified.processResult shouldBe unsupported.result
@@ -338,10 +342,11 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
     }
 
     "preserve every terminal result and bounded capture through the typed outcome mapping" in {
-      Given("success, nonzero exit and every incomplete terminal category with bounded captures")
+      Given("success, nonzero exit, confirmed unexecuted and every incomplete terminal category with bounded captures")
       val cases = Vector(
         ProcessExecutionTermination.Exited(0) -> SbtExecutionOutcome.Succeeded,
         ProcessExecutionTermination.Exited(3) -> SbtExecutionOutcome.Failed(3),
+        ProcessExecutionTermination.NotStarted -> SbtExecutionOutcome.NotExecuted,
         ProcessExecutionTermination.LaunchFailed -> SbtExecutionOutcome.Incomplete(ProcessExecutionTermination.LaunchFailed),
         ProcessExecutionTermination.TimedOut -> SbtExecutionOutcome.Incomplete(ProcessExecutionTermination.TimedOut),
         ProcessExecutionTermination.Cancelled -> SbtExecutionOutcome.Incomplete(ProcessExecutionTermination.Cancelled),
@@ -363,11 +368,42 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
         results.foreach { case (fixture, outcome, result) =>
           result.toOption.map(_.outcome) shouldBe Some(outcome)
           result.toOption.map(_.processResult) shouldBe Some(fixture.result)
+          result.toOption.map(_.target) shouldBe Some(fixture.target)
+          result.toOption.map(_.operation) shouldBe Some(SbtOperation.Test)
           result.toOption.map(_.processResult.stdout.truncated) shouldBe Some(true)
           result.toOption.map(_.processResult.stderr.byteCount) shouldBe Some(3L)
           fixture.profile.driver.executions should have size 1
         }
       } finally fixtures.foreach { case (fixture, _) => _close(fixture.root) }
+    }
+
+    "retain a confirmed unexecuted receipt through one External SbtExec in the owning UnitOfWork" in {
+      Given("a typed Test program, its current authorized context and an actual NotStarted process receipt")
+      val fixture = _fixture(_result(ProcessExecutionTermination.NotStarted))
+      val behavior = new SbtDslBehavior(Behavior.Core(fixture.context, None, None))
+      val program = behavior.test(fixture.target)
+      val expected = SbtExecutionResult(fixture.target, SbtOperation.Test, fixture.result)
+      val provider = new UnitOfWorkProgramStubProvider {
+        def resultFor[A](ordinal: Int, operation: UnitOfWorkOp[A]): Consequence[A] = operation match {
+          case UnitOfWorkOp.SbtExec(_, SbtOperation.Test) => Consequence.success(expected)
+          case _ => Consequence.notImplemented("unexpected operation in unexecuted SBT recording")
+        }
+      }
+      val uow = new UnitOfWork(fixture.context)
+      try {
+        When("the program is recorded and interpreted once in its owning UnitOfWork")
+        val recording = UnitOfWorkProgramRecorder.record(program, provider)
+        val result = new UnitOfWorkInterpreter(uow).run(program)
+
+        Then("one External SbtExec retains target, operation and process facts with no fallback or automatic replay")
+        recording.occurrences.map(_.operation) shouldBe Vector(UnitOfWorkOp.SbtExec(fixture.target, SbtOperation.Test))
+        recording.occurrences.map(_.effectClass) shouldBe Vector(UnitOfWorkEffectClass.External)
+        recording.occurrences.map(_.ordinal) shouldBe Vector(0)
+        recording.result.toOption shouldBe Some(expected)
+        result.toOption shouldBe Some(expected)
+        result.toOption.map(_.outcome) shouldBe Some(SbtExecutionOutcome.NotExecuted)
+        fixture.profile.driver.executions should have size 1
+      } finally _close(fixture.root)
     }
 
     "interpret generated nonzero exit codes as Failed without discarding the process result" in {

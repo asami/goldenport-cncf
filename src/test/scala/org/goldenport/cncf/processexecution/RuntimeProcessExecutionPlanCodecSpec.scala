@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -185,8 +185,8 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
       duplicatekeys.foreach(_.isFaillure shouldBe true)
     }
 
-    "round-trip V3 thirty Git declarations and SBT through one identical shared binding" in {
-      Given("one V3 host plan with all thirty Git operations, a Test declaration and generic templates")
+    "round-trip V3 thirty-three Git declarations and SBT through one identical shared binding" in {
+      Given("one V3 host plan with all thirty-three Git operations, a Test declaration and generic templates")
       val root = _directory()
       val wire = _v3_root(root)
       When("the strict host codec round-trips the plan and actual owning semantic admission resolves both tools")
@@ -207,6 +207,53 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
       (sbt.definition._sbt_metadata.get.binding eq binding) shouldBe true
       restored.grants shouldBe first.grants
       GitExecutionAdmission.validateGenericExecutionC(git).isFaillure shouldBe true
+    }
+
+    "round-trip only the three operation-specific bounded selected path arrays" in {
+      Given("all V3 Git declarations and fixed literal paths containing colon, backslash and LF")
+      val wire = _v3_root(_directory())
+      val kinds = Set(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges)
+      val paths = Vector("selected.txt", "C:literal\\name\n.txt")
+      val selected = kinds.foldLeft(wire)((root, kind) => _changed_git(root, kind,
+        _.mapObject(_.add("selectedPaths", Json.fromValues(paths.map(Json.fromString))))))
+      When("strict V3 decoding and canonical encoding reconstruct each operation's exact field set")
+      val first = _take(_decode(selected))
+      val encoded = _take(RuntimeProcessExecutionPlanCodec.encode(first))
+      val restored = _take(RuntimeProcessExecutionPlanCodec.decode(encoded))
+      val entries = parse(encoded.asInstanceOf[ConfigurationValue.StringValue].value).toOption.get
+        .hcursor.get[Vector[Json]]("gitPrograms").toOption.get
+      Then("bounded selections round-trip exactly and all other operations omit selectedPaths")
+      restored.gitDeclarations shouldBe first.gitDeclarations
+      restored.gitDeclarations.foreach { declaration =>
+        declaration.selectedPaths.map(_.value) shouldBe (if (kinds.contains(declaration.operation)) paths else Vector.empty)
+        val entry = entries.find(_.hcursor.get[String]("operation").toOption.contains(declaration.operation.wireName)).get
+        entry.asObject.get.contains("selectedPaths") shouldBe kinds.contains(declaration.operation)
+        entry.asObject.get.size shouldBe (if (kinds.contains(declaration.operation)) 16 else 15)
+      }
+    }
+
+    "reject absent null empty duplicate escaping or widened selectedPaths for each bounded kind" in {
+      Given("a V3 host plan with the three exact applicable operations and strict nonapplicable operations")
+      val wire = _v3_root(_directory())
+      val kinds = Vector(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges)
+      val invalidpaths = Vector(Json.Null, Json.arr(), Json.True, Json.arr(Json.Null), Json.arr(Json.True),
+        Json.arr(Json.fromString("")), Json.arr(Json.fromString("../escape")), Json.arr(Json.fromString("/absolute")),
+        Json.arr(Json.fromString(".git/config")), Json.arr(Json.fromString("nul\u0000path")),
+        Json.arr(Json.fromString("x"), Json.fromString("x")), Json.fromValues((0 to 256).map(n => Json.fromString(s"file$n"))))
+      val malformed = kinds.flatMap(kind => invalidpaths.map(paths => _changed_git(wire, kind,
+        _.mapObject(_.add("selectedPaths", paths)))) ++ Vector(
+        _changed_git(wire, kind, _.mapObject(_.remove("selectedPaths"))),
+        _changed_git(wire, kind, _.mapObject(_.add("extra", Json.True)))))
+      val unrelated = GitOperationKind.values.toVector.filterNot(kinds.contains).flatMap(kind =>
+        Vector(Json.Null, Json.arr(), Json.arr(Json.fromString("selected.txt"))).map(paths =>
+          _changed_git(wire, kind, _.mapObject(_.add("selectedPaths", paths)))))
+      When("the operation-first decoder receives missing fields, invalid arrays and fields outside their operation")
+      val results = (malformed ++ unrelated).map(_decode)
+      val duplicatekey = RuntimeProcessExecutionPlanCodec.decode(ConfigurationValue.StringValue(wire.noSpaces.replace(
+        "\"selectedPaths\":[\"selected.txt\"]", "\"selectedPaths\":[\"selected.txt\"],\"selectedPaths\":[\"other.txt\"]")))
+      Then("no old unbounded commit, ambiguous selection or unrelated field installs authority")
+      results.foreach(_.isFaillure shouldBe true)
+      duplicatekey.isFaillure shouldBe true
     }
 
     "reject V3 unknown fields, schema, duplicate keys, duplicate semantic capabilities and duplicate selections" in {
@@ -284,10 +331,11 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
     }
 
     "enforce each fixed selected-declaration count per workspace without introducing a selector-family field" in {
-      Given("StageSelected, StageSelectedAll and CommitSelected declarations at and above their fixed bounds")
+      Given("all five selected kinds at and above their individual per-workspace bounds")
       val root = _directory()
       val id = GitExecutionSpecSupport.workspaceId
-      val cases = Vector(GitOperationKind.StageSelected -> 128, GitOperationKind.StageSelectedAll -> 256, GitOperationKind.CommitSelected -> 64)
+      val cases = Vector(GitOperationKind.StageSelected -> 128, GitOperationKind.StageSelectedAll -> 256,
+        GitOperationKind.CommitSelected -> 64, GitOperationKind.CheckSelectedIndex -> 64, GitOperationKind.SelectedIndexChanges -> 64)
       When("V3 assembly receives unique declarations at each bound and one additional unique selection")
       val results = cases.map { case (kind, bound) =>
         val declarations = (0 to bound).toVector.map { n =>
@@ -300,7 +348,7 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
         _plan_(declarations.take(bound)).isSuccess -> _plan_(declarations).isFaillure
       }
       Then("each exact bound is admitted and each excess fails for that logical workspace")
-      results shouldBe Vector.fill(3)(true -> true)
+      results shouldBe Vector.fill(5)(true -> true)
     }
 
     "round-trip fixed programs, exact templates, finite limits and independently selected component grants" in {

@@ -9,7 +9,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection] = None)
@@ -20,6 +20,7 @@ enum SbtOperation {
 
 enum SbtExecutionOutcome {
   case Succeeded
+  case NotExecuted
   case Failed(exitCode: Int)
   case Incomplete(termination: ProcessExecutionTermination)
   case UnverifiedTests(reason: SbtTestSelectionFailure)
@@ -32,6 +33,7 @@ final case class SbtExecutionResult(
   testSelection: Option[SbtTestSelectionResult] = None
 ) {
   def outcome: SbtExecutionOutcome = processResult.termination match {
+    case ProcessExecutionTermination.NotStarted => SbtExecutionOutcome.NotExecuted
     case ProcessExecutionTermination.Exited(0) if operation == SbtOperation.TestOnly => testSelection match {
       case Some(SbtTestSelectionResult.Verified(_, _, _)) => SbtExecutionOutcome.Succeeded
       case Some(SbtTestSelectionResult.Rejected(reason)) => SbtExecutionOutcome.UnverifiedTests(reason)

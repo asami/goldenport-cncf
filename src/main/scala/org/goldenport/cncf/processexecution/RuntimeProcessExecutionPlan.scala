@@ -8,7 +8,7 @@ import org.goldenport.cncf.workspace.*
 /** Immutable host configuration. Parsing does not install a driver or grant caller authority. */
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] final case class WorkspaceRuntimeDeclaration(identity: WorkspaceId, root: Path)
@@ -39,7 +39,8 @@ private[cncf] final case class GitRuntimeDeclaration(
   selectedPath: Option[GitPath],
   commitMessage: Option[String],
   limits: ProcessExecutionLimits,
-  environment: Map[String, String]
+  environment: Map[String, String],
+  selectedPaths: Vector[GitPath] = Vector.empty
 )
 
 private[cncf] final class RuntimeProcessExecutionPlan private (
@@ -123,7 +124,9 @@ private[cncf] object RuntimeProcessExecutionPlan {
     _ <- if (gitdeclarations.groupBy(_.target).values.forall { declarations =>
       declarations.count(_.operation == GitOperationKind.StageSelected) <= 128 &&
       declarations.count(_.operation == GitOperationKind.StageSelectedAll) <= 256 &&
-      declarations.count(_.operation == GitOperationKind.CommitSelected) <= 64
+      declarations.count(_.operation == GitOperationKind.CommitSelected) <= 64 &&
+      declarations.count(_.operation == GitOperationKind.CheckSelectedIndex) <= 64 &&
+      declarations.count(_.operation == GitOperationKind.SelectedIndexChanges) <= 64
     }) Consequence.unit else Consequence.configurationInvalid("Git selection declarations exceed the per-workspace bounds")
     workspace <- WorkspaceExecutionAdmission.createC(workspacedeclarations.map(x => x.identity -> x.root), workspacegrants)
     sbttagged <- sbtdeclarations.foldLeft(Consequence.success(Vector.empty[ProcessProgramDefinition])) { (prior, declaration) => for {
@@ -138,7 +141,7 @@ private[cncf] object RuntimeProcessExecutionPlan {
       definition <- GitProgramDefinition.createC(binding, declaration.operation, declaration.capability,
         declaration.identity, declaration.gitExecutable, declaration.localBranch, declaration.remote,
         declaration.remoteBranch, declaration.endpoint, declaration.commitIdentity, declaration.selectionId,
-        declaration.selectedPath, declaration.commitMessage, declaration.limits, declaration.environment)
+        declaration.selectedPath, declaration.commitMessage, declaration.limits, declaration.environment, declaration.selectedPaths)
     } yield values :+ definition }
     tagged = sbttagged ++ gittagged
     policy <- ProcessExecutionPolicy.createC(programs ++ tagged)

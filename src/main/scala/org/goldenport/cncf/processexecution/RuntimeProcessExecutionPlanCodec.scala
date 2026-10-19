@@ -12,7 +12,7 @@ import org.goldenport.configuration.{ConfigurationValue, ConfigurationValueCodec
 /** Host wire contract: complete literal/lower-hex vectors only, never arbitrary shell text. */
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValueCodec[RuntimeProcessExecutionPlan] {
@@ -159,12 +159,15 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
   } yield SbtRuntimeDeclaration(target, operation, capability, identity, executable, limits, environment, classes)
 
   private def _git_program(json: Json): Either[String, GitRuntimeDeclaration] = for {
-    obj <- _fields(json, Set("target", "operation", "capability", "identity", "gitExecutable", "localBranch",
-      "remote", "remoteBranch", "endpoint", "commitIdentity", "selectionId", "selectedPath", "commitMessage", "limits", "environment"))
+    operationtext <- json.hcursor.get[String]("operation").left.map(_ => "Invalid typed Git operation")
+    operation <- GitOperationKind.values.find(_.wireName == operationtext).toRight("Invalid typed Git operation")
+    bounded = Set(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges).contains(operation)
+    names = Set("target", "operation", "capability", "identity", "gitExecutable", "localBranch",
+      "remote", "remoteBranch", "endpoint", "commitIdentity", "selectionId", "selectedPath", "commitMessage", "limits", "environment") ++
+      (if (bounded) Set("selectedPaths") else Set.empty[String])
+    obj <- _fields(json, names)
     targettext <- _string(obj, "target")
     target <- _valid(WorkspaceId.parseC(targettext))
-    operationtext <- _string(obj, "operation")
-    operation <- GitOperationKind.values.find(_.wireName == operationtext).toRight("Invalid typed Git operation")
     capabilitytext <- _string(obj, "capability")
     capability <- _valid(ProcessCapabilityId.parseC(capabilitytext))
     _ <- Either.cond(capability.print == capabilitytext, (), "Noncanonical Git capability")
@@ -183,8 +186,10 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
     message <- _optional(obj("commitMessage").get, _.asString.toRight("Invalid Git message"))
     limits <- _decode_limits(obj("limits").get)
     environment <- _string_map(obj("environment").get)
+    pathtexts <- if (bounded) _string_array(obj, "selectedPaths") else Right(Vector.empty[String])
+    paths <- _sequence(pathtexts.map(x => _valid(GitPath.parseC(x))))
   } yield GitRuntimeDeclaration(target, operation, capability, identity, executable, localbranch, remote,
-    remotebranch, endpoint, commitidentity, selection, path, message, limits, environment)
+    remotebranch, endpoint, commitidentity, selection, path, message, limits, environment, paths)
 
   private def _optional[A](json: Json, decode: Json => Either[String, A]): Either[String, Option[A]] =
     if (json.isNull) Right(None) else decode(json).map(Some(_))
@@ -195,7 +200,8 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
     email <- _string(obj, "email")
   } yield GitCommitIdentity(name, email)
 
-  private def _git_json(value: GitRuntimeDeclaration): Json = Json.obj(
+  private def _git_json(value: GitRuntimeDeclaration): Json = {
+    val base = Json.obj(
     "target" -> Json.fromString(value.target.print), "operation" -> Json.fromString(value.operation.wireName),
     "capability" -> Json.fromString(value.capability.print), "identity" -> Json.fromString(value.identity),
     "gitExecutable" -> Json.fromString(value.gitExecutable.toString), "localBranch" -> Json.fromString(value.localBranch.value),
@@ -206,6 +212,9 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
     "selectedPath" -> value.selectedPath.fold(Json.Null)(x => Json.fromString(x.value)),
     "commitMessage" -> value.commitMessage.fold(Json.Null)(Json.fromString),
     "limits" -> _limits_json(value.limits), "environment" -> Json.obj(value.environment.toVector.map { case (k, v) => k -> Json.fromString(v) }*))
+    if (Set(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges).contains(value.operation))
+      base.mapObject(_.add("selectedPaths", _strings(value.selectedPaths.map(_.value)))) else base
+  }
 
   private def _absolute_path(text: String): Either[String, java.nio.file.Path] =
     try {
