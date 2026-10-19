@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 19, 2026
  */
 final class DisplayMutationServiceIngressSpec extends AnyWordSpec with DisplayMutationServiceFixture.Vocabulary {
   import DisplayMutationServiceFixture.*
@@ -348,8 +348,10 @@ final class DisplayMutationServiceIngressSpec extends AnyWordSpec with DisplayMu
           val request = Record.dataAuto("resourceType" -> resourceType, "screenId" -> screenId,
             "payload" -> session.payload(_changes), EntityRevisionTransport.observedRevisionPropertyName -> "1")
           When("SpiInvoker resolves the registered provider and invokes display.update through ordinary Operation execution")
-          val result = session.subsystem.spiInvoker.invoke(spiContract, SpiOperationSelector("update", Some("display")), request,
-            ComponentSelector(component = Some(session.component.name)))
+          val result = active.observeAction {
+            session.subsystem.spiInvoker.invoke(spiContract, SpiOperationSelector("update", Some("display")), request,
+              ComponentSelector(component = Some(session.component.name)))
+          }
           val after = session.rows()
           Then("the ordinary SPI Record response retains the actual receipt and one canonical command, commit and contextual reload")
           result.toOption.get.getString("outcome") shouldBe Some("updated")
@@ -358,6 +360,15 @@ final class DisplayMutationServiceIngressSpec extends AnyWordSpec with DisplayMu
           session.log.commands shouldBe 1
           session.log.events.count(_.event == "find") shouldBe 1
           session.log.events.filter(_.event == "find").foreach(event => (event.uow eq active.uow) shouldBe true)
+          (active.uow eq active.callerUnitOfWork) shouldBe false
+          (active.uow.executionContext eq active.context) shouldBe false
+          (active.uow.executionContext.unitOfWork eq active.uow) shouldBe true
+          (active.context.unitOfWork eq active.callerUnitOfWork) shouldBe true
+          (active.callerUnitOfWork.executionContext eq active.context) shouldBe true
+          active.callerUnitOfWork.lastCommitTermination shouldBe active.callerCommitTerminationBeforeExecution
+          active.callerUnitOfWork.lastCommitResult shouldBe active.callerCommitResultBeforeExecution
+          active.uow.lastCommitTermination shouldBe Some(UnitOfWorkTermination.Committed)
+          active.uow.lastCommitResult shouldBe Some(Consequence.unit)
           checkRows(after, wanted.rows)
           checkCompleteState(session, wanted)
         } finally session.close()

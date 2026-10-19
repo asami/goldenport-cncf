@@ -56,11 +56,12 @@ final class DisplayMutationCommitObservationSpec extends AnyWordSpec with Displa
             attempt.result shouldBe a[Consequence.Failure[?]]
             conclusion(attempt.result).observation.taxonomy shouldBe conclusion(DisplayMutationResult.indeterminateC[Unit]()).observation.taxonomy
             And("the fresh current Action has no commit witness while its caller retains only the selected history")
-            (active.uow eq active.parentUnitOfWork) shouldBe false
+            (active.uow eq active.callerUnitOfWork) shouldBe false
             active.uow.lastCommitTermination shouldBe None
             active.uow.lastCommitResult shouldBe None
-            active.parentUnitOfWork.lastCommitTermination shouldBe (if (historical) Some(UnitOfWorkTermination.Committed) else None)
-            active.parentUnitOfWork.lastCommitResult shouldBe (if (historical) Some(Consequence.unit) else None)
+            active.callerUnitOfWork.lastCommitTermination shouldBe (if (historical) Some(UnitOfWorkTermination.Committed) else None)
+            active.callerUnitOfWork.lastCommitResult shouldBe (if (historical) Some(Consequence.unit) else None)
+            checkActionOwnership(attempt)
             active.attempts shouldBe 1
             session.log.events.count(_.event == "capture") shouldBe 1
             session.log.events.count(_.event == "find") shouldBe 0

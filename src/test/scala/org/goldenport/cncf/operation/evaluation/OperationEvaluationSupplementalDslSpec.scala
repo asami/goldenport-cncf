@@ -29,12 +29,15 @@ import org.goldenport.cncf.job.{
   ActionId,
   ActionTask,
   JobCommandMode,
+  JobContext,
   JobControlCommand,
   JobControlOption,
   JobControlRequest,
   JobId,
   JobResult,
-  TaskFailed
+  TaskFailed,
+  TaskId,
+  TaskSucceeded
 }
 import org.goldenport.cncf.spi.evaluation.{
   CorpusEvaluationSink,
@@ -70,6 +73,8 @@ final class OperationEvaluationSupplementalDslSpec
     with Matchers
     with GivenWhenThen
     with BeforeAndAfterEach {
+  import OperationEvaluationSupplementalDslSpec.{CorpusFixture, ExperimentFixture}
+
   private val _subsystems = ArrayBuffer.empty[Subsystem]
   private val _aes04_e8 = afterWord("in spec:action-execution-semantics, example:E8, rules:R7,R10,R11,R12, phase:57.2, slice:AES-04B")
 
@@ -84,24 +89,142 @@ final class OperationEvaluationSupplementalDslSpec
   "Supplemental operation evaluation DSL" should {
     "publish application evidence only after canonical success" which {
       "release a FunctionalActionCall corpus candidate after the terminal fact" in {
-        Given("a FunctionalActionCall and an installed deterministic Corpus sink")
+        Given("a FunctionalActionCall, an installed deterministic Corpus sink, and a caller-owned UnitOfWork")
         val fixture = _corpus_fixture()
-
-        When("the operation stages a bounded corpus candidate and succeeds")
-        val result = fixture.subsystem.executeOperationResponse(
-          _request(fixture.component.name, "corpusFunctional")
+        val caller = fixture.component.logic.executionContext()
+        val callerunitofwork = caller.runtime.unitOfWork
+        val callerbinding = callerunitofwork.executionContext
+        val observed = new AtomicReference[Option[ExecutionContext]](None)
+        val calls = new AtomicInteger()
+        val deliverycontexts = new AtomicReference(Vector.empty[ExecutionContext])
+        fixture.component.installSpi(CommitObservingCorpusEvaluationSink(
+          fixture.sink, fixture.commitstates, fixture.component.unitOfWorkForAttempt, Some(deliverycontexts)
+        ))
+        val operation = _success(OperationEvaluationOperationIdentity.createC(
+          fixture.component.name, "operation", "corpusFunctional"
+        ))
+        val action = ObservedSupplementalQueryAction(
+          _request(fixture.component.name, "corpusFunctional"), observed, calls
         )
+        val bindingcontext = new AtomicReference[Option[ExecutionContext]](None)
+        val runtime = new OperationEvaluationDeliveryRuntime()
+        try {
+          val evaluated = new OperationEvaluationActionTask(
+            ActionTask(ActionId.generate(), action, fixture.component.actionEngine, Some(fixture.component)),
+            new OperationEvaluationAttemptCapture(operation, runtime),
+            (response, context) => {
+              bindingcontext.set(Some(context))
+              Consequence.success(response)
+            }
+          )
 
-        Then("the business result is unchanged and the candidate follows the terminal fact")
-        result shouldBe Consequence.success(OperationResponse.Scalar("corpus-functional"))
-        fixture.sink.facts.map(_.factKind.token) shouldBe
-          Vector("operation-start", "operation-terminal", "corpus-candidate")
-        val candidate = fixture.sink.facts.last.asInstanceOf[CorpusCandidateFact]
-        candidate.source shouldBe OperationEvaluationFactSource.Application
-        candidate.summary.map(_.print) shouldBe Some("accepted training example")
-        candidate.labels.map(_.toRecord.getString("name")) shouldBe Vector(Some("quality"))
-        candidate.correlation.attemptId shouldBe fixture.sink.facts.head.correlation.attemptId
-        fixture.commitstates.get() shouldBe Vector(true)
+          When("the operation stages a bounded corpus candidate and succeeds")
+          val outcome = evaluated.run(caller)
+
+          Then("the business result is unchanged and the candidate follows the terminal fact")
+          outcome shouldBe TaskSucceeded(OperationResponse.Scalar("corpus-functional"))
+          fixture.sink.facts.map(_.factKind.token) shouldBe
+            Vector("operation-start", "operation-terminal", "corpus-candidate")
+          val candidate = fixture.sink.facts.last.asInstanceOf[CorpusCandidateFact]
+          candidate.source shouldBe OperationEvaluationFactSource.Application
+          candidate.summary.map(_.print) shouldBe Some("accepted training example")
+          candidate.labels.map(_.toRecord.getString("name")) shouldBe Vector(Some("quality"))
+          candidate.correlation.attemptId shouldBe fixture.sink.facts.head.correlation.attemptId
+          fixture.commitstates.get() shouldBe Vector(true)
+
+          And("response binding and delivery retain the one Action's committed UnitOfWork while the caller stays untouched")
+          val actual = observed.get().getOrElse(fail("ActionCall context missing"))
+          calls.get() shouldBe 1
+          bindingcontext.get().get should be theSameInstanceAs actual
+          actual.runtime should not be theSameInstanceAs(caller.runtime)
+          actual.runtime.unitOfWork should not be theSameInstanceAs(callerunitofwork)
+          actual.runtime.unitOfWork.executionContext should be theSameInstanceAs actual
+          actual.runtime.unitOfWork.lastCommitTermination shouldBe Some(UnitOfWorkTermination.Committed)
+          deliverycontexts.get() should have size 2
+          deliverycontexts.get().foreach(_.runtime.unitOfWork should be theSameInstanceAs actual.runtime.unitOfWork)
+          caller.runtime.unitOfWork should be theSameInstanceAs callerunitofwork
+          callerunitofwork.executionContext should be theSameInstanceAs callerbinding
+          callerunitofwork.lastCommitTermination shouldBe None
+          callerunitofwork.lastAbortResult shouldBe None
+        } finally {
+          runtime.close()
+        }
+      }
+
+      "retain the committed Action UnitOfWork for deferred Job terminal observation exactly once" in {
+        Given("a Job-owned task with a real FunctionalActionCall and an untouched caller UnitOfWork")
+        val fixture = _corpus_fixture()
+        val base = fixture.component.logic.executionContext()
+        val occurredat = base.clock.instant()
+        val actionid = ActionId.create("deferred-evaluation", occurredat, base.idGeneration)
+        val jobid = JobId.create("deferred-evaluation", occurredat, base.idGeneration)
+        val taskid = TaskId.create("deferred-evaluation", occurredat, base.idGeneration)
+        val caller = ExecutionContext.withJobContext(base, JobContext(
+          jobId = Some(jobid), taskId = Some(taskid), actionId = Some(actionid), currentTask = Some(taskid)
+        ))
+        val callerunitofwork = caller.runtime.unitOfWork
+        val callerbinding = callerunitofwork.executionContext
+        val observed = new AtomicReference[Option[ExecutionContext]](None)
+        val calls = new AtomicInteger()
+        val deliverycontexts = new AtomicReference(Vector.empty[ExecutionContext])
+        fixture.component.installSpi(CommitObservingCorpusEvaluationSink(
+          fixture.sink, fixture.commitstates, fixture.component.unitOfWorkForAttempt, Some(deliverycontexts)
+        ))
+        val operation = _success(OperationEvaluationOperationIdentity.createC(
+          fixture.component.name, "operation", "corpusFunctional"
+        ))
+        val action = ObservedSupplementalQueryAction(
+          _request(fixture.component.name, "corpusFunctional"), observed, calls
+        )
+        val runtime = new OperationEvaluationDeliveryRuntime()
+        try {
+          val evaluated = new OperationEvaluationActionTask(
+            ActionTask(actionid, action, fixture.component.actionEngine, Some(fixture.component)),
+            new OperationEvaluationAttemptCapture(operation, runtime),
+            (response, _) => Consequence.success(response)
+          )
+
+          When("the Job task commits before its canonical outcome is observed")
+          val outcome = evaluated.run(caller)
+
+          Then("the bound Action commits once while terminal and supplemental delivery wait")
+          outcome shouldBe TaskSucceeded(OperationResponse.Scalar("corpus-functional"))
+          val actual = observed.get().getOrElse(fail("ActionCall context missing"))
+          calls.get() shouldBe 1
+          actual.runtime.unitOfWork.executionContext should be theSameInstanceAs actual
+          actual.runtime.unitOfWork should not be theSameInstanceAs(callerunitofwork)
+          actual.runtime.unitOfWork.lastCommitTermination shouldBe Some(UnitOfWorkTermination.Committed)
+          fixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start")
+          deliverycontexts.get() shouldBe empty
+
+          When("Job outcome observation supplies the parent context")
+          evaluated.observeCanonicalOutcome(outcome, caller, cancelled = false)
+
+          Then("the terminal and candidate retain the committed Action UnitOfWork and Job correlation")
+          fixture.sink.facts.map(_.factKind.token) shouldBe
+            Vector("operation-start", "operation-terminal", "corpus-candidate")
+          fixture.sink.facts.flatMap(_.correlation.jobId).distinct shouldBe Vector(jobid)
+          fixture.sink.facts.flatMap(_.correlation.taskId).distinct shouldBe Vector(taskid)
+          fixture.sink.facts.last.correlation.attemptId shouldBe fixture.sink.facts.head.correlation.attemptId
+          fixture.commitstates.get() shouldBe Vector(true)
+          deliverycontexts.get() should have size 2
+          deliverycontexts.get().foreach(_.runtime.unitOfWork should be theSameInstanceAs actual.runtime.unitOfWork)
+          caller.runtime.unitOfWork should be theSameInstanceAs callerunitofwork
+          callerunitofwork.executionContext should be theSameInstanceAs callerbinding
+          callerunitofwork.lastCommitTermination shouldBe None
+          callerunitofwork.lastAbortResult shouldBe None
+          val delivered = fixture.sink.facts
+
+          When("the same task outcome is observed again")
+          evaluated.observeCanonicalOutcome(outcome, caller, cancelled = false)
+
+          Then("the removed pending terminal emits no further evidence")
+          fixture.sink.facts shouldBe delivered
+          deliverycontexts.get() should have size 2
+          calls.get() shouldBe 1
+        } finally {
+          runtime.close()
+        }
       }
 
       "release a ProcedureActionCall experiment observation with bounded measurements" in {
@@ -497,19 +620,6 @@ final class OperationEvaluationSupplementalDslSpec
     }
   }
 
-  private final case class CorpusFixture(
-    subsystem: Subsystem,
-    sink: DeterministicCorpusEvaluationSink,
-    component: SupplementalCorpusComponent,
-    commitstates: AtomicReference[Vector[Boolean]]
-  )
-
-  private final case class ExperimentFixture(
-    subsystem: Subsystem,
-    sink: DeterministicExperimentEvaluationSink,
-    component: SupplementalExperimentComponent
-  )
-
   private def _corpus_fixture(
     additionaloperations: Vector[spec.OperationDefinition] = Vector.empty
   ): CorpusFixture = {
@@ -666,6 +776,21 @@ final class OperationEvaluationSupplementalDslSpec
   }
 }
 
+object OperationEvaluationSupplementalDslSpec {
+  private final case class CorpusFixture(
+    subsystem: Subsystem,
+    sink: DeterministicCorpusEvaluationSink,
+    component: SupplementalCorpusComponent,
+    commitstates: AtomicReference[Vector[Boolean]]
+  )
+
+  private final case class ExperimentFixture(
+    subsystem: Subsystem,
+    sink: DeterministicExperimentEvaluationSink,
+    component: SupplementalExperimentComponent
+  )
+}
+
 private enum SupplementalMode {
   case CorpusFunctional
   case CorpusProcedure
@@ -701,7 +826,8 @@ private final class SupplementalExperimentComponent
 private final case class CommitObservingCorpusEvaluationSink(
   underlying: CorpusEvaluationSink,
   commitstates: AtomicReference[Vector[Boolean]],
-  unitofworkforattempt: OperationEvaluationAttemptId => Option[UnitOfWork]
+  unitofworkforattempt: OperationEvaluationAttemptId => Option[UnitOfWork],
+  observedcontexts: Option[AtomicReference[Vector[ExecutionContext]]] = None
 ) extends CorpusEvaluationSink {
   override val sinkIdentityOption = underlying.sinkIdentityOption
 
@@ -713,6 +839,7 @@ private final case class CommitObservingCorpusEvaluationSink(
   def recordTerminal(
     fact: OperationEvaluationTerminalFact
   )(using context: ExecutionContext): Consequence[OperationEvaluationDeliveryResult] =
+    observedcontexts.foreach(_.updateAndGet(_ :+ context))
     if (fact.outcome == OperationEvaluationOutcome.Failure)
       _record_commit_state(fact.correlation.attemptId)
     underlying.recordTerminal(fact)
@@ -720,6 +847,7 @@ private final case class CommitObservingCorpusEvaluationSink(
   def submitCandidate(
     fact: CorpusCandidateFact
   )(using context: ExecutionContext): Consequence[OperationEvaluationDeliveryResult] = {
+    observedcontexts.foreach(_.updateAndGet(_ :+ context))
     _record_commit_state(fact.correlation.attemptId)
     underlying.submitCandidate(fact)
   }
@@ -788,6 +916,21 @@ private final case class SupplementalQueryAction(
       case _ =>
         SupplementalProcedureActionCall(core, mode)
     }
+  }
+}
+
+private final case class ObservedSupplementalQueryAction(
+  request: Request,
+  observed: AtomicReference[Option[ExecutionContext]],
+  calls: AtomicInteger
+) extends QueryAction {
+  def createCall(core: ActionCall.Core): ActionCall = {
+    core.component.collect { case component: SupplementalCorpusComponent => component }
+      .foreach(_.observeActionContext(core.executionContext))
+    val call = SupplementalFunctionalActionCall(core)
+    calls.incrementAndGet()
+    observed.set(Some(call.executionContext))
+    call
   }
 }
 

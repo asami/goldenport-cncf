@@ -1,7 +1,7 @@
 package org.goldenport.cncf.phase51.build
 
 import java.io.File
-import java.net.URL
+import java.net.{JarURLConnection, URL}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 import java.util.Comparator
@@ -15,7 +15,7 @@ import org.yaml.snakeyaml.Yaml
 
 /*
  * @since   Oct. 16, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 19, 2026
  */
 final class CncfCoreDevelopmentRuntimeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _selector = "TEXTUS_GOLDENPORT_CORE_CNCF_SOURCE_ROOT"
@@ -327,7 +327,19 @@ final class CncfCoreDevelopmentRuntimeSpec extends AnyWordSpec with Matchers wit
         val owner = new File(loaded.getProtectionDomain.getCodeSource.getLocation.toURI).getCanonicalFile
         val resourcefiles = resources.filter(_.getProtocol == "file").map(url => new File(url.toURI).getCanonicalFile.toPath)
         val descriptor = _runtime_descriptor()
-        val descriptorfile = Option(descriptor._1).filter(_.getProtocol == "file").map(url => new File(url.toURI).getCanonicalFile.toPath)
+        val descriptorowner: Option[Path] = Option(descriptor._1).flatMap { url =>
+          url.getProtocol match {
+            case "file" => Some(new File(url.toURI).getCanonicalFile.toPath)
+            case "jar" =>
+              val connection = url.openConnection().asInstanceOf[JarURLConnection]
+              val jarurl = connection.getJarFileURL
+              if (connection.getEntryName == "META-INF/cncf/runtime.yaml" && jarurl.getProtocol == "file")
+                Some(new File(jarurl.toURI).getCanonicalFile.toPath)
+              else
+                None
+            case _ => None
+          }
+        }
         val sourcetarget = selected.map(source => new File(source, "target").getCanonicalFile.toPath)
         val selected204 = selected.map(_ => HttpStatus.fromInt(204).map(_.code))
         val response204 = selected.map(_ => HttpResponse.text(
@@ -352,7 +364,7 @@ final class CncfCoreDevelopmentRuntimeSpec extends AnyWordSpec with Matchers wit
             owner.isDirectory shouldBe true
             owner.toPath.startsWith(sourcetarget.get) shouldBe true
             resourcefiles shouldBe Vector(owner.toPath.resolve(resource))
-            descriptorfile.exists(_.startsWith(consumer.toPath.resolve("target"))) shouldBe true
+            descriptorowner.exists(_.startsWith(new File(consumer, "target").getCanonicalFile.toPath)) shouldBe true
             selected204 shouldBe Some(Some(204))
             response204 shouldBe Some(204)
         }

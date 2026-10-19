@@ -1,7 +1,7 @@
 # Phase 103 — Declaration Metadata Interpretation
 
 Date: 2026-10-18
-Status: Steps P103-S1/S2/S3 accepted locally; Phase delivery in progress; full validation has not passed.
+Status (updated 2026-10-19): Phase 103 CLOSED; Steps P103-S1/S2/S3/S4, required producer full validation and sole comprehensive Phase review accepted. At preparation of this closure record, the final local release commit is pending parent execution and committed-tree verification; its actual outcome belongs to the native commit receipt.
 
 Phase 103 began the normalized declaration interpretation Step. The frozen
 boundary is an additive public metadata ABI and its pure class/operation
@@ -150,14 +150,132 @@ protected-focused S3 Step review returned PASS with zero Current Boundary
 Blockers, Hygiene or Development Candidate findings and no evidence gaps.
 S3 is accepted in local Step commit `1df07da9be8716edf0e0462bcba221ca8d020c60`.
 
-Broader producer repository-full validation has not passed. Targeted non-DB
+At the S3 handoff, broader producer repository-full validation had not passed. Targeted non-DB
 reproduction also failed; the connection to the prior Action context/UnitOfWork
 ownership change has no accepted repair. Required PostgreSQL/MySQL flags were
 absent from the first full invocation, and the property/JUnit harness failure
 remains unresolved. Full Phase validation, review and release acceptance remain open.
 
-Actual sm-workflow source fixture/dependency refresh remains required separate
-S4 after producer acceptance and explicit source admission. No consumer source
+At that handoff, actual sm-workflow source fixture/dependency refresh remained
+required separate S4 after producer acceptance and explicit source admission. No consumer source
 was changed. The original Phase/base/authority/binding/plan epoch and VM-01..04
 requirements remain; full connected validation, one full Phase review and
 Phase acceptance are still open.
+
+## October 19 — consumer-owned S4 connection and focused closure checks
+
+The parent read actual sm-workflow Phase 6.2 consumer source and retained native
+receipts. The [consumer handoff](../../../notes/validation-test-metadata-consumer-handoff.md)
+links the selection, native metadata/validation and owning execution adapters.
+Actual discovery -> purpose/feature query -> identical producer `bindC` for
+selected and supplemental references -> native typed execution/outcome is
+available. The K2 CML authoring scenario produced COMPLETE ascii/empty/unicode
+inventory, query-selected ascii and explicit supplemental unicode, ordinary
+Test 3/3 and both exact TestOnly 1/1. Real independent consumer review accepted
+the isolated candidate, followed by Step commit
+`b69a60a0fc3dd5e9e7df87fd08b2549f41cef220`. Actual L3 Slice-plan integration
+has independent acceptance and isolated Step commit
+`157388724869c21649936d4b2de7508571507605` as supplementary concrete evidence.
+Neither commit accepts the dirty primary consumer implementation or releases
+Phase 6.2.
+
+The former source-admission prerequisite is resolved by that consumer-owned
+delivery and dependency refresh. This CNCF task performs and authorizes no
+sm-workflow source edit. Neither whole Phase waits for the other's whole
+completion. P103-S4 remains IN-PROGRESS: independent CNCF integrated review and
+its exact local Step acceptance commit are pending. The accepted Phase 103
+binder scope is exact zero-input scenario selection. Separately scoped nonempty
+typed-input work may coexist in the current tree without becoming Phase 103
+achievement evidence. No synthetic fixture is promoted to runtime proof;
+normalized CML semantics and the cbd-support static owner remain unchanged.
+
+The earlier failed full validation, missing native PostgreSQL/MySQL flags and
+failed non-DB reproduction remain historical evidence. Bounded Action-context
+and Display observer corrections are authored. Parent-selected
+`p103-closure-focused-20261019-003` passed compilation and 161/161 tests across
+19 suites, with no failures, aborts, canceled or pending tests; SBT/wrapper
+exit 0 and lock released. The original seven and additional three failures,
+including the List property/JUnit failure, are resolved on this focused surface.
+That result did not supply independent integrated acceptance. At that point,
+required producer-full validation was running with both native DB flags true;
+its outcome was unknown. Full validation, one full Phase review and release commit remained
+open. Original authority/base/binding/epoch/history and VM-01..04 obligations
+are retained; the [checklist](../../../phase/phase-103-checklist.md) owns closure.
+
+## October 19 — full validation result and expanded focused proof
+
+The full001 invocation enabled both PostgreSQL/MySQL flags and passed compilation.
+It completed with 6,853 tests across 861 suites: 6,851 passed, two failed,
+no suite aborts, five canceled, one ignored and 46 pending. SBT and wrapper
+exited 1 and the shared lock was released. The remaining C3-C2
+historical-caller/current-Action no-op oracle and C3-H5 direct SPI observer bypass
+were test observation defects, not native DB failures. Both were corrected
+without weakening ownership, no-replay or full-state assertions.
+
+Focused004 then passed compilation and 173/173 tests across 21 suites, including
+the previous 19 and both full001 failure suites. This includes private helper
+compilation and actual Action/caller history assertions. There were no failures,
+aborts, canceled, ignored or pending tests; SBT/wrapper exit 0 and lock released.
+The earlier failed invocations and focused003 success remain historical evidence.
+
+Required full002 is now running with explicit Test fork and both native DB
+flags; its outcome remains UNKNOWN until terminal completion. S4 remains
+IN_PROGRESS pending independent CNCF integrated Step review and its exact local
+Step commit. Required full validation, one full Phase review and final release
+remain open. The consumer ownership, isolated K2/L3 acceptance limits and exact
+zero-input Phase 103 scope recorded above are unchanged.
+
+Fresh independent protected CNCF integrated S4 Step review passed over the complete
+18 owned and 14 affected paths, with no Current Boundary Blockers, Development
+Candidates or evidence gaps. The actual Step review acceptance is persisted in
+the typed phase_review ledger10. Four accepted nonblocking pre-existing maintenance
+Hygiene dispositions will be projected to the canonical Hygiene journal before
+release. The exact local S4 Step acceptance commit remains pending, so S4 stays
+IN_PROGRESS and its combined review/commit checkbox remains unchecked. Required
+full002 is still running with outcome UNKNOWN; required full validation, the sole
+full Phase review and final release remain open.
+
+## October 19 — all Steps accepted and required full validation passed
+
+P103-S4 is CLOSED and accepted in exact local Step commit
+`c456f09c9ddd67f3746500381d8f7b30be538d57`, following its independent integrated
+review. All four declared Steps are accepted locally. Required full002 then
+passed compilation and 6,853/6,853 tests across 861 completed suites, with zero
+failures or suite aborts, five canceled, one ignored and 46 pending. Both native
+PostgreSQL and MySQL suites ran with explicit Test fork and both flags true;
+SBT/wrapper exit 0 and the shared lock was released. Earlier failures and
+pending-at-time entries above remain historical evidence.
+
+The four accepted nonblocking maintenance dispositions are materialized in the
+[Hygiene journal](2026-10-18-phase-103-hygiene-follow-up.md); there are no Development
+findings. The sole comprehensive Phase review and final release remain pending,
+so Phase 103 and its VM-01..04 closure ledger remain open. The exact zero-input
+scope, actual isolated K2/L3 consumer acceptance limits and consumer ownership
+remain unchanged.
+
+## October 19 — Phase 103 closure decision
+
+The sole comprehensive Phase review passed with no Current Boundary Blockers
+or evidence gaps. All four declared Steps are accepted in local commits
+`ac443ed353cc682251e4d17bf4e64a1285955798`,
+`2ec6da1265d14430cf522443869a0b9b2647ea00`,
+`1df07da9be8716edf0e0462bcba221ca8d020c60` and
+`c456f09c9ddd67f3746500381d8f7b30be538d57`. Focused004 passed 173/173 tests
+across 21 suites. Required full002 passed compilation and 6,853/6,853 tests
+across 861 suites, with no failures or aborts; five canceled, one ignored and
+46 pending retain those statuses. Both native PostgreSQL/MySQL paths ran;
+SBT/wrapper exit 0 and lock released. Earlier failed and pending-at-time
+entries above remain historical evidence.
+
+Phase 103 and VM-01..04 are CLOSED on this connected producer acceptance,
+including actual isolated K2/L3 consumer evidence and the shared static handoff.
+Exact zero-input binding scope and consumer ownership remain unchanged; this
+decision accepts neither nonempty typed-input work nor whole sm-workflow Phase
+6.2. Cozy syntax/generator and cbd-support static application ownership remain
+separate. The [Hygiene journal](2026-10-18-phase-103-hygiene-follow-up.md) retains
+OPEN nonblocking follow-ups `HYG-P103-S4-001`, `HYG-P103-S4-002`,
+`HYG-P103-S4-003`, `HYG-P103-S4-004` and `HYG-P103-FULL-001`; no Development
+findings or unpersisted accepted findings remain. At preparation of this closure
+record, the distinct final local release commit is pending parent execution and
+committed-tree verification; its actual outcome belongs to the native commit
+receipt. No successor, push, publication or deployment is started here.

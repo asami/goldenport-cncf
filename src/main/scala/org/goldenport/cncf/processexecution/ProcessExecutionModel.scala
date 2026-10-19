@@ -8,7 +8,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceExecutionAdmiss
 /*
  * @since   Jul. 17, 2026
  *  version Jul. 22, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ProcessCapabilityId private (value: String) {
@@ -545,8 +545,10 @@ object ProcessProgramDefinition {
         _ <- if (metadata.testClasses.contains(selection.suiteClassName)) Consequence.unit else
           Consequence.argumentPolicyViolation("scenario", "sbt.execution.scenario-allowlist",
             "exact class in current host TestOnly allowlist", "unapproved")
+        tokens = SbtScenarioParameters.renderArguments(selection.parameters)
+        task = s"testOnly ${selection.suiteClassName} -- -t \"${selection.testName}\""
         arguments = definition.fixedArguments.dropRight(1) :+
-          s"testOnly ${selection.suiteClassName} -- -t \"${selection.testName}\""
+          (if (tokens.isEmpty) task else task + " " + tokens.mkString(" "))
       } yield new ProcessProgramDefinition(
         definition.capability, definition.safeProgramIdentity, definition._executable_location,
         arguments, ProcessArgumentPolicy(arguments), definition.maximumLimits, definition.allowedArtifacts,

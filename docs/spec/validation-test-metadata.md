@@ -17,16 +17,18 @@ and [`ValidationDiscoverySelectionSpec`](../../src/test/scala/org/goldenport/cnc
 
 `ABI_VERSION` is the integer `1`. `Declaration` carries `abiVersion`, optional
 `purposes`, a `features` set, optional `expectedDuration`, optional `durationClass`,
-optional `executionRequirement` and a `requiredSemantics` set. All fields have
+optional `executionRequirement`, a `requiredSemantics` set and optional
+`inputSchema`. All fields have
 empty/absent defaults except `abiVersion`, which defaults to `ABI_VERSION`.
-`Declaration.validateC` admits the declaration without rewriting its source facts.
+`Declaration.validateC` admits the declaration and sorts its input schema by
+name; existing duration and execution-requirement source facts are preserved.
 `resolveC(specification, operation)` returns `Consequence[Metadata]` and performs
 pure deterministic validation and normalization. Both declarations are validated
 before composition; an operation override cannot hide an invalid class default.
 
 Only ABI version `1` is supported. Required semantic names are exactly
-`purposes`, `features`, `expectedDuration`, `durationClass` and
-`executionRequirement`. A required semantic name declares a compatibility need;
+`purposes`, `features`, `expectedDuration`, `durationClass`,
+`executionRequirement` and `inputSchema`. A required semantic name declares a compatibility need;
 it does not require a value for an optional field. Unknown names, including case
 variants, fail admission. There is no inferred minor version or silent fallback.
 
@@ -45,8 +47,8 @@ the feature set declared by tests is not a complete application inventory.
 ## Operation normalization
 
 `Metadata` carries purpose and feature sets, optional expected duration, a duration
-class, an optional existing execution aggregate and `Origins(specification,
-operation)`. Origins record declaration presence, including an explicit empty
+class, an optional existing execution aggregate, `Origins(specification,
+operation)` and a name-sorted `inputSchema` vector. Origins record declaration presence, including an explicit empty
 declaration; they do not supply source/artifact revision provenance.
 
 | Field | Resolution |
@@ -57,6 +59,7 @@ declaration; they do not supply source/artifact revision provenance.
 | `durationClass` | Operation value when supplied, otherwise specification value, otherwise `NORMAL`. |
 | `executionRequirement` | Validated canonical aggregate inherited or composed as below. |
 | `origins` | Presence of the two admitted declaration options. |
+| `inputSchema` | Operation `Some(schema)` replaces the whole specification schema, including explicit empty; `None` inherits; otherwise empty. |
 
 `None`/`None` gives empty purposes/features, absent duration/requirement, `NORMAL`
 and `Origins(false, false)`. An explicit empty operation declaration inherits
@@ -289,13 +292,17 @@ grammar. No generic record replaces these fixed public models.
 
 ## Exact typed operation binding
 
-[`ValidationOperationBindingV1.bindC(inventory, reference, workspaceId)`](../../src/main/scala/org/goldenport/cncf/validation/ValidationOperationBindingV1.scala)
+[`ValidationOperationBindingV1.bindC(inventory, reference, workspaceId, parameters = Map.empty)`](../../src/main/scala/org/goldenport/cncf/validation/ValidationOperationBindingV1.scala)
 uses the existing public exact `ValidationDiscoveryV1.resolveC` and returns
 `Consequence[BoundOperation]`. The final `BoundOperation` has a private
 constructor and public `operation: ValidationDiscoveryV1.Operation` and
-`intent: UnitOfWorkOp.SbtExec`. Its operation is unchanged, including metadata,
+`intent: UnitOfWorkOp.SbtExec`, with read-only typed `parameters` equal to
+`intent.target.scenario.get.parameters`. Its operation is unchanged, including metadata,
 provenance, requirements and diagnostics. Its intent is
-`SbtExec(SbtTarget(workspaceId, Some(SbtScenarioSelection(class, name))), TestOnly)`.
+`SbtExec(SbtTarget(workspaceId, Some(SbtScenarioSelection(class, name, inputs))), TestOnly)`.
+The supplied JSON parameter map is bound against the actual resolved metadata
+schema; absent input uses declared defaults. A no-input operation rejects any
+nonempty supplied parameter map.
 The logical typed workspace must be nonnull and admitted, and the framework
 selector must satisfy the [typed SBT literal selection contract](typed-sbt-execution.md).
 Unsupported literal rendering, null and malformed inputs fail structurally.
@@ -313,6 +320,122 @@ the definition narrows and never expands it. One final argv item requests the
 exact class/name. Compile/Test reject scenarios and `None` keeps class-only
 behavior. Generic tagged execution and caller request overrides remain denied;
 no host codec, request-construction site or interpreter change is introduced.
+
+## Typed scenario input schema (R1)
+
+[`ValidationInputsV1`](../../src/main/scala/org/goldenport/cncf/validation/ValidationInputsV1.scala)
+owns `Kind.Text`, `Kind.BooleanValue`, `Kind.Integer` and
+`Parameter(name, kind, required = true, defaultValue = None)`.
+[`SbtScenarioParameters.Value`](../../src/main/scala/org/goldenport/cncf/processexecution/SbtScenarioParameters.scala)
+has exact variants `Text(String)`, `BooleanValue(Boolean)` and `Integer(Long)`.
+Schema/default admission and typed input admission reject null maps, vectors,
+options, fields and members. There are at most 16 distinct parameters; names
+match `[a-z][a-z0-9-]{0,63}`. `validateSchemaC` returns a name-sorted vector.
+Defaults must have the exact declared kind and satisfy the value restrictions.
+
+Text is nonempty and at most 512 characters, with no controls, double quote,
+backslash or semicolon. Spaces (including leading/trailing spaces), Unicode,
+single quotes, dollar signs and parentheses remain exact literal data. Boolean
+values and signed Long values retain their types. These bounded scenario data
+never define executables, workspace paths, environment, JVM flags or SBT commands.
+There is no arbitrary argv API or shell escaping/expansion layer. Failures use
+argument policies `validation.inputs` or `sbt.execution.parameters`.
+
+## Exact JSON binding and defaults (R2)
+
+`ValidationInputsV1.bindC(schema, supplied: Map[String, io.circe.Json])` validates
+the schema and rejects unknown input keys, explicit null and incorrect JSON
+kinds. Text requires a JSON string, BooleanValue a JSON Boolean, and Integer
+an integral number exactly representable as a signed Long. No string coercion,
+fractional rounding or overflow is accepted. An absent name uses its declared
+default; otherwise a required input fails and an optional input stays absent.
+A supplied wrong value always fails even if the declaration has a default.
+The result's named typed values define its meaning through ordinary Map equality.
+
+For example, a schema declaring Integer `count` default `1`, BooleanValue
+`enabled` default `true`, and Text `label` default `default case` binds `{}` to
+those three typed defaults. JSON `{"count":2,"enabled":false,"label":"first case"}`
+binds the supplied values. `{"count":"2"}`, `{"count":null}` and
+`{"undeclared":2}` fail. Runtime omission does not clear the schema.
+
+## Ordinary ScalaTest ConfigMap transfer (R3)
+
+The trailing `SbtScenarioSelection.parameters = Map.empty` preserves existing
+no-input construction. The existing adapter appends name-sorted tokens after
+the exact class/name selection inside its one final SBT task argument:
+
+```text
+testOnly <class> -- -t "<exact name>" "-Dcncf.validation.input.count=2" "-Dcncf.validation.input.enabled=false" "-Dcncf.validation.input.label=first case"
+```
+
+Each entire `-D...` token is quoted within that task string for ordinary
+ScalaTest ConfigMap processing. None becomes a top-level SBT/JVM argument.
+Text is literal, Boolean is lowercase `true`/`false`, and Long is normal decimal.
+Empty parameters produce the exact previous fixed argument vector. The existing
+empty request and current host checks are unchanged.
+
+`fromConfigMapC(schema, supplied: Map[String, Any])` is the pure bridge after
+ordinary ScalaTest argument processing. It reads only the fixed namespace
+`cncf.validation.input.`; unrelated ScalaTest keys are ignored. Namespaced
+unknown names, null/non-String values and malformed data fail. Boolean spelling
+must be exactly `true` or `false`. Long spelling must equal its canonical decimal
+rendering: `01`, `+1`, `-0`, `1.0`, whitespace and out-of-range values fail.
+Text has the same R1 restrictions. R2 required/default/optional semantics apply
+identically. Main code depends on neither ScalaTest ConfigMap nor a parser
+registry, configuration file fallback or an external input API.
+
+## Trusted schema declarations and discovery (R4)
+
+A nonempty schema declaration must explicitly contain `inputSchema` in
+`requiredSemantics` while ABI_VERSION remains `1`. Omitting that compatibility
+requirement fails: older interpreters must reject the unknown required semantic
+instead of silently discarding the input contract. Empty/no-input declarations
+remain valid without that marker; unknown required semantic names still fail.
+Both declarations are validated before inheritance, so an operation cannot hide
+an invalid specification schema. The operation's whole `Some(schema)` replaces
+the inherited schema without merging parameters. `Some(Vector.empty)` explicitly
+clears inheritance; `None` inherits. Discovery admission reconstructs the full
+schema and its required semantics, and rejects noncanonical Metadata ordering
+or malformed defaults instead of dropping the schema.
+
+The existing trusted local `ValidationDeclarationProvider` attached through
+`ValidationSpecification` or `ValidationScenario` authors the schema. For example:
+
+```scala
+Declaration(requiredSemantics = Set("inputSchema"), inputSchema = Some(Vector(
+  ValidationInputsV1.Parameter("count", ValidationInputsV1.Kind.Integer,
+    defaultValue = Some(SbtScenarioParameters.Value.Integer(1L)))
+)))
+```
+
+The actual annotated
+[`TypedInputsFixtureSpec`](../../src/test/scala/org/goldenport/cncf/validation/fixtures/phase62inputs/TypedInputsFixtureSpec.scala)
+declares all three example inputs through a local provider and consumes
+`test.configMap` using ordinary ScalaTest `withFixture`. Construction registers
+one exact scenario without running its body or fixture. Its separate
+`phase62inputs` namespace leaves Phase103 fixture counts unchanged. Current CML
+generation retains its existing supported metadata fields; this unit authors
+nonempty schemas through the actual Scala provider and claims no CML input-schema
+generation or new CML property support.
+
+## Typed intent and evidence boundary (R5)
+
+Binding resolves the actual exact inventory operation before validating its
+inputs. Distinct supplied variants of one logical reference retain that same
+reference, original provenance and metadata, while target parameters differ.
+Binding has no effects or admission. Only the current UnitOfWork host supplies
+workspace Manage permission, component owner grant, executable, environment,
+limits and its class allowlist. Compile/Test reject scenario selection, and
+generic tagged ProcessExec and request overrides remain denied.
+
+Examples E1–E7 are authored in the fixture,
+[`ValidationInputsV1Spec`](../../src/test/scala/org/goldenport/cncf/validation/ValidationInputsV1Spec.scala),
+metadata, binding and existing SBT execution specifications. Their producer
+checks include real scoped metadata discovery and controlled-driver interpreter
+admission. They do not establish actual SBT process execution of nonempty inputs
+or consumer completion. The dependent sm-workflow consumer connection, real
+invocation variants and independent acceptance remain required. This input unit
+asserts no local publication, Phase103 completion or Phase6.2 completion.
 
 A scenario result retains the exact target and requires the conservative
 ordinary successful report for one matching class and exactly one test.

@@ -41,10 +41,14 @@ Current baseline:
   and separate sm-workflow obligations. No consumer Phase completion, main
   merge, push, publication or deployment is claimed.
 
-- [Phase 103](phase-103.md) plans the shared Validation/Test Metadata ABI and
-  operation discovery, driven by sm-workflow Phase 5. textus-cbd-support static
-  analysis/KPI is a separate Mac mini consumer; its completion does not block
-  the producer/runtime slice. [Checklist](phase-103-checklist.md).
+- [Phase 103](phase-103.md) is CLOSED: shared Validation/Test Metadata ABI, real
+  operation discovery, typed exact zero-input binding and actual sm-workflow
+  consumer integration. Four Steps, required full validation (6,853/6,853) and
+  the sole comprehensive review passed. The shared static/CML handoff preserves
+  consumer ownership; five nonblocking Hygiene follow-ups remain recorded.
+  At preparation of this closure record, final local release execution and
+  verification are pending; the actual outcome belongs to the native commit receipt.
+  [Checklist](phase-103-checklist.md).
 
 
 - Closed Job Management phase: [Phase 69.7](phase-69.7.md) /
@@ -729,8 +733,8 @@ retain their dated inventory status. This inventory changes no acceptance author
 | [phase-93](phase-93.md) | No top-level status declared |
 | [phase-94-checklist](phase-94-checklist.md) | status=planned |
 | [phase-94](phase-94.md) | status=planned |
-| [phase-103](phase-103.md) | status=planned |
-| [phase-103-checklist](phase-103-checklist.md) | status=planned |
+| [phase-103](phase-103.md) | status=closed |
+| [phase-103-checklist](phase-103-checklist.md) | status=closed |
 | [phase-105](phase-105.md) | status=closed |
 | [phase-105-checklist](phase-105-checklist.md) | status=closed |
 

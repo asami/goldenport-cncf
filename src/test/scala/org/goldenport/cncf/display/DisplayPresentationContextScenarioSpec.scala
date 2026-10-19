@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 17, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DisplayPresentationContextScenarioSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -21,7 +21,9 @@ final class DisplayPresentationContextScenarioSpec extends AnyWordSpec with Matc
   private def _execute(session: Session, provider: Provider, request: Request): (Json, Execution) = {
     val active = session.execution()
     val ctx = authenticated(active.context).withScope(ScopeContext.withPresentationContextResolver(active.context.scope, provider))
-    json(session.subsystem.executeOperationResponseInContext(request, ctx)) -> active
+    active.observeAction {
+      json(session.subsystem.executeOperationResponseInContext(request, ctx)) -> active
+    }
   }
   private def _context(json: Json): PresentationContext =
     success(PresentationContextCodec.decodeJsonC(json.hcursor.downField("presentationContext").focus.get))
@@ -75,6 +77,15 @@ final class DisplayPresentationContextScenarioSpec extends AnyWordSpec with Matc
           _check_context(_context(updated))
           _check_context(_context(updated.hcursor.downField("projection").downField("display").focus.get))
           execution.uow.lastCommitTermination shouldBe Some(org.goldenport.cncf.unitofwork.UnitOfWorkTermination.Committed)
+          execution.uow.lastCommitResult shouldBe Some(Consequence.unit)
+          (execution.uow eq execution.callerUnitOfWork) shouldBe false
+          (execution.uow.executionContext eq execution.context) shouldBe false
+          (execution.uow.executionContext.unitOfWork eq execution.uow) shouldBe true
+          (execution.context.unitOfWork eq execution.callerUnitOfWork) shouldBe true
+          (execution.callerUnitOfWork.executionContext eq execution.context) shouldBe true
+          execution.callerUnitOfWork.lastCommitTermination shouldBe execution.callerCommitTerminationBeforeExecution
+          execution.callerUnitOfWork.lastCommitResult shouldBe execution.callerCommitResultBeforeExecution
+          execution.callerUnitOfWork.lastAbortResult shouldBe None
           session.log.events.count(_.event == "find") shouldBe 1
           execution.lifecycleObservers.map(_.updates.size).sum shouldBe 1
           _check_callbacks(session)
@@ -107,6 +118,15 @@ final class DisplayPresentationContextScenarioSpec extends AnyWordSpec with Matc
           pending.hcursor.downField("projection").downField("display").focus shouldBe None
           _check_context(_context(pending))
           execution.uow.lastCommitTermination shouldBe Some(org.goldenport.cncf.unitofwork.UnitOfWorkTermination.Committed)
+          execution.uow.lastCommitResult shouldBe Some(Consequence.unit)
+          (execution.uow eq execution.callerUnitOfWork) shouldBe false
+          (execution.uow.executionContext eq execution.context) shouldBe false
+          (execution.uow.executionContext.unitOfWork eq execution.uow) shouldBe true
+          (execution.context.unitOfWork eq execution.callerUnitOfWork) shouldBe true
+          (execution.callerUnitOfWork.executionContext eq execution.context) shouldBe true
+          execution.callerUnitOfWork.lastCommitTermination shouldBe execution.callerCommitTerminationBeforeExecution
+          execution.callerUnitOfWork.lastCommitResult shouldBe execution.callerCommitResultBeforeExecution
+          execution.callerUnitOfWork.lastAbortResult shouldBe None
           execution.lifecycleObservers.map(_.updates.size).sum shouldBe 1
           provider.requests should have size 1
 

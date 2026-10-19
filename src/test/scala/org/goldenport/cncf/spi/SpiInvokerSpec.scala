@@ -19,6 +19,7 @@ import org.goldenport.cncf.security.OperationAuthorizationRule
 import org.goldenport.cncf.spi.evaluation.{CorpusEvaluationSinkSocket, DeterministicCorpusEvaluationSink}
 import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, Subsystem}
 import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.cncf.unitofwork.UnitOfWorkTermination
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -88,13 +89,15 @@ final class SpiInvokerSpec
     }
 
     "use a selected assembly binding without rematerializing the typed service" in {
-      Given("an assembly-admitted provider with an exact instance and a component operation")
+      Given("an assembly-admitted provider with an exact instance, a component operation, and a caller-owned UnitOfWork")
       val fixture = InvocationFixture.create()
       given ExecutionContext = ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.create(), enabled = true)
       val caller = summon[ExecutionContext]
       val parentruntime = caller.runtime
       val parentuow = caller.unitOfWork
       val parenttermination = parentuow.lastCommitTermination
+      val callerunitofwork = caller.runtime.unitOfWork
+      val callerbinding = callerunitofwork.executionContext
       val secret = "not-for-calltree"
       val request = Record.create(Vector(
         "tag" -> "first",
@@ -129,6 +132,25 @@ final class SpiInvokerSpec
       caller.unitOfWork should be theSameInstanceAs parentuow
       parentuow.lastCommitTermination shouldBe parenttermination
       fixture.provider.typedProviderMaterializationCount shouldBe fixture.materializationsAfterAssembly
+
+      And("the provider Action owns a fresh bound runtime and UnitOfWork while retaining caller facilities")
+      val actual = fixture.provider.observedExecutionContext.getOrElse(fail("provider Action context missing"))
+      actual.runtime should not be theSameInstanceAs(caller.runtime)
+      actual.runtime.unitOfWork should not be theSameInstanceAs(callerunitofwork)
+      actual.runtime.unitOfWork.executionContext should be theSameInstanceAs actual
+      actual.runtime.unitOfWork.lastCommitTermination shouldBe Some(UnitOfWorkTermination.Committed)
+      actual.security shouldBe caller.security
+      actual.clock should be theSameInstanceAs caller.clock
+      actual.random should be theSameInstanceAs caller.random
+      actual.idGeneration should be theSameInstanceAs caller.idGeneration
+      actual.runtime.context shouldBe caller.runtime.context
+      actual.runtime.httpDriver should be theSameInstanceAs caller.runtime.httpDriver
+      actual.observability.correlationId shouldBe caller.observability.correlationId
+      actual.observability.callTreeContext should be theSameInstanceAs caller.observability.callTreeContext
+      caller.runtime.unitOfWork should be theSameInstanceAs callerunitofwork
+      callerunitofwork.executionContext should be theSameInstanceAs callerbinding
+      callerunitofwork.lastCommitTermination shouldBe None
+      callerunitofwork.lastAbortResult shouldBe None
 
       And("safe selection metadata is visible in CallTree without request values")
       val calltree = summon[ExecutionContext].observability.callTreeContext.build().getOrElse(fail("calltree missing")).toRecord.print

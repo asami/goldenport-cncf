@@ -1,7 +1,8 @@
 # Phase 103: Validation/Test Metadata ABI and Discovery
 
-status=in-progress
+status=closed
 planned_at=2026-10-06
+closed_at=2026-10-19
 driver=sm-workflow Phase 5
 consumer=sm-workflow, textus-cbd-support, Cozy/CML projection
 static_analysis_owner=textus-cbd-support on Mac mini
@@ -51,7 +52,7 @@ review: 17 declaration scenarios and 16 existing execution-contract regressions
 passed across three suites, with no review findings. Its public declaration ABI,
 callable normalization, Executable Specifications and normative declaration docs
 are accepted in local Step commit `ac443ed353cc682251e4d17bf4e64a1285955798`.
-Full Phase validation and acceptance remain pending.
+At the S1 handoff, full Phase validation and acceptance remained pending.
 The [implementation journal](../journal/2026/10/2026-10-18-phase-103-validation-metadata.md)
 records the current handoff. The checklist remains the completion ledger.
 
@@ -89,25 +90,70 @@ Blockers, Hygiene or Development Candidate findings and no evidence gaps.
 S3 is accepted in local Step commit `1df07da9be8716edf0e0462bcba221ca8d020c60`. No runtime consumer
 acceptance is inferred.
 
-Broader producer repository-full validation has not passed. Targeted non-DB
-reproduction also failed; the connection to the prior Action context/UnitOfWork
-ownership change has no accepted repair. Required PostgreSQL/MySQL flags were
-absent from the first full invocation, and the property/JUnit harness failure
-remains unresolved. Full Phase validation, review and release acceptance remain open.
+As of October 19, P103-S4 is CLOSED and accepted locally. The actual consumer connection is
+delivered by [sm-workflow Phase 6.2](https://github.com/asami/sm-workflow/blob/main/docs/phase/phase-6.2.md),
+which owns its implementation and dependency refresh. The source-admission
+prerequisite is resolved by that consumer-owned delivery; this CNCF task neither
+authorizes nor performs sm-workflow source edits. Neither whole Phase waits for
+the other's whole completion. The [handoff](../notes/validation-test-metadata-consumer-handoff.md)
+records actual discovery -> purpose/feature query -> identical exact producer
+binding for selected/supplemental references -> native typed execution/outcomes.
+The K2 CML scenario has COMPLETE ascii/empty/unicode inventory, query-selected
+ascii and supplemental unicode, ordinary Test 3/3 and both exact TestOnly 1/1.
+Its independent consumer acceptance and isolated Step commit
+`b69a60a0fc3dd5e9e7df87fd08b2549f41cef220`, plus supplementary L3 Slice-plan
+acceptance at `157388724869c21649936d4b2de7508571507605`, establish concrete
+consumer evidence. They do not accept the dirty primary sm-workflow tree or
+release Phase 6.2. Independent CNCF integrated S4 review passed; its exact local
+Step acceptance commit is `c456f09c9ddd67f3746500381d8f7b30be538d57`. All four
+declared Steps are accepted locally. The synthetic example remains static input,
+never runtime proof.
 
-Actual sm-workflow source fixture/dependency refresh remains required separate
-Step P103-S4 under explicit source admission after producer acceptance. Its
-concrete discovery -> query -> exact binding -> typed invocation consumer is
-not replaced by the synthetic fixture or deterministic driver specifications.
-VM-01..04 and all full Phase checks remain obligations; internal Step handoffs
-do not split the Phase.
+The accepted Phase 103 operation binding is exact zero-input scenario selection.
+Separately scoped nonempty typed-input work may coexist in the current tree;
+its acceptance is not attributed to Phase 103.
+
+The first broader producer validation failed and omitted the required native
+PostgreSQL/MySQL flags; targeted non-DB reproduction also failed. Bounded
+Action-context and Display observer corrections are authored. The October 19
+closure-focused validation passed compilation and 161/161 tests across 19
+suites, with no failures, aborts, canceled or pending tests, SBT/wrapper exit 0
+and the shared lock released. This resolves the original seven and additional
+three failures on that focused surface, including the List property/JUnit
+failure; independent integrated S4 review and its local Step acceptance have since
+completed. The subsequent
+full001 invocation enabled PostgreSQL/MySQL and passed compilation, then failed:
+6,853 tests across 861 suites, 6,851 passed and two failed, no suite aborts,
+five canceled, one ignored and 46 pending; SBT/wrapper exit 1, lock released.
+The remaining C3-C2 historical-caller/current-Action no-op oracle and C3-H5
+direct SPI observer bypass were test observation defects, not native DB failures.
+Both were corrected while retaining ownership, no-replay and full-state assertions.
+Focused004 passed compilation and 173/173 tests across 21 suites, including the
+previous 19 and both failure suites, private helper compilation and actual
+Action/caller history assertions. It had no failures, aborts, canceled, ignored
+or pending tests; SBT/wrapper exit 0, lock released. Required full002 subsequently
+passed compilation and 6,853/6,853 tests across 861 suites, with zero failures or
+suite aborts, five canceled, one ignored and 46 pending. Both native PostgreSQL
+and MySQL suites ran with explicit Test fork and both flags true; SBT/wrapper
+exit 0 and lock released. Five accepted nonblocking Hygiene dispositions are
+recorded in the [Hygiene journal](../journal/2026/10/2026-10-18-phase-103-hygiene-follow-up.md).
+The sole comprehensive Phase review passed on October 19 with no Current
+Boundary Blockers or evidence gaps. All four Steps, required full validation,
+actual consumer connection and shared static handoff are accepted; VM-01..04
+are closed. At preparation of this closure record, the distinct final local
+release commit is pending parent execution and committed-tree verification;
+its actual outcome belongs to the native commit receipt.
+
+Internal Step handoffs did not split the Phase. The five Hygiene records remain
+OPEN separate follow-ups; there are no Development findings or unpersisted
+accepted findings. Closure starts no successor or remote publication.
 
 ## Development items
 
-- [ ] VM-01: Freeze the versioned normalized metadata and representation contract.
-- [ ] VM-02: Implement public Scala declarations and deterministic operation discovery.
-- [ ] VM-03: Verify merge, identity, compatibility and discovery through Executable Specifications.
-- [ ] VM-04: Deliver runtime/static consumer handoffs and document acceptance.
+- [x] VM-01: Freeze the versioned normalized metadata and representation contract.
+- [x] VM-02: Implement public Scala declarations and deterministic operation discovery.
+- [x] VM-03: Verify merge, identity, compatibility and discovery through Executable Specifications.
+- [x] VM-04: Deliver runtime/static consumer handoffs and document acceptance.
 
 Detailed tasks and evidence belong in the [checklist](phase-103-checklist.md).
 

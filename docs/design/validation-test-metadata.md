@@ -174,10 +174,10 @@ The actual static owner is the cbd-support
 [October 6 journal](https://github.com/asami/textus-cbd-support/blob/main/docs/journal/2026/10/2026-10-06-validation-test-metadata-static-analysis.md).
 Its closed Phase 14 is native Job integration, not metadata ownership. The
 [handoff](../notes/validation-test-metadata-consumer-handoff.md) preserves this
-workstream and the separately admitted actual sm-workflow S4 fixture obligation.
+workstream and the actual sm-workflow consumer connection obligation.
 Static application completion is outside producer acceptance.
 
-## Remaining connected delivery
+## Accepted connected delivery
 
 P103-S1 is accepted in `ac443ed353cc682251e4d17bf4e64a1285955798`.
 P103-S2 is accepted in `2ec6da1265d14430cf522443869a0b9b2647ea00`. The in-process
@@ -189,7 +189,31 @@ suite (total 80 tests across nine suites, zero failures or aborts, SBT/wrapper
 exit 0, shared lock released). Independent protected-focused S3 Step review
 returned PASS with zero Current Boundary Blockers, Hygiene or Development
 Candidate findings and no evidence gaps. S3 is accepted in local Step commit
-`1df07da9be8716edf0e0462bcba221ca8d020c60`. Actual sm-workflow source fixture and dependency refresh require
-separate S4 admission after producer acceptance. Full Phase validation/review
-remain open. The
-[phase checklist](../phase/phase-103-checklist.md) owns delivery status.
+`1df07da9be8716edf0e0462bcba221ca8d020c60`.
+
+The actual runtime adapter belongs to sm-workflow Phase 6.2: discovery and
+purpose/feature selection feed the same producer exact binder for selected and
+supplemental references, followed by native typed execution and exact outcome
+consumption. Consumer implementation does not require this producer task to
+edit sm-workflow, and neither whole Phase depends on the other's whole closure.
+The [handoff](../notes/validation-test-metadata-consumer-handoff.md) records actual
+K2 CML and supplementary L3 Slice-plan evidence and isolated consumer acceptance.
+That delivery supports exact zero-input scenario selection; acceptance of
+separately scoped nonempty typed-input work is not attributed to Phase 103 even
+when that work coexists in the current tree. The normalized CML and synthetic
+static example contracts above are unchanged. Independent integrated CNCF S4 review
+passed and S4 is accepted in local Step commit `c456f09c9ddd67f3746500381d8f7b30be538d57`;
+all four declared Steps are accepted locally. Full001 failed and the corrected
+observation tests passed focused004. Required full002 subsequently passed
+compilation and 6,853/6,853 tests across 861 suites, with zero failures or suite
+aborts, five canceled, one ignored and 46 pending. Both native PostgreSQL and
+MySQL suites ran with explicit Test fork and both flags true; SBT/wrapper exit 0
+and lock released. Five accepted nonblocking Hygiene dispositions are recorded
+in the [Hygiene journal](../journal/2026/10/2026-10-18-phase-103-hygiene-follow-up.md).
+The sole comprehensive Phase review passed on October 19 with no Current
+Boundary Blockers or evidence gaps. Producer Phase 103 and VM-01..04 are CLOSED;
+the Hygiene records remain OPEN separate follow-ups, with no Development or
+unpersisted accepted findings. At preparation of this closure record, the final
+local release commit is pending parent execution and committed-tree verification;
+its actual outcome belongs to the native commit receipt. The
+[phase checklist](../phase/phase-103-checklist.md) owns current delivery status.

@@ -5521,3 +5521,35 @@ Editing Studio Phase 2 owns application semantics, app Phase 4 prototype feedbac
 and app Phase 5 real-server aggregate/E2E acceptance. Those consumer boundaries
 are not accepted or started here. The older strategy snapshots above remain
 historical; no unrelated Phase status or successor plan is changed.
+
+## Phase 103 Closure — 2026-10-19
+
+[Phase 103](../phase/phase-103.md) and its
+[checklist](../phase/phase-103-checklist.md) are CLOSED for the versioned
+Validation/Test Metadata ABI, deterministic real operation discovery, pure
+purpose/feature selection and typed exact zero-input operation binding.
+Normalized CML equivalence and the shared synthetic static-consumer fixture
+preserve Cozy syntax/generator and cbd-support static-analysis ownership.
+Actual isolated K2/L3 sm-workflow consumer acceptance supplies the runtime
+connection; neither the dirty consumer primary tree, whole Phase 6.2 nor
+separately scoped nonempty typed-input work is accepted here.
+
+The four accepted local Step commits are
+`ac443ed353cc682251e4d17bf4e64a1285955798`,
+`2ec6da1265d14430cf522443869a0b9b2647ea00`,
+`1df07da9be8716edf0e0462bcba221ca8d020c60` and
+`c456f09c9ddd67f3746500381d8f7b30be538d57`. Focused004 passed 173/173 tests
+across 21 suites. Required full002 passed compilation and 6,853/6,853 tests
+across 861 suites with no failures or aborts, five canceled, one ignored and
+46 pending; native PostgreSQL/MySQL both ran, SBT/wrapper exit 0 and lock
+released. The sole comprehensive Phase review passed without Current Boundary
+Blockers or evidence gaps. The [closure journal](../journal/2026/10/2026-10-18-phase-103-validation-metadata.md)
+retains the earlier failures and acceptance history.
+
+Five nonblocking Hygiene follow-ups remain OPEN in the
+[canonical journal](../journal/2026/10/2026-10-18-phase-103-hygiene-follow-up.md);
+there are no Development findings or unpersisted accepted items. At preparation
+of this closure record, the distinct final local release commit is pending parent
+execution and committed-tree verification; its actual outcome belongs to the
+native commit receipt. This closure starts no successor or remote
+publication and leaves the other Phase histories unchanged.

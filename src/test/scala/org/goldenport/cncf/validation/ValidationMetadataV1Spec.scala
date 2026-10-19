@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /** Executable declaration interpretation contract, without framework discovery.
  * @since   Oct. 18, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 19, 2026
  */
 final class ValidationMetadataV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
   import ValidationMetadataV1.*
@@ -152,7 +152,7 @@ final class ValidationMetadataV1Spec extends AnyWordSpec with Matchers with Give
     "admit required semantics and null boundaries" which {
       "rejects unsupported ABI and semantic names before applying valid overrides" in {
         Given("unsupported versions, unknown required semantics and the complete supported semantic set")
-        val supported = Set("purposes", "features", "expectedDuration", "durationClass", "executionRequirement")
+        val supported = Set("purposes", "features", "expectedDuration", "durationClass", "executionRequirement", "inputSchema")
         val invalid = Vector(Declaration(abiVersion = 0), Declaration(abiVersion = 2),
           Declaration(requiredSemantics = Set("provider")), Declaration(requiredSemantics = Set("Purposes")))
         val overridevalue = Some(Declaration(purposes = Some(Set(Purpose.SMOKE))))
@@ -311,6 +311,50 @@ final class ValidationMetadataV1Spec extends AnyWordSpec with Matchers with Give
       specification.expectedDuration.map(_.unit) shouldBe Some(SECONDS)
       operation.expectedDuration.map(_.unit) shouldBe Some(MILLISECONDS)
       specification.executionRequirement.map(_.reviewRequired) shouldBe Some(false)
+    }
+  }
+
+  "E5 Whole input schema declarations" must afterWord(
+    "in spec:validation-test-metadata, example:E5, rules:R1,R4, phase:6.2"
+  ) {
+    "normalize schema order and replace or explicitly clear the whole inherited schema" in {
+      Given("docs/spec/validation-test-metadata.md R1,R4 E5: trusted specification and operation schemas")
+      val defaults = Vector(ValidationInputsV1.Parameter("z", ValidationInputsV1.Kind.Text),
+        ValidationInputsV1.Parameter("a", ValidationInputsV1.Kind.Integer))
+      val replacement = Vector(ValidationInputsV1.Parameter("enabled", ValidationInputsV1.Kind.BooleanValue))
+      val declaration = Declaration(requiredSemantics = Set("inputSchema"), inputSchema = Some(defaults))
+      When("operations inherit, replace or explicitly clear the schema")
+      val inherited = _resolved(Some(declaration), Some(Declaration()))
+      val replaced = _resolved(Some(declaration), Some(Declaration(requiredSemantics = Set("inputSchema"),
+        inputSchema = Some(replacement))))
+      val cleared = _resolved(Some(declaration), Some(Declaration(inputSchema = Some(Vector.empty))))
+      Then("schemas sort by name and whole operation overrides never merge individual parameters")
+      declaration.validateC.toOption.get.inputSchema shouldBe Some(defaults.reverse)
+      inherited.inputSchema shouldBe defaults.reverse
+      replaced.inputSchema shouldBe replacement
+      cleared.inputSchema shouldBe empty
+      inherited.origins shouldBe Origins(true, true)
+      ABI_VERSION shouldBe 1
+    }
+
+    "reject missing compatibility semantics, null schemas and invalid defaults before inheritance" in {
+      Given("docs/spec/validation-test-metadata.md R1,R4 E5: invalid specification declarations under valid overrides")
+      val schema = Vector(ValidationInputsV1.Parameter("count", ValidationInputsV1.Kind.Integer))
+      val invalid = Vector(Declaration(inputSchema = Some(schema)),
+        Declaration(requiredSemantics = Set("inputSchemas"), inputSchema = Some(schema)),
+        Declaration(inputSchema = null), Declaration(inputSchema = Some(null)),
+        Declaration(requiredSemantics = Set("inputSchema"), inputSchema = Some(Vector(null))),
+        Declaration(requiredSemantics = Set("inputSchema"), inputSchema = Some(Vector(
+          ValidationInputsV1.Parameter("count", ValidationInputsV1.Kind.Integer,
+            defaultValue = Some(org.goldenport.cncf.processexecution.SbtScenarioParameters.Value.Text("1")))))))
+      val overridevalue = Declaration(inputSchema = Some(Vector.empty))
+      When("every declaration is admitted before applying an operation override")
+      val outcomes = invalid.map(x => resolveC(Some(x), Some(overridevalue)))
+      Then("invalid inheritance cannot be hidden and nonempty schemas require explicit inputSchema semantics")
+      outcomes.foreach(_.isFaillure shouldBe true)
+      _policy(outcomes.head) shouldBe Some("validation.metadata.required-semantics")
+      _policy(outcomes(1)) shouldBe Some("validation.metadata.required-semantics")
+      Declaration(requiredSemantics = Set("inputSchema")).validateC.isFaillure shouldBe false
     }
   }
 

@@ -17,6 +17,7 @@ import org.goldenport.cncf.security.OperationAuthorizationRule
 import org.goldenport.cncf.spi.evaluation.{CorpusEvaluationSink, CorpusEvaluationSinkSocket, DeterministicCorpusEvaluationSink}
 import org.goldenport.cncf.subsystem.{GenericSubsystemComponentBinding, GenericSubsystemDescriptor, Subsystem}
 import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.cncf.unitofwork.UnitOfWorkTermination
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.protocol.{Argument, Protocol, Request}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
@@ -507,7 +508,7 @@ final class OperationEvaluationAutomaticCaptureSpec
       val terminalfixture = _fixture()
       val canonicalfixture = _fixture()
 
-      def _run_(fixture: Fixture, failoncall: Int): (org.goldenport.cncf.job.TaskOutcome, Option[Int]) = {
+      def _run_(fixture: Fixture, failoncall: Int): (org.goldenport.cncf.job.TaskOutcome, Option[Int], EvaluationFailingClock, Option[ExecutionContext]) = {
         val clock = new EvaluationFailingClock(Clock.fixed(Instant.parse("2026-07-23T01:00:00Z"), ZoneOffset.UTC))
         val context = _context_with_clock(fixture, clock)
         val identity = OperationEvaluationOperationIdentity.fromResolvedRoute("evaluation", "operation", "success")
@@ -515,23 +516,27 @@ final class OperationEvaluationAutomaticCaptureSpec
         val action = EvaluationQueryAction(_request("success"), failure = false)
         val task = ActionTask(ActionId.generate(), action, fixture.component.actionEngine, Some(fixture.component))
         val runtime = new OperationEvaluationDeliveryRuntime()
+        var committedcontext = Option.empty[ExecutionContext]
         try {
           clock.failOnCall(failoncall)
           val outcome = new OperationEvaluationActionTask(
             task,
             new OperationEvaluationAttemptCapture(identity, runtime),
-            (response, _) => Consequence.success(response)
+            (response, actual) => {
+              committedcontext = Some(actual)
+              Consequence.success(response)
+            }
           ).run(prepared)
-          (outcome, clock.observedFailureCall)
+          (outcome, clock.observedFailureCall, clock, committedcontext)
         } finally {
           runtime.close()
         }
       }
 
       When("the clock fails at start capture call 2, terminal capture call 4, or canonical transaction call 3")
-      val (startoutcome, startfailurecall) = _run_(startfixture, 2)
-      val (terminaloutcome, terminalfailurecall) = _run_(terminalfixture, 4)
-      val (canonicaloutcome, canonicalfailurecall) = _run_(canonicalfixture, 3)
+      val (startoutcome, startfailurecall, startclock, startcontext) = _run_(startfixture, 2)
+      val (terminaloutcome, terminalfailurecall, terminalclock, terminalcontext) = _run_(terminalfixture, 4)
+      val (canonicaloutcome, canonicalfailurecall, canonicalclock, canonicalcontext) = _run_(canonicalfixture, 3)
 
       Then("auxiliary capture failures preserve success and constructible facts while canonical transaction failure remains a Task failure")
       startoutcome shouldBe TaskSucceeded(OperationResponse.Scalar("success"))
@@ -540,6 +545,17 @@ final class OperationEvaluationAutomaticCaptureSpec
       terminalfailurecall shouldBe Some(4)
       canonicaloutcome shouldBe a[TaskFailed]
       canonicalfailurecall shouldBe Some(3)
+      startclock.failureCount shouldBe 1
+      terminalclock.failureCount shouldBe 1
+      canonicalclock.failureCount shouldBe 1
+      canonicalcontext shouldBe None
+      Vector(startcontext, terminalcontext).foreach { observed =>
+        observed shouldBe defined
+        val actual = observed.get
+        actual.unitOfWork.lastCommitTermination shouldBe Some(UnitOfWorkTermination.Committed)
+        actual.unitOfWork.lastCommitResult shouldBe Some(Consequence.unit)
+        (actual.unitOfWork.executionContext eq actual) shouldBe true
+      }
       startfixture.sink.facts shouldBe empty
       terminalfixture.sink.facts.map(_.factKind.token) shouldBe Vector("operation-start")
     }
@@ -1076,8 +1092,11 @@ final class OperationEvaluationAutomaticCaptureSpec
 
 private final class EvaluationFailingClock(delegate: Clock) extends Clock {
   private val _calls = new AtomicInteger(0)
+  private val _failures = new AtomicInteger(0)
   @volatile private var _failure_call = Int.MaxValue
   @volatile private var _observed_failure_call: Option[Int] = None
+
+  def failureCount: Int = _failures.get()
 
   def failOnCall(value: Int): Unit = {
     _calls.set(0)
@@ -1093,6 +1112,7 @@ private final class EvaluationFailingClock(delegate: Clock) extends Clock {
     val call = _calls.incrementAndGet()
     if (call == _failure_call) {
       _observed_failure_call = Some(call)
+      _failures.incrementAndGet()
       throw new IllegalStateException("planned capture clock failure")
     } else
       delegate.instant()

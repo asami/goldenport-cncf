@@ -8,7 +8,7 @@ import ValidationDiscovery.{failure, ordered}
 
 /** Pure admission, purpose/feature queries and exact supplemental references.
  * @since   Oct. 18, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 19, 2026
  */
 private[validation] object ValidationDiscoverySelection {
   def selectC(inventory: Inventory, query: SelectionQuery): Consequence[Vector[Operation]] =
@@ -121,11 +121,14 @@ private[validation] object ValidationDiscoverySelection {
   }
 
   private def _metadata(metadata: Metadata): Consequence[Unit] = {
-    if (metadata.origins == null) failure("metadata", "metadata", "normalized metadata origins")
+    if (metadata.origins == null || metadata.inputSchema == null)
+      failure("metadata", "metadata", "normalized metadata origins and input schema")
     else {
       val declaration = Declaration(purposes = Some(metadata.purposes), features = metadata.features,
         expectedDuration = metadata.expectedDuration, durationClass = Some(metadata.durationClass),
-        executionRequirement = metadata.executionRequirement)
+        executionRequirement = metadata.executionRequirement,
+        requiredSemantics = if (metadata.inputSchema.nonEmpty) Set("inputSchema") else Set.empty,
+        inputSchema = Some(metadata.inputSchema))
       val normalized = ValidationMetadataV1.resolveC(None, Some(declaration)).toOption
       val canonicalduration = metadata.expectedDuration != null && metadata.expectedDuration.forall { duration =>
         duration != null && duration.unit == java.util.concurrent.TimeUnit.NANOSECONDS

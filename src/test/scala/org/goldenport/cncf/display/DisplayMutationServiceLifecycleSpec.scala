@@ -49,10 +49,10 @@ final class DisplayMutationServiceLifecycleSpec extends AnyWordSpec with Display
             Then("the actual provider acknowledgement produces INITIAL Created, one contextual Detail and no generic write or replay")
             checkLifecycleResult(attempt, session, true, 1L)
             And("the committed Action has its own self-bound UnitOfWork while the original caller remains untouched")
-            attempt.execution.uow should not be theSameInstanceAs(attempt.execution.parentUnitOfWork)
+            attempt.execution.uow should not be theSameInstanceAs(attempt.execution.callerUnitOfWork)
             attempt.execution.uow.executionContext.unitOfWork should be theSameInstanceAs attempt.execution.uow
-            attempt.execution.parentUnitOfWork.lastCommitTermination shouldBe None
-            attempt.execution.context.unitOfWork should be theSameInstanceAs attempt.execution.parentUnitOfWork
+            attempt.execution.callerUnitOfWork.lastCommitTermination shouldBe None
+            attempt.execution.context.unitOfWork should be theSameInstanceAs attempt.execution.callerUnitOfWork
             session.log.idCalls shouldBe (if (supplied) Vector.empty else Vector(session.component.collectionId -> "entity-create"))
             session.log.conversions shouldBe DisplayMutationServiceDomain.fieldIds.filter(name => fields.exists(_.location.fieldId == name))
             session.log.validations shouldBe 1
@@ -410,6 +410,9 @@ final class DisplayMutationServiceLifecycleSpec extends AnyWordSpec with Display
             val wanted = if (create) expectedLifecycleCreate(session, before, lifecycleFields)
               else expectedLifecycleDelete(session, before, 1L, true)
             val active = session.execution(mode, historical = historical)
+            val caller = active.context.unitOfWork
+            val callertermination = caller.lastCommitTermination
+            val callerresult = caller.lastCommitResult
             When("the ordinary ActionEngine captures one actual command and invokes its configured current enclosing commit")
             val attempt = session.execute(session.lifecycleRequest(if (create) Operation.Create else Operation.Delete), active)
             Then("only the actual successful current commit yields a receipt; every other branch retains independent durable effects without replay or invented rollback")
@@ -423,16 +426,24 @@ final class DisplayMutationServiceLifecycleSpec extends AnyWordSpec with Display
               if (mode == Commit.Noop) {
                 conclusion(attempt.result).observation.taxonomy shouldBe conclusion(DisplayMutationResult.indeterminateC[Unit]()).observation.taxonomy
                 And("the current Noop Action is uncommitted independently of the untouched caller's prior successful history")
-                active.uow should not be theSameInstanceAs(active.parentUnitOfWork)
+                active.uow should not be theSameInstanceAs(active.callerUnitOfWork)
                 active.uow.lastCommitTermination shouldBe None
                 active.uow.lastCommitResult shouldBe None
-                active.parentUnitOfWork.lastCommitTermination shouldBe (if (historical) Some(org.goldenport.cncf.unitofwork.UnitOfWorkTermination.Committed) else None)
-                active.parentUnitOfWork.lastCommitResult shouldBe (if (historical) Some(Consequence.unit) else None)
+                active.callerUnitOfWork.lastCommitTermination shouldBe (if (historical) Some(org.goldenport.cncf.unitofwork.UnitOfWorkTermination.Committed) else None)
+                active.callerUnitOfWork.lastCommitResult shouldBe (if (historical) Some(Consequence.unit) else None)
               }
               if (mode == Commit.Reject) active.uow.lastCommitTermination shouldBe Some(org.goldenport.cncf.unitofwork.UnitOfWorkTermination.Aborted)
               if (mode == Commit.Abort) active.uow.lastAbortResult shouldBe Some(Consequence.unit)
               if (mode == Commit.Cleanup) conclusion(attempt.result).observation.taxonomy shouldBe projectionFailure.conclusion.observation.taxonomy
             }
+            And("the original caller retains its bound UoW and independently established historical commit state in every mode")
+            checkActionOwnership(attempt)
+            (active.callerUnitOfWork eq caller) shouldBe true
+            (active.context.unitOfWork eq caller) shouldBe true
+            caller.lastCommitTermination shouldBe callertermination
+            caller.lastCommitResult shouldBe callerresult
+            caller.lastCommitTermination shouldBe (if (historical) Some(org.goldenport.cncf.unitofwork.UnitOfWorkTermination.Committed) else None)
+            caller.lastCommitResult shouldBe (if (historical) Some(Consequence.unit) else None)
             session.log.events.count(_.event == "capture") shouldBe 1
             session.log.events.count(_.event == "commit") shouldBe 1
             session.log.events.foreach(event => (event.uow eq active.uow) shouldBe true)

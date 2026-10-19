@@ -327,6 +327,7 @@ private[cncf] object DisplayMutationServiceFixture {
 
   final class Log {
     private var _events = Vector.empty[Trace]
+    private var _context_observer = Option.empty[ExecutionContext => Unit]
     private var _conversions = Vector.empty[String]
     private var _validations = 0
     private var _commands = 0
@@ -369,7 +370,15 @@ private[cncf] object DisplayMutationServiceFixture {
         case _ => availability
       }
     }
-    def record(event: String, context: ExecutionContext): Unit = { _events :+= Trace(event, context, context.unitOfWork) }
+    def withContextObserver[A](observer: ExecutionContext => Unit)(body: => A): A = {
+      val previous = _context_observer
+      _context_observer = Some(observer)
+      try body finally { _context_observer = previous }
+    }
+    def record(event: String, context: ExecutionContext): Unit = {
+      _context_observer.foreach(observer => observer(context))
+      _events :+= Trace(event, context, context.unitOfWork)
+    }
     def convert(name: String): Unit = { _conversions :+= name }
     def validate(): Unit = { _validations += 1 }
     def command(): Unit = { _commands += 1 }
@@ -829,9 +838,12 @@ private[cncf] object DisplayMutationServiceFixture {
 
   final class Execution(session: Session, val mode: Commit = Commit.Normal, principal: String = "owner", historical: Boolean = false,
     authenticated: Boolean = true) {
-    private var _active_unit_of_work: Option[UnitOfWork] = None
-    private def _bound_context: ExecutionContext = _active_unit_of_work.map(_.executionContext).getOrElse(context)
-    val space = new ObservedSpace(session.log, () => _bound_context, session.provider, session.component.id, session.component.lifecycleSetup)
+    private var _action_context = Option.empty[ExecutionContext]
+    private var _cleanup_staged = false
+    private var _caller_commit_termination = Option.empty[UnitOfWorkTermination]
+    private var _caller_commit_result = Option.empty[Consequence[Unit]]
+    private def _selected_context: ExecutionContext = _action_context.getOrElse(context)
+    val space = new ObservedSpace(session.log, () => _selected_context, session.provider, session.component.id, session.component.lifecycleSetup)
     private val _commit_store = new CommitStore(mode)
     private val _entities = new EntityStoreSpace().addEntityStore(EntityStore.standard())
     private val _root_scope = ScopeContext(ScopeKind.Runtime, "normal-update-root", None, observability)
@@ -841,10 +853,9 @@ private[cncf] object DisplayMutationServiceFixture {
         observabilityContext = _root_scope.observabilityContext, httpDriverOption = None,
         datastore = Some(new DataStoreContext(space)), entitystore = Some(new EntityStoreContext(_entities)),
         entityspace = Some(new EntitySpaceContext(session.component.entitySpace))),
-      unitofworksupplier = () => _parent_unit_of_work, unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
-        def apply[A](operation: UnitOfWorkOp[A]): Consequence[A] = new UnitOfWorkInterpreter(_parent_unit_of_work).interpret(operation)
+      unitofworksupplier = () => callerUnitOfWork, unitofworkinterpreterfn = new (UnitOfWorkOp ~> Consequence) {
+        def apply[A](operation: UnitOfWorkOp[A]): Consequence[A] = new UnitOfWorkInterpreter(callerUnitOfWork).interpret(operation)
       }, commitaction = active => {
-        _active_unit_of_work = Some(active)
         session.log.record("commit", active.executionContext)
         mode match {
           case Commit.Noop => ()
@@ -853,11 +864,7 @@ private[cncf] object DisplayMutationServiceFixture {
           case Commit.Dispose => success(active.dispose()); ()
           case _ => active.commit(); ()
         }
-      }, abortaction = active => {
-        _active_unit_of_work = Some(active)
-        session.log.record("abort", active.executionContext)
-        success(active.abort()); ()
-      },
+      }, abortaction = active => { session.log.record("abort", active.executionContext); success(active.abort()); () },
       disposeaction = _ => (), token = "normal-update", operationMode = OperationMode.Test,
       transitionValidationHook = new TransitionValidationHook {
         private def _admit: Consequence[Unit] = if (session.log.rejectTransition) projectionFailure else Consequence.unit
@@ -882,16 +889,26 @@ private[cncf] object DisplayMutationServiceFixture {
         def opaqueId(purpose: String): String = "lifecycle-" + purpose
       })
     }
-    private lazy val _parent_unit_of_work: UnitOfWork = new UnitOfWork(context, org.goldenport.cncf.event.EventEngine.noop(_commit_store)) {
-      override def withContext(ctx: ExecutionContext): UnitOfWork = {
-        val rebound = super.withContext(ctx)
-        _active_unit_of_work = Some(rebound)
-        if (mode == Commit.Cleanup) rebound.stagePostCommitC(projectionFailure)
-        rebound
+    lazy val callerUnitOfWork: UnitOfWork = new UnitOfWork(context, org.goldenport.cncf.event.EventEngine.noop(_commit_store))
+    def uow: UnitOfWork = _action_context.map(_.unitOfWork).getOrElse(callerUnitOfWork)
+    def callerCommitTerminationBeforeExecution: Option[UnitOfWorkTermination] = _caller_commit_termination
+    def callerCommitResultBeforeExecution: Option[Consequence[Unit]] = _caller_commit_result
+    private def _observe_context(observed: ExecutionContext): Unit = {
+      if (!(observed eq context) && !(observed.unitOfWork eq callerUnitOfWork)) {
+        _action_context = Some(observed)
+        if (mode == Commit.Cleanup && !_cleanup_staged) {
+          _cleanup_staged = true
+          observed.unitOfWork.stagePostCommitC(projectionFailure)
+        }
       }
     }
-    def uow: UnitOfWork = _active_unit_of_work.getOrElse(_parent_unit_of_work)
-    def parentUnitOfWork: UnitOfWork = _parent_unit_of_work
+    def observeAction[A](body: => A): A = {
+      _action_context = None
+      _cleanup_staged = false
+      _caller_commit_termination = callerUnitOfWork.lastCommitTermination
+      _caller_commit_result = callerUnitOfWork.lastCommitResult
+      session.log.withContextObserver(_observe_context)(body)
+    }
     def bind(): Unit = {
       success(session.subsystem.bindManagedApplicationDataStoreC(space,
         ComponentDataStore.Environment(context.runtime.resolvedParameters, Some(session.subsystem.configuration)),
@@ -899,7 +916,7 @@ private[cncf] object DisplayMutationServiceFixture {
     }
     def prepare(): Unit = {
       bind()
-      if (historical) success(_parent_unit_of_work.commit())
+      if (historical) success(callerUnitOfWork.commit())
       _commit_store.arm()
       space.observing(true)
     }
@@ -966,7 +983,9 @@ private[cncf] object DisplayMutationServiceFixture {
       Property("resourceType", resourceType, None), Property("screenId", screenId, None), Property("resourceId", component.id.value, None)))
     def descriptorRequest: Request = readRequest.copy(operation = "describeMutation", properties = readRequest.properties.filterNot(_.name == "resourceId"))
     def execute(request: Request, active: Execution = execution()): Attempt =
-      Attempt(subsystem.executeOperationResponseInContext(request, active.context), active)
+      active.observeAction {
+        Attempt(subsystem.executeOperationResponseInContext(request, active.context), active)
+      }
     def read(): Attempt = execute(readRequest)
     def descriptor(): Attempt = execute(descriptorRequest)
     def lifecycleRequest(operation: DisplayMutation.Operation, fields: Vector[DisplayMutation.FieldInput] = lifecycleFields,
@@ -1558,6 +1577,7 @@ private[cncf] object DisplayMutationServiceFixture {
     def checkLifecycleResult(attempt: Attempt, session: Session, create: Boolean, version: Long,
       projection: String = "ready", principal: String = "owner"): Unit = {
       checkLifecycleJson(json(attempt.result), session, create, version, projection)
+      checkActionOwnership(attempt)
       attempt.execution.uow.lastCommitTermination shouldBe Some(UnitOfWorkTermination.Committed)
       attempt.execution.uow.lastCommitResult shouldBe Some(Consequence.unit)
       val observers = attempt.execution.lifecycleObservers
@@ -1645,6 +1665,18 @@ private[cncf] object DisplayMutationServiceFixture {
         left.map(_.fields) shouldBe right.map(_.fields)
       }
     }
+    def checkActionOwnership(attempt: Attempt): Unit = {
+      And("the observed Action owns its bound transaction while the original caller binding and commit history remain untouched")
+      val execution = attempt.execution
+      val actual = execution.uow
+      (actual eq execution.callerUnitOfWork) shouldBe false
+      (actual.executionContext eq execution.context) shouldBe false
+      (actual.executionContext.unitOfWork eq actual) shouldBe true
+      (execution.context.unitOfWork eq execution.callerUnitOfWork) shouldBe true
+      (execution.callerUnitOfWork.executionContext eq execution.context) shouldBe true
+      execution.callerUnitOfWork.lastCommitTermination shouldBe execution.callerCommitTerminationBeforeExecution
+      execution.callerUnitOfWork.lastCommitResult shouldBe execution.callerCommitResultBeforeExecution
+    }
     def checkResult(attempt: Attempt, session: Session, outcome: String, version: Long, projection: String = "ready",
       pendingReason: Option[String] = None): Unit = {
       val value = json(attempt.result)
@@ -1654,6 +1686,7 @@ private[cncf] object DisplayMutationServiceFixture {
       value.hcursor.get[Boolean]("retryCommand") shouldBe Right(false)
       value.hcursor.downField("projection").get[String]("type") shouldBe Right(projection)
       pendingReason.foreach(reason => value.hcursor.downField("projection").get[String]("reason") shouldBe Right(reason))
+      checkActionOwnership(attempt)
       attempt.execution.uow.lastCommitTermination shouldBe Some(UnitOfWorkTermination.Committed)
       attempt.execution.uow.lastCommitResult shouldBe Some(Consequence.unit)
       attempt.execution.attempts shouldBe 1

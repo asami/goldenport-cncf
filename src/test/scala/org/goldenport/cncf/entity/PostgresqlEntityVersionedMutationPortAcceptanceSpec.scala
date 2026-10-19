@@ -9,8 +9,9 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 19, 2026
  */
+@org.scalatest.tags.Slow
 final class PostgresqlEntityVersionedMutationPortAcceptanceSpec extends AnyWordSpec
     with EntityVersionedMutationPortFixture.Vocabulary with PostgresqlAcceptance {
   import EntityVersionedMutationPortFixture.*

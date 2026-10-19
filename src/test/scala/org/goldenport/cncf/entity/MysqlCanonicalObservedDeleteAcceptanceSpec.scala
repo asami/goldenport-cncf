@@ -13,8 +13,9 @@ import scala.util.control.NonFatal
 
 /*
  * @since   Oct.  6, 2026
- * @version Oct.  6, 2026
+ * @version Oct. 19, 2026
  */
+@org.scalatest.tags.Slow
 final class MysqlCanonicalObservedDeleteAcceptanceSpec
     extends AnyWordSpec with Matchers with GivenWhenThen with BeforeAndAfterAll {
   import EntityObservedDeleteCanonicalFixture.*

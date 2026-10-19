@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /** Actual-context admission of exact scenario intent through the existing interpreter.
  * @since   Oct. 18, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SbtScenarioExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -170,6 +170,88 @@ final class SbtScenarioExecutionDslSpec extends AnyWordSpec with Matchers with G
       val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(64), property)
       Then("the accepted selector has exact identity and no delimiter becomes executable text")
       checked.passed shouldBe true
+    }
+  }
+
+  "E7 Typed scenario parameters in the current host" must afterWord(
+    "in spec:validation-test-metadata, example:E7, rules:R1,R3,R5, phase:6.2"
+  ) {
+    "render literal ConfigMap tokens inside the current host task with an empty request" in {
+      Given("docs/spec/validation-test-metadata.md R1,R3,R5 E7: typed inputs constructed in A and independent current B")
+      val contexta = _fixture(Vector("org.other.ConstructionSpec"))
+      val contextb = _fixture(Vector(_class_name, "org.example.OtherSpec"))
+      val parameters = Map("label" -> SbtScenarioParameters.Value.Text("日本語 ' $() literal case"),
+        "enabled" -> SbtScenarioParameters.Value.BooleanValue(false),
+        "count" -> SbtScenarioParameters.Value.Integer(-2L))
+      val target = SbtTarget(_workspace_id, Some(_scenario.copy(parameters = parameters)))
+      val behavior = new SbtScenarioDslBehavior(Behavior.Core(contexta.context, None, None))
+      val program = behavior.testOnly(target)
+      try {
+        When("the existing interpreter evaluates the program under B")
+        val result = new UnitOfWorkInterpreter(new UnitOfWork(contextb.context)).run(program).toOption.get
+        Then("B retains exact typed target data and appends sorted literal tokens only inside its task")
+        result.target shouldBe target
+        result.target.scenario.get.parameters shouldBe parameters
+        result.outcome shouldBe SbtExecutionOutcome.Succeeded
+        result.processResult shouldBe contextb.result
+        contextb.profile.driver.executions should have size 1
+        val execution = contextb.profile.driver.executions.head
+        val arguments = Vector("--batch", "-Dsbt.server.autostart=false", "-Dsbt.supershell=false", "-Dsbt.color=false",
+          "testOnly org.example.ParameterSpec -- -t \"parameter case 1\" " +
+            "\"-Dcncf.validation.input.count=-2\" \"-Dcncf.validation.input.enabled=false\" " +
+            "\"-Dcncf.validation.input.label=日本語 ' $() literal case\"")
+        execution.definition.fixedArguments shouldBe arguments
+        execution.effectiveArguments shouldBe arguments
+        execution.request.arguments shouldBe empty
+        execution.request.workingDirectory shouldBe None
+        execution.effectiveLimits shouldBe _limits
+        execution.definition.capability shouldBe _capability
+        contextb.workspace.bindingC(_workspace_id).toOption.get.workingDirectoryC.toOption shouldBe
+          Some(contextb.root.resolve("checkout").toRealPath())
+        contexta.profile.driver.executions shouldBe empty
+        When("generic tagged intent or existing request overrides try to reuse the typed admission")
+        val generic = new UnitOfWorkInterpreter(new UnitOfWork(contextb.context)).interpret(UnitOfWorkOp.ProcessExec(execution))
+        val denied = Vector(execution.request.copy(arguments = Vector("test")),
+          execution.request.copy(workingDirectory = Some(WorkAreaRelativePath.parseC("other").toOption.get)),
+          execution.request.copy(input = ProcessExecutionInput.Bytes(Vector(1.toByte))),
+          execution.request.copy(requestedLimits = ProcessExecutionLimits(executionTimeoutMillis = Some(1L))))
+          .map(execution.definition.validateRequestC(_, execution.effectiveLimits))
+        Then("typed parameters confer no generic execution or request override authority")
+        generic.isFaillure shouldBe true
+        denied.foreach(_.isFaillure shouldBe true)
+        contextb.profile.driver.executions should have size 1
+      } finally Vector(contexta, contextb).foreach(x => _close(x.root))
+    }
+
+    "reject malformed typed data before the driver and retain all current authority gates" in {
+      Given("docs/spec/validation-test-metadata.md R1,R5 E7: malformed inputs and hosts missing independent permissions")
+      val fixture = _fixture(Vector(_class_name))
+      val malformed = Vector[Map[String, SbtScenarioParameters.Value]](null,
+        Map("label" -> null), Map("Label" -> SbtScenarioParameters.Value.Text("case")),
+        Map("label" -> SbtScenarioParameters.Value.Text(null)),
+        Map("label" -> SbtScenarioParameters.Value.Text("bad;value")),
+        Map("label" -> SbtScenarioParameters.Value.Text("bad\"value")),
+        Map("label" -> SbtScenarioParameters.Value.Text("bad\\value")),
+        Map("label" -> SbtScenarioParameters.Value.Text("bad\nvalue")),
+        Map("label" -> SbtScenarioParameters.Value.Text("x" * 513)))
+      val restricted = Vector(_fixture(Vector("org.example.OtherSpec")),
+        _fixture(Vector(_class_name), permission = WorkspacePermission.ReadOnly),
+        _fixture(Vector(_class_name), granted = false),
+        _fixture(Vector(_class_name), owner = ComponentId("org.example.OtherOwner")))
+      try {
+        When("the current interpreter admits malformed data or valid data without current host authority")
+        val invalid = malformed.map { parameters =>
+          new UnitOfWorkInterpreter(new UnitOfWork(fixture.context)).interpret(UnitOfWorkOp.SbtExec(
+            SbtTarget(_workspace_id, Some(_scenario.copy(parameters = parameters))), SbtOperation.TestOnly))
+        }
+        val target = SbtTarget(_workspace_id, Some(_scenario.copy(parameters =
+          Map("count" -> SbtScenarioParameters.Value.Integer(2)))))
+        val denied = restricted.map(x => new UnitOfWorkInterpreter(new UnitOfWork(x.context))
+          .interpret(UnitOfWorkOp.SbtExec(target, SbtOperation.TestOnly)))
+        Then("malformed data and missing workspace, owner, grant or class permissions fail before dispatch")
+        (invalid ++ denied).foreach(_.isFaillure shouldBe true)
+        (Vector(fixture) ++ restricted).foreach(_.profile.driver.executions shouldBe empty)
+      } finally (Vector(fixture) ++ restricted).foreach(x => _close(x.root))
     }
   }
 

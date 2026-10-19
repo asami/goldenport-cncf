@@ -55,8 +55,39 @@ comparability; the fixture computes no KPI score.
 sm-workflow supplies real artifact scopes/loaders, purpose/feature queries,
 supplemental references and logical workspace IDs. It calls the public exact
 operation binder for either reference source and interprets typed outcomes in
-its own runtime evidence and progression lifecycle. Its actual source fixture
-and dependency refresh remain separately admitted Phase 103 S4 work.
+its own runtime evidence and progression lifecycle. The actual consumer adapter
+and dependency refresh are delivered under
+[sm-workflow Phase 6.2](https://github.com/asami/sm-workflow/blob/main/docs/phase/phase-6.2.md).
+Its K2 CML scenario discovers COMPLETE ascii/empty/unicode inventory, selects
+ascii by purpose/feature query and unicode by explicit supplement through the
+same producer binder, and consumes native typed outcomes (ordinary Test 3/3,
+both exact TestOnly 1/1). Independent consumer acceptance and isolated Step
+commit `b69a60a0fc3dd5e9e7df87fd08b2549f41cef220`, with supplementary L3 Slice-plan
+acceptance at `157388724869c21649936d4b2de7508571507605`, are recorded in the
+[handoff](../../notes/validation-test-metadata-consumer-handoff.md).
+
+Those actual receipts do not execute this synthetic example or promote it into
+runtime proof. Phase 103's accepted binding scope is exact zero-input scenario
+selection; separately scoped nonempty typed-input work may coexist in the tree.
+sm-workflow retains source ownership and whole-Phase acceptance. CNCF's independent S4
+integrated review passed and S4 is accepted in local Step commit
+`c456f09c9ddd67f3746500381d8f7b30be538d57`; all four declared Steps are accepted locally.
+Full001 failed and its corrected observation tests passed focused004. Required
+full002 subsequently passed compilation and 6,853/6,853 tests across 861 suites,
+with zero failures or suite aborts, five canceled, one ignored and 46 pending.
+Both native PostgreSQL and MySQL suites ran with explicit Test fork and both flags
+true; SBT/wrapper exit 0 and lock released. Five accepted nonblocking Hygiene
+dispositions are recorded in the [Hygiene journal](../../journal/2026/10/2026-10-18-phase-103-hygiene-follow-up.md).
+The sole comprehensive Phase review passed on October 19 with no Current
+Boundary Blockers or evidence gaps; producer Phase 103 is CLOSED under the
+[checklist](../../phase/phase-103-checklist.md). The Hygiene records remain OPEN
+separate follow-ups, with no Development or unpersisted accepted findings.
+At preparation of this closure record, the final local release commit is pending
+parent execution and committed-tree verification; its actual outcome belongs to
+the native commit receipt. Neither whole Phase waits for the other's whole
+completion, and no sm-workflow source edit is authorized by this task. This
+producer acceptance does not execute the synthetic example or accept whole
+consumer Phase 6.2.
 
 textus-cbd-support consumes normalized metadata for static comparison under its
 [October 6 static-analysis workstream](https://github.com/asami/textus-cbd-support/blob/main/docs/journal/2026/10/2026-10-06-validation-test-metadata-static-analysis.md).

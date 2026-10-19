@@ -10,8 +10,9 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityRevision}
 
 /*
  * @since   Oct. 14, 2026
- * @version Oct. 14, 2026
+ * @version Oct. 19, 2026
  */
+@org.scalatest.tags.Slow
 final class PostgresqlAggregateObservedSnapshotAcceptanceSpec extends AnyWordSpec
     with AggregateObservedSnapshotFixture.Vocabulary with PostgresqlAcceptance {
   import AggregateObservedSnapshotFixture.*

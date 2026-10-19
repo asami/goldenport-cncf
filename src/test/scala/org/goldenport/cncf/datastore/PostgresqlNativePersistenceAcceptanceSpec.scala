@@ -17,8 +17,9 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRe
 
 /*
  * @since   Oct. 14, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 19, 2026
  */
+@org.scalatest.tags.Slow
 final class PostgresqlNativePersistenceAcceptanceSpec extends AnyWordSpec with Matchers with GivenWhenThen with PostgresqlAcceptance {
   import PostgresqlPersistenceFixture.*
 
