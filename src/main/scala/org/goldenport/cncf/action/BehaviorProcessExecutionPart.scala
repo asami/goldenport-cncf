@@ -140,6 +140,7 @@ import org.goldenport.cncf.processexecution.{
   ProcessExecutionRequest,
   ProcessExecutionResult,
   ResolvedProcessExecution,
+  SbtExecutionAttempt,
   SbtExecutionResult,
   SbtOperation,
   SbtTarget
@@ -147,7 +148,7 @@ import org.goldenport.cncf.processexecution.{
 
 /*
  * @since   Sep. 28, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -266,6 +267,18 @@ trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.
 
   private def _sbt_exec(target: SbtTarget, operation: SbtOperation): ExecUowM[SbtExecutionResult] =
     ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.SbtExec(target, operation)))
+
+  protected final def sbt_compile_attempt(target: SbtTarget): ExecUowM[SbtExecutionAttempt] =
+    _sbt_exec_attempt(target, SbtOperation.Compile)
+
+  protected final def sbt_test_attempt(target: SbtTarget): ExecUowM[SbtExecutionAttempt] =
+    _sbt_exec_attempt(target, SbtOperation.Test)
+
+  protected final def sbt_test_only_attempt(target: SbtTarget): ExecUowM[SbtExecutionAttempt] =
+    _sbt_exec_attempt(target, SbtOperation.TestOnly)
+
+  private def _sbt_exec_attempt(target: SbtTarget, operation: SbtOperation): ExecUowM[SbtExecutionAttempt] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.SbtExecAttempt(target, operation)))
 
   /** Resolves a provider's logical request through the runtime-owned admission service before
     * creating the resolved-only UnitOfWork operation.

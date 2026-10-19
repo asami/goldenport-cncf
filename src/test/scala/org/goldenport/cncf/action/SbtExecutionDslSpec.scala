@@ -5,7 +5,7 @@ import java.util.Comparator
 import scala.jdk.CollectionConverters.*
 import scala.util.Using
 import cats.syntax.all.*
-import org.goldenport.Consequence
+import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.observation.Descriptor
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.context.{ExecutionContext, GlobalContext, ScopeContext, ScopeKind}
@@ -22,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -39,6 +39,115 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
   )
 
   "Typed SBT internal DSL" should {
+    "record thin attempt intents as External without retaining construction authority" in {
+      Given("an unconfigured construction context and explicit admission-rejection stub data")
+      val fixture = _fixture(_result(ProcessExecutionTermination.Exited(0)),
+        workspaceinstalled = false, processinstalled = false, driverinstalled = false)
+      val behavior = new SbtDslBehavior(Behavior.Core(fixture.context, None, None))
+      val conclusion = Consequence.serviceUnavailable("Workspace Execution admission is not configured").conclusion
+      val provider = new UnitOfWorkProgramStubProvider {
+        def resultFor[A](ordinal: Int, operation: UnitOfWorkOp[A]): Consequence[A] = operation match {
+          case UnitOfWorkOp.SbtExecAttempt(target, kind) =>
+            Consequence.success(SbtExecutionAttempt.AdmissionRejected(target, kind, conclusion))
+          case _ => Consequence.notImplemented("unexpected operation in SBT attempt recording")
+        }
+      }
+      try {
+        When("Compile, Test and TestOnly attempt programs are recorded")
+        val recordings = Vector(behavior.compileAttempt(fixture.target), behavior.testAttempt(fixture.target),
+          behavior.testOnlyAttempt(fixture.target)).map(UnitOfWorkProgramRecorder.record(_, provider))
+        Then("each program contains exactly its one typed External intent with no admission or driver work")
+        recordings.map(_.occurrences.map(_.operation)) shouldBe Vector(
+          Vector(UnitOfWorkOp.SbtExecAttempt(fixture.target, SbtOperation.Compile)),
+          Vector(UnitOfWorkOp.SbtExecAttempt(fixture.target, SbtOperation.Test)),
+          Vector(UnitOfWorkOp.SbtExecAttempt(fixture.target, SbtOperation.TestOnly)))
+        recordings.foreach(_.occurrences.map(_.effectClass) shouldBe Vector(UnitOfWorkEffectClass.External))
+        recordings.foreach(_.result.isSuccess shouldBe true)
+        fixture.profile.driver.executions shouldBe empty
+      } finally _close(fixture.root)
+    }
+
+    "return actual missing-workspace and missing-build-grant admission diagnostics without a process receipt" in {
+      Given("current UnitOfWork contexts missing the workspace service or the independent build grant")
+      val fixtures = Vector(_fixture(_result(ProcessExecutionTermination.Exited(0)), workspaceinstalled = false),
+        _fixture(_result(ProcessExecutionTermination.Exited(0)), capabilitygranted = false))
+      try {
+        val expected = fixtures.map(fixture => _failure_conclusion(SbtExecutionAdmission.resolveC(
+          fixture.context, fixture.target, SbtOperation.Test)))
+        When("the actual UnitOfWork interpreter evaluates each Test attempt")
+        val results = fixtures.map(fixture => new UnitOfWorkInterpreter(new UnitOfWork(fixture.context)).interpret(
+          UnitOfWorkOp.SbtExecAttempt(fixture.target, SbtOperation.Test)))
+        Then("successful AdmissionRejected values retain the original structured diagnostic and start no driver")
+        results.zip(fixtures).zip(expected).foreach { case ((result, fixture), original) =>
+          result.toOption.get match {
+            case SbtExecutionAttempt.AdmissionRejected(target, operation, conclusion) =>
+              target shouldBe fixture.target
+              operation shouldBe SbtOperation.Test
+              conclusion.status shouldBe original.status
+              conclusion.observation.taxonomy shouldBe original.observation.taxonomy
+              conclusion.observation.cause.kind shouldBe original.observation.cause.kind
+              conclusion.observation.cause.descriptor.facets.filterNot(_.isInstanceOf[Descriptor.Facet.SrcPos]) shouldBe
+                original.observation.cause.descriptor.facets.filterNot(_.isInstanceOf[Descriptor.Facet.SrcPos])
+            case other => fail(s"Expected admission rejection, received $other")
+          }
+          fixture.profile.driver.executions shouldBe empty
+        }
+      } finally fixtures.foreach(fixture => _close(fixture.root))
+    }
+
+    "observe admitted Compile, Test and TestOnly through the existing managed result decoder" in {
+      Given("an authorized current context and complete test-owned selected-suite output")
+      val fixture = _fixture(_selection_process(Vector("org.example.SelectedSpec")))
+      val behavior = new SbtDslBehavior(Behavior.Core(fixture.context, None, None))
+      try {
+        When("each thin attempt DSL is interpreted through the owning UnitOfWork")
+        val results = Vector(behavior.compileAttempt(fixture.target), behavior.testAttempt(fixture.target),
+          behavior.testOnlyAttempt(fixture.target)).map(program =>
+          new UnitOfWorkInterpreter(new UnitOfWork(fixture.context)).run(program))
+        Then("actual process facts remain Observed and TestOnly retains its existing report qualification")
+        results.map(_.toOption) shouldBe Vector(
+          Some(SbtExecutionAttempt.Observed(SbtExecutionResult(fixture.target, SbtOperation.Compile, fixture.result))),
+          Some(SbtExecutionAttempt.Observed(SbtExecutionResult(fixture.target, SbtOperation.Test, fixture.result))),
+          Some(SbtExecutionAttempt.Observed(SbtExecutionResult(fixture.target, SbtOperation.TestOnly, fixture.result,
+            Some(SbtTestSelectionResult.Verified(Vector("org.example.SelectedSpec"), 1, 7L))))))
+        fixture.profile.driver.executions should have size 3
+      } finally _close(fixture.root)
+    }
+
+    "retain start and post-start driver failures as Uncertain without reclassifying admission or replaying" in {
+      Given("authorized intents and actual test-owned drivers failing at start or while awaiting a handle")
+      val original = Consequence.serviceUnavailable("test-owned driver observation failed").conclusion
+      var starts = 0
+      val drivers = Vector(false, true).map { admittedhandle => new ProcessExecutionDriver {
+        val safeIdentity = "test-owned-failing-sbt"
+        def startC(execution: ResolvedProcessExecution): Consequence[ProcessExecutionHandle] = {
+          starts += 1
+          if (!admittedhandle) Consequence.Failure(original)
+          else Consequence.success(new ProcessExecutionHandle {
+            def awaitC: Consequence[ProcessExecutionResult] = Consequence.Failure(original)
+            def cancelC: Consequence[Unit] = Consequence.unit
+          })
+        }
+      } }
+      val fixtures = drivers.map(driver => _fixture(_result(ProcessExecutionTermination.Exited(0)), driver = Some(driver)))
+      val uows = fixtures.map(fixture => new UnitOfWork(fixture.context))
+      try {
+        When("actual admitted Test attempts reach each failing driver exactly once")
+        val results = fixtures.zip(uows).map { case (fixture, uow) =>
+          new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.SbtExecAttempt(fixture.target, SbtOperation.Test))
+        }
+        Then("each result carries the identical execution failure as Uncertain with no synthetic process result")
+        results.zip(fixtures).foreach { case (result, fixture) =>
+          result.toOption shouldBe Some(SbtExecutionAttempt.Uncertain(fixture.target, SbtOperation.Test, original))
+        }
+        starts shouldBe 2
+        fixtures.foreach(_.profile.driver.executions shouldBe empty)
+      } finally {
+        uows.foreach(_.dispose())
+        fixtures.foreach(fixture => _close(fixture.root))
+      }
+    }
+
     "construct and record one TestOnly intent without runtime services" in {
       Given("a Behavior without workspace, process admission or driver and a deliberate typed selection result")
       val fixture = _fixture(_result(ProcessExecutionTermination.Exited(0)),
@@ -548,6 +657,11 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
     }
   }
 
+  private def _failure_conclusion[A](result: Consequence[A]): Conclusion = result match {
+    case Consequence.Failure(conclusion) => conclusion
+    case Consequence.Success(value) => fail(s"Expected admission failure, received success: $value")
+  }
+
   private def _sbt_path: Path = Paths.get("/usr/bin/true")
 
   private def _selection_process(classes: Vector[String]): ProcessExecutionResult = {
@@ -568,7 +682,8 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
     capabilitygranted: Boolean = true,
     workspacegranted: Boolean = true,
     driverinstalled: Boolean = true,
-    testclasses: Vector[String] = Vector("org.example.SelectedSpec")
+    testclasses: Vector[String] = Vector("org.example.SelectedSpec"),
+    driver: Option[ProcessExecutionDriver] = None
   ): Fixture = {
     val base = Files.createDirectories(Paths.get("target", "sbt-execution-dsl-spec").toAbsolutePath)
     val root = Files.createTempDirectory(base, "case-")
@@ -589,7 +704,7 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
     val admission = ProcessExecutionAdmission.forComponentsC(policy, Map(_owner -> grants)).toOption.get
     val profile = ProcessExecutionTestProfile(Map(_compile_capability -> result, _test_capability -> result, _test_only_capability -> result))
     val context = _context(if (workspaceinstalled) Some(workspace) else None,
-      if (processinstalled) Some(admission) else None, profile, owner, driverinstalled)
+      if (processinstalled) Some(admission) else None, profile, owner, driverinstalled, driver)
     Fixture(root, SbtTarget(_workspace_id), result, workspace, definitions, policy, admission, profile, context)
   }
 
@@ -598,7 +713,8 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
     admission: Option[ProcessExecutionAdmission],
     profile: ProcessExecutionTestProfile,
     owner: ComponentId,
-    driverinstalled: Boolean = true
+    driverinstalled: Boolean = true,
+    driver: Option[ProcessExecutionDriver] = None
   ): ExecutionContext = {
     val base = Files.createDirectories(Paths.get("target", "sbt-execution-dsl-spec", "workareas").toAbsolutePath)
     val space = new WorkAreaSpace(WorkAreaGroup(new FileWorkArea(
@@ -607,7 +723,7 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
     GlobalContext.set(GlobalContext(space))
     val execution = ExecutionContext.create()
     val runtime = ScopeContext(ScopeKind.Runtime, "sbt-spec", None, execution.observability,
-      processexecutiondriveroption = if (driverinstalled) Some(profile.driver) else None,
+      processexecutiondriveroption = if (driverinstalled) driver.orElse(Some(profile.driver)) else None,
       processexecutionadmissionoption = admission,
       workspaceExecutionAdmissionOption = workspace)
     val component = Component.create(owner.name, owner, ComponentInstanceId.default(owner), Protocol.empty)
@@ -646,5 +762,8 @@ private final class SbtDslBehavior(val behaviorCore: Behavior.Core) extends Beha
   def compile(target: SbtTarget) = sbt_compile(target)
   def test(target: SbtTarget) = sbt_test(target)
   def testOnly(target: SbtTarget) = sbt_test_only(target)
+  def compileAttempt(target: SbtTarget) = sbt_compile_attempt(target)
+  def testAttempt(target: SbtTarget) = sbt_test_attempt(target)
+  def testOnlyAttempt(target: SbtTarget) = sbt_test_only_attempt(target)
   def generic(request: ProcessExecutionRequest) = process_exec(request)
 }

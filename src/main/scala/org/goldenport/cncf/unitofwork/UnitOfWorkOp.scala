@@ -20,7 +20,7 @@ import org.goldenport.cncf.blob.{
   InlineImageOccurrence
 }
 import org.goldenport.cncf.embedded.{EmbeddedDataStore, EmbeddedStatement, EmbeddedUpdateResult}
-import org.goldenport.cncf.processexecution.{GitExecutionResult, GitOperation, GitTarget, ProcessExecutionResult, ResolvedProcessExecution, SbtExecutionResult, SbtOperation, SbtTarget}
+import org.goldenport.cncf.processexecution.{GitExecutionResult, GitOperation, GitTarget, ProcessExecutionResult, ResolvedProcessExecution, SbtExecutionAttempt, SbtExecutionResult, SbtOperation, SbtTarget}
 import org.goldenport.cncf.operation.evaluation.OperationEvaluationSupplementalIntent
 import org.goldenport.cncf.workflow.{ActionExecution, ProviderExecutionRequest, StateMachineProvidedApiRequest}
 import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
@@ -41,7 +41,7 @@ import org.goldenport.cncf.workspace.{FileReadTextResult, FileTarget, FileWriteM
  *  version Apr. 29, 2026
  *  version May.  4, 2026
  *  version Jul. 26, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -122,6 +122,11 @@ object UnitOfWorkOp {
     target: SbtTarget,
     operation: SbtOperation
   ) extends UnitOfWorkOp[SbtExecutionResult]
+
+  final case class SbtExecAttempt(
+    target: SbtTarget,
+    operation: SbtOperation
+  ) extends UnitOfWorkOp[SbtExecutionAttempt]
 
   final case class GitExec[A](
     target: GitTarget,

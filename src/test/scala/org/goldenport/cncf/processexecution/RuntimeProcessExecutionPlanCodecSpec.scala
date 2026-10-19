@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -69,7 +69,97 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
       if (entry.hcursor.get[String]("operation").toOption.contains(kind.wireName)) change(entry) else entry
     })))
 
+  private def _v4_root(root: Path): Json = _v3_root(root).mapObject(
+    _.add("schema", Json.fromString(RuntimeProcessExecutionPlanCodec.SCHEMA_V4))
+      .add("registeredSbtHost", Json.obj("requestFile" -> Json.fromString(root.resolve("request.json").toString),
+        "responseFile" -> Json.fromString(root.resolve("response.json").toString))))
+
   "Runtime process host wire contract" should {
+    "round-trip explicit V4 host files with the actual V3 workspace, process and semantic declarations" in {
+      Given("a complete V3 authority object extended by exact trusted registered-host paths")
+      val root = _directory()
+      val wire = _v4_root(root)
+      val v3 = _take(_decode(_v3_root(root)))
+      When("V4 is decoded through V3 admission, encoded and decoded again")
+      val plan = _take(_decode(wire))
+      val encoded = _take(RuntimeProcessExecutionPlanCodec.encode(plan)).asInstanceOf[ConfigurationValue.StringValue]
+      val restored = _take(RuntimeProcessExecutionPlanCodec.decode(encoded))
+      Then("the new schema adds only host routing and retains every independent fixed authority declaration")
+      restored.schemaVersion shouldBe RuntimeProcessExecutionPlanCodec.SCHEMA_V4
+      restored.registeredSbtHost shouldBe Some(RegisteredSbtHostConfiguration(root.resolve("request.json"), root.resolve("response.json")))
+      restored.programs.map(_.capability) shouldBe v3.programs.map(_.capability)
+      restored.grants shouldBe v3.grants
+      restored.workspaceDeclarations shouldBe v3.workspaceDeclarations
+      restored.workspaceGrants shouldBe v3.workspaceGrants
+      restored.sbtDeclarations shouldBe v3.sbtDeclarations
+      restored.gitDeclarations shouldBe v3.gitDeclarations
+      restored.workspaceAdmissionOption.get.bindingC(restored.sbtDeclarations.head.target).isSuccess shouldBe true
+      parse(encoded.value).toOption shouldBe Some(wire)
+    }
+
+    "preserve V1 through V3 encoding without inferring registered-host configuration" in {
+      Given("the existing generic V1, semantic V2 and Git-capable V3 host representations")
+      val wires = Vector(_root, _v2_root(_directory()), _v3_root(_directory()))
+      When("each existing representation completes its ordinary decode and encode round trip")
+      val results = wires.map { wire =>
+        val plan = _take(_decode(wire))
+        val encoded = _take(RuntimeProcessExecutionPlanCodec.encode(plan)).asInstanceOf[ConfigurationValue.StringValue]
+        plan -> parse(encoded.value).toOption.get
+      }
+      Then("all old schemas retain their fields and ordinary local execution selection")
+      results.map(_._1.schemaVersion) shouldBe Vector(RuntimeProcessExecutionPlanCodec.SCHEMA,
+        RuntimeProcessExecutionPlanCodec.SCHEMA_V2, RuntimeProcessExecutionPlanCodec.SCHEMA_V3)
+      results.foreach(_._1.registeredSbtHost shouldBe None)
+      results.map(_._2) shouldBe wires
+      results.foreach(_._2.asObject.get.contains("registeredSbtHost") shouldBe false)
+    }
+
+    "refuse V4 absent, relative, shared, escaping and symbolic-link host paths at configuration admission" in {
+      Given("one complete V4 plan and malformed or unsuitable per-invocation host locations")
+      val root = _directory()
+      val wire = _v4_root(root)
+      val host = wire.hcursor.downField("registeredSbtHost").focus.get
+      val actual = Files.createDirectory(root.resolve("actual-host"))
+      val directorylink = Files.createSymbolicLink(root.resolve("linked-host"), actual)
+      val filelink = Files.createSymbolicLink(root.resolve("request-link.json"), root.resolve("unused-request.json"))
+      def _with_host_(value: Json): Json = wire.mapObject(_.add("registeredSbtHost", value))
+      def _paths_(request: String, response: String): Json = _with_host_(Json.obj(
+        "requestFile" -> Json.fromString(request), "responseFile" -> Json.fromString(response)))
+      val invalid = Vector(wire.mapObject(_.remove("registeredSbtHost")), _with_host_(Json.Null),
+        _with_host_(host.mapObject(_.add("unknown", Json.True))),
+        _with_host_(host.mapObject(_.remove("responseFile"))),
+        _paths_("relative-request.json", root.resolve("response.json").toString),
+        _paths_(root.resolve("request.json").toString, "relative-response.json"),
+        _paths_(root.resolve("same.json").toString, root.resolve("same.json").toString),
+        _paths_(root.resolve("request.json").toString, actual.resolve("response.json").toString),
+        _paths_("/host/request.json", "/host/response.json"),
+        _paths_(root.resolve("..").resolve("request.json").toString, root.resolve("response.json").toString),
+        _paths_(directorylink.resolve("request.json").toString, directorylink.resolve("response.json").toString),
+        _paths_(filelink.toString, root.resolve("response.json").toString))
+      When("the strict V4 decoder validates each host object and duplicate host key")
+      val results = invalid.map(_decode)
+      val duplicate = RuntimeProcessExecutionPlanCodec.decode(ConfigurationValue.StringValue(wire.noSpaces.replace(
+        "\"registeredSbtHost\":{", "\"registeredSbtHost\":{\"requestFile\":\"duplicate\",")))
+      Then("no malformed location or ambiguous declaration creates a registered execution route")
+      results.foreach(_.isFaillure shouldBe true)
+      duplicate.isFaillure shouldBe true
+    }
+
+    "retain V3 grant requirements and reject V4 host fields in earlier schemas" in {
+      Given("an explicit V4 route with the same actual-component Manage and independent process grants as V3")
+      val wire = _v4_root(_directory())
+      val host = wire.hcursor.downField("registeredSbtHost").focus.get
+      val earlier = Vector(_root, _v2_root(_directory()), _v3_root(_directory())).map(
+        _.mapObject(_.add("registeredSbtHost", host)))
+      val invalid = Vector(_changed_entry(wire, "workspaceGrants", _.mapObject(_.add("access", Json.fromString("read-only")))),
+        wire.mapObject(_.add("workspaceGrants", Json.arr())),
+        _changed_entry(wire, "sbtPrograms", _.mapObject(_.add("target", Json.fromString("unknown")))))
+      When("the host decodes incompatible old-schema extensions and denied V4 authorities")
+      val results = (earlier ++ invalid).map(_decode)
+      Then("registered routing grants no workspace or process authority and is available only by explicit V4 selection")
+      results.foreach(_.isFaillure shouldBe true)
+    }
+
     "refuse ordinary shell and known capability laundering in V1, V2 and V3 despite exact declarations and grants" in {
       Given("valid selected-tool wires for all three schemas, retaining separately tagged SBT and Git declarations")
       val wires = Vector(_root, _v2_root(_directory()), _v3_root(_directory()))

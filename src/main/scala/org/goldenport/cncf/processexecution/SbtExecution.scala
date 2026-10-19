@@ -2,20 +2,27 @@ package org.goldenport.cncf.processexecution
 
 import java.nio.file.{Files, Path}
 import scala.util.control.NonFatal
-import org.goldenport.Consequence
+import org.goldenport.{Consequence, Conclusion}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.effect.{ExternalEffect, ExternalEffectKind}
 import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePermission}
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection] = None)
 
 enum SbtOperation {
   case Compile, Test, TestOnly
+}
+
+/** Admission failure carries no process receipt; admitted failures never imply safe replay. */
+enum SbtExecutionAttempt {
+  case Observed(result: SbtExecutionResult)
+  case AdmissionRejected(target: SbtTarget, operation: SbtOperation, conclusion: Conclusion)
+  case Uncertain(target: SbtTarget, operation: SbtOperation, conclusion: Conclusion)
 }
 
 enum SbtExecutionOutcome {

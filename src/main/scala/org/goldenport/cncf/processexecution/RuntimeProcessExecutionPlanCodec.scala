@@ -12,13 +12,14 @@ import org.goldenport.configuration.{ConfigurationValue, ConfigurationValueCodec
 /** Host wire contract: complete literal/lower-hex vectors only, never arbitrary shell text. */
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValueCodec[RuntimeProcessExecutionPlan] {
   val SCHEMA = "cncf.runtime-process-execution.v1"
   val SCHEMA_V2 = "cncf.runtime-process-execution.v2"
   val SCHEMA_V3 = "cncf.runtime-process-execution.v3"
+  val SCHEMA_V4 = "cncf.runtime-process-execution.v4"
   private val _parser = JawnParser(allowDuplicateKeys = false)
   private val _limit_names = Vector("launchTimeoutMillis", "executionTimeoutMillis", "terminationGraceMillis",
     "stdinBytes", "stdoutBytes", "stderrBytes", "argumentCount", "argumentBytes", "artifactCount", "artifactBytes", "workAreaBytes")
@@ -33,6 +34,7 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
           case SCHEMA => Right(Set("schema", "programs", "grants"))
           case SCHEMA_V2 => Right(Set("schema", "programs", "grants", "workspaces", "workspaceGrants", "sbtPrograms"))
           case SCHEMA_V3 => Right(Set("schema", "programs", "grants", "workspaces", "workspaceGrants", "sbtPrograms", "gitPrograms"))
+          case SCHEMA_V4 => Right(Set("schema", "programs", "grants", "workspaces", "workspaceGrants", "sbtPrograms", "gitPrograms", "registeredSbtHost"))
           case _ => Left("Unsupported runtime process schema")
         }
         root <- _fields(json, names)
@@ -44,14 +46,18 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
         plan <- if (schema == SCHEMA) _valid(RuntimeProcessExecutionPlan.createC(programs, grants.toMap))
           else for {
             workspacevalues <- _array(root, "workspaces")
-            workspaces <- _sequence(workspacevalues.map(x => _workspace(x, schema == SCHEMA_V3)))
+            workspaces <- _sequence(workspacevalues.map(x => _workspace(x, schema == SCHEMA_V3 || schema == SCHEMA_V4)))
             workspacegrantvalues <- _array(root, "workspaceGrants")
             workspacegrants <- _sequence(workspacegrantvalues.map(_workspace_grant))
             sbtvalues <- _array(root, "sbtPrograms")
             sbt <- _sequence(sbtvalues.map(_sbt_program))
-            git <- if (schema == SCHEMA_V3) _array(root, "gitPrograms").flatMap(xs => _sequence(xs.map(_git_program)))
+            git <- if (schema == SCHEMA_V3 || schema == SCHEMA_V4) _array(root, "gitPrograms").flatMap(xs => _sequence(xs.map(_git_program)))
               else Right(Vector.empty[GitRuntimeDeclaration])
-            value <- _valid(if (schema == SCHEMA_V3)
+            host <- if (schema == SCHEMA_V4) _registered_sbt_host(root("registeredSbtHost").get).map(Some(_))
+              else Right(None)
+            value <- _valid(if (schema == SCHEMA_V4)
+              RuntimeProcessExecutionPlan.createV4C(programs, grants.toMap, workspaces, workspacegrants, sbt, git, host.get)
+              else if (schema == SCHEMA_V3)
               RuntimeProcessExecutionPlan.createV3C(programs, grants.toMap, workspaces, workspacegrants, sbt, git)
               else RuntimeProcessExecutionPlan.createV2C(programs, grants.toMap, workspaces, workspacegrants, sbt))
           } yield value
@@ -91,11 +97,26 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
           case WorkspacePermission.Manage => "manage"
         })))))
       .add("sbtPrograms", Json.fromValues(plan.sbtDeclarations.map(_sbt_json))))
-    val root = if (plan.schemaVersion == SCHEMA_V3)
+    val withgit = if (plan.schemaVersion == SCHEMA_V3 || plan.schemaVersion == SCHEMA_V4)
       semantic.mapObject(_.add("gitPrograms", Json.fromValues(plan.gitDeclarations.map(_git_json)))) else semantic
+    val root = if (plan.schemaVersion == SCHEMA_V4) {
+      val host = plan.registeredSbtHost.get
+      withgit.mapObject(_.add("registeredSbtHost", Json.obj(
+        "requestFile" -> Json.fromString(host.requestFile.toString),
+        "responseFile" -> Json.fromString(host.responseFile.toString))))
+    } else withgit
     val encoded = ConfigurationValue.StringValue(root.noSpaces)
     Consequence.success(encoded)
   }
+
+  private def _registered_sbt_host(json: Json): Either[String, RegisteredSbtHostConfiguration] = for {
+    obj <- _fields(json, Set("requestFile", "responseFile"))
+    requesttext <- _string(obj, "requestFile")
+    request <- _absolute_path(requesttext)
+    responsetext <- _string(obj, "responseFile")
+    response <- _absolute_path(responsetext)
+    configuration <- _valid(RegisteredSbtHostConfiguration.createC(request, response))
+  } yield configuration
 
   private def _sbt_json(x: SbtRuntimeDeclaration): Json = {
     val base = Json.obj(
