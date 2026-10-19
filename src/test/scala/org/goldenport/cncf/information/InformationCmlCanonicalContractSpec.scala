@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Aug. 30, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InformationCmlCanonicalContractSpec
@@ -66,6 +67,63 @@ final class InformationCmlCanonicalContractSpec
           "org.goldenport.cncf.information.value.InformationConflictState",
           "org.goldenport.cncf.information.value.InformationFieldState"
         )
+      }
+
+    }
+
+
+    "fixed powertype persistence codes" which {
+
+      "retain every explicit Information code and agree with the lifecycle descriptor" in {
+        Given("the five Information vocabularies with fixed signed16 persistence codes")
+        import org.goldenport.cncf.information.value.{
+          InformationBindingStatus, InformationConflictState, InformationFieldState,
+          InformationLifecycleState, InformationPublicationState
+        }
+        val lifecycle = Vector(
+          "imported" -> 1, "invalid" -> 2, "needs_resolution" -> 3,
+          "ready_for_confirmation" -> 4, "confirmed" -> 5, "published" -> 6,
+          "rejected" -> 7, "conflict" -> 8
+        )
+        val binding = Vector(
+          "candidate" -> 1, "selected" -> 2, "confirmed" -> 3,
+          "rejected" -> 4, "superseded" -> 5, "conflict" -> 6
+        )
+        val publication = Vector("not_published" -> 1, "published" -> 2, "failed" -> 3)
+        val conflict = Vector("open" -> 1, "resolved" -> 2)
+        val field = Vector(
+          "untouched" -> 1, "unresolved" -> 2, "inferred" -> 3,
+          "imported" -> 4, "editing" -> 5, "stable" -> 6
+        )
+        val expected = Vector(lifecycle, binding, publication, conflict, field).flatten
+
+        When("each generated correspondence and common numeric codec is used in both directions")
+        val observations = Vector(
+          _code_observations(lifecycle, InformationLifecycleState.from,
+            InformationLifecycleState.fromDbValue, InformationLifecycleState.dbValueOf,
+            InformationLifecycleState.numericCodeCodec, _.value),
+          _code_observations(binding, InformationBindingStatus.from,
+            InformationBindingStatus.fromDbValue, InformationBindingStatus.dbValueOf,
+            InformationBindingStatus.numericCodeCodec, _.value),
+          _code_observations(publication, InformationPublicationState.from,
+            InformationPublicationState.fromDbValue, InformationPublicationState.dbValueOf,
+            InformationPublicationState.numericCodeCodec, _.value),
+          _code_observations(conflict, InformationConflictState.from,
+            InformationConflictState.fromDbValue, InformationConflictState.dbValueOf,
+            InformationConflictState.numericCodeCodec, _.value),
+          _code_observations(field, InformationFieldState.from,
+            InformationFieldState.fromDbValue, InformationFieldState.dbValueOf,
+            InformationFieldState.numericCodeCodec, _.value)
+        ).flatten
+        val states = informationLifecycle.states.map(state => state.name -> state.value)
+
+        Then("every kind retains its explicit code through the generated and common codec APIs")
+        observations shouldBe expected.map { case (name, code) =>
+          (name, Some(code), Some(name), code, name)
+        }
+
+        And("the lifecycle transition vocabulary uses exactly the same fixed codes")
+        states shouldBe lifecycle.map { case (name, code) => name -> Right(code) }
       }
 
     }
@@ -455,6 +513,20 @@ final class InformationCmlCanonicalContractSpec
     classOf[org.goldenport.cncf.information.value.InformationConflictState],
     classOf[org.goldenport.cncf.information.value.InformationFieldState]
   )
+
+  private def _code_observations[A](
+    expected: Vector[(String, Int)],
+    from: String => Option[A],
+    fromdb: Int => Option[A],
+    codeof: String => Option[Int],
+    codec: org.goldenport.convert.NumericCodeCodec[A],
+    symbol: A => String
+  ): Vector[(String, Option[Int], Option[String], Int, String)] =
+    expected.map { case (name, code) =>
+      val value = from(name).getOrElse(fail(s"missing generated Information kind: $name"))
+      (name, codeof(name), fromdb(code).map(symbol),
+        _success(codec.encodeC(value)), symbol(_success(codec.decodeC(code))))
+    }
 
   private def _public_declared_method_names(klass: Class[?]): Set[String] =
     klass.getDeclaredMethods.iterator

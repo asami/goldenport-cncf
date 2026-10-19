@@ -45,7 +45,7 @@ Current acceptance is recorded only in the canonical
 The application/generated field declaration selects its authoritative Core
 logical datatype, physical scalar representation and captured application codec.
 The datatype remains exactly the supplied object, including `DataType.Named("name")`,
-`XInt`, `XLong`, `XBoolean` and `XDecimal`. It is not replaced by a class name,
+`XShort`, `XInt`, `XLong`, `XBoolean` and `XDecimal`. It is not replaced by a class name,
 payload shape or SQL column type. Row validation still compares
 `domain.datatype` with `binding.datatype`.
 
@@ -107,14 +107,47 @@ NonFatal encoder/decoder exceptions remain sanitized application failures.
 | --- | --- | --- | --- |
 | Text | Actual JSON string | Exact unchanged Scala String content | Actual String, passed to Json.fromString |
 | Boolean | Actual JSON Boolean | Actual Scala Boolean | Boolean; exact numeric 0/1 from the Number numeric classes; exact String `"0"` or `"1"` |
-| Number | Finite JSON number with exact BigDecimal representation | Scala BigDecimal extracted with JsonNumber.toBigDecimal | Byte, Short, Int, Long, Scala BigInt/BigDecimal, Java BigInteger/BigDecimal, finite Float/Double, or explicitly parsed numeric JSON text |
+| Number with declared XShort | Finite mathematically integral JSON number in −32768…32767 | Scala Short after exact integral and signed16 range validation | Admitted Number numeric classes or explicitly parsed numeric JSON text, with exact integral and signed16 validation before the captured decoder |
+| Number with declared XInt | Finite mathematically integral JSON number within Int bounds | Scala Int after exact integral and range validation | The admitted Number numeric classes or explicitly parsed numeric JSON text, with the same exact integral and Int range validation before the captured decoder |
+| Number with other declared datatypes | Finite JSON number with exact BigDecimal representation | Scala BigDecimal extracted with JsonNumber.toBigDecimal | Byte, Short, Int, Long, Scala BigInt/BigDecimal, Java BigInteger/BigDecimal, finite Float/Double, or explicitly parsed numeric JSON text |
 
 Text never trims, parses or lexically reconstructs content. Empty, Unicode,
 whitespace, escaping and numeric/object/array/null/malformed JSON-looking text
 remain exact text. Core `Name` can therefore keep its actual captured Codec and
 canonical `Named("name")` domain while persisting plaintext.
 
-Number uses no Double intermediate for encode or exact numeric-class decode.
+The supplied logical datatype controls the standard numeric physical mapping.
+Exact `XShort` with Number writes Scala Short for ordinary Short attributes and
+application values whose captured codec supplies a fixed code. POWERTYPE database
+bindings declare `XShort` and use this same route; there is no POWERTYPE storage
+exception or separate adapter. A code outside −32768…32767 or a fraction is rejected
+before storage and before captured decode. Zero remains a value, not absence;
+an in-range unknown code is rejected by the captured code correspondence.
+
+Exact `XInt` with Number writes Scala Int for both ordinary Int values and any
+application value whose captured codec supplies an integer code, including
+Core NumericCodeCodec.jsonCodec. There is no application-class, POWERTYPE,
+reflection or payload-shape inference. Fractional and out-of-range numbers fail
+before storage on encode and before the captured decoder on read; conversion
+never truncates or rounds. Integral decimal and exponent notation remain
+mathematically integral. Existing numeric-text reads remain compatible, and
+this mapping performs no existing-database migration.
+
+The shared SQL Record codec preserves the physical Short, Int and Long runtime
+widths for DDL and JDBC parameter binding. PostgreSQL and MySQL select signed
+`SMALLINT` for Short, `INTEGER` for Int and `BIGINT` for Long in both table creation
+and added columns. SQLite retains `INTEGER` storage with signed16 validation owned
+by the common declared `XShort` bridge. This is a logical range contract; SQLite
+does not promise a fixed two-byte physical representation. Existing Byte and
+Boolean policies are unchanged. Arbitrary-precision BigInt/BigDecimal (including
+Java counterparts) retain exact SQL text transport without a floating conversion.
+Generated DDL specifications cover PostgreSQL/MySQL; SQLite additionally has an
+actual isolated save/load/provider-reopen specification.
+
+Other declarations retain the existing BigDecimal physical mapping in this
+bounded step, including `XLong`. `XInteger` and `XDecimal` retain exact arbitrary
+precision values within BigDecimal's representable range. Number uses no Double
+intermediate for encode or exact numeric-class decode.
 Finite Float/Double input uses Circe's explicit `Json.fromFloat` / `fromDouble`
 constructor. It retains the meaning those constructors assign to that already
 floating-point value; it cannot recover precision lost before conversion.
@@ -124,8 +157,9 @@ still applies; this is not an unlimited-exponent storage contract.
 
 Physical String parsing occurs only under the explicit Number selection. The
 parsed root must be a number: invalid text, JSON null, object, array, Boolean
-and quoted numeric strings fail `wrong-physical-value`. The captured typed
-decoder still enforces integral ranges and rejects fractional Int values. No
+and quoted numeric strings fail `wrong-physical-value`. Declared XShort and XInt validate
+exact integrality and their respective signed16 and Int bounds before invoking the captured typed decoder;
+other declared types retain their captured decoder constraints. No
 numeric conversion uses Presentable, arbitrary toString or a successful String
 fallback.
 
@@ -142,8 +176,17 @@ store vectors of individually stringified physical values. Text children become
 JSON strings once, Boolean children JSON booleans and Number children exact JSON
 numbers. No child Text is parsed as JSON or serialized/parsed twice.
 
-Nested arrays retain explicit children, order and empty arrays. Each actual
-element invokes the captured application encoder/decoder once. Missing child
+The native child JSON bridge validates its declared datatype on both encode
+and decode, independently of cardinality. XShort children require exact signed16
+integers and XInt children require exact signed32 integers in scalar, array and
+nested-array bindings alike. Fractional or overflowing children fail before
+storage and before the captured child decoder, even when that decoder would
+otherwise accept them. This common check does not change XInteger/XDecimal
+precision or replace numeric JSON children with strings.
+
+Nested arrays retain explicit children, order and empty arrays. Each valid
+element invokes the captured application encoder/decoder once. Invalid declared
+integer children do not invoke the captured decoder. Missing child
 metadata fails before traversal even when there are no elements. Null or wrong
 physical JSON child kinds aggregate causal failures in element order, with
 existing recursive index FieldPath context; no partial Vector or row succeeds.
@@ -169,8 +212,9 @@ Required null omitted by Record ingress and other required absence fail as
 widened to bypass scalar declarations.
 
 Representation failures use existing `Consequence.valueInvalid` and Descriptor
-Reason facets: `wrong-physical-value` for invalid physical inputs,
-`wrong-structured-shape` for invalid codec Json kind,
+Reason facets: `wrong-physical-value` for invalid physical inputs, including
+fractional or out-of-range XShort/XInt reads; `wrong-structured-shape` for invalid codec
+Json kind or fractional/out-of-range declared XShort/XInt writes,
 `unsupported-external-value` for nonfinite/unrepresentable numbers,
 `missing-codec-binding` for missing captures/representation, and `missing-mapping`
 for missing supplied datatype. Original application-codec-failure,
@@ -249,6 +293,15 @@ successful adversarial cases. In the historical 2026-10-05 snapshot, the
 eight-suite generation/native/persistence accumulator passed 85/85 tests and
 complete eighteen-path independent protected review was pending. No later
 review result is implied here.
+
+NATIVE-13–NATIVE-15 specify the declared XInt mapping: at least 100 generated
+Int-boundary cases share one integer path for ordinary Int and a generic
+NumericCodeCodec-backed value; generated fractional and overflow writes/reads
+fail before decoder admission; and public SQLite save/load plus read-only JDBC
+`typeof` checks establish integer storage for both fields, including zero and
+both Int boundaries. The SQLite scenario also retains exact XInteger/XDecimal
+text transport and logical readback. These are authored regression obligations,
+not a validation or Phase acceptance claim.
 
 The following continuation records that historical prerequisite boundary rather
 than current unfulfilled Phase 115 requirements. At that time SQL

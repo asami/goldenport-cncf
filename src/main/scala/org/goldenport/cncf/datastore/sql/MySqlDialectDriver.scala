@@ -3,7 +3,8 @@ package org.goldenport.cncf.datastore.sql
 /*
  * @since   Jul.  6, 2026
  *  version Jul. 15, 2026
- * @version Jul. 26, 2026
+ *  version Jul. 26, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 object MySqlDialectDriver extends SqlDialectDriver {
@@ -97,7 +98,9 @@ object MySqlDialectDriver extends SqlDialectDriver {
 
   private def _datatype(value: Any): String =
     value match {
-      case _: Byte | _: Short | _: Int | _: Long | _: Boolean => "BIGINT"
+      case _: Short => "SMALLINT"
+      case _: Int => "INTEGER"
+      case _: Byte | _: Long | _: Boolean => "BIGINT"
       case _: Float | _: Double | _: BigInt | _: BigDecimal => "DOUBLE"
       case _ => "TEXT"
     }

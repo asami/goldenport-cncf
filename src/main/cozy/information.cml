@@ -304,6 +304,11 @@ package = org.goldenport.cncf.information.value
 
 # POWERTYPE
 
+Each `value` below is a fixed persistence code using the standard `XShort`
+mapping. Codes are explicit, independent of declaration order and labels, and
+must not be reassigned or derived from ordinal position. JSON and CLI retain
+the symbolic kind names. Lifecycle codes agree with `informationLifecycle`.
+
 ## InformationLifecycleState
 
 Lifecycle state of Information.
@@ -314,16 +319,16 @@ reported through publication/materialization status and Knowledge summaries.
 
 package = org.goldenport.cncf.information.value
 
-| name                   | label                  |
-| ---                    | ---                    |
-| imported               | Imported               |
-| invalid                | Invalid                |
-| needs_resolution       | Needs resolution       |
-| ready_for_confirmation | Ready for confirmation |
-| confirmed              | Confirmed              |
-| published              | Published              |
-| rejected               | Rejected               |
-| conflict               | Conflict               |
+| name                   | value | label                  |
+| ---                    | ---   | ---                    |
+| imported               | 1     | Imported               |
+| invalid                | 2     | Invalid                |
+| needs_resolution       | 3     | Needs resolution       |
+| ready_for_confirmation | 4     | Ready for confirmation |
+| confirmed              | 5     | Confirmed              |
+| published              | 6     | Published              |
+| rejected               | 7     | Rejected               |
+| conflict               | 8     | Conflict               |
 
 ## InformationBindingStatus
 
@@ -331,14 +336,14 @@ Status of an identity binding or candidate binding.
 
 package = org.goldenport.cncf.information.value
 
-| name       | label      |
-| ---        | ---        |
-| candidate  | Candidate  |
-| selected   | Selected   |
-| confirmed  | Confirmed  |
-| rejected   | Rejected   |
-| superseded | Superseded |
-| conflict   | Conflict   |
+| name       | value | label      |
+| ---        | ---   | ---        |
+| candidate  | 1     | Candidate  |
+| selected   | 2     | Selected   |
+| confirmed  | 3     | Confirmed  |
+| rejected   | 4     | Rejected   |
+| superseded | 5     | Superseded |
+| conflict   | 6     | Conflict   |
 
 ## InformationPublicationState
 
@@ -347,11 +352,11 @@ confirmation.
 
 package = org.goldenport.cncf.information.value
 
-| name          | label         |
-| ---           | ---           |
-| not_published | Not published |
-| published     | Published     |
-| failed        | Failed        |
+| name          | value | label         |
+| ---           | ---   | ---           |
+| not_published | 1     | Not published |
+| published     | 2     | Published     |
+| failed        | 3     | Failed        |
 
 ## InformationConflictState
 
@@ -359,10 +364,10 @@ Conflict workflow state.
 
 package = org.goldenport.cncf.information.value
 
-| name     | label    |
-| ---      | ---      |
-| open     | Open     |
-| resolved | Resolved |
+| name     | value | label    |
+| ---      | ---   | ---      |
+| open     | 1     | Open     |
+| resolved | 2     | Resolved |
 
 ## InformationFieldState
 
@@ -370,14 +375,14 @@ Per-field curation state.
 
 package = org.goldenport.cncf.information.value
 
-| name      | label     |
-| ---       | ---       |
-| untouched | Untouched |
-| unresolved | Unresolved |
-| inferred  | Inferred  |
-| imported  | Imported  |
-| editing   | Editing   |
-| stable    | Stable    |
+| name       | value | label      |
+| ---        | ---   | ---        |
+| untouched  | 1     | Untouched  |
+| unresolved | 2     | Unresolved |
+| inferred   | 3     | Inferred   |
+| imported   | 4     | Imported   |
+| editing    | 5     | Editing    |
+| stable     | 6     | Stable     |
 
 # STATEMACHINE
 

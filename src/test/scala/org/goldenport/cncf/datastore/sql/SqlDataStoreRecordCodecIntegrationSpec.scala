@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 17, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SqlDataStoreRecordCodecIntegrationSpec extends AnyWordSpec
@@ -81,6 +81,37 @@ final class SqlDataStoreRecordCodecIntegrationSpec extends AnyWordSpec
         literal shouldBe "null"
         exact shouldBe decimal.toString
       }
+    }
+
+    "preserve Short width and exact numeric text under both dialect write policies" in {
+      Given("signed16 boundary and generated values, Int and Long values and exact arbitrary precision scalars")
+      val property = Prop.forAll(Gen.choose(Short.MinValue.toInt, Short.MaxValue.toInt)) { generated =>
+        val values = Vector(Short.MinValue, generated.toShort, 0.toShort, Short.MaxValue)
+        val codecs = Vector(false, true).map(value => new SqlDataStoreRecordCodec(SqlDataStore.Config(), value))
+        val exactinteger = BigInt("12345678901234567890123456789012345678901234567890")
+        val exactdecimal = BigDecimal("123456789012345678901234567890.12345678901234567890")
+        When("both shared SQL policies prepare these physical scalars for DDL and JDBC")
+        codecs.foreach { codec =>
+          values.foreach { value =>
+            val stored = codec.columnValue(value)
+            stored shouldBe value
+            stored.isInstanceOf[Short] shouldBe true
+          }
+          codec.columnValue(Int.MaxValue).isInstanceOf[Int] shouldBe true
+          codec.columnValue(Long.MaxValue).isInstanceOf[Long] shouldBe true
+          codec.columnValue(exactinteger) shouldBe exactinteger.toString
+          codec.columnValue(exactdecimal) shouldBe exactdecimal.toString
+          codec.columnValue(exactinteger.bigInteger) shouldBe exactinteger.toString
+          codec.columnValue(exactdecimal.bigDecimal) shouldBe exactdecimal.toString
+        }
+        true
+      }
+      When("ScalaCheck executes at least one hundred width-preservation scenarios")
+      val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(100), property)
+      Then("Short remains Short while existing Int Long and arbitrary precision transports retain their contracts")
+      withClue(checked.toString) { checked.passed shouldBe true }
+      checked.succeeded should be >= 100
+      checked.discarded shouldBe 0
     }
 
     "preserve JSON-looking durable Job metadata under both dialect read policies" in {
