@@ -47,7 +47,7 @@ import org.typelevel.ci.CIString
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 20, 2026
  */
 /** Real ordinary component assembly; no fixture-owned resource map or result writer. */
 private[cncf] object DisplayMutationServiceFixture {
@@ -575,7 +575,8 @@ private[cncf] object DisplayMutationServiceFixture {
   final class NormalComponent(val token: String, val target: Target, val representation: EntityRevisionRepresentation,
     val log: Log, registration: Registration = Registration.Normal, val lifecycleSetup: Option[LifecycleSetup] = None,
     val businessSetup: Option[DisplayBusinessReviewFixture.Setup] = None,
-    val referenceProfile: Option[DisplayEditingStudioReferenceFixture.Profile] = None) extends Component()
+    val referenceProfile: Option[DisplayEditingStudioReferenceFixture.Profile] = None,
+    authenticationProvider: Option[AuthenticationProvider] = None) extends Component()
       with GeneratedLogicalUiMetadataProvider with DisplayBindingProvider with DisplayServiceBindingProvider
       with DisplayMutationServiceBindingProvider with SpiProviderComponent with DisplayBusinessOperationBindingProvider {
     require(referenceProfile.forall(profile => registration == Registration.Normal &&
@@ -586,7 +587,10 @@ private[cncf] object DisplayMutationServiceFixture {
       (lifecycleSetup.isEmpty || referenceProfile.nonEmpty)),
       "Business fixture setup requires the ordinary non-lifecycle registration")
     override def authenticationProviders: Vector[AuthenticationProvider] =
-      if (businessSetup.exists(_.production)) Vector(DisplayBusinessReviewFixture.authenticationProvider(log)) else Vector.empty
+      authenticationProvider match {
+        case Some(provider) => Vector(provider)
+        case None => if (businessSetup.exists(_.production)) Vector(DisplayBusinessReviewFixture.authenticationProvider(log)) else Vector.empty
+      }
     def displayBusinessOperationBindings(component: Component): Vector[DisplayBusinessOperation.Binding] =
       if (businessSetup.nonEmpty) Vector(DisplayBusinessOperation.Binding(screenId,
         DisplayBusinessOperation.ActionScope.Screen, "request-review", "business", "requestReview")) else Vector.empty
@@ -1308,7 +1312,8 @@ private[cncf] object DisplayMutationServiceFixture {
     database: Option[PostgresqlPersistenceFixture.Database] = None, registration: Registration = Registration.Normal,
     backend: String = "memory", sharedSession: Option[Session] = None, lifecycle: Option[LifecycleSetup] = None,
     businessSetup: Option[DisplayBusinessReviewFixture.Setup] = None,
-    referenceProfile: Option[DisplayEditingStudioReferenceFixture.Profile] = None): Session = {
+    referenceProfile: Option[DisplayEditingStudioReferenceFixture.Profile] = None,
+    authenticationProvider: Option[AuthenticationProvider] = None): Session = {
     require(referenceProfile.forall(profile => sharedSession.isEmpty && registration == Registration.Normal &&
       lifecycle.contains(DisplayEditingStudioReferenceFixture.lifecycle(profile)) &&
       businessSetup.contains(DisplayBusinessReviewFixture.Setup())),
@@ -1344,7 +1349,9 @@ private[cncf] object DisplayMutationServiceFixture {
       "textus.execution.key" -> ConfigurationValue.StringValue(token),
       "textus.execution.random.seed" -> ConfigurationValue.StringValue(token),
       "textus.execution.time.mode" -> ConfigurationValue.StringValue("manual"),
-      "textus.execution.time.start-at" -> ConfigurationValue.StringValue(fixedInstant.toString))
+      "textus.execution.time.start-at" -> ConfigurationValue.StringValue(fixedInstant.toString)) ++
+      (if (authenticationProvider.nonEmpty) Map(
+        org.goldenport.cncf.subsystem.SubsystemUserMode.CONFIGURATION_KEY -> ConfigurationValue.StringValue("multi-user")) else Map.empty)
     val configuration = ResolvedConfiguration(Configuration(baseconfiguration.configuration.values ++ executionconfiguration), baseconfiguration.trace)
     val operationmode = if (production) OperationMode.Production else OperationMode.Test
     val subsystem = try sharedSession.map(_.subsystem).getOrElse {
@@ -1364,7 +1371,8 @@ private[cncf] object DisplayMutationServiceFixture {
         throw error
     }
     try {
-      val component = new NormalComponent(token, target, representation, log, registration, lifecycle, businessSetup, referenceProfile)
+      val component = new NormalComponent(token, target, representation, log, registration, lifecycle, businessSetup, referenceProfile,
+        authenticationProvider)
       initialize(component, subsystem)
       success(new ComponentFactory().bootstrapC(component))
       component.withMcpReadyServices(Set("display"))

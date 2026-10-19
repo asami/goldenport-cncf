@@ -6,18 +6,18 @@ import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.directive.Query
 import org.goldenport.observation.Taxonomy
-import org.goldenport.protocol.Request
+import org.goldenport.http.HttpRequest
+import org.goldenport.protocol.{Property, Request}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec.{OperationDefinition, OperationDefinitionGroup, ParameterDefinition, RequestDefinition, ResponseDefinition, ServiceDefinition}
-import org.goldenport.record.Record
+import org.goldenport.record.{Field, Record}
 import org.goldenport.schema.{DataType, Multiplicity, ValueDomain, XString}
 import org.goldenport.value.BaseContent
 import org.simplemodeling.model.datatype.EntityId
 
 /*
  * @since   Oct.  5, 2026
- *  version Oct. 15, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 20, 2026
  */
 /** Complete admitted bindings used only by ordinary component Operations. */
 final class DisplayService private[DisplayService] (
@@ -37,7 +37,7 @@ final class DisplayService private[DisplayService] (
       .concat(_business.toVector.flatMap(registry => DisplayBusinessOperationIngress.operations(_component_id, registry))))
   )
 
-  private final class BoundOperation(opname: String) extends OperationDefinition {
+  private final class BoundOperation(opname: String) extends DisplayHttpOperation {
     private val _operation_name = opname
     private val _names = Vector("resourceType", "screenId") ++
       (if (opname == "read") Vector("resourceId") else Vector.empty)
@@ -50,6 +50,13 @@ final class DisplayService private[DisplayService] (
       }.toList),
       response = ResponseDefinition(result = List(DataType.Named("OperationResponse")))
     )
+
+    private[cncf] def _encode_http_request_c(request: HttpRequest): Consequence[Request] =
+      _http_shape_c(request, _names).map { _ =>
+        val properties = request.query.fields.filterNot(field => PresentationContextIngress._is_context_query_key(field.key))
+          .map(field => Property(field.key, field.value.single, None)).toList
+        Request.ofHttpRequest(request, _component_id.name, "display", _operation_name, properties = properties)
+      }
 
     def createOperationRequest(req: Request): Consequence[OperationRequest] = {
       for {
@@ -211,9 +218,28 @@ object DisplayService {
     }
   }
 
+  private def _http_shape_c(request: HttpRequest, names: Vector[String]): Consequence[Unit] = {
+    if (request == null || request.method != HttpRequest.GET || request.query == null || request.form == null ||
+        request.form.fields.nonEmpty || request.body.nonEmpty ||
+        request.query.fields.exists(field => field == null || field.key == null ||
+          (!names.contains(field.key) && !_transport_property(field.key) &&
+            !PresentationContextIngress._is_context_query_key(field.key))))
+      _failure("INPUT_INVALID", "request.http")
+    else names.foldLeft(Consequence.unit) { (result, name) => result.flatMap { _ =>
+      request.query.fields.filter(_.key == name) match {
+        case Vector(Field(_, Field.Value.Single(text: String))) => _id(text, "request." + name) match {
+          case Some(diagnostic) => _diagnostic_failure(diagnostic)
+          case None => Consequence.unit
+        }
+        case _ => _failure("INPUT_INVALID", "request." + name)
+      }
+    } }
+  }
+
   private def _transport_property(name: String): Boolean = {
     val lower = name.toLowerCase(java.util.Locale.ROOT)
     name.startsWith("textus.") || name.startsWith("cncf.") ||
+      lower == "authorization" || lower == "cookie" ||
       lower == "x-textus-session" || lower.startsWith("x-textus-debug-") ||
       name.startsWith("security.") || name.startsWith("crud.") ||
       Set("principalId", "principal_id", "subjectId", "subject_id", "privilege", "capability", "capabilities", "role", "roles").contains(name)

@@ -17,11 +17,17 @@ source inspection provenance remain in the [P96-01B journal](../journal/2026/10/
 
 The Scala 3 package is `org.goldenport.cncf.display`. Object
 `GeneratedLogicalUiAbi` owns immutable ABI values and admission. Auxiliary
-mixin trait `GeneratedLogicalUiMetadataProvider` exposes the public method:
+mixin trait `GeneratedLogicalUiMetadataProvider` exposes these public methods:
 
 ```text
+generatedLogicalUiEnabled: Boolean = true
 generatedLogicalUiDefinitions: Vector[GeneratedLogicalUiAbi.Definition]
 ```
+
+`generatedLogicalUiEnabled` is a concrete, default-enabled server-side capability
+on the selected component or factory provider. Bootstrap evaluates it once; it
+is not a client parameter or a member of the generated Definition/wire shape.
+Existing generated providers inherit the default without a generator change.
 
 ABI identity is exactly `cncf.logical-ui-generated.v1`, integer version `1`.
 It is independent of the exact Phase 74 descriptor, definition revision,
@@ -185,7 +191,7 @@ unknown code:
 | `LUI96_ABI_INCOMPATIBLE` | Null or incompatible ABI identity/version descriptor fields |
 | `LUI96_CONTRACT_INCOMPATIBLE` | Null or nonidentical semantic contract |
 | `LUI96_PROVENANCE_INVALID` | Missing or malformed provenance |
-| `LUI96_DEFINITIONS_MISSING` | Present selected provider with an empty vector |
+| `LUI96_DEFINITIONS_MISSING` | Enabled selected provider with an empty vector |
 | `LUI96_ELEMENT_INVALID` | Null vector/root/element/Option container or Some(null) |
 | `LUI96_ID_INVALID` | Malformed ordinary ID, binding reference or definition revision |
 | `LUI96_TEXT_INVALID` | Malformed label/title text |
@@ -195,8 +201,10 @@ unknown code:
 | `LUI96_DUPLICATE_ROLE` | Repeated non-content role in a field container |
 | `LUI96_DETAIL_TARGET_INVALID` | Invalid or unresolved same-component Detail target |
 
-No provider is not an ABI failure. A null provider vector is element-invalid;
-an empty vector from a present selected provider is definitions-missing.
+No provider or an explicitly disabled selected provider is not an ABI failure.
+Disabled selection skips the definition getter and admission entirely. For an
+enabled selected provider, a null vector is element-invalid and an empty vector
+is definitions-missing, with the unchanged `LUI96_DEFINITIONS_MISSING` diagnostic.
 Reject nested nulls before dereference: null roots/screens/structures/vectors/
 elements/Option containers and `Some(null)` are element-invalid, while null or
 malformed ABI descriptor, semantic descriptor and provenance use their
@@ -226,10 +234,19 @@ both present the component explicitly overrides and the shadowed factory is
 not read or accessed. Do not concatenate providers, scan classpath or reflect
 Cozy classes.
 
-No provider means no definitions and no Display capability/service, preserving
-old components. An empty/invalid selected provider fails construction without
-fallback. A throwing selected provider becomes structured component bootstrap
-failure, not a successful empty registry or fallback to another provider.
+After selecting the provider, evaluate `generatedLogicalUiEnabled` once during
+bootstrap. False means no admitted definitions, runtime, service, mutation or
+Business registration and skips every corresponding Display getter. A disabled
+component still shadows an enabled factory; selection never falls through on
+false. No provider preserves the same absence behavior for old components.
+
+True, including the concrete default, requires unchanged whole-vector admission:
+empty/null/invalid definitions fail construction without fallback or partial
+publication. An exception from activation or definitions becomes the existing
+structured component bootstrap failure. Successful repeated bootstrap retains
+its registration and does not reread activation or other provider getters. This
+capability introduces no late toggle, rebootstrap or retry mechanism and changes
+neither ABI identity/version nor Definition constructor/wire shape.
 
 ## LUI96-S07: Atomic admission and binding readiness
 

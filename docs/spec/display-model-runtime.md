@@ -91,8 +91,13 @@ Register exactly one component-scoped service selector `display`, with
 canonical read Operations `display.query` and `display.read`. Do not add
 `list/get` aliases. Explicit registration is required: a conflicting display
 service or duplicate Operation fails bootstrap, never last-wins replacement.
-With no definitions there is no Display service. Admission and complete typed
-binding join precede usable lookup/exposure.
+With no definitions there is no Display service. The selected metadata provider's
+concrete `generatedLogicalUiEnabled: Boolean = true` capability may explicitly
+disable Display at bootstrap. False skips definitions and all Display runtime,
+service, mutation and Business getters without falling back to the factory.
+Enabled providers retain whole-vector admission, including the unchanged
+`LUI96_DEFINITIONS_MISSING` rejection for an empty vector. Admission and complete
+typed binding join precede usable lookup/exposure.
 
 Ordinary canonical Operation selection and authorization govern each request.
 A client selects admitted screen/resource/query input; it cannot choose
@@ -521,8 +526,12 @@ Constructor/copy bypass of admitted executable service bindings is closed.
 Prepare one ordinary ServiceDefinition `display`, exactly `query` and `read`,
 no default or list/get aliases. Any existing normalized display definition or
 installed Service is a collision; never merge, replace or last-wins. Absent
-metadata preserves legacy bootstrap success without a Display service or service
-capability read. A present selected provider with an empty definition vector is
+metadata, or selected metadata with `generatedLogicalUiEnabled == false`,
+preserves legacy bootstrap success without a Display service or any Display
+capability getter read. Activation defaults to true and is evaluated once after
+component-first selection; a disabled component still shadows its factory.
+Successful repeated bootstrap does not reread activation or provider getters.
+An enabled selected provider with an empty definition vector is
 rejected by existing Logical UI ABI S05/S06 with LUI96_DEFINITIONS_MISSING at
 `definitions`, before runtime or service getters and without fallback. It does
 not produce an admitted empty runtime or service.
@@ -543,8 +552,15 @@ duplicate, wrong-kind, missing, numeric, Boolean, collection or null business
 inputs fail without incidental `toString` conversion or source effects.
 
 Direct operation-request construction may carry only existing framework/security
-transport properties; normal Subsystem strips them. They never select a source
-or grant authority. No arbitrary View/converter/path/class/Aggregate Operation,
+transport properties. Normal Subsystem extracts authentication/security metadata
+before domain conversion; ordinary HTTP `Authorization` and `Cookie` carriers
+may remain as case-insensitive framework metadata in the closed Display read,
+mutation and Business-descriptor input gates. These carriers are not business
+fields and confer no authority: normal provider authentication, Operation
+authorization and Entity access still govern execution. A Cookie does not replace
+the selected provider's credential requirements. Unknown properties, exact
+selector cardinality/value checks and raw mutation-body admission remain closed.
+They never select a source or grant authority. No arbitrary View/converter/path/class/Aggregate Operation,
 filter/where/limit/offset/total/control grammar is admitted. Extra client filters
 are rejected, not ignored. Resolve the exact admitted screen/resourceType pair;
 read requires Detail and query requires List. Resource IDs use existing

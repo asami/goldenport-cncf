@@ -3,15 +3,18 @@ package org.goldenport.cncf.http
 import org.goldenport.Conclusion
 import org.goldenport.http.HttpResponse
 import org.goldenport.cncf.config.OperationMode
+import org.goldenport.cncf.observability.ConclusionDisclosure
 import org.goldenport.cncf.protocol.HttpFailureTransportMetadata
 import org.goldenport.error.DetailCode
 import org.goldenport.record.Record
 import org.goldenport.record.io.RecordEncoder
+import org.goldenport.schema.DataConfidentiality
 
 /*
  * @since   Apr. 24, 2026
  *  version May. 11, 2026
- * @version Aug. 15, 2026
+ *  version Aug. 15, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class StructuredHttpError(
@@ -35,38 +38,56 @@ final case class StructuredHttpError(
   def debugEnabled: Boolean =
     !isProduction
 
-  def publicRecord: Record =
+  def publicRecord: Record = _public_record(Map.empty, Vector.empty)
+
+  private def _public_record(confidentiality: Map[String, DataConfidentiality], credentials: Vector[String]): Record =
     Record.data(
       "status" -> status,
-      "statusText" -> statusText,
-      "message" -> message
+      "statusText" -> ConclusionDisclosure.sanitizeText(statusText, credentials),
+      "message" -> conclusion.map(ConclusionDisclosure.message(_, credentials, confidentiality))
+        .getOrElse(ConclusionDisclosure.sanitizeText(message, credentials))
     ) ++ Record.dataOption(
       "detailCode" -> detailCode,
       "appCode" -> appCode,
-      "appStatus" -> appStatus
+      "appStatus" -> appStatus.map(ConclusionDisclosure.sanitizeText(_, credentials))
     )
 
   def diagnosticRecord: Record =
-    publicRecord ++
+    _diagnostic_record(ConclusionDisclosure.Detail.Standard, Map.empty, Vector.empty)
+
+  private def _diagnostic_record(detail: ConclusionDisclosure.Detail,
+    confidentiality: Map[String, DataConfidentiality], credentials: Vector[String]): Record =
+    _public_record(confidentiality, credentials) ++
       Record.data(
         "mode" -> operationMode.name,
-        "path" -> path,
-        "method" -> method
+        "path" -> ConclusionDisclosure.sanitizeText(path, credentials),
+        "method" -> ConclusionDisclosure.sanitizeText(method, credentials)
       ) ++
       Record.dataOption(
-        "component" -> component,
-        "service" -> service,
-        "operation" -> operation,
+        "component" -> component.map(ConclusionDisclosure.sanitizeText(_, credentials)),
+        "service" -> service.map(ConclusionDisclosure.sanitizeText(_, credentials)),
+        "operation" -> operation.map(ConclusionDisclosure.sanitizeText(_, credentials)),
         "detailCodePath" -> conclusion.map(DetailCode.path),
-        "conclusion" -> conclusion.map(_.toRecord),
-        "diagnostic" -> conclusion.map(_.show)
+        "conclusion" -> conclusion.map(ConclusionDisclosure.http(_, detail, confidentiality, credentials))
       )
 
   def envelopeRecord: Record =
-    if (debugEnabled)
-      Record.data("error" -> (publicRecord ++ Record.data("debug" -> diagnosticRecord)))
-    else
-      Record.data("error" -> publicRecord)
+    _envelope_record(ConclusionDisclosure.Detail.Standard)
+
+  private[cncf] def _envelope_record(
+    detail: ConclusionDisclosure.Detail,
+    confidentiality: Map[String, DataConfidentiality] = Map.empty,
+    credentials: Vector[String] = Vector.empty
+  ): Record = {
+    val semantic = conclusion.map { original =>
+      Record.data("conclusion" -> ConclusionDisclosure.http(original, detail, confidentiality, credentials),
+        "conclusionDetail" -> detail.name) ++ Record.dataOption("conclusionOmitted" ->
+          Option.when(detail == ConclusionDisclosure.Detail.Standard && original.previous.nonEmpty)(Vector("previous")))
+    }.getOrElse(Record.empty)
+    val error = _public_record(confidentiality, credentials) ++ semantic
+    Record.data("error" -> (if (debugEnabled) error ++
+      Record.data("debug" -> _diagnostic_record(detail, confidentiality, credentials)) else error))
+  }
 
   def envelopeJson: String =
     RecordEncoder.json(envelopeRecord)
@@ -83,7 +104,7 @@ object StructuredHttpError {
     conclusion: Conclusion,
     path: String,
     method: String,
-    operationmode: OperationMode,
+    operationMode: OperationMode,
     component: Option[String] = None,
     service: Option[String] = None,
     operation: Option[String] = None
@@ -92,13 +113,13 @@ object StructuredHttpError {
     StructuredHttpError(
       status = resolvedstatus,
       statusText = conclusion.status.webCode.statusText,
-      message = conclusion.displayMessage,
+      message = ConclusionDisclosure.message(conclusion),
       detailCode = conclusion.status.detailCode.map(_.code),
       appCode = conclusion.status.appCode,
       appStatus = conclusion.status.appStatus,
       path = path,
       method = method,
-      operationMode = operationmode,
+      operationMode = operationMode,
       conclusion = Some(conclusion),
       component = component,
       service = service,
@@ -111,7 +132,7 @@ object StructuredHttpError {
     status: Int,
     path: String,
     method: String,
-    operationmode: OperationMode,
+    operationMode: OperationMode,
     component: Option[String] = None,
     service: Option[String] = None,
     operation: Option[String] = None
@@ -125,7 +146,7 @@ object StructuredHttpError {
       appStatus = None,
       path = path,
       method = method,
-      operationMode = operationmode,
+      operationMode = operationMode,
       component = component,
       service = service,
       operation = operation

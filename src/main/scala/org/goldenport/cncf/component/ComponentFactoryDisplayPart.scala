@@ -8,8 +8,7 @@ import org.goldenport.cncf.display.{DisplayBusinessOperation, DisplayBusinessOpe
 
 /*
  * @since   Oct.  3, 2026
- *  version Oct. 15, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 20, 2026
  */
 private[component] trait ComponentFactoryDisplayPart { self: ComponentFactory =>
   private[component] def _prepare_display_service_c(
@@ -118,9 +117,9 @@ private[component] trait ComponentFactoryDisplayPart { self: ComponentFactory =>
         }
       }
       provider match {
-        case Some(selected) =>
+        case Some(selected) if selected.generatedLogicalUiEnabled =>
           GeneratedLogicalUiAbi.admitC(selected.generatedLogicalUiDefinitions).map(Some(_))
-        case None =>
+        case _ =>
           Consequence.success(None)
       }
     } catch {
