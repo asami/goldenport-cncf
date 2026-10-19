@@ -55,6 +55,8 @@ final class DisplayMutationCommitObservationSpec extends AnyWordSpec with Displa
             Then("transaction-indeterminate contains no receipt or reload and never mistakes historical state for a current witness")
             attempt.result shouldBe a[Consequence.Failure[?]]
             conclusion(attempt.result).observation.taxonomy shouldBe conclusion(DisplayMutationResult.indeterminateC[Unit]()).observation.taxonomy
+            And("the fresh current Action has no commit witness while its caller retains only the selected history")
+            (active.uow eq active.callerUnitOfWork) shouldBe false
             active.uow.lastCommitTermination shouldBe None
             active.uow.lastCommitResult shouldBe None
             active.callerUnitOfWork.lastCommitTermination shouldBe (if (historical) Some(UnitOfWorkTermination.Committed) else None)

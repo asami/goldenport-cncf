@@ -73,7 +73,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererEntityAdminSpec extends AnyWordSpec with Matchers with GivenWhenThen with StaticFormAppRendererSpecFixtures {
@@ -769,7 +769,7 @@ final class StaticFormAppRendererEntityAdminSpec extends AnyWordSpec with Matche
       Then("the stale form reports conflict and cannot replace the first commit")
       firsthtml should include ("Applied</th><td>true")
       stalehtml should include ("Applied</th><td>false")
-      stalehtml should include ("result.status</th><td>400")
+      stalehtml should include ("result.status</th><td>409")
       stalehtml should include ("operation.conflict")
       val stored = _load_notice_store_record(subsystem, entityid)
       stored.getString("title") shouldBe Some("first writer")

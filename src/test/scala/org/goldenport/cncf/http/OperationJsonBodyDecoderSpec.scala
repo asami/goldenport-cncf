@@ -9,7 +9,7 @@ import org.goldenport.datatype.I18nLabel
 import org.goldenport.observation.Descriptor
 import org.goldenport.protocol.spec.ParameterDefinition
 import org.goldenport.record.Record
-import org.goldenport.schema.{DataType, Multiplicity, ValueDomain, XJson, XSemiStructuredData, XString}
+import org.goldenport.schema.{DataType, Multiplicity, ValueDomain, XInt, XJson, XSemiStructuredData, XString}
 import org.goldenport.value.BaseContent
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
@@ -20,14 +20,14 @@ import org.scalatest.wordspec.AnyWordSpec
  * JSON syntax, semantic Record ownership and explicit update instructions.
  *
  * @since   Oct. 18, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationJsonBodyDecoderSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Operation JSON body admission" should {
     "delegate semantic structures to Core" which {
-      "omit nested null properties while preserving ordered properties and empty structures" in {
-        Given("an ordinary object interleaving semantic children and actual raw Json parameters")
+      "E1 omit nested null properties while preserving ordinary root presence, order and empty structures" in {
+        Given("docs/spec/http-json-body-admission.md R1, R2, E1: an ordinary object interleaving semantic children and actual raw Json parameters")
         val text = """{"first":"one","gone":null,"payload":{"gone":null},"evidence":{"z":1,"gone":null,"empty":{},"array":[],"child":{"gone":null,"text":"null"}},"payloads":[null],"last":"two"}"""
 
         When("the selected Operation's body is decoded outside Entity update semantics")
@@ -35,8 +35,9 @@ final class OperationJsonBodyDecoderSpec extends AnyWordSpec with Matchers with 
         val evidence = record.getAny("evidence").get.asInstanceOf[Record]
         val child = evidence.getAny("child").get.asInstanceOf[Record]
 
-        Then("Core omission keeps the surviving order, empty object, empty array and literal text")
-        record.fields.map(_.key) shouldBe Vector("first", "payload", "evidence", "payloads", "last")
+        Then("root null remains present while Core nested omission retains empty structures and literal text")
+        record.fields.map(_.key) shouldBe Vector("first", "gone", "payload", "evidence", "payloads", "last")
+        record.getAny("gone") shouldBe Some(Json.Null)
         evidence.fields.map(_.key) shouldBe Vector("z", "empty", "array", "child")
         evidence.getAny("gone") shouldBe None
         evidence.getAny("empty") shouldBe Some(Record.empty)
@@ -61,6 +62,121 @@ final class OperationJsonBodyDecoderSpec extends AnyWordSpec with Matchers with 
           Then("the conversion returns a structured failure and never a successful None fallback")
           result shouldBe a[Consequence.Failure[?]]
         }
+      }
+    }
+
+    "retain ordinary root presence defined in docs/spec/http-json-body-admission.md" which {
+      "E2 distinguish an absent ordinary parameter from an explicit root Json.Null" in {
+        Given("docs/spec/http-json-body-admission.md R1, E2: an optional ordinary String parameter outside Entity update semantics")
+        val parameters = Vector(_parameter("nickname", XString, Multiplicity.ZeroOne))
+
+        When("one object omits the parameter and another explicitly supplies JSON null")
+        val absent = _decode("{}", parameters, None)
+        val present = _decode("""{"nickname":null}""", parameters, None)
+
+        Then("only the explicit null produces a singular present field")
+        absent.getAny("nickname") shouldBe None
+        present.fields.map(_.key) shouldBe Vector("nickname")
+        present.getAny("nickname") shouldBe Some(Json.Null)
+      }
+
+      "E3 distinguish absent unknown keys from explicit null keys for operation validation" in {
+        Given("docs/spec/http-json-body-admission.md R1, R4, E3: a selected parameter list that does not declare other")
+        val parameters = Vector(_parameter("nickname", XString, Multiplicity.ZeroOne))
+
+        When("objects with and without the unknown null key cross the body admission boundary")
+        val absent = _decode("""{"nickname":"one"}""", parameters, None)
+        val present = _decode("""{"other":null,"nickname":"one"}""", parameters, None)
+
+        Then("the operation receives the unknown key and its original position instead of losing rejection evidence")
+        absent.getAny("other") shouldBe None
+        present.fields.map(_.key) shouldBe Vector("other", "nickname")
+        present.getAny("other") shouldBe Some(Json.Null)
+        present.getString("nickname") shouldBe Some("one")
+      }
+
+      "E4 keep an invalid ordinary integer null visible to the actual typed reader" in {
+        Given("docs/spec/http-json-body-admission.md R1, R4, E4: an optional integer parameter and the existing Int ValueReader")
+        val parameters = Vector(_parameter("count", XInt, Multiplicity.ZeroOne))
+        val reader = summon[ValueReader[Int]]
+
+        When("omitted, null and valid numeric inputs are admitted and present values reach typed construction")
+        val absent = _decode("{}", parameters, None)
+        val present = _decode("""{"count":null}""", parameters, None)
+        val ordinary = _decode("""{"count":7}""", parameters, None)
+        val rejected = present.getAny("count").map(reader.readC)
+        val accepted = ordinary.getAny("count").map(reader.readC)
+
+        Then("null reaches the reader as an invalid present value while omission alone skips value reading")
+        absent.getAny("count").map(reader.readC) shouldBe None
+        present.getAny("count") shouldBe Some(Json.Null)
+        rejected.get shouldBe a[Consequence.Failure[?]]
+        accepted shouldBe Some(Consequence.success(7))
+      }
+
+      "E5 preserve ordinary presence and raw children for one hundred shrinking samples with zero discards" in {
+        Given("docs/spec/http-json-body-admission.md R1, R2, R4, E5: independent nonempty names, disjoint key roles, null presence, ordinary values and root order")
+        val name = Gen.nonEmptyListOf(Gen.alphaChar).map(_.mkString)
+        val samples = for {
+          ordinaryname <- name
+          unknownname <- name
+          rawname <- name
+          valuename <- name
+          ordinarypresent <- Gen.oneOf(true, false)
+          unknownpresent <- Gen.oneOf(true, false)
+          text <- Gen.alphaNumStr
+          number <- Gen.choose(-1000000, 1000000)
+          reverse <- Gen.oneOf(true, false)
+          offset <- Gen.choose(0, 3)
+        } yield (ordinaryname, unknownname, rawname, valuename, ordinarypresent, unknownpresent, text, number, reverse, offset)
+        val property = Prop.forAll(samples) { case (ordinaryname, unknownname, rawname, valuename, ordinarypresent, unknownpresent, text, number, reverse, offset) =>
+          Given("independently generated ordinary, unknown, raw and value keys with optional null occurrences")
+          val ordinarykey = "ordinary_" + ordinaryname
+          val unknownkey = "unknown_" + unknownname
+          val rawkey = "raw_" + rawname
+          val valuekey = "value_" + valuename
+          val raw = Json.obj("gone" -> Json.Null, "children" -> Json.arr(Json.Null, Json.fromInt(number)),
+            "text" -> Json.fromString(text))
+          val ordinary = Json.obj("text" -> Json.fromString(text), "enabled" -> Json.fromBoolean(ordinarypresent))
+          val entries = Vector(ordinarykey -> Json.Null, unknownkey -> Json.Null, rawkey -> raw, valuekey -> ordinary)
+          val direction = if (reverse) entries.reverse else entries
+          val ordered = direction.drop(offset) ++ direction.take(offset)
+          val selected = ordered.filter { case (key, _) =>
+            (key != ordinarykey || ordinarypresent) && (key != unknownkey || unknownpresent)
+          }
+          val withoutnulls = ordered.filterNot { case (key, _) => key == ordinarykey || key == unknownkey }
+          val parameters = Vector(_parameter(ordinarykey, XString, Multiplicity.ZeroOne),
+            _parameter(rawkey, XJson), _parameter(valuekey, XSemiStructuredData))
+
+          When("the selected body and matching objects with both null keys absent or present are admitted")
+          val record = _decode(Json.fromFields(selected).noSpaces, parameters, None)
+          val absent = _decode(Json.fromFields(withoutnulls).noSpaces, parameters, None)
+          val present = _decode(Json.fromFields(ordered).noSpaces, parameters, None)
+
+          Then("presence, original root order, singular null values, raw children and ordinary values remain observable without Scala null")
+          record.fields.map(_.key) shouldBe selected.map(_._1)
+          absent.fields.map(_.key) shouldBe withoutnulls.map(_._1)
+          present.fields.map(_.key) shouldBe ordered.map(_._1)
+          record.getAny(ordinarykey) shouldBe (if (ordinarypresent) Some(Json.Null) else None)
+          record.getAny(unknownkey) shouldBe (if (unknownpresent) Some(Json.Null) else None)
+          Vector(ordinarykey, unknownkey).foreach { key =>
+            absent.getAny(key) shouldBe None
+            present.getAny(key) shouldBe Some(Json.Null)
+          }
+          Vector(record, absent, present).foreach { decoded =>
+            decoded.getAny(rawkey) shouldBe Some(raw)
+            decoded.getAny(valuekey) shouldBe Some(Record.dataAuto("text" -> text, "enabled" -> ordinarypresent))
+            _contains_scala_null(decoded) shouldBe false
+          }
+          true
+        }
+
+        When("ScalaCheck evaluates the connected shrinking presence property")
+        val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(100), property)
+        Then("at least one hundred successful samples and zero discarded cases are required")
+        withClue(checked.toString) { checked.passed shouldBe true }
+        checked.succeeded should be >= 100
+        checked.discarded shouldBe 0
       }
     }
 
@@ -368,6 +484,12 @@ final class OperationJsonBodyDecoderSpec extends AnyWordSpec with Matchers with 
     operation: Option[CmlOperationDefinition] = Some(_operation)): Record =
     _take(OperationJsonBodyDecoder.decode(text, parameters, operation)).getOrElse(fail("expected an object Record"))
   private def _json(text: String): Json = io.circe.parser.parse(text).fold(error => fail(error.message), identity)
+  private def _contains_scala_null(value: Any): Boolean = value match {
+    case null => true
+    case record: Record => record.fields.exists(field => _contains_scala_null(field.value.single))
+    case values: Seq[?] => values.exists(_contains_scala_null)
+    case _ => false
+  }
   private def _take[A](result: Consequence[A]): A = result match {
     case Consequence.Success(value) => value
     case Consequence.Failure(conclusion) => fail((conclusion.show +: conclusion.causes.map(_.display)).mkString("\n"))

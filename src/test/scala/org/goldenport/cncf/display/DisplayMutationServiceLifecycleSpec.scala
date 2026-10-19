@@ -48,6 +48,11 @@ final class DisplayMutationServiceLifecycleSpec extends AnyWordSpec with Display
             val attempt = session.execute(session.lifecycleRequest(Operation.Create, fields))
             Then("the actual provider acknowledgement produces INITIAL Created, one contextual Detail and no generic write or replay")
             checkLifecycleResult(attempt, session, true, 1L)
+            And("the committed Action has its own self-bound UnitOfWork while the original caller remains untouched")
+            attempt.execution.uow should not be theSameInstanceAs(attempt.execution.callerUnitOfWork)
+            attempt.execution.uow.executionContext.unitOfWork should be theSameInstanceAs attempt.execution.uow
+            attempt.execution.callerUnitOfWork.lastCommitTermination shouldBe None
+            attempt.execution.context.unitOfWork should be theSameInstanceAs attempt.execution.callerUnitOfWork
             session.log.idCalls shouldBe (if (supplied) Vector.empty else Vector(session.component.collectionId -> "entity-create"))
             session.log.conversions shouldBe DisplayMutationServiceDomain.fieldIds.filter(name => fields.exists(_.location.fieldId == name))
             session.log.validations shouldBe 1
@@ -420,8 +425,12 @@ final class DisplayMutationServiceLifecycleSpec extends AnyWordSpec with Display
               attempt.execution.lifecycleObservers.map(_.writes).sum shouldBe 0
               if (mode == Commit.Noop) {
                 conclusion(attempt.result).observation.taxonomy shouldBe conclusion(DisplayMutationResult.indeterminateC[Unit]()).observation.taxonomy
+                And("the current Noop Action is uncommitted independently of the untouched caller's prior successful history")
+                active.uow should not be theSameInstanceAs(active.callerUnitOfWork)
                 active.uow.lastCommitTermination shouldBe None
                 active.uow.lastCommitResult shouldBe None
+                active.callerUnitOfWork.lastCommitTermination shouldBe (if (historical) Some(org.goldenport.cncf.unitofwork.UnitOfWorkTermination.Committed) else None)
+                active.callerUnitOfWork.lastCommitResult shouldBe (if (historical) Some(Consequence.unit) else None)
               }
               if (mode == Commit.Reject) active.uow.lastCommitTermination shouldBe Some(org.goldenport.cncf.unitofwork.UnitOfWorkTermination.Aborted)
               if (mode == Commit.Abort) active.uow.lastAbortResult shouldBe Some(Consequence.unit)

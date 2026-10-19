@@ -11,7 +11,7 @@ import org.goldenport.record.Record
 import org.goldenport.schema.DataType
 import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentInstanceMetadata, ComponentOrigin}
-import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.context.{ExecutionContext, ScopeKind}
 import org.goldenport.cncf.event.DomainEvent
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.operation.evaluation.{OperationEvaluationName, OperationEvaluationStartFact, OperationEvaluationTerminalFact}
@@ -93,6 +93,9 @@ final class SpiInvokerSpec
       val fixture = InvocationFixture.create()
       given ExecutionContext = ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.create(), enabled = true)
       val caller = summon[ExecutionContext]
+      val parentruntime = caller.runtime
+      val parentuow = caller.unitOfWork
+      val parenttermination = parentuow.lastCommitTermination
       val callerunitofwork = caller.runtime.unitOfWork
       val callerbinding = callerunitofwork.executionContext
       val secret = "not-for-calltree"
@@ -112,11 +115,22 @@ final class SpiInvokerSpec
         Some(socket)
       )
 
-      Then("the Record fields reach the selected provider without materializing the typed service")
+      Then("the Record fields reach a fresh self-bound Action context inheriting caller facilities without materializing the typed service")
       result shouldBe a[Consequence.Success[_]]
       result.toOption.get.asMap.get("tag").collect {
         case values: Seq[?] => values.toVector.map(_.toString)
       } shouldBe Some(Vector("first", "second"))
+      val observed = fixture.provider.observedExecutionContext.getOrElse(fail("provider ExecutionContext missing"))
+      observed.runtime should not be theSameInstanceAs(parentruntime)
+      observed.unitOfWork should not be theSameInstanceAs(parentuow)
+      observed.unitOfWork.executionContext should be theSameInstanceAs observed
+      observed.cncfCore.scope.kind shouldBe ScopeKind.Action
+      observed.security shouldBe caller.security
+      observed.observability shouldBe caller.observability
+      observed.runtime.context shouldBe parentruntime.context
+      caller.runtime should be theSameInstanceAs parentruntime
+      caller.unitOfWork should be theSameInstanceAs parentuow
+      parentuow.lastCommitTermination shouldBe parenttermination
       fixture.provider.typedProviderMaterializationCount shouldBe fixture.materializationsAfterAssembly
 
       And("the provider Action owns a fresh bound runtime and UnitOfWork while retaining caller facilities")
