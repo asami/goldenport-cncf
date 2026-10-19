@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /** Owning-runtime SPI specs. These are not workflow semantic acceptance or a product SBT bridge. */
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeProcessExecutionInitializationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -173,8 +173,12 @@ final class CncfRuntimeProcessExecutionInitializationSpec extends AnyWordSpec wi
         Subsystem.shutdownOwned(subsystem)
         runtime.closeEmbedding()
       }
-      And("the same owning lifecycle closes the typed execution's driver")
-      subsystem.globalRuntimeContext.processExecutionDriverOption.get.startC(admitted.get).isFaillure shouldBe true
+      Given("the owning subsystem has shut down its standard driver after admitting the typed SBT execution")
+      When("the stopped owning driver receives the already admitted typed SBT execution")
+      val stopped = _take(_take(subsystem.globalRuntimeContext.processExecutionDriverOption.get.startC(admitted.get)).awaitC)
+      Then("the original SystemNode remains stopped and the typed result reports NotStarted")
+      subsystem.systemNode.state shouldBe SystemNode.State.Stopped
+      stopped.termination shouldBe ProcessExecutionTermination.NotStarted
     }
 
     "refuse V2 authority supplied by a Component source or command argument" in {
