@@ -5,7 +5,8 @@ import java.time.Instant
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import io.circe.parser.parse
-import org.goldenport.Conclusion
+import org.goldenport.{Conclusion, Consequence}
+import org.goldenport.cncf.config.OperationMode
 import org.goldenport.cncf.context.RuntimeContext
 import org.goldenport.cncf.protocol.HttpFailureTransportMetadata
 import org.goldenport.conclusion.{Disposition, Interpretation}
@@ -20,13 +21,122 @@ import org.typelevel.ci.CIString
 
 /*
  * @since   Aug. 15, 2026
- * @version Aug. 15, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class HttpFailureTransportMetadataSpec
   extends AnyWordSpec
     with Matchers
     with GivenWhenThen {
+  "E1 HTTP operation-conflict projection" should afterWord(
+    "in spec:http-failure-transport, example:E1, rules:P12-HTTP-BLOB-CONFLICT-01,P12-HTTP-ENTITY-CONFLICT-01, phase:12"
+  ) {
+    "resolve Conflict consistently while preserving failure metadata and production filtering" in {
+      Given("an operation-conflict Conclusion with explicit detail and application status metadata")
+      val conflict = Consequence.operationConflict(
+        "update-entity",
+        Vector(Descriptor.Facet.Message("The entity revision is stale."), Descriptor.Facet.Reason("stale-entity-revision"))
+      ).conclusion
+      val conclusion = conflict.copy(status = conflict.status.copy(appCode = Some(_app_code), appStatus = Some(_app_status)))
+
+      When("the failure is projected to its HTTP status and structured production envelope")
+      val status = HttpFailureTransportMetadata.httpStatus(conclusion)
+      val error = _structured_error(conclusion)
+      val envelope = parse(error.envelopeJson).toOption.map(_.hcursor.downField("error"))
+
+      Then("both projections use Conflict 409 and retain safe metadata with the diagnostic Conclusion privately available")
+      status shouldBe HttpStatus.Conflict
+      error.status shouldBe 409
+      error.statusText shouldBe "Conflict"
+      error.message shouldBe conclusion.displayMessage
+      error.detailCode shouldBe conclusion.status.detailCode.map(_.code)
+      error.appCode shouldBe Some(_app_code)
+      error.appStatus shouldBe Some(_app_status)
+      error.conclusion shouldBe Some(conclusion)
+      envelope.flatMap(_.get[Int]("status").toOption) shouldBe Some(409)
+      envelope.flatMap(_.get[String]("statusText").toOption) shouldBe Some("Conflict")
+      envelope.flatMap(_.get[Long]("detailCode").toOption) shouldBe conclusion.status.detailCode.map(_.code)
+      envelope.flatMap(_.get[Long]("appCode").toOption) shouldBe Some(_app_code)
+      envelope.flatMap(_.get[String]("appStatus").toOption) shouldBe Some(_app_status)
+      envelope.flatMap(_.get[io.circe.Json]("debug").toOption) shouldBe None
+    }
+  }
+
+  "E2 HTTP argument-invalid projection" should afterWord(
+    "in spec:http-failure-transport, example:E2, rules:P12-HTTP-BLOB-CONFLICT-01,P12-HTTP-ENTITY-CONFLICT-01, phase:12"
+  ) {
+    "retain Bad Request for ordinary invalid arguments" in {
+      Given("an invalid-argument Conclusion produced by the semantic failure utility")
+      val conclusion = Consequence.argumentInvalid[Unit]("The entity identifier is required.").conclusion
+
+      When("the failure is projected to its HTTP status and structured error")
+      val status = HttpFailureTransportMetadata.httpStatus(conclusion)
+      val error = _structured_error(conclusion)
+
+      Then("the existing Bad Request mapping remains 400")
+      status shouldBe HttpStatus.BadRequest
+      error.status shouldBe 400
+      error.statusText shouldBe "Bad Request"
+    }
+  }
+
+  "E3 HTTP operation-illegal projection" should afterWord(
+    "in spec:http-failure-transport, example:E3, rules:P12-HTTP-BLOB-CONFLICT-01,P12-HTTP-ENTITY-CONFLICT-01, phase:12"
+  ) {
+    "ignore conflict wording when the typed operation symptom differs" in {
+      Given("an illegal-operation Conclusion whose message contains conflict")
+      val conclusion = Consequence.operationIllegal("update-entity", "A conflict word is descriptive only.").conclusion
+
+      When("the failure is projected to its HTTP status and structured error")
+      val status = HttpFailureTransportMetadata.httpStatus(conclusion)
+      val error = _structured_error(conclusion)
+
+      Then("message text does not promote the failure to Conflict")
+      status shouldBe HttpStatus.BadRequest
+      error.status shouldBe 400
+      error.statusText shouldBe "Bad Request"
+    }
+  }
+
+  "E4 HTTP non-operation-conflict projection" should afterWord(
+    "in spec:http-failure-transport, example:E4, rules:P12-HTTP-BLOB-CONFLICT-01,P12-HTTP-ENTITY-CONFLICT-01, phase:12"
+  ) {
+    "retain the category mapping when only the typed conflict symptom matches" in {
+      Given("an argument-taxonomy Conclusion with the Conflict symptom")
+      val original = _conclusion()
+      val conclusion = original.copy(observation = original.observation.copy(
+        taxonomy = Taxonomy(Taxonomy.Category.Argument, Taxonomy.Symptom.Conflict)
+      ))
+
+      When("the failure is projected to its HTTP status and structured error")
+      val status = HttpFailureTransportMetadata.httpStatus(conclusion)
+      val error = _structured_error(conclusion)
+
+      Then("the Argument category keeps Bad Request rather than selecting the operation-conflict override")
+      status shouldBe HttpStatus.BadRequest
+      error.status shouldBe 400
+      error.statusText shouldBe "Bad Request"
+    }
+  }
+
+  "E5 HTTP permission-denied projection" should afterWord(
+    "in spec:http-failure-transport, example:E5, rules:P12-HTTP-BLOB-CONFLICT-01,P12-HTTP-ENTITY-CONFLICT-01, phase:12"
+  ) {
+    "retain Forbidden for security permission failures" in {
+      Given("a permission-denied Conclusion produced by the semantic failure utility")
+      val conclusion = Consequence.securityPermissionDenied[Unit]("The operation requires permission.").conclusion
+
+      When("the failure is projected to its HTTP status and structured error")
+      val status = HttpFailureTransportMetadata.httpStatus(conclusion)
+      val error = _structured_error(conclusion)
+
+      Then("the existing Forbidden mapping remains 403")
+      status shouldBe HttpStatus.Forbidden
+      error.status shouldBe 403
+      error.statusText shouldBe "Forbidden"
+    }
+  }
+
   "HTTP failure transport metadata" should {
     "render explicitly materialized failure status metadata in a structured JSON error" in {
       Given("an argument-taxonomy Conclusion with explicit application status metadata")
@@ -208,6 +318,9 @@ final class HttpFailureTransportMetadataSpec
       _internal_headers(response) shouldBe empty
     }
   }
+
+  private def _structured_error(conclusion: Conclusion): StructuredHttpError =
+    StructuredHttpError.fromConclusion(conclusion, "/failure-transport", "POST", OperationMode.Production)
 
   private lazy val _server: Http4sHttpServer =
     HttpRuntimeBindingAdmissionFixture.server(

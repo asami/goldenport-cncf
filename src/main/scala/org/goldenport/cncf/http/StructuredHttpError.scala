@@ -11,7 +11,8 @@ import org.goldenport.record.io.RecordEncoder
 /*
  * @since   Apr. 24, 2026
  *  version May. 11, 2026
- * @version Aug. 15, 2026
+ *  version Aug. 15, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class StructuredHttpError(
@@ -88,10 +89,10 @@ object StructuredHttpError {
     service: Option[String] = None,
     operation: Option[String] = None
   ): StructuredHttpError = {
-    val resolvedstatus = conclusion.status.webCode.code
+    val resolvedstatus = HttpFailureTransportMetadata.httpStatus(conclusion).code
     StructuredHttpError(
       status = resolvedstatus,
-      statusText = conclusion.status.webCode.statusText,
+      statusText = statusText(resolvedstatus),
       message = conclusion.displayMessage,
       detailCode = conclusion.status.detailCode.map(_.code),
       appCode = conclusion.status.appCode,

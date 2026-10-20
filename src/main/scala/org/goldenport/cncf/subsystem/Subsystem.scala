@@ -76,7 +76,7 @@ import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
  *  version Apr. 30, 2026
  *  version Aug. 15, 2026
  *  version Sep.  8, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -2745,7 +2745,7 @@ final class Subsystem(
     HttpFailureTransportMetadata.attach(HttpResponse.text(_http_status(c), c.displayMessage), c)
 
   private def _http_status(c: org.goldenport.Conclusion): HttpStatus =
-    HttpStatus.fromInt(c.status.webCode.code).getOrElse(HttpStatus.InternalServerError)
+    HttpFailureTransportMetadata.httpStatus(c)
 
   private val _alias_resolver: AliasResolver = aliasResolver
   private val _http_run_mode: RunMode = runMode
