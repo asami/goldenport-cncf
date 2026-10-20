@@ -17,17 +17,20 @@ import org.simplemodeling.model.datatype.EntityRevision
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 20, 2026
  */
 /** Selected by the actual resolved Operation, never by a textual route heuristic. */
 private[cncf] trait DisplayMutationOperation extends OperationDefinition {
   private[cncf] def _string_input_names: Set[String]
 }
 
-private[cncf] trait DisplayMutationHttpOperation extends DisplayMutationOperation {
+private[cncf] trait DisplayHttpOperation extends OperationDefinition {
+  private[cncf] def _encode_http_request_c(request: HttpRequest): Consequence[Request]
+}
+
+private[cncf] trait DisplayMutationHttpOperation extends DisplayHttpOperation with DisplayMutationOperation {
   private[cncf] def _expected_http_method: HttpRequest.Method
   private[cncf] def _raw_mutation_body: Boolean
-  private[cncf] def _encode_http_request_c(request: HttpRequest): Consequence[Request]
 }
 
 /** Strict adapter admission into the same ordinary descriptor and command Actions. */
@@ -203,6 +206,7 @@ private[cncf] object DisplayMutationIngress {
   private def _framework_property(name: String): Boolean = {
     val lower = name.toLowerCase(java.util.Locale.ROOT)
     name.startsWith("textus.") || name.startsWith("cncf.") || name.startsWith("security.") || name.startsWith("crud.") ||
+      lower == "authorization" || lower == "cookie" ||
       lower == "x-textus-session" || lower.startsWith("x-textus-debug-") ||
       Set("principalId", "principal_id", "subjectId", "subject_id", "privilege", "capability", "capabilities", "role", "roles").contains(name)
   }

@@ -76,7 +76,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version May. 27, 2026
  *  version Jun. 19, 2026
  *  version Sep. 28, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with GivenWhenThen with StaticFormAppRendererSpecFixtures {
@@ -814,7 +814,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
     }
 
     "serve structured Blob content errors when managed payload is missing" in {
-      Given("the prerequisites for serve structured Blob content errors when managed payload is missing")
+      Given("a registered managed Blob whose local payload has been deleted")
       val root = Files.createTempDirectory("cncf-blob-content-missing-payload-spec")
       val subsystem = HttpRuntimeBindingAdmissionFixture.default(
         Some("server"),
@@ -843,11 +843,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       Files.delete(payloadpath)
       val server = HttpRuntimeBindingAdmissionFixture.server(new HttpExecutionEngine(subsystem))
 
+      When("the Blob content display route is requested")
       val response = server.routes(null).orNotFound.run(_get_request(displaypath)).unsafeRunSync()
-      When("serve structured Blob content errors when managed payload is missing is exercised")
       val body = response.as[String].unsafeRunSync()
 
-      Then("the observable contract for serve structured Blob content errors when managed payload is missing holds")
+      Then("the error page retains the current Conclusion and omits previous history under standard disclosure")
       response.status.code shouldBe 500
       body should include ("Request failed")
       body should include ("<strong>Status:</strong>")
@@ -855,7 +855,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers with Giv
       body should include ("managed Blob metadata points at a missing payload")
       body should include ("state")
       body should include ("invalid")
-      body should include ("previous")
+      body should include ("conclusion:")
+      body should include ("managed-payload-missing")
+      body should not include ("previous:")
     }
 
     "serve Blob admin mutation routes" in {

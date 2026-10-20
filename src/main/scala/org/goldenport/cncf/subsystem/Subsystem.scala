@@ -38,7 +38,7 @@ import org.goldenport.cncf.entity.{
   EntityMutationAdapterDefaults,
   EntityRevisionTransport
 }
-import org.goldenport.cncf.http.{HttpDriver, HttpExecutionEnvelope, HttpExecutionResult, WebExecutionResolutionPolicy}
+import org.goldenport.cncf.http.{HttpDriver, HttpExecutionEnvelope, HttpExecutionResult, StructuredHttpError, WebExecutionResolutionPolicy}
 import org.goldenport.cncf.job.{DurableJobRuntimeOwner, DurableJobRuntimeProvider, InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.config.JobDurableRuntimeConfiguration
 import org.goldenport.cncf.datastore.DataStore
@@ -67,7 +67,11 @@ import org.goldenport.cncf.mcp.client.{CodexMcpRuntimeAssembly, CodexMcpRuntimeC
 import org.goldenport.cncf.operationtool.{OperationToolRuntimeConfiguration, OperationToolRuntimeRegistry, OperationToolSetId}
 import org.goldenport.cncf.spi.{ComponentApiResolver, ResolvedSpiBinding, SpiInvoker, SpiOperationSelector}
 import org.goldenport.cncf.servicecontainer.{ServiceContainerCleanupOutcome, ServiceContainerDiagnostics, ServiceContainerId, ServiceContainerRuntime, ServiceContainerRuntimeConfiguration}
-import org.goldenport.cncf.observability.ServiceContainerRuntimeObservation
+import org.goldenport.cncf.observability.{ConclusionDisclosure, ServiceContainerRuntimeObservation}
+import org.goldenport.cncf.operation.OperationConfidentiality
+import org.goldenport.record.io.RecordEncoder
+import org.goldenport.datatype.{ContentType, MimeType}
+import org.goldenport.bag.Bag
 
 /*
  * @since   Jan.  7, 2026
@@ -1173,7 +1177,7 @@ final class Subsystem(
       normalized <- _prepare_filebundle_parameters(route._3, request)
       response <- _execute_resolved_operation(route, normalized, executioncontext)
     } yield response
-    _observe_execute_failure(request, result)
+    _observe_execute_failure(request, result, executioncontext = Some(executioncontext))
     result
   }
 
@@ -1209,19 +1213,38 @@ final class Subsystem(
     httprequest: Option[HttpRequest],
     origin: Origin = Origin.Canonical
   ): Consequence[ExecutionEnvelope] = {
+    val outcome = _execute_standard(request, httprequest, origin)
+    val projected = outcome.result.map(response => ExecutionEnvelope(response, outcome.metadata, outcome.executionresponse))
+    httprequest match {
+      case Some(_) => projected.recover { conclusion =>
+        ExecutionEnvelope(OperationResponse.Http(_failure_response(conclusion, httprequest, outcome.route, Some(request))),
+          outcome.metadata, outcome.executionresponse)
+      }
+      case None => projected
+    }
+  }
+
+  private def _execute_standard(
+    request: Request,
+    httprequest: Option[HttpRequest],
+    origin: Origin
+  ): Subsystem.ExecutionOutcome = {
     val requestwithhttpproperties =
       httprequest
         .map(req => _with_framework_properties(request, req))
         .getOrElse(request)
     var lastexecutionmetadata = RuntimeContext.ExecutionMetadata.empty
     var lastexecutionresponse = Option.empty[RuntimeContext.ExecutionResponseMetadata]
-    val r: Consequence[ExecutionEnvelope] = for {
+    var lastcontext = Option.empty[ExecutionContext]
+    var lastroute = Option.empty[(Component, ServiceDefinition, OperationDefinition)]
+    val r: Consequence[OperationResponse] = for {
       route <- _resolve_route(requestwithhttpproperties) match {
         case Some(r) =>
           Consequence.success(r)
         case None =>
           Consequence.operationNotFound("operation route")
       }
+      _ = { lastroute = Some(route) }
       normalizedrequest <- _prepare_filebundle_parameters(route._3, requestwithhttpproperties)
       profile <- executionProfileC
       response <- {
@@ -1242,11 +1265,12 @@ final class Subsystem(
         ingress.flatMap { security =>
           val executioncontext =
             _with_http_runtime_parameters(security.executionContext, httprequest)
+          lastcontext = Some(executioncontext)
           _execute_resolved_operation(route, normalizedrequest, executioncontext,
             presentationorigin = origin, presentationhttp = httprequest).map { result =>
             lastexecutionmetadata = _execution_metadata(executioncontext)
             lastexecutionresponse = ExecutionContext.currentExecutionResponse(executioncontext)
-            ExecutionEnvelope(result, lastexecutionmetadata, lastexecutionresponse)
+            result
           }.recoverWith { conclusion =>
             lastexecutionmetadata = _execution_metadata(executioncontext)
             lastexecutionresponse = ExecutionContext.currentExecutionResponse(executioncontext)
@@ -1255,19 +1279,8 @@ final class Subsystem(
         }
       }
     } yield response
-    _observe_execute_failure(requestwithhttpproperties, r)
-    httprequest match {
-      case Some(_) =>
-        r.recover { conclusion =>
-          ExecutionEnvelope(
-            OperationResponse.Http(_failure_response(conclusion)),
-            lastexecutionmetadata,
-            lastexecutionresponse
-          )
-        }
-      case None =>
-        r
-    }
+    _observe_execute_failure(requestwithhttpproperties, r, httprequest, lastroute, lastcontext)
+    Subsystem.ExecutionOutcome(r, lastexecutionmetadata, lastexecutionresponse, lastroute)
   }
 
   private def _execute_resolved_operation(
@@ -1642,7 +1655,7 @@ final class Subsystem(
           }
       }
     } yield response
-    _observe_execute_failure(request, r)
+    _observe_execute_failure(request, r, httprequest, executioncontext = Some(executioncontext))
     r
   }
 
@@ -1909,17 +1922,34 @@ final class Subsystem(
 
   private def _observe_execute_failure[A](
     request: Request,
-    r: Consequence[A]
+    r: Consequence[A],
+    httprequest: Option[HttpRequest] = None,
+    route: Option[(Component, ServiceDefinition, OperationDefinition)] = None,
+    executioncontext: Option[ExecutionContext] = None
   ): Unit =
     r match {
       case Consequence.Failure(c) =>
-        val _ = _subsystem_scope_context.observe_error(
-          "execute_failed",
-          attributes = Record.data(
-            "reason" -> c.status.toString,
-            "request" -> request.toString
-          )
-        )
+        try {
+          val selected = route.orElse(_resolve_route(request))
+          val confidentiality = selected.map { case (component, _, operation) =>
+            OperationConfidentiality.combined(component, operation.name, Some(operation))
+          }.getOrElse(Map.empty)
+          val credentials = ConclusionDisclosure.credentials(httprequest, Some(request), confidentiality)
+          val conclusion = ConclusionDisclosure.log(c, confidentiality, credentials)
+          val attributes = Record.data("status" -> c.status.webCode.code, "conclusion" -> conclusion) ++
+            Record.dataOption(
+              "component" -> selected.map(value => ConclusionDisclosure.sanitizeText(value._1.componentId.name, credentials)),
+              "service" -> selected.map(value => ConclusionDisclosure.sanitizeText(value._2.name, credentials)),
+              "operation" -> selected.map(value => ConclusionDisclosure.sanitizeText(value._3.name, credentials)),
+              "traceId" -> executioncontext.map(value => ConclusionDisclosure.sanitizeText(value.observability.traceId.print, credentials)),
+              "correlationId" -> executioncontext.flatMap(_.observability.correlationId.map(value =>
+                ConclusionDisclosure.sanitizeText(value.print, credentials))))
+          val _ = _subsystem_scope_context.observe_error(
+            "execute_failed conclusion=" + RecordEncoder.json(conclusion), attributes = attributes)
+        } catch {
+          // Observation cannot change the operation result or authorize a retry.
+          case scala.util.control.NonFatal(_) => ()
+        }
       case _ =>
         ()
     }
@@ -2244,6 +2274,8 @@ final class Subsystem(
   ): Boolean =
     if (name == null)
       false
+    else if (ConclusionDisclosure.isCookieMetadata(name))
+      true
     else if (_is_job_input_property(name))
       false
     else if (_is_operation_origin_slot_property(name))
@@ -2289,7 +2321,8 @@ final class Subsystem(
       false
     else {
       val lower = name.toLowerCase(java.util.Locale.ROOT)
-      name.startsWith("textus.") ||
+      ConclusionDisclosure.isCookieMetadata(name) ||
+        name.startsWith("textus.") ||
         name.startsWith("cncf.") ||
         lower == "x-textus-session" ||
         lower.startsWith("x-textus-debug-") ||
@@ -2444,14 +2477,15 @@ final class Subsystem(
   ): HttpExecutionEnvelope = {
 //    _ensure_system_context(component)
     val _ = service
-    val r: Consequence[(HttpResponse, RuntimeContext.ExecutionMetadata, Option[RuntimeContext.ExecutionResponseMetadata])] = for {
+    val route = Some((component, service, operation))
+    val r: Consequence[HttpExecutionEnvelope] = for {
       ingress <- Consequence.fromOption(
         component.protocol.handler.ingresses
           .findByInput(classOf[HttpRequest]),
         "HTTP ingress not configured"
       )
       request0 <- operation match {
-        case selected: org.goldenport.cncf.display.DisplayMutationHttpOperation => selected._encode_http_request_c(req)
+        case selected: org.goldenport.cncf.display.DisplayHttpOperation => selected._encode_http_request_c(req)
         case _ => ingress.encode(operation, req)
       }
       request1 = _with_framework_properties(request0, req)
@@ -2481,17 +2515,20 @@ final class Subsystem(
       // Route HTTP ingress through the standard request execution path so
       // request-derived execution mode, security, and other ingress context
       // are applied consistently with command/client execution.
-      result <- _execute_with_execution_response(normalized, Some(req), Origin.HttpIngress(req))
-      response = result.response match {
-        case OperationResponse.Http(http) => http
-        case other => _egress(component).encode(operation, _to_response(normalized, other, result.metadata, result.executionResponse))
+      result = _execute_standard(normalized, Some(req), Origin.HttpIngress(req))
+      response = result.result match {
+        case Consequence.Success(OperationResponse.Http(http)) => http
+        case Consequence.Success(other) => _egress(component).encode(operation,
+          _to_response(normalized, other, result.metadata, result.executionresponse))
+        case Consequence.Failure(conclusion) => _failure_response(conclusion, Some(req), route, Some(normalized))
       }
-    } yield (response, result.metadata, result.executionResponse)
+    } yield HttpExecutionEnvelope(response, result.metadata, result.executionresponse)
     r match {
-      case Consequence.Success((res, metadata, executionresponse)) =>
-        HttpExecutionEnvelope(res, metadata, executionresponse)
+      case Consequence.Success(result) => result
       case Consequence.Failure(c) =>
-        HttpExecutionEnvelope(_failure_response(c), RuntimeContext.ExecutionMetadata.empty, None)
+        val request = Request.ofHttpRequest(req, component.componentId.name, service.name, operation.name)
+        _observe_execute_failure(request, r, Some(req), route)
+        HttpExecutionEnvelope(_failure_response(c, Some(req), route, Some(request)), RuntimeContext.ExecutionMetadata.empty, None)
     }
   }
 
@@ -2724,13 +2761,15 @@ final class Subsystem(
     val businesssession = declarednames.contains(AuthenticationRequest.normalizeToken("sessionId"))
     def _is_business_session_(name: String): Boolean =
       businesssession && AuthenticationRequest.normalizeToken(name) == AuthenticationRequest.normalizeToken("sessionId")
-    val properties = request.properties.foldLeft(Map.empty[String, String]) { (z, property) =>
+    val properties = request.properties.filterNot(property => ConclusionDisclosure.isCookieMetadata(property.name))
+      .foldLeft(Map.empty[String, String]) { (z, property) =>
       val value = Option(property.value).map(_.toString).getOrElse("")
       if (property.name.nonEmpty && value.nonEmpty && !_is_business_session_(property.name))
         z.updated(property.name, value)
       else z
     }
-    request.arguments.foldLeft(properties) { (z, argument) =>
+    request.arguments.filterNot(argument => ConclusionDisclosure.isCookieMetadata(argument.name))
+      .foldLeft(properties) { (z, argument) =>
       val value = Option(argument.value).map(_.toString).getOrElse("")
       if (argument.name.nonEmpty && value.nonEmpty && !_is_business_session_(argument.name))
         z.updated(argument.name, value)
@@ -2741,8 +2780,37 @@ final class Subsystem(
   private def _internal_error(): HttpResponse =
     HttpResponse.internalServerError()
 
-  private def _failure_response(c: org.goldenport.Conclusion): HttpResponse =
-    HttpFailureTransportMetadata.attach(HttpResponse.text(_http_status(c), c.displayMessage), c)
+  private def _failure_response(
+    c: org.goldenport.Conclusion,
+    httprequest: Option[HttpRequest] = None,
+    route: Option[(Component, ServiceDefinition, OperationDefinition)] = None,
+    request: Option[Request] = None
+  ): HttpResponse = {
+    val confidentiality = route.map { case (component, _, operation) =>
+      OperationConfidentiality.combined(component, operation.name, Some(operation))
+    }.getOrElse(Map.empty)
+    val credentials = ConclusionDisclosure.credentials(httprequest, request, confidentiality)
+    val accept = httprequest.toVector.flatMap(_.header.fields).collect {
+      case field if field.key.equalsIgnoreCase("Accept") => field.value.single
+    }.collect { case value: String => value.toLowerCase(java.util.Locale.ROOT) }.mkString(",")
+    val yaml = accept.contains("application/yaml") || accept.contains("text/yaml") || accept.contains("application/x-yaml")
+    val plain = accept.contains("text/plain") && !accept.contains("application/json") && !yaml
+    if (plain) HttpFailureTransportMetadata.attach(
+      HttpResponse.text(_http_status(c), ConclusionDisclosure.message(c, credentials, confidentiality)), c)
+    else {
+      val mode = runtimeOperationSecurityPolicyC.toOption.map(_.operationMode)
+        .getOrElse(org.goldenport.cncf.config.OperationMode.Production)
+      val error = StructuredHttpError.fromConclusion(c, httprequest.map(_.path.asString).getOrElse(""),
+        httprequest.map(_.method.name).getOrElse(""), mode,
+        component = route.map(_._1.componentId.name), service = route.map(_._2.name), operation = route.map(_._3.name))
+      val record = error._envelope_record(httprequest.map(ConclusionDisclosure.detail).getOrElse(ConclusionDisclosure.Detail.Standard),
+        confidentiality, credentials)
+      val body = if (yaml) RecordEncoder.yaml(record) else RecordEncoder.json(record)
+      HttpFailureTransportMetadata.markStructured(HttpResponse.Text(_http_status(c),
+        ContentType(MimeType(if (yaml) "application/yaml" else "application/json"), Some(java.nio.charset.StandardCharsets.UTF_8)),
+        Bag.text(body)))
+    }
+  }
 
   private def _http_status(c: org.goldenport.Conclusion): HttpStatus =
     HttpFailureTransportMetadata.httpStatus(c)
@@ -2791,6 +2859,13 @@ object Subsystem {
   import org.goldenport.Consequence
   import org.goldenport.configuration.ResolvedConfiguration
   import org.goldenport.cncf.cli.RunMode
+
+  private final case class ExecutionOutcome(
+    result: Consequence[OperationResponse],
+    metadata: RuntimeContext.ExecutionMetadata,
+    executionresponse: Option[RuntimeContext.ExecutionResponseMetadata],
+    route: Option[(Component, ServiceDefinition, OperationDefinition)]
+  )
 
   final case class WiredExecutionResult(
     request: Request,

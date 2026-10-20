@@ -11,7 +11,7 @@ import org.goldenport.cncf.security.AuthorizationDecision
 import org.goldenport.cncf.security.AuthorizationEngine
 import org.goldenport.cncf.security.{Action as SecurityAction, SecuredResource}
 import org.goldenport.cncf.log.LogBackendHolder
-import org.goldenport.cncf.observability.{CallTreeContext, CallTreeValueSummary, ConclusionDiagnostics, DiagnosticPayloadExternalizer, DiagnosticPayloadSummary, ObservabilityEngine, OpenTelemetryExporter, OperationContext}
+import org.goldenport.cncf.observability.{CallTreeContext, CallTreeValueSummary, ConclusionDiagnostics, ConclusionDisclosure, DiagnosticPayloadExternalizer, DiagnosticPayloadSummary, ObservabilityEngine, OpenTelemetryExporter, OperationContext}
 import org.goldenport.cncf.context.{ScopeContext, ScopeKind}
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.config.ResolvedParameters
@@ -34,7 +34,7 @@ import org.goldenport.schema.DataConfidentiality
  *  version May. 17, 2026
  *  version Jun. 18, 2026
  *  version Aug. 12, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -387,9 +387,15 @@ class ActionEngine(
         _log_backend("debug", Some(call.action.name), "", None, Some(call)) // TODO
         observe_debug("Action completed successfully", call)
       case Consequence.Failure(conclusion) =>
-        _log_backend("error", Some(call.action.name), "", None, Some(call)) // TODO
-        val message = s"Action failed: ${conclusion.show}"
-        observe_error(message, conclusion.getException, call)
+        try {
+          _log_backend("error", Some(call.action.name), "", None, Some(call)) // TODO
+          val confidentiality = call.allFieldConfidentiality
+          val credentials = ConclusionDisclosure.credentials(None, Some(call.request), confidentiality)
+          val message = "Action failed: " + RecordEncoder.json(ConclusionDisclosure.log(conclusion, confidentiality, credentials))
+          observe_error(message, None, call)
+        } catch {
+          case NonFatal(_) => ()
+        }
     }
   }
 
@@ -524,27 +530,33 @@ class ActionEngine(
     cause: Option[Throwable],
     call: Option[ActionCall]
   ): Unit = {
-    LogBackendHolder.backend.foreach { backend =>
-      val name = actionname.getOrElse("unknown")
-      val scope = call.map(_.executionContext.cncfCore.scope).getOrElse(ScopeContext(
-        kind = ScopeKind.Action,
-        name = name,
-        parent = None,
-        observabilitycontext = org.goldenport.cncf.context.ObservabilityContext(
-          traceId = org.goldenport.cncf.context.TraceId("action", name),
-          spanId = None,
-          correlationId = None
-        ),
-        httpdriveroption = None
-      ))
-      if (ObservabilityEngine.shouldEmit(level, scope, "org.goldenport.cncf.action", "ActionEngine", backend)) {
-        val prefix = s"event=$level scope=Action name=$name "
-        val text = cause match {
-          case Some(c) => s"$message cause=${c.getMessage}"
-          case None => message
+    try {
+      LogBackendHolder.backend.foreach { backend =>
+        val name = actionname.getOrElse("unknown")
+        val scope = call.map(_.executionContext.cncfCore.scope).getOrElse(ScopeContext(
+          kind = ScopeKind.Action,
+          name = name,
+          parent = None,
+          observabilitycontext = org.goldenport.cncf.context.ObservabilityContext(
+            traceId = org.goldenport.cncf.context.TraceId("action", name),
+            spanId = None,
+            correlationId = None
+          ),
+          httpdriveroption = None
+        ))
+        if (ObservabilityEngine.shouldEmit(level, scope, "org.goldenport.cncf.action", "ActionEngine", backend)) {
+          val prefix = s"event=$level scope=Action name=$name "
+          val text = cause match {
+            case Some(c) => s"$message cause=${c.getMessage}"
+            case None => message
+          }
+          val credentials = call.map(value => ConclusionDisclosure.credentials(None, Some(value.request), value.allFieldConfidentiality))
+            .getOrElse(Vector.empty)
+          backend.log(level, ConclusionDisclosure.sanitizeText(s"$prefix$text", credentials))
         }
-        backend.log(level, s"$prefix$text")
       }
+    } catch {
+      case NonFatal(_) => ()
     }
   }
 

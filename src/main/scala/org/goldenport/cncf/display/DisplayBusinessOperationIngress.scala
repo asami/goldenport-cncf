@@ -4,7 +4,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.openapi.{OpenApiHttpMethod, OpenApiOperationProjection}
-import org.goldenport.protocol.Request
+import org.goldenport.protocol.{Property, Request}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec.{OperationDefinition, ParameterDefinition, RequestDefinition, ResponseDefinition}
 import org.goldenport.schema.{DataType, Multiplicity, ValueDomain, XString}
@@ -14,7 +14,7 @@ import org.goldenport.record.Field
 
 /*
  * @since   Oct. 16, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 20, 2026
  */
 /** Ordinary read-only Operation returning already admitted metadata. */
 private[cncf] object DisplayBusinessOperationIngress {
@@ -25,13 +25,20 @@ private[cncf] object DisplayBusinessOperationIngress {
     if (registry.nonEmpty) Vector(new BoundOperation(componentId, registry)) else Vector.empty
 
   private final class BoundOperation(private val _component_id: ComponentId, private val _registry: Registry)
-      extends OperationDefinition with OpenApiOperationProjection {
+      extends DisplayHttpOperation with OpenApiOperationProjection {
     def openApiHttpMethod: OpenApiHttpMethod = OpenApiHttpMethod.GET
     val specification: OperationDefinition.Specification = OperationDefinition.Specification(
       name = "describeBusiness",
       request = RequestDefinition(_names.map(name => ParameterDefinition(content = BaseContent.simple(name),
         kind = ParameterDefinition.Kind.Property, domain = ValueDomain(XString, Multiplicity.One))).toList),
       response = ResponseDefinition(result = List(DataType.Named("OperationResponse"))))
+
+    private[cncf] def _encode_http_request_c(request: HttpRequest): Consequence[Request] =
+      _http_shape_c(request).map { _ =>
+        val properties = request.query.fields.filterNot(field => PresentationContextIngress._is_context_query_key(field.key))
+          .map(field => Property(field.key, field.value.single, None)).toList
+        Request.ofHttpRequest(request, _component_id.name, "display", "describeBusiness", properties = properties)
+      }
 
     def createOperationRequest(request: Request): Consequence[OperationRequest] = for {
       _ <- _shape_c(request, _component_id.name)
@@ -62,7 +69,8 @@ private[cncf] object DisplayBusinessOperationIngress {
     if (request == null || request.method != HttpRequest.GET || request.query == null || request.form == null ||
         request.form.fields.nonEmpty || request.body.nonEmpty ||
         request.query.fields.exists(field => field == null || field.key == null ||
-          (!_names.contains(field.key) && !_framework_property(field.key))))
+          (!_names.contains(field.key) && !_framework_property(field.key) &&
+            !PresentationContextIngress._is_context_query_key(field.key))))
       _input_invalid_c("ELEMENT_INVALID", "request.http")
     else _names.foldLeft(Consequence.unit) { (result, name) => result.flatMap { _ =>
       request.query.fields.filter(_.key == name) match {
@@ -82,6 +90,7 @@ private[cncf] object DisplayBusinessOperationIngress {
   private def _framework_property(name: String): Boolean = {
     val lower = name.toLowerCase(java.util.Locale.ROOT)
     name.startsWith("textus.") || name.startsWith("cncf.") || name.startsWith("security.") || name.startsWith("crud.") ||
+      lower == "authorization" || lower == "cookie" ||
       lower == "x-textus-session" || lower.startsWith("x-textus-debug-") ||
       Set("principalId", "principal_id", "subjectId", "subject_id", "privilege", "capability", "capabilities", "role", "roles").contains(name)
   }

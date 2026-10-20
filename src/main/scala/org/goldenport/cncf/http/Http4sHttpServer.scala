@@ -29,7 +29,7 @@ import org.http4s.server.websocket.WebSocketBuilder2
 import org.http4s.websocket.WebSocketFrame
 import org.typelevel.ci.CIString
 import org.goldenport.record.{Record, RecordFormat, RecordKeyNaming}
-import org.goldenport.record.io.RecordExportEncoder
+import org.goldenport.record.io.{RecordEncoder, RecordExportEncoder}
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.http.{HttpContext, HttpPath, HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
@@ -46,7 +46,8 @@ import org.goldenport.cncf.entity.{
 import org.goldenport.cncf.naming.{NamingConventions, PropertyValueResolver}
 import org.goldenport.cncf.job.{JobExperienceQuery, JobExperienceQueryCodec, JobExperienceScope, JobExperienceService, JobId, JobInput, JobInputRetentionPolicy, JobQueryReadModel, JobStatus}
 import org.goldenport.cncf.usernotification.UserNotificationInboxRuntime
-import org.goldenport.cncf.observability.{ConclusionDiagnostics, DiagnosticPayloadReferenceCodec, DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
+import org.goldenport.cncf.observability.{ConclusionDiagnostics, ConclusionDisclosure, DiagnosticPayloadReferenceCodec, DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
+import org.goldenport.cncf.operation.OperationConfidentiality
 import org.goldenport.cncf.mcp.{McpJsonRpcAdapter, McpJsonRpcOutcome}
 import org.goldenport.cncf.openapi.OpenApiProjector
 import org.goldenport.cncf.security.{AuthenticationRequest, IngressSecurityResolver, SessionId}
@@ -68,7 +69,7 @@ import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
  *  version Aug. 14, 2026
  *  version Aug. 15, 2026
  *  version Sep. 29, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -6190,7 +6191,7 @@ final class Http4sHttpServer(
     form: Record = Record.empty
   ): Record = {
     val base = req.headers.headers
-      .filterNot(h => _is_raw_session_header(h.name.toString))
+      .filterNot(h => _is_raw_session_header(h.name.toString) || ConclusionDisclosure.isCookieMetadata(h.name.toString))
       .map(h => h.name.toString -> h.value).toVector
     val enriched =
       _session_id_(req, query, form) match {
@@ -6201,6 +6202,10 @@ final class Http4sHttpServer(
       }
     Record.create(enriched)
   }
+
+  private def _disclosure_header_record(req: org.http4s.Request[IO]): Record =
+    ConclusionDisclosure.withCookieCredentials(_request_header_record(req),
+      req.headers.headers.filter(_.name.toString.equalsIgnoreCase("Cookie")).map(_.value).toVector)
 
   private def _is_raw_session_header(name: String): Boolean =
     val lower = name.trim.toLowerCase(java.util.Locale.ROOT)
@@ -7392,29 +7397,30 @@ final class Http4sHttpServer(
   private def _structured_error_response(
     req: org.http4s.Request[IO],
     error: StructuredHttpError
-  ): IO[HResponse[IO]] =
-    if (_prefers_yaml(Some(req)))
-      _error_yaml_response(error)
-    else if (_prefers_plain_text(Some(req)))
-      IO.pure(
-        HResponse[IO](HStatus.fromInt(error.status).getOrElse(HStatus.InternalServerError))
-          .withEntity(_plain_structured_error_body(error))
-          .withContentType(`Content-Type`(MediaType.text.plain, Some(Charset.`UTF-8`)))
-      )
-    else
-      _error_json_response(error)
-
-  private def _plain_structured_error_body(
-    error: StructuredHttpError
-  ): String =
-    Vector(
-      Some(error.message),
-      Some(s"status: ${error.status}"),
-      Some(s"statusText: ${error.statusText}"),
-      error.detailCode.map(x => s"detailCode: ${x}"),
-      error.appCode.map(x => s"appCode: ${x}"),
-      error.appStatus.map(x => s"appStatus: ${x}")
-    ).flatten.mkString("\n")
+  ): IO[HResponse[IO]] = {
+    _to_http_request(req).map { decoded =>
+      val physical = decoded.toOption.getOrElse(HttpRequest.fromPath(HttpRequest.GET, req.uri.path.renderString,
+        query = _query_record(req), header = _disclosure_header_record(req),
+        context = HttpContext(None, None, Some(req.uri.renderString))))
+      val confidentiality = (for {
+        name <- error.component
+        component <- _component(name)
+        service <- error.service
+        operation <- error.operation
+        definition <- _protocol_operation_definition_for_route(component, service, operation)
+      } yield OperationConfidentiality.combined(component, definition.name, Some(definition))).getOrElse(Map.empty)
+      val credentials = ConclusionDisclosure.credentials(Some(physical), confidentiality = confidentiality)
+      val record = error._envelope_record(ConclusionDisclosure.detail(physical), confidentiality, credentials)
+      val yaml = _prefers_yaml(Some(req))
+      val plain = _prefers_plain_text(Some(req)) && !yaml
+      val body = if (yaml) RecordEncoder.yaml(record)
+        else if (plain) Http4sHttpServer._plain_structured_error_body(record.getRecord("error").getOrElse(Record.empty))
+        else RecordEncoder.json(record)
+      val mime = if (yaml) _yaml_media_type else if (plain) MediaType.text.plain else MediaType.application.json
+      HResponse[IO](HStatus.fromInt(error.status).getOrElse(HStatus.InternalServerError))
+        .withEntity(body).withContentType(`Content-Type`(mime, Some(Charset.`UTF-8`)))
+    }
+  }
 
   private def _not_found_api_response(
     req: org.http4s.Request[IO],
@@ -7508,7 +7514,7 @@ final class Http4sHttpServer(
       case _ => HttpRequest.GET
     }
     val query = _query_record(req)
-    val header = _request_header_record(req)
+    val header = _disclosure_header_record(req)
     val origin = _request_origin(req)
     val context = HttpContext(
       scheme = req.uri.scheme.map(_.value).orElse(origin.map(_._1)),
@@ -7791,14 +7797,7 @@ final class Http4sHttpServer(
     metadata: RuntimeContext.ExecutionMetadata,
     executionresponse: Option[RuntimeContext.ExecutionResponseMetadata] = None
   ): IO[org.http4s.Response[IO]] = {
-    val status = res.code match {
-      case 200 => HStatus.Ok
-      case 400 => HStatus.BadRequest
-      case 401 => HStatus.Unauthorized
-      case 403 => HStatus.Forbidden
-      case 404 => HStatus.NotFound
-      case _ => HStatus.InternalServerError
-    }
+    val status = HStatus.fromInt(res.code).getOrElse(HStatus.InternalServerError)
     val mime = MediaType.parse(res.mime.value).fold(_ => MediaType.text.plain, identity)
     val charset: Option[org.http4s.Charset] =
       res.charset.map(c => org.http4s.Charset.fromNioCharset(c))
@@ -7833,14 +7832,10 @@ final class Http4sHttpServer(
         service = service,
         operation = operation
       )
-      if (_prefers_yaml(req))
-        _error_yaml_response(error).map { response =>
-          Http4sHttpServer._with_execution_metadata_headers(_with_response_headers(response, res), metadata, executionresponse)
-        }
-      else
-        _error_json_response(error).map { response =>
-          Http4sHttpServer._with_execution_metadata_headers(_with_response_headers(response, res), metadata, executionresponse)
-        }
+      val projected = req.map(request => _structured_error_response(request, error)).getOrElse(_error_json_response(error))
+      projected.map { response =>
+        Http4sHttpServer._with_execution_metadata_headers(_with_response_headers(response, res), metadata, executionresponse)
+      }
     } else {
       val response =
         Http4sHttpServer._with_execution_metadata_headers(
@@ -7950,8 +7945,8 @@ final class Http4sHttpServer(
     res: HttpResponse,
     body: String
   ): Boolean =
-    res.mime.value.toLowerCase(java.util.Locale.ROOT).contains("json") &&
-      body.contains("\"error\"")
+    HttpFailureTransportMetadata.isStructured(res) ||
+      (res.mime.value.toLowerCase(java.util.Locale.ROOT).contains("json") && body.contains("\"error\""))
 
   private def _page_request(
     req: HRequest[IO]
@@ -7980,6 +7975,16 @@ final class Http4sHttpServer(
 }
 
 object Http4sHttpServer {
+  private[http] def _plain_structured_error_body(error: Record): String =
+    Vector(
+      error.getString("message"),
+      error.getInt("status").map(value => s"status: $value"),
+      error.getString("statusText").map(value => s"statusText: $value"),
+      error.getAny("detailCode").collect { case value: Long => s"detailCode: $value" },
+      error.getAny("appCode").collect { case value: Long => s"appCode: $value" },
+      error.getString("appStatus").map(value => s"appStatus: $value")
+    ).flatten.mkString("\n")
+
   private val _runtime_start_test_adapter = new ThreadLocal[RuntimeStartTestAdapter]()
 
   private[cncf] final class RuntimeStartTestAdapter {

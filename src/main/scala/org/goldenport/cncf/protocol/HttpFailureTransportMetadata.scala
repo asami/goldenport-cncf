@@ -20,6 +20,17 @@ private[cncf] object HttpFailureTransportMetadata {
   val DETAIL_CODE_HEADER = "X-Cncf-Internal-Detail-Code"
   val APP_CODE_HEADER = "X-Cncf-Internal-App-Code"
   val APP_STATUS_HEADER = "X-Cncf-Internal-App-Status"
+  val STRUCTURED_ERROR_HEADER = "X-Cncf-Internal-Structured-Error"
+
+  def markStructured(response: HttpResponse): HttpResponse =
+    response.withHeader(Record(response.header.fields.filterNot(_.key.equalsIgnoreCase(STRUCTURED_ERROR_HEADER))) ++
+      Record.data(STRUCTURED_ERROR_HEADER -> "1"))
+
+  def isStructured(response: HttpResponse): Boolean =
+    response.header.fields.filter(_.key.equalsIgnoreCase(STRUCTURED_ERROR_HEADER)) match {
+      case Vector(field) => field.value.single == "1"
+      case _ => false
+    }
 
   final case class Metadata(
     detailCode: Option[Long],
@@ -67,7 +78,8 @@ private[cncf] object HttpFailureTransportMetadata {
   private val _internal_headers = Set(
     DETAIL_CODE_HEADER,
     APP_CODE_HEADER,
-    APP_STATUS_HEADER
+    APP_STATUS_HEADER,
+    STRUCTURED_ERROR_HEADER
   )
 
   private def _metadata(header: Record): Option[Metadata] =
