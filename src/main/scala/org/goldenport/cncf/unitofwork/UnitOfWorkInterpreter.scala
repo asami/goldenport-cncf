@@ -38,6 +38,7 @@ import org.goldenport.cncf.processexecution.{
   ProcessExternalEffectPolicy,
   ResolvedProcessExecution,
   SbtExecutionAdmission,
+  SbtExecutionAttempt,
   SbtExecutionResult,
   GitExecutionAdmission
 }
@@ -59,7 +60,7 @@ import org.simplemodeling.model.directive.Update
  *  version May. 11, 2026
  *  version Aug.  1, 2026
  *  version Sep. 19, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -1348,6 +1349,21 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
           _with_process_execution_calltree(execution) {
             _execute_process_c(execution)
           }.map(result => SbtExecutionAdmission.decode(target, operation, execution, result))
+        }
+      }
+
+    case UnitOfWorkOp.SbtExecAttempt(target, operation) =>
+      _with_calltree("uow:sbt:attempt") {
+        SbtExecutionAdmission.resolveC(uow.executionContext, target, operation) match {
+          case Consequence.Failure(conclusion) =>
+            Consequence.success[SbtExecutionAttempt](SbtExecutionAttempt.AdmissionRejected(target, operation, conclusion))
+          case Consequence.Success(execution) =>
+            _with_process_execution_calltree(execution) {
+              _execute_process_c(execution)
+            }.map[SbtExecutionAttempt](result =>
+              SbtExecutionAttempt.Observed(SbtExecutionAdmission.decode(target, operation, execution, result))
+            ).recoverWith(conclusion =>
+              Consequence.success[SbtExecutionAttempt](SbtExecutionAttempt.Uncertain(target, operation, conclusion)))
         }
       }
 

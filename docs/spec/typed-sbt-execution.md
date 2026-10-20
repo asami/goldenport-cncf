@@ -296,3 +296,43 @@ The parent-selected real top-level parameter-fixture test is separate literal
 ScalaTest selection evidence. The actual sm-workflow adapter/fixture remains
 separately admitted S4 work; authored producer specifications do not establish
 consumer or Phase acceptance.
+
+## Confirmed pre-submission result
+
+`ProcessExecutionTermination.NotStarted` is a terminal producer fact that the
+local execution owner confirmed before submitting a launcher task for an admitted
+tagged SBT execution. `SbtExecutionResult.outcome` maps only this terminal to
+`SbtExecutionOutcome.NotExecuted`. The actual `processResult`, target and operation
+remain intact. Exited/TestOnly qualification and all other incomplete outcomes
+retain their existing meanings; CNCF performs no automatic retry.
+
+Both local-driver `startC` variants validate the tagged request before reporting
+this fact. They may return an already-completed handle when the driver is already
+closed before submission, or when direct `Files.isRegularFile` / `Files.isExecutable`
+inspection finds that the previously resolved absolute executable is no longer a
+regular executable file. Host definition validation and independent grants remain
+required. Malformed requests still fail structurally, even when the executable is
+unavailable or the driver is closed. A nonfatal filesystem inspection failure is
+an ordinary structured failure and cannot establish `NotStarted`.
+
+This path submits no Callable, invokes no launcher and allocates no active process
+or active handle. It uses the existing completed-handle result with empty captures,
+zero byte counts, no truncation or artifacts, actual finite elapsed time and the
+same safe program identity. The handle stays completed after executable restoration;
+only a separate fresh start can dispatch. Generic and Git closed-driver behavior
+is unchanged.
+
+An IOException from any launcher, ExecutionException, launch timeout, interruption,
+closure after submission, cancellation, ambiguous failure or absent receipt does
+not establish this fact. Such paths retain `LaunchFailed`, `Incomplete` or their
+existing structured failure. The pre-submission observation does not claim
+race-proof filesystem containment and creates no alternate command or authority
+path, global serialization, wrapper or main.
+
+`LocalProcessExecutionDriverSpec` authors both start variants, executable removal
+and permission loss after admission, fresh dispatch after restoration, malformed
+request rejection and the launch/closure ambiguity boundary. `SbtExecutionDslSpec`
+authors `NotStarted` to `NotExecuted` while retaining one External `SbtExec` and the
+actual receipt in the owning UnitOfWork. This producer fact alone does not implement
+workflow continuation, consume Human authority, qualify actual installed SBT or
+establish Phase acceptance.

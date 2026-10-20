@@ -135,11 +135,12 @@ import org.goldenport.cncf.config.{
 }
 import org.goldenport.cncf.processexecution.{
   GitTarget, GitOperation, GitExecutionResult, GitObjectId, GitPath, GitBranchName, GitSelectionId,
-  GitRemoteTip, GitHistoryCounts, GitCommitMetadata, GitStatusEntry, GitIndexEntry, GitBlobContent, GitDiff, GitIndexCheck,
+  GitRemoteTip, GitHistoryCounts, GitCommitMetadata, GitStatusEntry, GitIndexEntry, GitBlobContent, GitDiff, GitIndexCheck, GitTreeChange,
   ProcessExecutionAdmission,
   ProcessExecutionRequest,
   ProcessExecutionResult,
   ResolvedProcessExecution,
+  SbtExecutionAttempt,
   SbtExecutionResult,
   SbtOperation,
   SbtTarget
@@ -147,7 +148,7 @@ import org.goldenport.cncf.processexecution.{
 
 /*
  * @since   Sep. 28, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -242,6 +243,15 @@ trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.
   protected final def git_commit_selected(target: GitTarget, selectionId: GitSelectionId): ExecUowM[GitExecutionResult[Unit]] =
     _git_exec(target, GitOperation.CommitSelected(selectionId))
 
+  protected final def git_check_selected_index(target: GitTarget, selectionId: GitSelectionId, parent: GitObjectId): ExecUowM[GitExecutionResult[GitIndexCheck]] =
+    _git_exec(target, GitOperation.CheckSelectedIndex(selectionId, parent))
+
+  protected final def git_selected_index_changes(target: GitTarget, selectionId: GitSelectionId, parent: GitObjectId): ExecUowM[GitExecutionResult[Vector[GitTreeChange]]] =
+    _git_exec(target, GitOperation.SelectedIndexChanges(selectionId, parent))
+
+  protected final def git_tree_changes(target: GitTarget, before: GitObjectId, after: GitObjectId): ExecUowM[GitExecutionResult[Vector[GitTreeChange]]] =
+    _git_exec(target, GitOperation.TreeChanges(before, after))
+
   private def _git_exec[A](target: GitTarget, operation: GitOperation[A]): ExecUowM[GitExecutionResult[A]] =
     ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.GitExec(target, operation)))
 
@@ -257,6 +267,18 @@ trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.
 
   private def _sbt_exec(target: SbtTarget, operation: SbtOperation): ExecUowM[SbtExecutionResult] =
     ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.SbtExec(target, operation)))
+
+  protected final def sbt_compile_attempt(target: SbtTarget): ExecUowM[SbtExecutionAttempt] =
+    _sbt_exec_attempt(target, SbtOperation.Compile)
+
+  protected final def sbt_test_attempt(target: SbtTarget): ExecUowM[SbtExecutionAttempt] =
+    _sbt_exec_attempt(target, SbtOperation.Test)
+
+  protected final def sbt_test_only_attempt(target: SbtTarget): ExecUowM[SbtExecutionAttempt] =
+    _sbt_exec_attempt(target, SbtOperation.TestOnly)
+
+  private def _sbt_exec_attempt(target: SbtTarget, operation: SbtOperation): ExecUowM[SbtExecutionAttempt] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.SbtExecAttempt(target, operation)))
 
   /** Resolves a provider's logical request through the runtime-owned admission service before
     * creating the resolved-only UnitOfWork operation.

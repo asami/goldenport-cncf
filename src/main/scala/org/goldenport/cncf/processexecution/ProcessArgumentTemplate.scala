@@ -4,7 +4,7 @@ import org.goldenport.Consequence
 
 /*
  * @since   Oct.  6, 2026
- * @version Oct.  6, 2026
+ * @version Oct. 19, 2026
  */
 enum ProcessArgumentSlot {
   case Literal(value: String)
@@ -13,7 +13,9 @@ enum ProcessArgumentSlot {
   def validateC: Consequence[Unit] = {
     def _text_valid_(text: String): Boolean = text != null && !text.exists(_.isControl)
     val valid = this match {
-      case Literal(value) => _text_valid_(value)
+      // Host-fixed literal arguments preserve LF/CR/TAB without widening exact matching.
+      case Literal(value) => value != null && !value.exists(c =>
+        c.isControl && c != '\n' && c != '\r' && c != '\t')
       case LowerHex(lengths, prefix, suffix) => lengths != null && lengths.nonEmpty &&
         lengths.forall(_ > 0) && _text_valid_(prefix) && _text_valid_(suffix)
     }

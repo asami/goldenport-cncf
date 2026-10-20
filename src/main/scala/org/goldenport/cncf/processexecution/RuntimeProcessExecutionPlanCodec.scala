@@ -12,13 +12,14 @@ import org.goldenport.configuration.{ConfigurationValue, ConfigurationValueCodec
 /** Host wire contract: complete literal/lower-hex vectors only, never arbitrary shell text. */
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValueCodec[RuntimeProcessExecutionPlan] {
   val SCHEMA = "cncf.runtime-process-execution.v1"
   val SCHEMA_V2 = "cncf.runtime-process-execution.v2"
   val SCHEMA_V3 = "cncf.runtime-process-execution.v3"
+  val SCHEMA_V4 = "cncf.runtime-process-execution.v4"
   private val _parser = JawnParser(allowDuplicateKeys = false)
   private val _limit_names = Vector("launchTimeoutMillis", "executionTimeoutMillis", "terminationGraceMillis",
     "stdinBytes", "stdoutBytes", "stderrBytes", "argumentCount", "argumentBytes", "artifactCount", "artifactBytes", "workAreaBytes")
@@ -33,6 +34,7 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
           case SCHEMA => Right(Set("schema", "programs", "grants"))
           case SCHEMA_V2 => Right(Set("schema", "programs", "grants", "workspaces", "workspaceGrants", "sbtPrograms"))
           case SCHEMA_V3 => Right(Set("schema", "programs", "grants", "workspaces", "workspaceGrants", "sbtPrograms", "gitPrograms"))
+          case SCHEMA_V4 => Right(Set("schema", "programs", "grants", "workspaces", "workspaceGrants", "sbtPrograms", "gitPrograms", "registeredSbtHost"))
           case _ => Left("Unsupported runtime process schema")
         }
         root <- _fields(json, names)
@@ -44,14 +46,18 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
         plan <- if (schema == SCHEMA) _valid(RuntimeProcessExecutionPlan.createC(programs, grants.toMap))
           else for {
             workspacevalues <- _array(root, "workspaces")
-            workspaces <- _sequence(workspacevalues.map(x => _workspace(x, schema == SCHEMA_V3)))
+            workspaces <- _sequence(workspacevalues.map(x => _workspace(x, schema == SCHEMA_V3 || schema == SCHEMA_V4)))
             workspacegrantvalues <- _array(root, "workspaceGrants")
             workspacegrants <- _sequence(workspacegrantvalues.map(_workspace_grant))
             sbtvalues <- _array(root, "sbtPrograms")
             sbt <- _sequence(sbtvalues.map(_sbt_program))
-            git <- if (schema == SCHEMA_V3) _array(root, "gitPrograms").flatMap(xs => _sequence(xs.map(_git_program)))
+            git <- if (schema == SCHEMA_V3 || schema == SCHEMA_V4) _array(root, "gitPrograms").flatMap(xs => _sequence(xs.map(_git_program)))
               else Right(Vector.empty[GitRuntimeDeclaration])
-            value <- _valid(if (schema == SCHEMA_V3)
+            host <- if (schema == SCHEMA_V4) _registered_sbt_host(root("registeredSbtHost").get).map(Some(_))
+              else Right(None)
+            value <- _valid(if (schema == SCHEMA_V4)
+              RuntimeProcessExecutionPlan.createV4C(programs, grants.toMap, workspaces, workspacegrants, sbt, git, host.get)
+              else if (schema == SCHEMA_V3)
               RuntimeProcessExecutionPlan.createV3C(programs, grants.toMap, workspaces, workspacegrants, sbt, git)
               else RuntimeProcessExecutionPlan.createV2C(programs, grants.toMap, workspaces, workspacegrants, sbt))
           } yield value
@@ -91,11 +97,26 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
           case WorkspacePermission.Manage => "manage"
         })))))
       .add("sbtPrograms", Json.fromValues(plan.sbtDeclarations.map(_sbt_json))))
-    val root = if (plan.schemaVersion == SCHEMA_V3)
+    val withgit = if (plan.schemaVersion == SCHEMA_V3 || plan.schemaVersion == SCHEMA_V4)
       semantic.mapObject(_.add("gitPrograms", Json.fromValues(plan.gitDeclarations.map(_git_json)))) else semantic
+    val root = if (plan.schemaVersion == SCHEMA_V4) {
+      val host = plan.registeredSbtHost.get
+      withgit.mapObject(_.add("registeredSbtHost", Json.obj(
+        "requestFile" -> Json.fromString(host.requestFile.toString),
+        "responseFile" -> Json.fromString(host.responseFile.toString))))
+    } else withgit
     val encoded = ConfigurationValue.StringValue(root.noSpaces)
     Consequence.success(encoded)
   }
+
+  private def _registered_sbt_host(json: Json): Either[String, RegisteredSbtHostConfiguration] = for {
+    obj <- _fields(json, Set("requestFile", "responseFile"))
+    requesttext <- _string(obj, "requestFile")
+    request <- _absolute_path(requesttext)
+    responsetext <- _string(obj, "responseFile")
+    response <- _absolute_path(responsetext)
+    configuration <- _valid(RegisteredSbtHostConfiguration.createC(request, response))
+  } yield configuration
 
   private def _sbt_json(x: SbtRuntimeDeclaration): Json = {
     val base = Json.obj(
@@ -159,12 +180,15 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
   } yield SbtRuntimeDeclaration(target, operation, capability, identity, executable, limits, environment, classes)
 
   private def _git_program(json: Json): Either[String, GitRuntimeDeclaration] = for {
-    obj <- _fields(json, Set("target", "operation", "capability", "identity", "gitExecutable", "localBranch",
-      "remote", "remoteBranch", "endpoint", "commitIdentity", "selectionId", "selectedPath", "commitMessage", "limits", "environment"))
+    operationtext <- json.hcursor.get[String]("operation").left.map(_ => "Invalid typed Git operation")
+    operation <- GitOperationKind.values.find(_.wireName == operationtext).toRight("Invalid typed Git operation")
+    bounded = Set(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges).contains(operation)
+    names = Set("target", "operation", "capability", "identity", "gitExecutable", "localBranch",
+      "remote", "remoteBranch", "endpoint", "commitIdentity", "selectionId", "selectedPath", "commitMessage", "limits", "environment") ++
+      (if (bounded) Set("selectedPaths") else Set.empty[String])
+    obj <- _fields(json, names)
     targettext <- _string(obj, "target")
     target <- _valid(WorkspaceId.parseC(targettext))
-    operationtext <- _string(obj, "operation")
-    operation <- GitOperationKind.values.find(_.wireName == operationtext).toRight("Invalid typed Git operation")
     capabilitytext <- _string(obj, "capability")
     capability <- _valid(ProcessCapabilityId.parseC(capabilitytext))
     _ <- Either.cond(capability.print == capabilitytext, (), "Noncanonical Git capability")
@@ -183,8 +207,10 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
     message <- _optional(obj("commitMessage").get, _.asString.toRight("Invalid Git message"))
     limits <- _decode_limits(obj("limits").get)
     environment <- _string_map(obj("environment").get)
+    pathtexts <- if (bounded) _string_array(obj, "selectedPaths") else Right(Vector.empty[String])
+    paths <- _sequence(pathtexts.map(x => _valid(GitPath.parseC(x))))
   } yield GitRuntimeDeclaration(target, operation, capability, identity, executable, localbranch, remote,
-    remotebranch, endpoint, commitidentity, selection, path, message, limits, environment)
+    remotebranch, endpoint, commitidentity, selection, path, message, limits, environment, paths)
 
   private def _optional[A](json: Json, decode: Json => Either[String, A]): Either[String, Option[A]] =
     if (json.isNull) Right(None) else decode(json).map(Some(_))
@@ -195,7 +221,8 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
     email <- _string(obj, "email")
   } yield GitCommitIdentity(name, email)
 
-  private def _git_json(value: GitRuntimeDeclaration): Json = Json.obj(
+  private def _git_json(value: GitRuntimeDeclaration): Json = {
+    val base = Json.obj(
     "target" -> Json.fromString(value.target.print), "operation" -> Json.fromString(value.operation.wireName),
     "capability" -> Json.fromString(value.capability.print), "identity" -> Json.fromString(value.identity),
     "gitExecutable" -> Json.fromString(value.gitExecutable.toString), "localBranch" -> Json.fromString(value.localBranch.value),
@@ -206,6 +233,9 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
     "selectedPath" -> value.selectedPath.fold(Json.Null)(x => Json.fromString(x.value)),
     "commitMessage" -> value.commitMessage.fold(Json.Null)(Json.fromString),
     "limits" -> _limits_json(value.limits), "environment" -> Json.obj(value.environment.toVector.map { case (k, v) => k -> Json.fromString(v) }*))
+    if (Set(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges).contains(value.operation))
+      base.mapObject(_.add("selectedPaths", _strings(value.selectedPaths.map(_.value)))) else base
+  }
 
   private def _absolute_path(text: String): Either[String, java.nio.file.Path] =
     try {

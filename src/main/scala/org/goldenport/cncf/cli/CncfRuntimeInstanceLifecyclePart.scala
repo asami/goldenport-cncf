@@ -34,7 +34,7 @@ import org.goldenport.cncf.config.SubsystemStorageConfiguration
 import org.goldenport.cncf.config.SubsystemProcessExecutionConfiguration
 import org.goldenport.cncf.config.SubsystemHttpExecutionConfiguration
 import org.goldenport.cncf.http.HttpExecutionAdmission
-import org.goldenport.cncf.processexecution.{LocalProcessExecutionDriver, ProcessExecutionAdmission, ProcessExecutionDriver}
+import org.goldenport.cncf.processexecution.{LocalProcessExecutionDriver, ProcessExecutionAdmission, ProcessExecutionDriver, RegisteredSbtHostDriver}
 import org.goldenport.cncf.workspace.WorkspaceExecutionAdmission
 import org.goldenport.cncf.config.SystemNodeShutdownConfiguration
 import org.goldenport.cncf.context.ExecutionContext
@@ -92,7 +92,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Jul. 30, 2026
  *  version Aug. 19, 2026
  *  version Sep.  8, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cli] trait CncfRuntimeInstanceLifecyclePart {
@@ -418,8 +418,12 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
     observe_info(systemnodeshutdownconfiguration.observationMessage)
     val systemnode = SystemNode.create(systemnodeshutdownconfiguration)
     val subsystem0 = try {
-      val processdriver = processplan.map { _ =>
-        val driver = new LocalProcessExecutionDriver()
+      val processdriver = processplan.map { plan =>
+        val local = new LocalProcessExecutionDriver()
+        val driver: ProcessExecutionDriver & AutoCloseable = plan.registeredSbtHost match {
+          case Some(configuration) => new RegisteredSbtHostDriver(local, configuration)
+          case None => local
+        }
         systemnode.ownRuntimeResourceC(driver) match {
           case Consequence.Success(_) => driver
           case Consequence.Failure(conclusion) =>

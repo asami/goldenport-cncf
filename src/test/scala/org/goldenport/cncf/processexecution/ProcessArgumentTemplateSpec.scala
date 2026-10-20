@@ -8,7 +8,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  6, 2026
- * @version Oct.  6, 2026
+ * @version Oct. 19, 2026
  */
 final class ProcessArgumentTemplateSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _capability = ProcessCapabilityId.parseC("selected-tip").toOption.get
@@ -26,6 +26,57 @@ final class ProcessArgumentTemplateSpec extends AnyWordSpec with Matchers with G
     Some(256), Some(256), Some(256), Some(8), Some(512), Some(1), Some(256), Some(512))
 
   "Runtime-declared argument templates" should {
+    "preserve an exact host-fixed literal path containing colon, backslash, LF, CR and TAB" in {
+      Given("a host-fixed path after a native OID slot and the literal path separator")
+      val path = "selected:name\\part\nline\rreturn\ttab.txt"
+      val template = ProcessArgumentTemplate(Vector(ProcessArgumentSlot.Literal("diff"),
+        ProcessArgumentSlot.LowerHex(Set(40, 64)), ProcessArgumentSlot.Literal("--"),
+        ProcessArgumentSlot.Literal(path)))
+      val policy = _argument_policy.copy(permittedArgumentTemplates = Set(template))
+      val selected = Vector("diff", _tip, "--", path)
+      val crossed = Vector(selected.updated(3, path.replace('\n', ' ')),
+        selected.updated(3, "other.txt"), selected.updated(3, "--force"),
+        selected :+ "--force")
+      When("the declaration is installed and its exact vector and crossed requests are admitted")
+      val declared = _definition(policy)
+      val admission = _admission(policy)
+      val accepted = admission.admitC(ProcessExecutionRequest(_capability, selected))
+      val refused = crossed.map(argv => admission.admitC(ProcessExecutionRequest(_capability, argv)))
+      Then("the declared vector is preserved verbatim and different paths, options and extra arguments fail")
+      declared.toOption.isDefined shouldBe true
+      accepted.toOption.map(_.effectiveArguments) shouldBe Some(_prefix ++ selected)
+      refused.forall(_.isFaillure) shouldBe true
+    }
+
+    "reject null literals and every ISO control other than LF, CR and TAB in declarations" in {
+      Given("literal declarations containing NUL, ESC, DEL, the other forbidden controls or null")
+      val controls = (0 to 0x9f).map(_.toChar).filter(c =>
+        c.isControl && c != '\n' && c != '\r' && c != '\t')
+      val literals = controls.map(c => "selected" + c + ".txt").toVector :+ null
+      val policies = literals.map(value => _argument_policy.copy(permittedArgumentTemplates =
+        Set(ProcessArgumentTemplate(Vector(ProcessArgumentSlot.Literal(value))))))
+      When("the trusted runtime constructs each literal declaration")
+      val refused = policies.map(_definition)
+      Then("every forbidden literal fails declaration without granting argument admission")
+      refused.forall(_.isFaillure) shouldBe true
+    }
+
+    "keep LF, CR and TAB forbidden in lower-hex affixes while preserving native tokens" in {
+      Given("lower-hex slots with each permitted literal control in a prefix or suffix")
+      val slots = Vector("\n", "\r", "\t").flatMap(control => Vector(
+        ProcessArgumentSlot.LowerHex(Set(40, 64), prefix = control),
+        ProcessArgumentSlot.LowerHex(Set(40, 64), suffix = control)))
+      val policies = slots.map(slot => _argument_policy.copy(permittedArgumentTemplates =
+        Set(ProcessArgumentTemplate(Vector(slot)))))
+      val selected = Vector("merge", "--no-commit", "--no-ff", _tip)
+      When("the runtime constructs the affixed declarations and admits an unchanged native token")
+      val refused = policies.map(_definition)
+      val accepted = _admission(_argument_policy).admitC(ProcessExecutionRequest(_capability, selected))
+      Then("all control-bearing affixes fail and the ordinary native-token vector remains exact")
+      refused.forall(_.isFaillure) shouldBe true
+      accepted.toOption.map(_.effectiveArguments) shouldBe Some(_prefix ++ selected)
+    }
+
     "admit generated native-token forms only in their complete fixed positions" in {
       Given("a granted template capability and generated 40/64-character ASCII lower-hex tokens")
       val admission = _admission(_argument_policy)

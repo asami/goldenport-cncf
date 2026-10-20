@@ -14,11 +14,73 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Protected typed Git DSL" should {
+    "observe a new selected EOF-only finding before dispatch and commit only its corrected fixed path" in {
+      Given("a normal Git checkout with unrelated staged and unstaged changes and an untracked selected NEW file")
+      val driver = new LocalProcessExecutionDriver()
+      val fixture = create(driver = Some(driver))
+      setup(fixture.checkout, "init", "--initial-branch=main")
+      setup(fixture.checkout, "config", "user.name", "Fixture")
+      setup(fixture.checkout, "config", "user.email", "fixture@example.invalid")
+      Files.writeString(fixture.checkout.resolve("staged.txt"), "staged base\n")
+      Files.writeString(fixture.checkout.resolve("unstaged.txt"), "unstaged base\n")
+      setup(fixture.checkout, "add", "--", "staged.txt", "unstaged.txt")
+      setup(fixture.checkout, "commit", "-m", "fixture initial")
+      Files.writeString(fixture.checkout.resolve("staged.txt"), "unrelated staged bytes\n")
+      setup(fixture.checkout, "add", "--", "staged.txt")
+      Files.writeString(fixture.checkout.resolve("unstaged.txt"), "unrelated unstaged bytes\n")
+      Files.writeString(fixture.checkout.resolve("selected.txt"), "selected new\n\n")
+      val stagedbytes = Files.readAllBytes(fixture.checkout.resolve("staged.txt")).toVector
+      val unstagedbytes = Files.readAllBytes(fixture.checkout.resolve("unstaged.txt")).toVector
+      try {
+        When("typed staging and the fixed selected index check observe the new file before any commit dispatch")
+        val base = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        val originaldiff = GitExecutionSpecSupport.execute(fixture, GitOperation.PendingDiff(base)).toOption.get.valueC.toOption.get
+        val staged = GitExecutionSpecSupport.execute(fixture, GitOperation.StageSelectedAll(selectionId)).toOption.get
+        val findings = GitExecutionSpecSupport.execute(fixture, GitOperation.CheckSelectedIndex(selectionId, base)).toOption.get
+        val observedhead = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        Then("the actual exit-two receipt classifies only the selected EOF blank line and HEAD remains unchanged")
+        staged.outcome shouldBe GitExecutionOutcome.Succeeded
+        findings.outcome shouldBe GitExecutionOutcome.Succeeded
+        findings.processResult.termination shouldBe ProcessExecutionTermination.Exited(2)
+        findings.valueC.toOption shouldBe Some(GitIndexCheck(Set("selected.txt:2: new blank line at EOF."),
+          Set(GitPath.parseC("selected.txt").toOption.get), true))
+        observedhead shouldBe base
+        Given("the fixture applies its bounded terminal-LF correction to the selected file")
+        Files.writeString(fixture.checkout.resolve("selected.txt"), "selected new\n")
+        When("typed restaging and selected checking succeed, followed by the selected raw observation and real selected commit")
+        val restaged = GitExecutionSpecSupport.execute(fixture, GitOperation.StageSelectedAll(selectionId)).toOption.get
+        val clean = GitExecutionSpecSupport.execute(fixture, GitOperation.CheckSelectedIndex(selectionId, base)).toOption.get
+        val selected = GitExecutionSpecSupport.execute(fixture, GitOperation.SelectedIndexChanges(selectionId, base)).toOption.get
+        val committed = GitExecutionSpecSupport.execute(fixture, GitOperation.CommitSelected(selectionId)).toOption.get
+        val head = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        val tree = GitExecutionSpecSupport.execute(fixture, GitOperation.TreeChanges(base, head)).toOption.get
+        val pending = GitExecutionSpecSupport.execute(fixture, GitOperation.PendingDiff(head)).toOption.get.valueC.toOption.get
+        val status = GitExecutionSpecSupport.execute(fixture, GitOperation.Status).toOption.get.valueC.toOption.get
+        Then("the selected add is the whole commit and unrelated index and worktree content retain their original bytes and state")
+        Vector(restaged, clean, selected, committed, tree).foreach(_.outcome shouldBe GitExecutionOutcome.Succeeded)
+        clean.valueC.toOption shouldBe Some(GitIndexCheck(Set.empty))
+        val changes = selected.valueC.toOption.get
+        changes should have size 1
+        changes.head.path.value shouldBe "selected.txt"
+        changes.head.status shouldBe "A"
+        changes.head.oldBlob shouldBe None
+        changes.head.newBlob.isDefined shouldBe true
+        tree.valueC.toOption shouldBe Some(changes)
+        head should not be (base)
+        pending shouldBe originaldiff
+        status.map(entry => (entry.path.value, entry.indexCode, entry.worktreeCode)).toSet shouldBe
+          Set(("staged.txt", 'M', ' '), ("unstaged.txt", ' ', 'M'))
+        Files.readAllBytes(fixture.checkout.resolve("staged.txt")).toVector shouldBe stagedbytes
+        Files.readAllBytes(fixture.checkout.resolve("unstaged.txt")).toVector shouldBe unstagedbytes
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe "selected new\n"
+      } finally { driver.close(); fixture.close() }
+    }
+
     "return clean and exact whitespace-finding index facts through normal local Git and the typed UoW" in {
       Given("a temporary normal Git checkout with an initial committed fixed selected file")
       val driver = new LocalProcessExecutionDriver()
@@ -104,8 +166,11 @@ final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
         val staged = GitExecutionSpecSupport.execute(fixture, GitOperation.StageSelectedAll(selectionId))
         val status = GitExecutionSpecSupport.execute(fixture, GitOperation.Status)
         val paths = GitExecutionSpecSupport.execute(fixture, GitOperation.PendingPaths(first))
+        val clean = GitExecutionSpecSupport.execute(fixture, GitOperation.CheckSelectedIndex(selectionId, first))
+        val selected = GitExecutionSpecSupport.execute(fixture, GitOperation.SelectedIndexChanges(selectionId, first))
         val committed = GitExecutionSpecSupport.execute(fixture, GitOperation.CommitSelected(selectionId))
         val parent = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        val changed = GitExecutionSpecSupport.execute(fixture, GitOperation.TreeChanges(first, parent))
         val full = GitExecutionSpecSupport.execute(fixture, GitOperation.StageFullState)
         val tree = GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption.get
         val checkpoint = GitExecutionSpecSupport.execute(fixture, GitOperation.CreateCheckpoint(tree, parent)).toOption.get.valueC.toOption.get
@@ -116,6 +181,9 @@ final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
         Vector(staged, committed, full, installed).foreach(_.toOption.get.outcome shouldBe GitExecutionOutcome.Succeeded)
         paths.toOption.get.valueC.toOption.get.map(_.value) shouldBe Vector(filename)
         status.toOption.get.valueC.toOption.get.map(_.path.value) shouldBe Vector(filename)
+        clean.toOption.get.valueC.toOption shouldBe Some(GitIndexCheck(Set.empty))
+        selected.toOption.get.valueC.toOption.get.map(_.path.value) shouldBe Vector(filename)
+        changed.toOption.get.valueC.toOption shouldBe selected.toOption.get.valueC.toOption
         absentmerge.toOption.get.valueC.toOption shouldBe Some(None)
         shallow.toOption.get.valueC.toOption shouldBe Some(false)
         replacements.toOption.get.valueC.toOption shouldBe Some(Vector.empty)
@@ -124,25 +192,59 @@ final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
       } finally { driver.close(); fixture.close() }
     }
 
-    "dispatch all thirty wrappers as one typed current-context execution with the exact result type" in {
-      Given("the actual owning component with independent workspace and thirty operation grants")
+    "dispatch all thirty-three wrappers as one typed current-context execution with the exact result type" in {
+      Given("the actual owning component with independent workspace and thirty-three operation grants")
       val fixture = create()
       val path = GitPath.parseC("selected.txt").toOption.get
       val expected: Vector[Any] = Vector("main", fixture.checkout.toRealPath().toString, GitRemoteTip(branchName, objectId),
         objectId, objectId, Vector(GitStatusEntry(' ', 'M', path, None)), false, Vector.empty, Some(objectId),
         Some(objectId), GitHistoryCounts(0, 0), Some(objectId), (), objectId, Vector.empty, (), (), (), (), (),
         objectId, (), GitCommitMetadata(objectId, objectId, Vector.empty), GitBlobContent("blob\n".getBytes("UTF-8").toVector, Some("blob\n")),
-        GitIndexCheck(Set.empty), GitDiff("diff\n", false), Vector(path), (), (), ())
+        GitIndexCheck(Set.empty), GitDiff("diff\n", false), Vector(path), (), (), (), GitIndexCheck(Set.empty),
+        Vector(GitTreeChange("000000", "100644", None, Some(objectId), "A", path)),
+        Vector(GitTreeChange("000000", "100644", None, Some(objectId), "A", path)))
       try {
         When("the owning interpreter runs every protected typed wrapper")
         val results = operations.map(op => GitExecutionSpecSupport.execute(fixture, op).toOption.get)
         Then("each intent yields its typed value and exactly one admitted shared-process execution")
         results.map(_.operation) shouldBe operations
         results.map(_.target).distinct shouldBe Vector(fixture.target)
-        results.map(_.outcome) shouldBe Vector.fill(30)(GitExecutionOutcome.Succeeded)
+        results.map(_.outcome) shouldBe Vector.fill(33)(GitExecutionOutcome.Succeeded)
         results.map(_.value.get) shouldBe expected
         fixture.profile.driver.executions.map(_.definition) shouldBe fixture.definitions
-        fixture.profile.driver.executions should have size 30
+        fixture.profile.driver.executions should have size 33
+      } finally fixture.close()
+    }
+
+    "record each new wrapper as exactly one original GitExec without runtime authority" in {
+      Given("a declarative Behavior with absent runtime services and exact new operation stubs")
+      val fixture = create(workspaceInstalled = false, processInstalled = false)
+      val behavior = new GitSpecBehavior(Behavior.Core(fixture.context, None, None))
+      val selected: Vector[GitOperation[?]] = Vector(GitOperation.CheckSelectedIndex(selectionId, objectId),
+        GitOperation.SelectedIndexChanges(selectionId, objectId), GitOperation.TreeChanges(objectId, objectId))
+      val provider = new UnitOfWorkProgramStubProvider {
+        def resultFor[A](ordinal: Int, operation: UnitOfWorkOp[A]): Consequence[A] = operation match {
+          case UnitOfWorkOp.GitExec(target, GitOperation.CheckSelectedIndex(id, parent)) =>
+            Consequence.success(GitExecutionResult(target, GitOperation.CheckSelectedIndex(id, parent),
+              GitExecutionOutcome.Succeeded, Some(GitIndexCheck(Set.empty)), result()))
+          case UnitOfWorkOp.GitExec(target, GitOperation.SelectedIndexChanges(id, parent)) =>
+            Consequence.success(GitExecutionResult(target, GitOperation.SelectedIndexChanges(id, parent),
+              GitExecutionOutcome.Succeeded, Some(Vector.empty[GitTreeChange]), result()))
+          case UnitOfWorkOp.GitExec(target, GitOperation.TreeChanges(before, after)) =>
+            Consequence.success(GitExecutionResult(target, GitOperation.TreeChanges(before, after),
+              GitExecutionOutcome.Succeeded, Some(Vector.empty[GitTreeChange]), result()))
+          case _ => Consequence.notImplemented("unexpected selected Git recording operation")
+        }
+      }
+      try {
+        When("the generic recorder traverses each protected wrapper")
+        val recordings = selected.map(op => UnitOfWorkProgramRecorder.record(behavior.program(fixture.target, op), provider))
+        Then("each declaration records one exact target and typed operation with no driver start")
+        recordings.zip(selected).foreach { case (recording, op) =>
+          recording.result.isSuccess shouldBe true
+          recording.occurrences.map(_.operation) shouldBe Vector(UnitOfWorkOp.GitExec(fixture.target, op))
+        }
+        fixture.profile.driver.executions shouldBe empty
       } finally fixture.close()
     }
 
@@ -200,7 +302,15 @@ final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
         behavior.program(fixture.target, GitOperation.PendingMerge(null)),
         behavior.program(fixture.target, GitOperation.StageSelected(null)),
         behavior.program(fixture.target, GitOperation.Push(objectId, null)),
-        behavior.program(fixture.target, GitOperation.StageSelected(GitSelectionId.parseC("unknown").toOption.get)))
+        behavior.program(fixture.target, GitOperation.StageSelected(GitSelectionId.parseC("unknown").toOption.get)),
+        behavior.program(fixture.target, GitOperation.CheckSelectedIndex(null, objectId)),
+        behavior.program(fixture.target, GitOperation.CheckSelectedIndex(selectionId, null)),
+        behavior.program(fixture.target, GitOperation.SelectedIndexChanges(null, objectId)),
+        behavior.program(fixture.target, GitOperation.SelectedIndexChanges(selectionId, null)),
+        behavior.program(fixture.target, GitOperation.TreeChanges(null, objectId)),
+        behavior.program(fixture.target, GitOperation.TreeChanges(objectId, null)),
+        behavior.program(fixture.target, GitOperation.CheckSelectedIndex(GitSelectionId.parseC("unknown").toOption.get, objectId)),
+        behavior.program(fixture.target, GitOperation.SelectedIndexChanges(GitSelectionId.parseC("unknown").toOption.get, objectId)))
       try {
         When("the current UoW interprets malformed declarations including a null canonical operation")
         val failures = malformed.map(new UnitOfWorkInterpreter(new UnitOfWork(fixture.context)).run(_))
@@ -217,16 +327,18 @@ final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
       val denied = Vector(create(capabilityGranted = false), create(workspaceGranted = false),
         create(processInstalled = false), create(workspaceInstalled = false), create(component = ComponentId("org.goldenport.spec.OtherGitOwner")))
       try {
-        When("read operations and write-tree are interpreted with ReadOnly and Head is interpreted in every denied context")
-        val read = GitExecutionSpecSupport.execute(readonly, GitOperation.Head)
+        When("Head and all new observations use ReadOnly while writes and ungranted contexts attempt interpretation")
+        val readoperations: Vector[GitOperation[?]] = Vector(GitOperation.Head, GitOperation.CheckSelectedIndex(selectionId, objectId),
+          GitOperation.SelectedIndexChanges(selectionId, objectId), GitOperation.TreeChanges(objectId, objectId))
+        val read = readoperations.map(GitExecutionSpecSupport.execute(readonly, _))
         val write = GitExecutionSpecSupport.execute(readonly, GitOperation.IndexTree)
-        val failures = denied.map(GitExecutionSpecSupport.execute(_, GitOperation.Head))
+        val failures = denied.flatMap(fixture => readoperations.map(GitExecutionSpecSupport.execute(fixture, _)))
         val unknown = new UnitOfWorkInterpreter(new UnitOfWork(readonly.context)).interpret(
           UnitOfWorkOp.GitExec(GitTarget(WorkspaceId.parseC("unknown").toOption.get), GitOperation.Head))
         Then("only the explicit read capability starts; write-tree and every missing authority fail before launch")
-        read.toOption.get.outcome shouldBe GitExecutionOutcome.Succeeded
+        read.foreach(_.toOption.get.outcome shouldBe GitExecutionOutcome.Succeeded)
         (failures :+ write :+ unknown).foreach(_.isFaillure shouldBe true)
-        readonly.profile.driver.executions should have size 1
+        readonly.profile.driver.executions should have size 4
         denied.foreach(_.profile.driver.executions shouldBe empty)
       } finally (denied :+ readonly).foreach(_.close())
     }

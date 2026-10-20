@@ -11,7 +11,7 @@ import org.goldenport.Consequence
 /*
  * @since   Jul. 17, 2026
  *  version Jul. 18, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -31,28 +31,54 @@ final class LocalProcessExecutionDriver(
   private val _lifecycle_lock = new AnyRef
 
   def startC(execution: ResolvedProcessExecution): Consequence[ProcessExecutionHandle] =
-    if (_closed.get)
+    if (_closed.get && execution.definition._sbt_metadata.isEmpty)
       Consequence.serviceUnavailable("Local Process Execution driver is closed")
     else
       for {
         _ <- _validate_sbt_c(execution)
         _ <- _validate_prelaunch_c(execution)
-        handle <- _launch_c(execution)
+        terminal <- _sbt_prelaunch_c(execution)
+        handle <- terminal.fold(_launch_c(execution))(Consequence.success)
       } yield handle
 
   override def startC(
     execution: ResolvedProcessExecution,
     workArea: ProcessExecutionWorkArea
   ): Consequence[ProcessExecutionHandle] =
-    if (_closed.get)
+    if (_closed.get && execution.definition._sbt_metadata.isEmpty)
       Consequence.serviceUnavailable("Local Process Execution driver is closed")
     else
       for {
         _ <- _validate_sbt_c(execution)
-        workingdirectory <- _working_directory_c(execution, Some(workArea))
-        inputfile <- _input_file_c(execution, workArea)
-        handle <- _launch_c(execution, workingdirectory, inputfile, Some(workArea))
+        terminal <- _sbt_prelaunch_c(execution)
+        handle <- terminal match {
+          case Some(value) => Consequence.success(value)
+          case None => for {
+            workingdirectory <- _working_directory_c(execution, Some(workArea))
+            inputfile <- _input_file_c(execution, workArea)
+            launched <- _launch_c(execution, workingdirectory, inputfile, Some(workArea))
+          } yield launched
+        }
       } yield handle
+
+  /** Only owner-observed facts before submission can confirm a tagged build never started. */
+  private def _sbt_prelaunch_c(
+    execution: ResolvedProcessExecution
+  ): Consequence[Option[ProcessExecutionHandle]] =
+    if (execution.definition._sbt_metadata.isEmpty)
+      Consequence.success(None)
+    else {
+      val startedat = System.nanoTime()
+      try {
+        val executable = Path.of(execution.definition._executable_location)
+        if (_closed.get || !Files.isRegularFile(executable) || !Files.isExecutable(executable))
+          Consequence.success(Some(_completed_handle(execution, startedat, ProcessExecutionTermination.NotStarted)))
+        else
+          Consequence.success(None)
+      } catch {
+        case NonFatal(_) => Consequence.serviceUnavailable("SBT executable inspection failed before launch")
+      }
+    }
 
   private def _validate_sbt_c(execution: ResolvedProcessExecution): Consequence[Unit] =
     execution.definition._sbt_metadata.fold(Consequence.unit)(_ =>

@@ -1,10 +1,11 @@
 package org.goldenport.cncf.processexecution
 
-import java.io.IOException
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, IOException}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
+import java.nio.file.attribute.PosixFilePermissions
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import scala.jdk.CollectionConverters.*
 import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId}
 import org.goldenport.cncf.config.RuntimeConfig
@@ -20,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *
  * @since   Jul. 17, 2026
  *  version Jul. 30, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -42,6 +43,175 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
   )
 
   "Local Process Execution driver" should {
+    Vector("removed", "non-executable").foreach { condition =>
+      s"confirm a $condition admitted SBT executable was not started and permit only fresh dispatch after restoration" in {
+        Given(s"an admitted owned executable later made $condition and a controlled successful launcher")
+        val root = _sbt_root()
+        val cleanup = new ProcessExecutionWorkArea(root)
+        val executable = _sbt_executable(root)
+        val execution = _sbt_execution(root, SbtOperation.Test, executable = executable)
+        val workarea = new ProcessExecutionWorkArea(Files.createDirectory(root.resolve("workarea")))
+        val calls = new ConcurrentLinkedQueue[(Vector[String], Path, Map[String, String])]()
+        val driver = new LocalProcessExecutionDriver("unavailable-build", _sbt_launcher(calls, succeed = true))
+        if (condition == "removed") Files.delete(executable)
+        else Files.setPosixFilePermissions(executable, PosixFilePermissions.fromString("rw-------"))
+        try {
+          When("both start variants receive the execution before any launcher submission")
+          val handles = Vector(driver.startC(execution), driver.startC(execution, workarea)).map(_.toOption.get)
+          val results = handles.map(_.awaitC.toOption.get)
+
+          Then("both completed handles retain empty actual results without launcher calls or active resources")
+          results.foreach { result =>
+            result.termination shouldBe ProcessExecutionTermination.NotStarted
+            result.stdout shouldBe ProcessExecutionCapture(Vector.empty, 0L, truncated = false)
+            result.stderr shouldBe ProcessExecutionCapture(Vector.empty, 0L, truncated = false)
+            result.artifacts shouldBe empty
+            result.elapsedMillis should be >= 0L
+            result.elapsedMillis should be < 5000L
+            result.safeProgramIdentity shouldBe execution.definition.safeProgramIdentity
+          }
+          calls shouldBe empty
+          driver.activeProcessCount shouldBe 0
+          driver.activeHandleCount shouldBe 0
+
+          When("the same owned executable is restored and fresh starts are explicitly requested")
+          if (condition == "removed") Files.createFile(executable)
+          Files.setPosixFilePermissions(executable, PosixFilePermissions.fromString("rwx------"))
+          val fresh = Vector(driver.startC(execution), driver.startC(execution, workarea)).map(_.flatMap(_.awaitC))
+          handles.foreach(_.cancelC)
+          val retained = handles.map(_.awaitC.toOption.get)
+
+          Then("only the fresh calls dispatch normally and the first handles remain permanently completed")
+          fresh.foreach(_.toOption.map(_.termination) shouldBe Some(ProcessExecutionTermination.Exited(0)))
+          retained shouldBe results
+          calls should have size 2
+          calls.iterator().asScala.toVector.foreach { case (command, cwd, environment) =>
+            command.head shouldBe executable.toRealPath().toString
+            command.last shouldBe "test"
+            cwd shouldBe root.resolve("checkout").toRealPath()
+            environment shouldBe Map("TEXTUS_BUILD_PROFILE" -> "controlled")
+          }
+          driver.activeProcessCount shouldBe 0
+          driver.activeHandleCount shouldBe 0
+        } finally { driver.close(); workarea.close(); cleanup.close() }
+      }
+    }
+
+    "confirm closed-before-start typed SBT without changing generic or Git closure failures" in {
+      Given("a closed driver and admitted SBT, generic and Git executions")
+      val root = _sbt_root()
+      val cleanup = new ProcessExecutionWorkArea(root)
+      val workarea = new ProcessExecutionWorkArea(Files.createDirectory(root.resolve("workarea")))
+      val execution = _sbt_execution(root, SbtOperation.Compile)
+      val gitfixture = GitExecutionSpecSupport.create()
+      val gitexecution = GitExecutionAdmission.resolveC(gitfixture.context, gitfixture.target, GitOperation.Head).toOption.get
+      val generic = _execution(Vector("streams", "literal"))
+      val calls = new ConcurrentLinkedQueue[(Vector[String], Path, Map[String, String])]()
+      val driver = new LocalProcessExecutionDriver("closed-build", _sbt_launcher(calls))
+      driver.close()
+      try {
+        When("each execution is submitted through both start variants after closure")
+        val typed = Vector(driver.startC(execution), driver.startC(execution, workarea)).map(_.flatMap(_.awaitC))
+        val other = Vector(generic, gitexecution).flatMap(value =>
+          Vector(driver.startC(value), driver.startC(value, workarea)))
+
+        Then("only typed SBT has confirmed NotStarted results and no call allocates active work")
+        typed.foreach(_.toOption.map(_.termination) shouldBe Some(ProcessExecutionTermination.NotStarted))
+        other.foreach(_.isFaillure shouldBe true)
+        calls shouldBe empty
+        driver.activeProcessCount shouldBe 0
+        driver.activeHandleCount shouldBe 0
+      } finally { driver.close(); workarea.close(); cleanup.close(); gitfixture.close() }
+    }
+
+    "reject malformed tagged requests before classifying unavailable executables or closed drivers" in {
+      Given("an admitted SBT execution with a forged argv and its owned executable removed after admission")
+      val root = _sbt_root()
+      val cleanup = new ProcessExecutionWorkArea(root)
+      val executable = _sbt_executable(root)
+      val admitted = _sbt_execution(root, SbtOperation.Test, executable = executable)
+      val execution = admitted.copy(request = admitted.request.copy(arguments = Vector("unapproved")))
+      val workarea = new ProcessExecutionWorkArea(Files.createDirectory(root.resolve("workarea")))
+      val calls = new ConcurrentLinkedQueue[(Vector[String], Path, Map[String, String])]()
+      val driver = new LocalProcessExecutionDriver("malformed-build", _sbt_launcher(calls))
+      Files.delete(executable)
+      try {
+        When("both variants receive the malformed request before and after driver closure")
+        val open = Vector(driver.startC(execution), driver.startC(execution, workarea))
+        driver.close()
+        val closed = Vector(driver.startC(execution), driver.startC(execution, workarea))
+
+        Then("request validation fails structurally instead of producing a NotStarted receipt")
+        (open ++ closed).foreach(_.isFaillure shouldBe true)
+        calls shouldBe empty
+        driver.activeProcessCount shouldBe 0
+        driver.activeHandleCount shouldBe 0
+      } finally { driver.close(); workarea.close(); cleanup.close() }
+    }
+
+    "retain LaunchFailed when typed SBT times out after launcher submission" in {
+      Given("an admitted SBT execution and a controlled delayed launcher under a finite launch timeout")
+      val root = _sbt_root()
+      val cleanup = new ProcessExecutionWorkArea(root)
+      val workarea = new ProcessExecutionWorkArea(Files.createDirectory(root.resolve("workarea")))
+      val calls = new AtomicInteger(0)
+      val launcher = new LocalProcessLauncher {
+        def startBlocking(command: Vector[String]): Process = throw new IOException("explicit cwd required")
+        override def startBlocking(command: Vector[String], workingDirectory: Path, environment: Map[String, String]): Process = {
+          calls.incrementAndGet()
+          Thread.sleep(1000L)
+          throw new IOException("delayed controlled launch")
+        }
+      }
+      val execution = _sbt_execution(root, SbtOperation.Test, limits = _limits(launchtimeout = 100L))
+      val driver = new LocalProcessExecutionDriver("delayed-build", launcher)
+      try {
+        When("both start variants submit a launch that cannot complete in time")
+        val results = Vector(driver.startC(execution).flatMap(_.awaitC), driver.startC(execution, workarea).flatMap(_.awaitC))
+
+        Then("timeout remains LaunchFailed and never establishes a confirmed unexecuted fact")
+        results.foreach(_.toOption.map(_.termination) shouldBe Some(ProcessExecutionTermination.LaunchFailed))
+        calls.get shouldBe 2
+        driver.activeProcessCount shouldBe 0
+        driver.activeHandleCount shouldBe 0
+      } finally { driver.close(); workarea.close(); cleanup.close() }
+    }
+
+    "retain LaunchFailed when typed SBT driver closure occurs after launcher entry" in {
+      Given("controlled launchers that close their driver after submission and return a completed process")
+      val root = _sbt_root()
+      val cleanup = new ProcessExecutionWorkArea(root)
+      val workarea = new ProcessExecutionWorkArea(Files.createDirectory(root.resolve("workarea")))
+      val execution = _sbt_execution(root, SbtOperation.Test)
+      val calls = new ConcurrentLinkedQueue[(Vector[String], Path, Map[String, String])]()
+      val drivers = Vector.fill(2) {
+        val reference = new AtomicReference[LocalProcessExecutionDriver]()
+        val delegate = _sbt_launcher(calls, succeed = true)
+        val launcher = new LocalProcessLauncher {
+          def startBlocking(command: Vector[String]): Process = throw new IOException("explicit cwd required")
+          override def startBlocking(command: Vector[String], workingDirectory: Path, environment: Map[String, String]): Process = {
+            reference.get.close()
+            delegate.startBlocking(command, workingDirectory, environment)
+          }
+        }
+        val driver = new LocalProcessExecutionDriver("closing-build", launcher)
+        reference.set(driver)
+        driver
+      }
+      try {
+        When("each start variant observes closure only after its launcher has been entered")
+        val results = Vector(drivers.head.startC(execution), drivers.last.startC(execution, workarea)).map(_.flatMap(_.awaitC))
+
+        Then("the terminal remains LaunchFailed because a launch was already submitted")
+        results.foreach(_.toOption.map(_.termination) shouldBe Some(ProcessExecutionTermination.LaunchFailed))
+        calls should have size 2
+        drivers.foreach { driver =>
+          driver.activeProcessCount shouldBe 0
+          driver.activeHandleCount shouldBe 0
+        }
+      } finally { drivers.foreach(_.close()); workarea.close(); cleanup.close() }
+    }
+
     "send normal Git vectors with fixed environment and canonical workspace cwd through both start variants" in {
       Given("an admitted typed Git Head and a controlled launcher that records direct launch attempts")
       val fixture = GitExecutionSpecSupport.create()
@@ -164,7 +334,7 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
       }
     }
 
-    "reject a retargeted workspace before either launcher entry and retain driver closure semantics" in {
+    "reject a retargeted workspace before either launcher entry and confirm subsequent driver closure" in {
       Given("an admitted configured root symlink later pointing at a different checkout")
       val root = _sbt_root()
       val cleanup = new ProcessExecutionWorkArea(root)
@@ -182,10 +352,11 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
         val direct = driver.startC(execution)
         val scoped = driver.startC(execution, workarea)
         driver.close()
-        val closed = driver.startC(execution)
+        val closed = driver.startC(execution).flatMap(_.awaitC)
 
-        Then("all starts fail before the launcher and closure leaves no runtime-owned process")
-        Vector(direct, scoped, closed).foreach(_.isFaillure shouldBe true)
+        Then("binding checks fail before the launcher and a subsequent closed-driver start is confirmed unexecuted")
+        Vector(direct, scoped).foreach(_.isFaillure shouldBe true)
+        closed.toOption.map(_.termination) shouldBe Some(ProcessExecutionTermination.NotStarted)
         calls shouldBe empty
         driver.activeProcessCount shouldBe 0
         driver.activeHandleCount shouldBe 0
@@ -614,27 +785,45 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
   }
 
   private def _sbt_launcher(
-    calls: ConcurrentLinkedQueue[(Vector[String], Path, Map[String, String])]
+    calls: ConcurrentLinkedQueue[(Vector[String], Path, Map[String, String])],
+    succeed: Boolean = false
   ): LocalProcessLauncher = new LocalProcessLauncher {
     def startBlocking(command: Vector[String]): Process =
       throw new IOException("controlled launcher requires an explicit working directory")
 
     override def startBlocking(command: Vector[String], workingDirectory: Path, environment: Map[String, String]): Process = {
       calls.add((command, workingDirectory, environment))
-      throw new IOException("controlled launch failure; no host process is created")
+      if (succeed) new Process {
+        def getInputStream = new ByteArrayInputStream(Array.emptyByteArray)
+        def getErrorStream = new ByteArrayInputStream(Array.emptyByteArray)
+        def getOutputStream = new ByteArrayOutputStream()
+        def waitFor(): Int = 0
+        def exitValue(): Int = 0
+        def destroy(): Unit = ()
+        override def isAlive(): Boolean = false
+      }
+      else throw new IOException("controlled launch failure; no host process is created")
     }
+  }
+
+  private def _sbt_executable(root: Path): Path = {
+    val executable = Files.createFile(root.resolve("owned-sbt"))
+    Files.setPosixFilePermissions(executable, PosixFilePermissions.fromString("rwx------"))
+    executable
   }
 
   private def _sbt_execution(
     root: Path,
     operation: SbtOperation,
-    configuredroot: Option[Path] = None
+    configuredroot: Option[Path] = None,
+    executable: Path = Paths.get("/usr/bin/true"),
+    limits: ProcessExecutionLimits = _limits()
   ): ResolvedProcessExecution = {
     val checkout = configuredroot.getOrElse(Files.createDirectories(root.resolve("checkout")))
     val binding = WorkspaceBinding.createC(WorkspaceId.parseC("project").toOption.get, checkout).toOption.get
     val capability = ProcessCapabilityId.parseC("project-build").toOption.get
     val definition = SbtProgramDefinition.createC(binding, operation, capability, "project-build",
-      Paths.get("/usr/bin/true"), _limits(), Map("TEXTUS_BUILD_PROFILE" -> "controlled")).toOption.get
+      executable, limits, Map("TEXTUS_BUILD_PROFILE" -> "controlled")).toOption.get
     val policy = ProcessExecutionPolicy.createC(Vector(definition)).toOption.get
     policy.resolveSbtC(definition, ProcessExecutionGrant(capability)).toOption.get
   }

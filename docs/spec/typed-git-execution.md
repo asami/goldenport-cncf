@@ -43,6 +43,11 @@ Branches obey strict ref-part rules: no leading option/slash, trailing
 slash/dot, controls or space, forbidden Git ref punctuation, empty/dot-leading
 or .lock-ending segments, double slash/dot or @{; bare @ is invalid.
 Selection IDs are lowercase safe tokens of at most 64 characters.
+The finite operation set has thirty-three kinds. CheckSelectedIndex and
+SelectedIndexChanges carry a selection ID and canonical parent OID;
+TreeChanges carries two canonical OIDs without a selection. All three are
+ReadOnly observations without a commit identity. CommitSelected remains
+Manage and requires the fixed host commit identity.
 
 Each row has a corresponding `git_<snake_case_operation>` wrapper with a
 GitTarget first and only the listed typed parameters. There is no raw Git
@@ -81,7 +86,10 @@ remote branch.
 | `PendingPaths(parent: GitObjectId)` | `Vector[GitPath]` | `diff --cached --no-ext-diff --no-textconv --no-renames --name-only -z PARENT --` |
 | `StageSelected(selectionId: GitSelectionId)` | `Unit` | `--literal-pathspecs add -- FIXED_SELECTED_PATH` |
 | `StageSelectedAll(selectionId: GitSelectionId)` | `Unit` | `--literal-pathspecs add --all -- FIXED_SELECTED_PATH` |
-| `CommitSelected(selectionId: GitSelectionId)` | `Unit` | `IDENTITY commit --no-verify --no-gpg-sign -m FIXED_SELECTED_MESSAGE` |
+| `CommitSelected(selectionId: GitSelectionId)` | `Unit` | `IDENTITY --literal-pathspecs commit --only --no-verify --no-gpg-sign -m FIXED_SELECTED_MESSAGE -- FIXED_SELECTED_PATHS` |
+| `CheckSelectedIndex(selectionId: GitSelectionId, parent: GitObjectId)` | `GitIndexCheck` | `--literal-pathspecs diff --cached --no-ext-diff --no-textconv --check PARENT -- FIXED_SELECTED_PATHS` |
+| `SelectedIndexChanges(selectionId: GitSelectionId, parent: GitObjectId)` | `Vector[GitTreeChange]` | `--literal-pathspecs diff --cached --no-ext-diff --no-textconv --raw --no-abbrev --no-renames -z PARENT -- FIXED_SELECTED_PATHS` |
+| `TreeChanges(before: GitObjectId, after: GitObjectId)` | `Vector[GitTreeChange]` | `diff-tree --no-commit-id --no-ext-diff --no-textconv --raw --no-abbrev --no-renames -r -z BEFORE AFTER --` |
 
 Every invocation directly starts the configured normal Git executable. The
 shared fixed prefix is
@@ -90,6 +98,19 @@ There is no -C argument: cwd is the admitted canonical workspace directory.
 IDENTITY expands to host-only `-c user.name=NAME -c user.email=EMAIL -c user.useConfigOnly=true`.
 The fixed checkpoint message is exactly `sm-workflow full-state checkpoint`.
 Selected paths and messages come solely from the fixed runtime declaration.
+FIXED_SELECTED_PATHS expands to the exact ordered host vector of literal
+GitPath arguments. Only canonical OIDs occupy dynamic slots; executable, cwd,
+environment, limits, paths and message remain host-fixed. Existing process
+argument limits still apply. No arbitrary suffix or pathspec interpretation
+is admitted.
+
+Exact host-fixed literal path slots preserve LF, CR and TAB, together with
+literal colons and backslashes, as single arguments passed directly without a
+shell. Literal matching remains exact; NUL and every other ISO control are
+rejected, and lower-hex prefixes and suffixes remain control-free. Structural
+GitPath validation, canonical OID slots, explicit grants, bounded captures and
+finite argument and execution limits remain required. Quoted EOF diagnostics
+cannot authorize correction when their path classification is unavailable.
 
 Only PATH, SSH_AUTH_SOCK and TMPDIR may be configured by the host environment.
 CNCF injects GIT_TERMINAL_PROMPT=0, GIT_CONFIG_NOSYSTEM=1,
@@ -110,7 +131,7 @@ value; all other outcomes fail structurally while retaining the raw receipt.
 Non-Exited terminals are Incomplete. Nonzero exits are Failed except exact
 optional-ref/merge-base exit one with empty stdout, which succeeds with None,
 and PendingMerge exit one, which requires conflict observation and has no
-value. CheckPendingIndex also admits exact exit two as a completed findings
+value. CheckPendingIndex and CheckSelectedIndex also admit exact exit two as a completed findings
 observation under the strict contract below. Exit one never proves a confirmed merge conflict. The primary must
 consume later typed Status and UnmergedIndex plus its saved preconditions.
 No stderr-text heuristic classifies conflicts or authorizes replay.
@@ -120,18 +141,24 @@ counts yield InvalidOutput. Text protocols require strict UTF-8. BlobContent
 retains exact bytes and provides text only for valid UTF-8 without NUL;
 an incomplete capture never becomes successful binary data.
 
-CheckPendingIndex returns `GitIndexCheck(findingKeys: Set[String])`, whose
-`isClean` is exactly `findingKeys.isEmpty`. This operation requires both actual
+Both index checks return `GitIndexCheck(findingKeys: Set[String],
+eofBlankLinePaths: Set[GitPath] = Set.empty, onlyEofBlankLines: Boolean = false)`, whose
+`isClean` is exactly `findingKeys.isEmpty`. Both require actual
 stdout and stderr captures to be complete: neither may be truncated and each
 byteCount must equal its content size. Both streams require strict UTF-8 and
 no NUL. Exit zero succeeds only with empty stdout and stderr, producing no
-keys. Exit two succeeds only with empty stderr and at least one nonempty,
+keys, no EOF paths and a false EOF-only flag. Exit two succeeds only with empty stderr and at least one nonempty,
 non-plus-prefixed diagnostic line in stdout. Split only on LF; retain all
 other characters, including CR, whitespace and literal colons. A final line
 without LF is accepted when the capture is complete. Duplicate diagnostics
 collapse into the set; empty and plus-prefixed source/context lines contribute
-no keys. Keys are opaque diagnostic identities, with no filename, line-number
-or policy interpretation.
+no keys. Keys remain exact diagnostic identities. An additional EOF-only fact
+is true only when every diagnostic key matches exactly
+`<literal path>:<positive line>: new blank line at EOF.` and every captured
+path passes GitPath validation. The matching paths become the exact path set.
+Quoted, control-containing or backslash-escaped pathname renderings are
+ambiguous and do not classify. Mixed findings, other whitespace diagnostics,
+invalid paths or unmatched lines yield false and an empty EOF path set.
 
 A decoded exit-two observation is Succeeded with findings and `isClean=false`;
 it never establishes a clean validation. The actual ProcessExecutionResult,
@@ -139,8 +166,14 @@ including exit two and both captures, remains unchanged. Contradictory exit-zero
 output, empty or context-only exit-two stdout, nonempty stderr, invalid text or
 incomplete captures yield InvalidOutput with no value. Other exits, including
 one, seven and 128, remain Failed with no value. Non-Exited terminals remain
-Incomplete. The ordinary pure output-parser helper uses empty stderr for this
+Incomplete. The ordinary pure output-parser helper uses empty stderr for either
 operation; the owning live GitExec decoder always passes both actual captures.
+
+This classification is an observation of actual Git diagnostics. It grants no
+authority to correct files, reuse review or infer a failed commit dispatch.
+The read-only check cannot create a commit; the primary records whether it
+dispatched a commit. Post-dispatch failure and unknown-effect classification
+retain their existing contracts and never follow from an exit code alone.
 
 `GitIndexCheck.parseStoredC(exitCode: Int, stdout: String, stderr: String)`
 decodes a previously stored ordinary validation Receipt through the same text
@@ -174,6 +207,19 @@ UnmergedIndex requires a six-octal mode, canonical blob OID, stage 1/2/3,
 tab and literal NUL-terminated path. Duplicate (path,stage) entries fail.
 Commit metadata has exact commit/tree/parents lines. PendingPaths rejects
 duplicate paths. GitDiff retains strict text plus a binary marker fact.
+SelectedIndexChanges and TreeChanges parse actual NUL raw diff output into
+`GitTreeChange(oldMode: String, newMode: String, oldBlob: Option[GitObjectId],
+newBlob: Option[GitObjectId], status: String, path: GitPath)`. Each record has
+exactly five space-separated metadata fields (`:OLDMODE NEWMODE OLDOID NEWOID
+STATUS`), NUL, a literal nonempty path and NUL. Both modes are six octal
+digits, and both OIDs are canonical lowercase IDs of the same native 40- or
+64-character length. A zero OID becomes None exactly when its mode is zero.
+Only A, D, M and T are admitted: A has absent old and present new, D has
+present old and absent new, and M/T require both present. Unmerged statuses,
+scores, renames/copies, extra fields, odd record counts, incomplete captures,
+invalid UTF-8, duplicate paths and invalid GitPaths fail. Empty complete
+output yields an empty vector. Paths preserve colon, backslash and LF and
+are never split on whitespace or newline.
 Domain budgets, saved-intent comparisons, workflow conflict decisions,
 durable results and uncertain-effect no-replay policy remain primary-owned.
 
@@ -190,12 +236,20 @@ mandatory gitPrograms. V1 and V2 retain their strict existing field sets and
 creator signatures. Generic programs remain generic-only; semantic definitions
 join the policy only after common workspace assembly.
 
-Each Git declaration has exactly target, operation (stable kebab-case kind),
+Each Git declaration retains exactly the base fields target, operation (stable kebab-case kind),
 capability, identity, gitExecutable, localBranch, remote, remoteBranch,
 endpoint, commitIdentity, selectionId, selectedPath, commitMessage, limits
 and environment. commitIdentity is null or exactly {name,email}, required
 only for PendingMerge, CommitPending, CreateCheckpoint and CommitSelected.
-Selection ID is required only for the three selected kinds. Fixed path is
+Exactly CommitSelected, CheckSelectedIndex and SelectedIndexChanges also
+require selectedPaths: a nonnull array of 1..256 unique valid literal GitPaths.
+The operation is decoded before selecting its strict allowed and required
+field set. Those three kinds emit selectedPaths; every other kind omits it
+and rejects it even when null or empty. Missing, null, empty, duplicate or
+escaping path arrays fail. The private direct creator's trailing empty default
+is only nonapplicable data; it never authorizes an old unbounded CommitSelected
+declaration. There are no aliases or old-wire fallbacks.
+Selection ID is required only for the five selected kinds. Fixed single path is
 required only for StageSelected/StageSelectedAll. Fixed message is required
 only for CommitSelected and is nonempty, non-NUL and at most 4096 UTF-8 bytes.
 Unrelated optional fields must be null. Identity values are nonblank and
@@ -205,7 +259,8 @@ One WorkspaceExecutionAdmission produces all SBT and Git bindings. Duplicate
 capabilities, workspace/kind/selection keys, owners or grants fail.
 Each process grant requires corresponding same-owner workspace permission.
 Workspace permission alone creates no process grant. Per workspace, at most
-128 StageSelected, 256 StageSelectedAll and 64 CommitSelected declarations
+128 StageSelected, 256 StageSelectedAll, 64 CommitSelected,
+64 CheckSelectedIndex and 64 SelectedIndexChanges declarations
 are admitted, using the existing conflict-path/goal-path/goal-step bounds.
 A selection token carries no application-specific prefix or new family field.
 
@@ -223,6 +278,13 @@ LocalProcessExecutionDriverSpec author this producer contract. Real Git
 fixtures use temporary local repositories and fixed temporary bare remotes;
 fixture-only ProcessBuilder initializes preconditions. Subject Git execution
 uses the typed UoW. No external remote endpoint is part of these fixtures.
+Selected-check fixtures stage a new selected file with an extra terminal LF,
+observe actual EOF-only findings with HEAD unchanged, apply a bounded fixture
+correction and restage before a clean check, selected raw observation and real
+selected commit. The commit and typed tree diff contain only the selected
+file. Unrelated staged and unstaged file bytes and index/worktree states are
+preserved. Separate literal colon/backslash/LF selection coverage uses the
+same selected observations and commit adapter.
 
 This producer is intermediate. The actual sm-workflow all-consumer migration,
 old Git definitions and executable launch-route removal, same-workflow actual

@@ -20,13 +20,171 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import GitExecutionSpecSupport.*
 
   "Typed Git protocol" should {
+    "classify only exact EOF blank-line findings with unambiguous literal paths" in {
+      Given("actual-shaped EOF diagnostics with literal colons, repeated keys and source context")
+      val first = "C:notes.txt:2: new blank line at EOF."
+      val second = "other.txt:14: new blank line at EOF."
+      val paths = Set("C:notes.txt", "other.txt").map(x => GitPath.parseC(x).toOption.get)
+      When("the shared stored-receipt parser observes an exact exit-two EOF-only finding set")
+      val findings = GitIndexCheck.parseStoredC(2, s"$first\n+\n$second\n$first\n", "")
+      Then("opaque keys remain intact and exact typed paths accompany the EOF-only fact")
+      findings.toOption shouldBe Some(GitIndexCheck(Set(first, second), paths, true))
+      findings.toOption.get.isClean shouldBe false
+      Given("mixed, trailing-space, quoted, escaped, invalid-path and nonpositive-line diagnostics")
+      val ordinary = Vector(s"$first\nx:1: trailing whitespace.\n", s"$first \n",
+        "\"quoted\\tname\":2: new blank line at EOF.\n", "escaped\\tname:2: new blank line at EOF.\n",
+        "../escape:2: new blank line at EOF.\n", "x:0: new blank line at EOF.\n",
+        "x:01: new blank line at EOF.\n", "x:2: new blank line at EOF.\r\n")
+      When("the same parser observes those completed findings and an empty clean check")
+      val decoded = ordinary.map(GitIndexCheck.parseStoredC(2, _, "")) :+ GitIndexCheck.parseStoredC(0, "", "")
+      Then("each keeps its ordinary cleanliness and keys without granting EOF-only classification")
+      decoded.foreach { value =>
+        value.toOption.get.onlyEofBlankLines shouldBe false
+        value.toOption.get.eofBlankLinePaths shouldBe empty
+      }
+      decoded.last.toOption.get.isClean shouldBe true
+    }
+
+    "decode selected checks through the owning UoW with complete actual stdout and stderr" in {
+      Given("a selected EOF-only observation plus contradictory, incomplete, failed and invalid-text receipts")
+      val diagnostic = "selected.txt:2: new blank line at EOF.\n"
+      val findings = result(diagnostic, ProcessExecutionTermination.Exited(2))
+      val invalid = Vector(findings.copy(stdout = findings.stdout.copy(truncated = true)),
+        findings.copy(stderr = findings.stderr.copy(truncated = true)),
+        findings.copy(stdout = findings.stdout.copy(byteCount = 1L)),
+        findings.copy(stderr = findings.stderr.copy(byteCount = 1L)),
+        findings.copy(stderr = result("warning").stdout), result(diagnostic), result("", ProcessExecutionTermination.Exited(2)),
+        result("+context\n", ProcessExecutionTermination.Exited(2))) ++
+        Vector(Vector[Byte](-61, 40), Vector[Byte](0)).flatMap { bytes =>
+          val capture = ProcessExecutionCapture(bytes, bytes.size.toLong, false)
+          Vector(findings.copy(stdout = capture), findings.copy(stderr = capture))
+        }
+      val failed = result(diagnostic, ProcessExecutionTermination.Exited(1))
+      val incomplete = result(diagnostic, ProcessExecutionTermination.TimedOut)
+      val receipts = Vector(result(), findings) ++ invalid ++ Vector(failed, incomplete)
+      val fixtures = receipts.map(raw => create(outputs = Map(GitOperationKind.CheckSelectedIndex -> raw)))
+      try {
+        When("the owning interpreter consumes each actual selected check receipt")
+        val decoded = fixtures.map(GitExecutionSpecSupport.execute(_, GitOperation.CheckSelectedIndex(selectionId, objectId)).toOption.get)
+        Then("clean and EOF-only findings are distinct typed observations and every unusable capture retains no value")
+        decoded.take(2).map(_.outcome) shouldBe Vector.fill(2)(GitExecutionOutcome.Succeeded)
+        decoded.head.valueC.toOption shouldBe Some(GitIndexCheck(Set.empty))
+        decoded(1).valueC.toOption shouldBe Some(GitIndexCheck(Set(diagnostic.dropRight(1)),
+          Set(GitPath.parseC("selected.txt").toOption.get), true))
+        decoded.slice(2, 2 + invalid.size).foreach(_.outcome shouldBe a[GitExecutionOutcome.InvalidOutput])
+        decoded.takeRight(2).map(_.outcome) shouldBe Vector(GitExecutionOutcome.Failed(1),
+          GitExecutionOutcome.Incomplete(ProcessExecutionTermination.TimedOut))
+        decoded.drop(2).foreach(_.value shouldBe None)
+        decoded.zip(receipts).foreach { case (typed, raw) => typed.processResult shouldBe raw }
+        fixtures.foreach(_.profile.driver.executions should have size 1)
+      } finally fixtures.foreach(_.close())
+    }
+
+    "parse raw add modify delete and type-change records with literal filenames and native object lengths" in {
+      Given("complete NUL raw diffs with exact five-field metadata and literal colon, backslash and LF paths")
+      val fixture = create()
+      val names = Vector("C:new\\name\n.txt", "modified", "deleted", "type")
+      val paths = names.map(x => GitPath.parseC(x).toOption.get)
+      val operations = Vector(GitOperation.SelectedIndexChanges(selectionId, objectId), GitOperation.TreeChanges(objectId, objectId))
+      try {
+        Vector(40, 64).foreach { length =>
+          val oldid = GitObjectId.parseC("a" * length).toOption.get
+          val newid = GitObjectId.parseC("b" * length).toOption.get
+          val zero = "0" * length
+          val raw = s":000000 100644 $zero ${newid.value} A\u0000${names(0)}\u0000" +
+            s":100644 100644 ${oldid.value} ${newid.value} M\u0000${names(1)}\u0000" +
+            s":100644 000000 ${oldid.value} $zero D\u0000${names(2)}\u0000" +
+            s":100644 120000 ${oldid.value} ${newid.value} T\u0000${names(3)}\u0000"
+          When("each raw-result operation interprets the complete native Git protocol")
+          val decoded = operations.map(parse(fixture, _, raw))
+          val empty = operations.map(parse(fixture, _, ""))
+          Then("typed records preserve ordered modes, absence, status and exact filename bytes; empty output has no changes")
+          val expected = Vector(GitTreeChange("000000", "100644", None, Some(newid), "A", paths(0)),
+            GitTreeChange("100644", "100644", Some(oldid), Some(newid), "M", paths(1)),
+            GitTreeChange("100644", "000000", Some(oldid), None, "D", paths(2)),
+            GitTreeChange("100644", "120000", Some(oldid), Some(newid), "T", paths(3)))
+          decoded.foreach(_.toOption shouldBe Some(expected))
+          empty.foreach(_.toOption shouldBe Some(Vector.empty))
+        }
+      } finally fixture.close()
+    }
+
+    "reject malformed raw diff metadata paths and incomplete or invalid UTF8 captures" in {
+      Given("raw diff rows with inconsistent absence, modes, statuses, fields, OIDs, NUL records and paths")
+      val fixture = create()
+      val oid = objectId.value
+      val zero = "0" * 40
+      val row = s":100644 100644 $oid $oid M\u0000literal\u0000"
+      val malformed = Vector(row.replace(":100644", ":10064"), row.replace("100644", "100648"),
+        row.replace(s"$oid $oid", s"$zero $oid"), row.replace(s"$oid $oid", s"$oid $zero"),
+        row.replace(":100644", ":000000"), row.replace(":100644 100644", ":100644 000000"),
+        row.replace(" M\u0000", " A\u0000"), row.replace(" M\u0000", " D\u0000"),
+        row.replace(" M\u0000", " U\u0000"), row.replace(" M\u0000", " R100\u0000"),
+        row.replace(" M\u0000", " C\u0000"), row.replace(" M\u0000", " M100\u0000"),
+        row.replace(" M\u0000", " M extra\u0000"), row.replace(" M\u0000", "\u0000"),
+        row.replace(s"$oid $oid", s"${"A" * 40} $oid"), row.replace(s"$oid $oid", s"$oid ${"b" * 64}"),
+        row.replace("literal", ""), row.replace("literal", "../escape"), row.replace("literal", ".git/config"),
+        row.dropRight(1), row + "extra\u0000", row + row,
+        s":000000 000000 $zero $zero A\u0000x\u0000", s":000000 000000 $zero $zero D\u0000x\u0000")
+      val operations = Vector(GitOperation.SelectedIndexChanges(selectionId, objectId), GitOperation.TreeChanges(objectId, objectId))
+      try {
+        When("both raw parsers receive malformed text and damaged actual bounded captures")
+        val decoded = operations.flatMap(op => malformed.map(parse(fixture, op, _)))
+        val captures = Vector(result(row, truncated = true).stdout, result(row).stdout.copy(byteCount = 1L),
+          ProcessExecutionCapture(Vector[Byte](-61, 40), 2L, false))
+        val damaged = operations.flatMap { op =>
+          val metadata = fixture.definitions.find(_._git_metadata.get.kind == op.kind).get._git_metadata.get
+          captures.map(GitOutputParser.parse(op, metadata, _, 0))
+        }
+        Then("none yields usable raw changes")
+        (decoded ++ damaged).foreach(_.isLeft shouldBe true)
+      } finally fixture.close()
+    }
+
+    "require bounded explicit selected path vectors and preserve selected-observation argument limits" in {
+      Given("three bounded host kinds, an ordinary kind and a shared admitted workspace")
+      val fixture = create()
+      val binding = fixture.workspace.bindingC(workspaceId).toOption.get
+      val kinds = Vector(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges)
+      val path = GitPath.parseC("selected.txt").toOption.get
+      val many = Vector.tabulate(257)(n => GitPath.parseC(s"file$n").toOption.get)
+      val invalid = kinds.flatMap { kind =>
+        val declared = declaration(kind, fixture.endpoint)
+        Vector(declared.copy(selectedPaths = null), declared.copy(selectedPaths = Vector.empty),
+          declared.copy(selectedPaths = Vector(path, path)), declared.copy(selectedPaths = Vector(null)),
+          declared.copy(selectedPaths = many))
+      } :+ declaration(GitOperationKind.Head, fixture.endpoint).copy(selectedPaths = Vector(path))
+      try {
+        When("host definition assembly applies path bounds and typed resolution applies the unchanged finite argument limit")
+        val rejected = invalid.map(definition(binding, _))
+        val bounded = kinds.map(kind => definition(binding, declaration(kind, fixture.endpoint).copy(
+          selectedPaths = many.take(256), limits = limits.copy(argumentCount = Some(512L)))))
+        val limited = Vector(GitOperation.CheckSelectedIndex(selectionId, objectId), GitOperation.SelectedIndexChanges(selectionId, objectId)).map { op =>
+          val declared = definition(binding, declaration(op.kind, fixture.endpoint).copy(selectedPaths = many.take(256))).toOption.get
+          val policy = ProcessExecutionPolicy.createC(Vector(declared)).toOption.get
+          val arguments = GitProgramDefinition.typedArgumentsC(op, declared._git_metadata.get).toOption.get
+          policy.resolveGitC(declared, ProcessExecutionGrant(declared.capability), arguments)
+        }
+        val commit = declaration(GitOperationKind.CommitSelected, fixture.endpoint)
+        val olddefault = GitProgramDefinition.createC(binding, commit.operation, commit.capability, commit.identity,
+          commit.gitExecutable, commit.localBranch, commit.remote, commit.remoteBranch, commit.endpoint,
+          commit.commitIdentity, commit.selectionId, commit.selectedPath, commit.commitMessage, commit.limits, commit.environment)
+        Then("only explicit valid vectors within both limits are admitted and an old unbounded commit remains rejected")
+        rejected.foreach(_.isFaillure shouldBe true)
+        bounded.foreach(_.isSuccess shouldBe true)
+        limited.foreach(_.isFaillure shouldBe true)
+        olddefault.isFaillure shouldBe true
+        fixture.profile.driver.executions shouldBe empty
+      } finally fixture.close()
+    }
+
     "decode clean and diagnostic stored index-check receipts with exact opaque keys" in {
       Given("ordinary stored receipt fields with duplicate diagnostics, literal colons, CR and plus-prefixed context")
       val first = " C:literal:name.txt:2: trailing whitespace.\r"
@@ -125,8 +283,8 @@ final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThe
       } finally fixture.close()
     }
 
-    "render the complete thirty-operation table with only fixed host inputs and canonical OID slots" in {
-      Given("one admitted workspace and all thirty fixed runtime Git declarations")
+    "render the complete thirty-three-operation table with only fixed host inputs and canonical OID slots" in {
+      Given("one admitted workspace and all thirty-three fixed runtime Git declarations")
       val fixture = create()
       val oid = objectId.value
       val tracking = "refs/remotes/origin/main"
@@ -152,7 +310,10 @@ final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThe
         Vector("diff", "--cached", "--no-ext-diff", "--no-textconv", "--no-color", "--no-renames", oid, "--"),
         Vector("diff", "--cached", "--no-ext-diff", "--no-textconv", "--no-renames", "--name-only", "-z", oid, "--"),
         Vector("--literal-pathspecs", "add", "--", "selected.txt"), Vector("--literal-pathspecs", "add", "--all", "--", "selected.txt"),
-        identityArguments ++ Vector("commit", "--no-verify", "--no-gpg-sign", "-m", "selected checkpoint"))
+        identityArguments ++ Vector("--literal-pathspecs", "commit", "--only", "--no-verify", "--no-gpg-sign", "-m", "selected checkpoint", "--", "selected.txt"),
+        Vector("--literal-pathspecs", "diff", "--cached", "--no-ext-diff", "--no-textconv", "--check", oid, "--", "selected.txt"),
+        Vector("--literal-pathspecs", "diff", "--cached", "--no-ext-diff", "--no-textconv", "--raw", "--no-abbrev", "--no-renames", "-z", oid, "--", "selected.txt"),
+        Vector("diff-tree", "--no-commit-id", "--no-ext-diff", "--no-textconv", "--raw", "--no-abbrev", "--no-renames", "-r", "-z", oid, oid, "--"))
       try {
         When("trusted typed admission resolves every operation without launching a process")
         val admitted = operations.map(op => GitExecutionAdmission.resolveC(fixture.context, fixture.target, op).toOption.get)
@@ -375,7 +536,9 @@ private[cncf] object GitExecutionSpecSupport {
     GitOperation.CreateCheckpoint(objectId, objectId), GitOperation.InstallCheckpoint(objectId, objectId),
     GitOperation.CommitMetadata(objectId), GitOperation.BlobContent(objectId), GitOperation.CheckPendingIndex(objectId),
     GitOperation.PendingDiff(objectId), GitOperation.PendingPaths(objectId), GitOperation.StageSelected(selectionId),
-    GitOperation.StageSelectedAll(selectionId), GitOperation.CommitSelected(selectionId))
+    GitOperation.StageSelectedAll(selectionId), GitOperation.CommitSelected(selectionId),
+    GitOperation.CheckSelectedIndex(selectionId, objectId), GitOperation.SelectedIndexChanges(selectionId, objectId),
+    GitOperation.TreeChanges(objectId, objectId))
 
   def capability(kind: GitOperationKind): ProcessCapabilityId = ProcessCapabilityId.parseC("git-" + kind.wireName).toOption.get
 
@@ -384,13 +547,15 @@ private[cncf] object GitExecutionSpecSupport {
     endpoint, if (kind.requiresIdentity) Some(GitCommitIdentity("Fixture", "fixture@example.invalid")) else None,
     if (kind.selected) Some(selectionId) else None,
     if (kind == GitOperationKind.StageSelected || kind == GitOperationKind.StageSelectedAll) Some(GitPath.parseC("selected.txt").toOption.get) else None,
-    if (kind == GitOperationKind.CommitSelected) Some("selected checkpoint") else None, limits, Map("PATH" -> "/usr/bin:/bin"))
+    if (kind == GitOperationKind.CommitSelected) Some("selected checkpoint") else None, limits, Map("PATH" -> "/usr/bin:/bin"),
+    if (Set(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges).contains(kind))
+      Vector(GitPath.parseC("selected.txt").toOption.get) else Vector.empty)
 
   def definition(binding: WorkspaceBinding, declaration: GitRuntimeDeclaration): Consequence[ProcessProgramDefinition] =
     GitProgramDefinition.createC(binding, declaration.operation, declaration.capability, declaration.identity,
       declaration.gitExecutable, declaration.localBranch, declaration.remote, declaration.remoteBranch, declaration.endpoint,
       declaration.commitIdentity, declaration.selectionId, declaration.selectedPath, declaration.commitMessage,
-      declaration.limits, declaration.environment)
+      declaration.limits, declaration.environment, declaration.selectedPaths)
 
   def result(text: String = "", termination: ProcessExecutionTermination = ProcessExecutionTermination.Exited(0),
     truncated: Boolean = false): ProcessExecutionResult = {
@@ -412,6 +577,8 @@ private[cncf] object GitExecutionSpecSupport {
     case GitOperationKind.BlobContent => "blob\n"
     case GitOperationKind.PendingDiff => "diff\n"
     case GitOperationKind.PendingPaths => "selected.txt\u0000"
+    case GitOperationKind.SelectedIndexChanges | GitOperationKind.TreeChanges =>
+      s":000000 100644 ${"0" * 40} ${objectId.value} A\u0000selected.txt\u0000"
     case _ => ""
   }
 
@@ -436,7 +603,9 @@ private[cncf] object GitExecutionSpecSupport {
     val binding = workspace.bindingC(workspaceId).toOption.get
     val definitions = GitOperationKind.values.toVector.map { kind =>
       val declared = declaration(kind, endpoint)
-      val selected = if (declared.selectedPath.nonEmpty) declared.copy(selectedPath = Some(GitPath.parseC(selectedPath).toOption.get)) else declared
+      val selected = declared.copy(
+        selectedPath = if (declared.selectedPath.nonEmpty) Some(GitPath.parseC(selectedPath).toOption.get) else None,
+        selectedPaths = if (declared.selectedPaths.nonEmpty) Vector(GitPath.parseC(selectedPath).toOption.get) else Vector.empty)
       definition(binding, selected).toOption.get
     }
     val policy = ProcessExecutionPolicy.createC(definitions).toOption.get
@@ -515,5 +684,8 @@ private[cncf] final class GitSpecBehavior(val behaviorCore: Behavior.Core) exten
     case GitOperation.StageSelected(selectionId) => git_stage_selected(target, selectionId)
     case GitOperation.StageSelectedAll(selectionId) => git_stage_selected_all(target, selectionId)
     case GitOperation.CommitSelected(selectionId) => git_commit_selected(target, selectionId)
+    case GitOperation.CheckSelectedIndex(selectionid, parent) => git_check_selected_index(target, selectionid, parent)
+    case GitOperation.SelectedIndexChanges(selectionid, parent) => git_selected_index_changes(target, selectionid, parent)
+    case GitOperation.TreeChanges(before, after) => git_tree_changes(target, before, after)
   }
 }
