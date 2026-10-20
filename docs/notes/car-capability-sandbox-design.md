@@ -2,7 +2,7 @@
 
 Status: historical design note
 Date: 2026-05-25
-Updated: 2026-10-15
+Updated: 2026-10-20
 
 ## Purpose
 
@@ -647,3 +647,45 @@ The latter is a semantic attack-surface reduction rather than physical code elim
 - Add CAR lint/admission diagnostics for CAR requests outside the resolved SAR boundary.
 - Define runtime evidence for capability-boundary violations.
 - Consider executable security properties such as: an operation without `process.exec` can never reach the managed process facility.
+
+
+## Consolidated Hardening Direction (2026-10-20)
+
+The comparison with a specialized minimal HTTPS runtime was carried through across the major security dimensions. CNCF should approach the same goals with layered controls appropriate to a general-purpose runtime.
+
+### Safe managed-JVM baseline
+
+For ordinary CAR code, managed JVM execution plus CAR lint/admission should be the counterpart to a safe-Rust-only policy. Hardened CAR admission should reject JNI, Unsafe/internal low-level access, arbitrary native loading, direct process/filesystem/network access outside managed capability facades, and risky reflection/dynamic-loading escape paths according to policy. Native/unsafe workloads remain Hard Sandbox cases. This targets the same common memory-corruption attack classes without requiring CNCF to move to Rust.
+
+### CAR isolation as physical Capability projection
+
+A hardened CAR Capability Boundary should be projectable onto a process/container boundary. Per-CAR Docker isolation can constrain network reachability, filesystem/mounts, volumes, secrets, external endpoints, and process/runtime policy. Hardened CAR-to-CAR communication should use CNCF-managed Component/Service/Operation invocation or a governed bridge rather than arbitrary direct networking. This adds physical compromise containment to logical Capability isolation.
+
+### Signed CAR and Component Repository trust chain
+
+CAR should be the supply-chain trust unit. Electronic signatures should cover executable artifacts and security-relevant metadata, including descriptors, Capability declarations, dependencies, configuration/resources, and manifest information. Publisher identity, CAR signature, Component Repository verification/provenance, CNCF admission, and runtime should form one trust chain. Signature validity establishes authenticity/integrity; it MUST NOT widen the SAR Capability Boundary.
+
+### Security Profile
+
+The earlier working term Protection Profile is replaced by **Security Profile**. The working Archetype decomposition is now:
+
+```text
+SAR Archetype
+  = Capability Profile
+  + Exposure Profile
+  + Data Profile
+  + Execution Profile
+  + Security Profile
+```
+
+Security Profile describes technical security posture: allowed/forbidden protocols, TLS baseline, cryptographic/PQC policy, isolation strength, CAR signature/trusted-publisher requirements, secret handling, and audit/evidence requirements. Capability Profile remains responsible for which abilities may exist; Authorization/Guard decides concrete subject/resource/action access.
+
+### Security Property Verification and Evidence
+
+CNCF should define mechanically checkable security invariants where feasible, such as: no process Capability implies no managed process execution; ReadOnlyWeb implies no datastore mutation; hardened CAR isolation implies no undeclared direct CAR networking; and only protocols admitted by Security Profile can activate.
+
+A resolved SAR should also expose **Security Evidence**: resolved SAR/CAR Capability boundaries, CAR signature/publisher/provenance status, Safe JVM lint/admission results, isolation realization, active protocol/TLS/crypto policy, security-property results, and capability violation/audit evidence.
+
+### Residual difference
+
+A dedicated minimal system on dedicated infrastructure can physically omit more code and reduce its trusted computing base further. This is an inherent architectural advantage of specialization, not a missing CNCF application-security control. CNCF compensates with semantic Capability elimination, managed-JVM safety, signed supply-chain trust, admission, runtime enforcement, optional physical CAR isolation, Security Profile policy, and mechanical security-property verification.
