@@ -8,7 +8,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceExecutionAdmiss
 /*
  * @since   Jul. 17, 2026
  *  version Jul. 22, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ProcessCapabilityId private (value: String) {
@@ -1082,6 +1082,7 @@ enum ProcessExecutionTermination {
   case LaunchFailed
   case TimedOut
   case Cancelled
+  case TerminationUnconfirmed
   case OutputLimitExceeded(stream: ProcessExecutionStream)
   case ArtifactLimitExceeded
 }

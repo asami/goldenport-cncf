@@ -70,7 +70,8 @@ import org.goldenport.cncf.observability.global.GlobalObservable
  *  version May. 25, 2026
  *  version Jun. 29, 2026
  *  version Jul. 30, 2026
- * @version Aug. 19, 2026
+ *  version Aug. 19, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cli] trait CncfRuntimeBootstrapPart {
@@ -1188,10 +1189,12 @@ private[cli] trait CncfRuntimeBootstrapPart {
                     Subsystem.shutdownOwned(subsystem)
                 case Some(RunMode.Command) =>
                   val subsystem = buildSubsystem(extraComponents, Some(RunMode.Command), args)
-                  try
+                  val termination = RuntimeCommandTermination.install(subsystem)
+                  termination.run {
                     new CncfRuntime().executeCommand(subsystem, launch.domainargs.drop(1))
-                  finally
+                  } {
                     Subsystem.shutdownOwned(subsystem)
+                  }
                 case Some(RunMode.ServerEmulator) =>
                   _execute_server_emulator(launch.domainargs.drop(1), args, extraComponents)
                 case Some(RunMode.Script) =>
@@ -1261,10 +1264,12 @@ private[cli] trait CncfRuntimeBootstrapPart {
                   Subsystem.shutdownOwned(subsystem)
               case Some(RunMode.Command) =>
                 val subsystem = buildSubsystem(mode = Some(RunMode.Command), args = args)
-                try
+                val termination = RuntimeCommandTermination.install(subsystem)
+                termination.run {
                   new CncfRuntime().executeCommand(subsystem, launch.domainargs.drop(1))
-                finally
+                } {
                   Subsystem.shutdownOwned(subsystem)
+                }
               case Some(RunMode.ServerEmulator) =>
                 _execute_server_emulator(launch.domainargs.drop(1), args, _ => Nil)
               case Some(RunMode.Script) =>

@@ -2,9 +2,7 @@ package org.goldenport.cncf.processexecution
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.ComponentId
-import java.nio.file.{Files, Path}
-import scala.jdk.CollectionConverters.*
-import scala.util.control.NonFatal
+import java.nio.file.Path
 import org.goldenport.cncf.workspace.*
 
 /** Immutable host configuration. Parsing does not install a driver or grant caller authority. */
@@ -14,32 +12,6 @@ import org.goldenport.cncf.workspace.*
  * @author  ASAMI, Tomoharu
  */
 private[cncf] final case class WorkspaceRuntimeDeclaration(identity: WorkspaceId, root: Path)
-
-/** Exact per-invocation files selected by the trusted owning host. */
-final case class RegisteredSbtHostConfiguration(requestFile: Path, responseFile: Path)
-
-object RegisteredSbtHostConfiguration {
-  def createC(requestFile: Path, responseFile: Path): Consequence[RegisteredSbtHostConfiguration] =
-    try {
-      if (_valid_path(requestFile) && _valid_path(responseFile) && requestFile != responseFile &&
-          requestFile.getParent == responseFile.getParent)
-        Consequence.success(RegisteredSbtHostConfiguration(requestFile, responseFile))
-      else
-        Consequence.configurationInvalid("Registered SBT host requires distinct absolute sibling files below target without symlinks")
-    } catch {
-      case NonFatal(_) => Consequence.configurationInvalid("Invalid registered SBT host locations")
-    }
-
-  private def _valid_path(path: Path): Boolean =
-    path != null && path.isAbsolute && path == path.normalize() && !path.toString.exists(_.isControl) &&
-      path.getParent != null && path.getParent.iterator().asScala.exists(_.toString == "target") && {
-        var current = path.getRoot
-        path.iterator().asScala.forall { segment =>
-          current = current.resolve(segment)
-          !Files.isSymbolicLink(current)
-        }
-      }
-}
 
 private[cncf] final case class SbtRuntimeDeclaration(
   target: WorkspaceId,
@@ -80,8 +52,7 @@ private[cncf] final class RuntimeProcessExecutionPlan private (
   val workspaceGrants: Vector[WorkspaceGrant],
   val sbtDeclarations: Vector[SbtRuntimeDeclaration],
   val gitDeclarations: Vector[GitRuntimeDeclaration],
-  val workspaceAdmissionOption: Option[WorkspaceExecutionAdmission],
-  val registeredSbtHost: Option[RegisteredSbtHostConfiguration] = None
+  val workspaceAdmissionOption: Option[WorkspaceExecutionAdmission]
 )
 
 private[cncf] object RuntimeProcessExecutionPlan {
@@ -128,23 +99,6 @@ private[cncf] object RuntimeProcessExecutionPlan {
   ): Consequence[RuntimeProcessExecutionPlan] =
     _create_semantic_c(programs, grants, workspaceDeclarations, workspaceGrants, sbtDeclarations,
       gitDeclarations, RuntimeProcessExecutionPlanCodec.SCHEMA_V3)
-
-  def createV4C(
-    programs: Vector[ProcessProgramDefinition],
-    grants: Map[ComponentId, Vector[ProcessExecutionGrant]],
-    workspaceDeclarations: Vector[WorkspaceRuntimeDeclaration],
-    workspaceGrants: Vector[WorkspaceGrant],
-    sbtDeclarations: Vector[SbtRuntimeDeclaration],
-    gitDeclarations: Vector[GitRuntimeDeclaration],
-    registeredSbtHost: RegisteredSbtHostConfiguration
-  ): Consequence[RuntimeProcessExecutionPlan] = for {
-    configuration <- if (registeredSbtHost == null)
-      Consequence.configurationInvalid("Registered SBT host configuration is required")
-      else RegisteredSbtHostConfiguration.createC(registeredSbtHost.requestFile, registeredSbtHost.responseFile)
-    prior <- createV3C(programs, grants, workspaceDeclarations, workspaceGrants, sbtDeclarations, gitDeclarations)
-  } yield new RuntimeProcessExecutionPlan(prior.programs, prior.grants, prior.admission,
-    RuntimeProcessExecutionPlanCodec.SCHEMA_V4, prior.workspaceDeclarations, prior.workspaceGrants,
-    prior.sbtDeclarations, prior.gitDeclarations, prior.workspaceAdmissionOption, Some(configuration))
 
   private def _create_semantic_c(
     programs: Vector[ProcessProgramDefinition],

@@ -34,7 +34,7 @@ import org.goldenport.cncf.config.SubsystemStorageConfiguration
 import org.goldenport.cncf.config.SubsystemProcessExecutionConfiguration
 import org.goldenport.cncf.config.SubsystemHttpExecutionConfiguration
 import org.goldenport.cncf.http.HttpExecutionAdmission
-import org.goldenport.cncf.processexecution.{LocalProcessExecutionDriver, ProcessExecutionAdmission, ProcessExecutionDriver, RegisteredSbtHostDriver}
+import org.goldenport.cncf.processexecution.{LocalProcessExecutionDriver, ProcessExecutionAdmission, ProcessExecutionDriver, ProcessExecutionProgress}
 import org.goldenport.cncf.workspace.WorkspaceExecutionAdmission
 import org.goldenport.cncf.config.SystemNodeShutdownConfiguration
 import org.goldenport.cncf.context.ExecutionContext
@@ -274,7 +274,8 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
     }
     _initialize_consequence(_initialize(args, extraComponents)) match {
       case Consequence.Success(subsystem) =>
-        try {
+        val termination = RuntimeCommandTermination.install(subsystem)
+        termination.run {
           normalizedargs.headOption.flatMap(RunMode.from) match {
             case Some(RunMode.Command) =>
               _execute_command_args(subsystem, normalizedargs.drop(1))
@@ -287,7 +288,7 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
                   _exit_code(Consequence.Failure(conclusion))
               }
           }
-        } finally {
+        } {
           Subsystem.shutdownOwned(subsystem)
         }
       case Consequence.Failure(conclusion) =>
@@ -418,12 +419,8 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
     observe_info(systemnodeshutdownconfiguration.observationMessage)
     val systemnode = SystemNode.create(systemnodeshutdownconfiguration)
     val subsystem0 = try {
-      val processdriver = processplan.map { plan =>
-        val local = new LocalProcessExecutionDriver()
-        val driver: ProcessExecutionDriver & AutoCloseable = plan.registeredSbtHost match {
-          case Some(configuration) => new RegisteredSbtHostDriver(local, configuration)
-          case None => local
-        }
+      val processdriver = processplan.map { _ =>
+        val driver = new LocalProcessExecutionDriver(progress = ProcessExecutionProgress.stderr)
         systemnode.ownRuntimeResourceC(driver) match {
           case Consequence.Success(_) => driver
           case Consequence.Failure(conclusion) =>

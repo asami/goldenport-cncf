@@ -4,12 +4,15 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream, IOException}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 import java.nio.file.attribute.PosixFilePermissions
-import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.{ConcurrentLinkedQueue, FutureTask, TimeUnit}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import scala.jdk.CollectionConverters.*
 import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId}
 import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.context.{ExecutionContext, GlobalContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.cncf.resource.{ResourceTreeAccess, ResourceTreeEntry, ResourceTreeLimits, ResourceTreeReference}
+import org.goldenport.cncf.subsystem.SystemNode
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
@@ -21,7 +24,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *
  * @since   Jul. 17, 2026
  *  version Jul. 30, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -43,6 +46,341 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
   )
 
   "Local Process Execution driver" should {
+    "automatically cancel a generic UnitOfWork process through the runtime driver stop entry" in {
+      Given("an ordinary UnitOfWork process and its runtime-owned local driver without an application cancellation callback")
+      val driver = new LocalProcessExecutionDriver()
+      GlobalContext.set(GlobalContext(WorkAreaSpace.create(RuntimeConfig.default)))
+      val base = ExecutionContext.create()
+      val scope = ScopeContext(kind = ScopeKind.Runtime, name = "runtime-stop-spec", parent = None,
+        observabilitycontext = base.observability, processexecutiondriveroption = Some(driver))
+      val uow = new UnitOfWork(base.withScope(scope))
+      val execution = _execution(Vector("10"), _limits(executiontimeout = 20000L),
+        executable = "/bin/sleep", fixedarguments = Vector.empty)
+      val result = new AtomicReference[org.goldenport.Consequence[ProcessExecutionResult]]()
+      val worker = new Thread(() => {
+        result.set(new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.ProcessExec(execution)))
+      })
+      worker.setDaemon(true)
+      try {
+        When("the runtime stop entry is called while the actual interpreter owns an active process handle")
+        worker.start()
+        _await_condition(driver.activeHandleCount == 1, 5000L)
+        val stopped = driver.requestStopC()
+        worker.join(5000L)
+        Then("the ordinary UnitOfWork returns its actual cancelled receipt and completes normal resource finalization")
+        stopped.isSuccess shouldBe true
+        worker.isAlive shouldBe false
+        Option(result.get).flatMap(_.toOption).map(_.termination) shouldBe Some(ProcessExecutionTermination.Cancelled)
+        driver.activeProcessCount shouldBe 0
+        driver.activeHandleCount shouldBe 0
+        driver.terminationConfirmed shouldBe true
+      } finally {
+        driver.close()
+        worker.join(5000L)
+        uow.dispose()
+      }
+    }
+
+    "retain captures and the owning await when a runtime stop closes admission" in {
+      Given("an admitted SBT handle whose real local process writes both streams before waiting")
+      val root = _sbt_root()
+      val cleanup = new ProcessExecutionWorkArea(root)
+      val ready = root.resolve("ready")
+      val script = Files.writeString(root.resolve("waiting.sh"), """trap 'exit 0' TERM
+printf 'retained-output'
+printf 'retained-error' >&2
+printf ready > "$1"
+while :; do /bin/sleep 1; done
+""")
+      val launcher = new LocalProcessLauncher {
+        def startBlocking(command: Vector[String]): Process = throw new IOException("explicit cwd required")
+        override def startBlocking(command: Vector[String], workingDirectory: Path, environment: Map[String, String]): Process =
+          LocalProcessLauncher.local.startBlocking(Vector("/bin/sh", script.toString, ready.toString), workingDirectory, environment)
+      }
+      val driver = new LocalProcessExecutionDriver("stopping-build", launcher)
+      val execution = _sbt_execution(root, SbtOperation.Test, limits = _limits(executiontimeout = 10000L))
+      try {
+        When("the runtime requests stop after output is written and before the owning handle is awaited")
+        val handle = driver.startC(execution).toOption.get
+        _await_condition(Files.exists(ready), 3000L)
+        val stopped = driver.requestStopC()
+        val retained = driver.activeHandleCount
+        val refused = driver.startC(execution).flatMap(_.awaitC)
+        val result = handle.awaitC.toOption.get
+        val repeated = handle.awaitC.toOption.get
+        Then("admission is closed while the original await preserves cancellation, captures and normal cleanup")
+        stopped.isSuccess shouldBe true
+        retained shouldBe 1
+        refused.toOption.map(_.termination) shouldBe Some(ProcessExecutionTermination.NotStarted)
+        result.termination shouldBe ProcessExecutionTermination.Cancelled
+        _text(result.stdout) shouldBe "retained-output"
+        _text(result.stderr) shouldBe "retained-error"
+        repeated shouldBe result
+        driver.activeProcessCount shouldBe 0
+        driver.activeHandleCount shouldBe 0
+        driver.terminationConfirmed shouldBe true
+      } finally { driver.close(); cleanup.close() }
+    }
+
+    "force a retained TERM-resistant grandchild after its root exits before the grace expires" in {
+      Given("a real owned root, child and TERM-resistant grandchild with explicit fixture PID files")
+      val root = _sbt_root()
+      val cleanup = new ProcessExecutionWorkArea(root)
+      val grandpid = root.resolve("grandchild.pid")
+      val childpid = root.resolve("child.pid")
+      val grand = Files.writeString(root.resolve("grandchild.sh"), """trap '' TERM
+printf 'grandchild-output'
+printf '%s' "$$" > "$1"
+while :; do :; done
+""")
+      val child = Files.writeString(root.resolve("child.sh"), """trap 'exit 0' TERM
+/bin/sh "$1" "$2" &
+printf '%s' "$$" > "$3"
+wait
+""")
+      val script = Files.writeString(root.resolve("root.sh"), """trap 'exit 0' TERM
+/bin/sh "$1" "$2" "$3" "$4" &
+printf 'root-output'
+printf 'root-error' >&2
+wait
+""")
+      val process = new AtomicReference[Process]()
+      val launcher = new LocalProcessLauncher {
+        def startBlocking(command: Vector[String]): Process = throw new IOException("explicit cwd required")
+        override def startBlocking(command: Vector[String], workingDirectory: Path, environment: Map[String, String]): Process = {
+          val actual = LocalProcessLauncher.local.startBlocking(Vector("/bin/sh", script.toString,
+            child.toString, grand.toString, grandpid.toString, childpid.toString), workingDirectory, environment)
+          process.set(actual)
+          actual
+        }
+      }
+      val driver = new LocalProcessExecutionDriver("tree-stop", launcher)
+      var owned = Vector.empty[ProcessHandle]
+      try {
+        When("stop snapshots the tree, the root exits on TERM and the resistant descendant outlives the root")
+        val handle = driver.startC(_sbt_execution(root, SbtOperation.Test,
+          limits = _limits(executiontimeout = 10000L, terminationgrace = 1000L))).toOption.get
+        _await_condition(Files.exists(grandpid) && Files.size(grandpid) > 0L && Files.exists(childpid) && Files.size(childpid) > 0L, 3000L)
+        val grandhandle = ProcessHandle.of(Files.readString(grandpid).toLong).get()
+        owned = Vector(ProcessHandle.of(Files.readString(childpid).toLong).get(), grandhandle)
+        val awaited = new FutureTask[org.goldenport.Consequence[ProcessExecutionResult]](() => handle.awaitC)
+        val awaiting = new Thread(awaited)
+        awaiting.setDaemon(true)
+        awaiting.start()
+        val stopper = new Thread(() => { driver.requestStopC(); () })
+        stopper.setDaemon(true)
+        stopper.start()
+        _await_condition(!process.get.isAlive, 1500L)
+        val rootfirst = grandhandle.isAlive
+        val premature = awaited.isDone
+        stopper.join(4000L)
+        val result = awaited.get(3000L, TimeUnit.MILLISECONDS).toOption.get
+        Then("the same cancellation waits for retained descendants, forces the survivor and retains actual streams")
+        rootfirst shouldBe true
+        premature shouldBe false
+        stopper.isAlive shouldBe false
+        process.get.isAlive shouldBe false
+        owned.foreach(_.isAlive shouldBe false)
+        result.termination shouldBe ProcessExecutionTermination.Cancelled
+        _text(result.stdout) should include ("root-output")
+        _text(result.stdout) should include ("grandchild-output")
+        _text(result.stderr) should include ("root-error")
+        driver.activeHandleCount shouldBe 0
+      } finally {
+        driver.close()
+        owned.foreach(handle => if (handle.isAlive) handle.destroyForcibly())
+        Option(process.get).foreach(value => if (value.isAlive) value.destroyForcibly())
+        cleanup.close()
+      }
+    }
+
+    Vector(true, false).foreach { initiallyalive =>
+    s"retain an incomplete observation when descendant inspection is unavailable and root initially alive is $initiallyalive" in {
+      Given("a controlled process with unavailable descendant inspection or a root that already exited before any tree observation")
+      val root = _sbt_root()
+      val cleanup = new ProcessExecutionWorkArea(root)
+      val events = new ConcurrentLinkedQueue[ProcessExecutionProgressEvent]()
+      val destroyed = new AtomicInteger(0)
+      val observer = new ProcessExecutionProgress {
+        def report(event: ProcessExecutionProgressEvent): Unit = { events.add(event); () }
+      }
+      val launcher = new LocalProcessLauncher {
+        def startBlocking(command: Vector[String]): Process = throw new IOException("explicit cwd required")
+        override def startBlocking(command: Vector[String], workingDirectory: Path, environment: Map[String, String]): Process = new Process {
+          private val _alive = new java.util.concurrent.atomic.AtomicBoolean(initiallyalive)
+          def getInputStream = new ByteArrayInputStream("kept-output".getBytes(StandardCharsets.UTF_8))
+          def getErrorStream = new ByteArrayInputStream("kept-error".getBytes(StandardCharsets.UTF_8))
+          def getOutputStream = new ByteArrayOutputStream()
+          def waitFor(): Int = 0
+          def exitValue(): Int = if (_alive.get) throw new IllegalThreadStateException() else 0
+          def destroy(): Unit = { destroyed.incrementAndGet(); _alive.set(false) }
+          override def isAlive(): Boolean = _alive.get
+        }
+      }
+      val driver = new LocalProcessExecutionDriver("unconfirmed-stop", launcher, observer)
+      val execution = _sbt_execution(root, SbtOperation.Test)
+      try {
+        When("runtime stop observes the root exit but cannot confirm the process tree before awaiting")
+        val handle = driver.startC(execution).toOption.get
+        val another = driver.startC(execution).toOption.get
+        val stopped = driver.requestStopC()
+        val result = handle.awaitC.toOption.get
+        val second = another.awaitC.toOption.get
+        val last = events.iterator().asScala.toVector.last
+        Then("the result retains captures and Incomplete while telemetry cannot claim a terminal exit")
+        stopped.isFaillure shouldBe true
+        second.termination shouldBe ProcessExecutionTermination.TerminationUnconfirmed
+        destroyed.get shouldBe (if (initiallyalive) 2 else 0)
+        result.termination shouldBe ProcessExecutionTermination.TerminationUnconfirmed
+        SbtExecutionResult(SbtTarget(execution.definition._sbt_metadata.get.binding.workspaceId), SbtOperation.Test, result).outcome shouldBe
+          SbtExecutionOutcome.Incomplete(ProcessExecutionTermination.TerminationUnconfirmed)
+        _text(result.stdout) shouldBe "kept-output"
+        _text(result.stderr) shouldBe "kept-error"
+        last.state shouldBe ProcessExecutionProgressState.Uncertain
+        last.termination shouldBe None
+        last.exitCode shouldBe None
+        driver.terminationConfirmed shouldBe false
+        intercept[IllegalStateException](driver.close()).getMessage shouldBe
+          "Local Process Execution termination could not be confirmed"
+        driver.terminationConfirmed shouldBe false
+      } finally { intercept[IllegalStateException](driver.close()); cleanup.close() }
+    }
+    }
+
+    "fail ordinary owned shutdown while closing every resource when process termination is unconfirmed" in {
+      Given("a SystemNode owning an ordinary marker before a local driver with two unconfirmed process trees")
+      val node = SystemNode.create()
+      val closed = new AtomicInteger(0)
+      val destroyed = new AtomicInteger(0)
+      val launcher = new LocalProcessLauncher {
+        def startBlocking(command: Vector[String]): Process = new Process {
+          private val _alive = new java.util.concurrent.atomic.AtomicBoolean(true)
+          def getInputStream = new ByteArrayInputStream(Array.emptyByteArray)
+          def getErrorStream = new ByteArrayInputStream(Array.emptyByteArray)
+          def getOutputStream = new ByteArrayOutputStream()
+          def waitFor(): Int = 0
+          def exitValue(): Int = if (_alive.get) throw new IllegalThreadStateException() else 0
+          def destroy(): Unit = { destroyed.incrementAndGet(); _alive.set(false) }
+          override def isAlive(): Boolean = _alive.get
+        }
+      }
+      val driver = new LocalProcessExecutionDriver("ordinary-unconfirmed-close", launcher)
+      node.ownRuntimeResourceC(new AutoCloseable {
+        def close(): Unit = { closed.incrementAndGet(); () }
+      }).isSuccess shouldBe true
+      node.ownRuntimeResourceC(driver).isSuccess shouldBe true
+      try {
+        driver.startC(_execution(Vector("streams", "literal"))).isSuccess shouldBe true
+        driver.startC(_execution(Vector("streams", "literal"))).isSuccess shouldBe true
+        driver.activeHandleCount shouldBe 2
+        When("ordinary SystemNode shutdown closes its last-registered driver before the other owned resource")
+        val result = node.shutdownC()
+        val repeated = node.shutdownC()
+        Then("both handles receive cleanup, the remaining resource closes and the shutdown retains failed confirmation")
+        result.isFaillure shouldBe true
+        repeated.isFaillure shouldBe true
+        destroyed.get shouldBe 2
+        closed.get shouldBe 1
+        node.state shouldBe SystemNode.State.Stopped
+        driver.activeHandleCount shouldBe 0
+        driver.activeProcessCount shouldBe 0
+        driver.terminationConfirmed shouldBe false
+        intercept[IllegalStateException](driver.close()).getMessage shouldBe
+          "Local Process Execution termination could not be confirmed"
+      } finally { node.shutdownC() }
+    }
+
+    "observe sequential admitted SBT exits without changing results or disclosing command data" in {
+      Given("one runtime driver, admitted Compile and Test operations with differing effective budgets, and a metadata observer")
+      val root = _sbt_root()
+      val cleanup = new ProcessExecutionWorkArea(root)
+      val events = new ConcurrentLinkedQueue[ProcessExecutionProgressEvent]()
+      val observer = new ProcessExecutionProgress {
+        def report(event: ProcessExecutionProgressEvent): Unit = { events.add(event); () }
+      }
+      val driver = new LocalProcessExecutionDriver(progress = observer)
+      val executions = Vector(
+        _sbt_execution(root, SbtOperation.Compile, executable = Paths.get("/usr/bin/true"),
+          limits = _limits(launchtimeout = 3100L, executiontimeout = 7200L, terminationgrace = 120L)),
+        _sbt_execution(root, SbtOperation.Test, executable = Paths.get("/usr/bin/false"),
+          limits = _limits(launchtimeout = 4300L, executiontimeout = 9100L, terminationgrace = 240L)))
+      try {
+        When("the local driver starts and awaits both real processes consecutively, including repeated awaits")
+        val results = executions.map { execution =>
+          val handle = driver.startC(execution).toOption.get
+          handle.awaitC.toOption.get -> handle.awaitC.toOption.get
+        }
+        val observed = events.iterator().asScala.toVector
+        val lines = observed.map(ProcessExecutionProgress.jsonLine)
+        Then("each operation reports launch, observed start, wait and actual exit once with unchanged zero and nonzero results")
+        results.foreach { case (first, repeated) => repeated shouldBe first }
+        results.map(_._1.termination) shouldBe Vector(ProcessExecutionTermination.Exited(0), ProcessExecutionTermination.Exited(1))
+        observed.grouped(4).zip(executions).foreach { case (group, execution) =>
+          group.map(_.state) shouldBe Vector(ProcessExecutionProgressState.Launching,
+            ProcessExecutionProgressState.Started, ProcessExecutionProgressState.Waiting, ProcessExecutionProgressState.Terminal)
+          group.map(_.operation).distinct shouldBe Vector(execution.definition._sbt_metadata.get.operation)
+          group.map(_.workspaceId.print).distinct shouldBe Vector("project")
+          group.map(_.programIdentity).distinct shouldBe Vector("project-build")
+          group.head.pid shouldBe None
+          group.head.launchTimeoutMillis shouldBe execution.effectiveLimits.launchTimeoutMillis
+          group.head.executionTimeoutMillis shouldBe execution.effectiveLimits.executionTimeoutMillis
+          group.head.terminationGraceMillis shouldBe execution.effectiveLimits.terminationGraceMillis
+          val launching = io.circe.parser.parse(ProcessExecutionProgress.jsonLine(group.head)
+            .stripPrefix("[cncf-sbt-event] ")).toOption.get
+          launching.hcursor.get[Long]("launchTimeoutMillis").toOption shouldBe execution.effectiveLimits.launchTimeoutMillis
+          launching.hcursor.get[Long]("executionTimeoutMillis").toOption shouldBe execution.effectiveLimits.executionTimeoutMillis
+          launching.hcursor.get[Long]("terminationGraceMillis").toOption shouldBe execution.effectiveLimits.terminationGraceMillis
+          group.tail.foreach { event =>
+            event.launchTimeoutMillis shouldBe None
+            event.executionTimeoutMillis shouldBe None
+            event.terminationGraceMillis shouldBe None
+            val json = io.circe.parser.parse(ProcessExecutionProgress.jsonLine(event)
+              .stripPrefix("[cncf-sbt-event] ")).toOption.get
+            json.asObject.get.keys.toSet.intersect(Set("launchTimeoutMillis", "executionTimeoutMillis", "terminationGraceMillis")) shouldBe empty
+          }
+          group.tail.flatMap(_.pid).distinct should have size 1
+          group.last.exitCode shouldBe Some(if (group.head.operation == SbtOperation.Compile) 0 else 1)
+          group.last.termination shouldBe Some(results(if (group.head.operation == SbtOperation.Compile) 0 else 1)._1.termination)
+          group.dropRight(1).foreach(_.termination shouldBe None)
+        }
+        observed should have size 8
+        lines.foreach { line =>
+          line should startWith ("[cncf-sbt-event] {")
+          line should not include "TEXTUS_BUILD_PROFILE"
+          line should not include "controlled"
+          line should not include "--batch"
+          line should not include root.toString
+          line should not include "stdout"
+          line should not include "stderr"
+        }
+        driver.activeProcessCount shouldBe 0
+        driver.activeHandleCount shouldBe 0
+      } finally { driver.close(); cleanup.close() }
+    }
+
+    "isolate observer failures from actual SBT launch and completion" in {
+      Given("an admitted real local SBT-tagged process and an observer throwing at every event")
+      val root = _sbt_root()
+      val cleanup = new ProcessExecutionWorkArea(root)
+      val count = new AtomicInteger(0)
+      val observer = new ProcessExecutionProgress {
+        def report(event: ProcessExecutionProgressEvent): Unit = {
+          count.incrementAndGet()
+          throw new IllegalStateException("observer failure")
+        }
+      }
+      val driver = new LocalProcessExecutionDriver(progress = observer)
+      try {
+        When("the driver launches and awaits the admitted process")
+        val result = driver.startC(_sbt_execution(root, SbtOperation.Compile)).flatMap(_.awaitC)
+        Then("the unchanged actual result and cleanup survive all four observer failures")
+        result.toOption.map(_.termination) shouldBe Some(ProcessExecutionTermination.Exited(0))
+        count.get shouldBe 4
+        driver.activeProcessCount shouldBe 0
+        driver.activeHandleCount shouldBe 0
+      } finally { driver.close(); cleanup.close() }
+    }
+
     Vector("removed", "non-executable").foreach { condition =>
       s"confirm a $condition admitted SBT executable was not started and permit only fresh dispatch after restoration" in {
         Given(s"an admitted owned executable later made $condition and a controlled successful launcher")
@@ -52,7 +390,11 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
         val execution = _sbt_execution(root, SbtOperation.Test, executable = executable)
         val workarea = new ProcessExecutionWorkArea(Files.createDirectory(root.resolve("workarea")))
         val calls = new ConcurrentLinkedQueue[(Vector[String], Path, Map[String, String])]()
-        val driver = new LocalProcessExecutionDriver("unavailable-build", _sbt_launcher(calls, succeed = true))
+        val events = new ConcurrentLinkedQueue[ProcessExecutionProgressEvent]()
+        val observer = new ProcessExecutionProgress {
+          def report(event: ProcessExecutionProgressEvent): Unit = { events.add(event); () }
+        }
+        val driver = new LocalProcessExecutionDriver("unavailable-build", _sbt_launcher(calls, succeed = true), observer)
         if (condition == "removed") Files.delete(executable)
         else Files.setPosixFilePermissions(executable, PosixFilePermissions.fromString("rw-------"))
         try {
@@ -69,6 +411,14 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
             result.elapsedMillis should be >= 0L
             result.elapsedMillis should be < 5000L
             result.safeProgramIdentity shouldBe execution.definition.safeProgramIdentity
+          }
+          val prelaunch = events.iterator().asScala.toVector
+          prelaunch should have size 2
+          prelaunch.foreach { event =>
+            event.state shouldBe ProcessExecutionProgressState.Terminal
+            event.termination shouldBe Some(ProcessExecutionTermination.NotStarted)
+            event.pid shouldBe None
+            event.exitCode shouldBe None
           }
           calls shouldBe empty
           driver.activeProcessCount shouldBe 0
@@ -149,6 +499,57 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
       } finally { driver.close(); workarea.close(); cleanup.close() }
     }
 
+    "retain an honest final audit when a timed-out launcher continues beyond an empty stop snapshot" in {
+      Given("an admitted execution and an actual launcher Callable held past its deadline despite interruption")
+      val root = _sbt_root()
+      val cleanup = new ProcessExecutionWorkArea(root)
+      val release = new java.util.concurrent.CountDownLatch(1)
+      val entered = new java.util.concurrent.CountDownLatch(1)
+      val returned = new java.util.concurrent.CountDownLatch(1)
+      val process = new AtomicReference[Process]()
+      val launcher = new LocalProcessLauncher {
+        def startBlocking(command: Vector[String]): Process = throw new IOException("explicit cwd required")
+        override def startBlocking(command: Vector[String], workingDirectory: Path, environment: Map[String, String]): Process = {
+          entered.countDown()
+          while (release.getCount > 0L) {
+            try release.await()
+            catch { case _: InterruptedException => () }
+          }
+          try {
+            val actual = LocalProcessLauncher.local.startBlocking(Vector("/usr/bin/true"), workingDirectory, environment)
+            process.set(actual)
+            actual
+          } finally returned.countDown()
+        }
+      }
+      val driver = new LocalProcessExecutionDriver("late-launch", launcher)
+      try {
+        When("launch times out, stop snapshots no registered handle and normal close clears only owned registries")
+        val result = driver.startC(_sbt_execution(root, SbtOperation.Test, limits = _limits(launchtimeout = 100L))).flatMap(_.awaitC)
+        val stopped = driver.requestStopC()
+        val before = driver.terminationConfirmed
+        intercept[IllegalStateException](driver.close())
+        val after = driver.terminationConfirmed
+        release.countDown()
+        val finished = returned.await(5000L, TimeUnit.MILLISECONDS)
+        _await_condition(Option(process.get).forall(value => !value.isAlive), 5000L)
+        Then("successful empty stop does not certify in-flight or abandoned launch cleanup, even after close")
+        entered.getCount shouldBe 0L
+        result.toOption.map(_.termination) shouldBe Some(ProcessExecutionTermination.LaunchFailed)
+        stopped.isSuccess shouldBe true
+        before shouldBe false
+        after shouldBe false
+        finished shouldBe true
+        driver.terminationConfirmed shouldBe false
+      } finally {
+        release.countDown()
+        returned.await(5000L, TimeUnit.MILLISECONDS)
+        Option(process.get).foreach(value => if (value.isAlive) value.destroyForcibly())
+        intercept[IllegalStateException](driver.close())
+        cleanup.close()
+      }
+    }
+
     "retain LaunchFailed when typed SBT times out after launcher submission" in {
       Given("an admitted SBT execution and a controlled delayed launcher under a finite launch timeout")
       val root = _sbt_root()
@@ -164,20 +565,33 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
         }
       }
       val execution = _sbt_execution(root, SbtOperation.Test, limits = _limits(launchtimeout = 100L))
-      val driver = new LocalProcessExecutionDriver("delayed-build", launcher)
+      val events = new ConcurrentLinkedQueue[ProcessExecutionProgressEvent]()
+      val observer = new ProcessExecutionProgress {
+        def report(event: ProcessExecutionProgressEvent): Unit = { events.add(event); () }
+      }
+      val driver = new LocalProcessExecutionDriver("delayed-build", launcher, observer)
       try {
         When("both start variants submit a launch that cannot complete in time")
         val results = Vector(driver.startC(execution).flatMap(_.awaitC), driver.startC(execution, workarea).flatMap(_.awaitC))
 
         Then("timeout remains LaunchFailed and never establishes a confirmed unexecuted fact")
         results.foreach(_.toOption.map(_.termination) shouldBe Some(ProcessExecutionTermination.LaunchFailed))
+        val observed = events.iterator().asScala.toVector
+        observed.map(_.state) shouldBe Vector(ProcessExecutionProgressState.Launching, ProcessExecutionProgressState.Uncertain,
+          ProcessExecutionProgressState.Launching, ProcessExecutionProgressState.Uncertain)
+        observed.foreach { event =>
+          event.pid shouldBe None
+          event.termination shouldBe None
+          event.exitCode shouldBe None
+        }
         calls.get shouldBe 2
         driver.activeProcessCount shouldBe 0
         driver.activeHandleCount shouldBe 0
-      } finally { driver.close(); workarea.close(); cleanup.close() }
+        driver.terminationConfirmed shouldBe false
+      } finally { intercept[IllegalStateException](driver.close()); workarea.close(); cleanup.close() }
     }
 
-    "retain LaunchFailed when typed SBT driver closure occurs after launcher entry" in {
+    "retain the actual unconfirmed handle when driver closure races an already exited launch" in {
       Given("controlled launchers that close their driver after submission and return a completed process")
       val root = _sbt_root()
       val cleanup = new ProcessExecutionWorkArea(root)
@@ -190,7 +604,7 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
         val launcher = new LocalProcessLauncher {
           def startBlocking(command: Vector[String]): Process = throw new IOException("explicit cwd required")
           override def startBlocking(command: Vector[String], workingDirectory: Path, environment: Map[String, String]): Process = {
-            reference.get.close()
+            intercept[IllegalStateException](reference.get.close())
             delegate.startBlocking(command, workingDirectory, environment)
           }
         }
@@ -202,14 +616,14 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
         When("each start variant observes closure only after its launcher has been entered")
         val results = Vector(drivers.head.startC(execution), drivers.last.startC(execution, workarea)).map(_.flatMap(_.awaitC))
 
-        Then("the terminal remains LaunchFailed because a launch was already submitted")
-        results.foreach(_.toOption.map(_.termination) shouldBe Some(ProcessExecutionTermination.LaunchFailed))
+        Then("the returned handle preserves captures and uncertainty rather than claiming that a submitted process never started")
+        results.foreach(_.toOption.map(_.termination) shouldBe Some(ProcessExecutionTermination.TerminationUnconfirmed))
         calls should have size 2
         drivers.foreach { driver =>
           driver.activeProcessCount shouldBe 0
           driver.activeHandleCount shouldBe 0
         }
-      } finally { drivers.foreach(_.close()); workarea.close(); cleanup.close() }
+      } finally { drivers.foreach(driver => intercept[IllegalStateException](driver.close())); workarea.close(); cleanup.close() }
     }
 
     "send normal Git vectors with fixed environment and canonical workspace cwd through both start variants" in {
@@ -234,7 +648,7 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
         }
         driver.activeHandleCount shouldBe 0
         driver.activeProcessCount shouldBe 0
-      } finally { driver.close(); workarea.close(); fixture.close() }
+      } finally { intercept[IllegalStateException](driver.close()); workarea.close(); fixture.close() }
     }
 
     "deny Git binding invalidation and request override before either launcher entry" in {
@@ -306,7 +720,7 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
         driver.activeProcessCount shouldBe 0
         driver.activeHandleCount shouldBe 0
       } finally {
-        driver.close()
+        intercept[IllegalStateException](driver.close())
         workarea.close()
         cleanup.close()
       }
@@ -329,7 +743,7 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
         calls.iterator().asScala.toVector.map(_._2) shouldBe Vector(root.resolve("nested"))
         calls.iterator().asScala.toVector.map(_._1) shouldBe Vector(_java_path +: execution.effectiveArguments)
       } finally {
-        driver.close()
+        intercept[IllegalStateException](driver.close())
         workarea.close()
       }
     }
@@ -421,7 +835,11 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
     "launch an approved argument vector directly and drain stdout and stderr concurrently" in {
       Given("a local JVM probe and a literal value that a shell would normally expand")
       val execution = _execution(Vector("streams", "$HOME"))
-      val driver = new LocalProcessExecutionDriver()
+      val events = new ConcurrentLinkedQueue[ProcessExecutionProgressEvent]()
+      val observer = new ProcessExecutionProgress {
+        def report(event: ProcessExecutionProgressEvent): Unit = { events.add(event); () }
+      }
+      val driver = new LocalProcessExecutionDriver(progress = observer)
 
       When("the runtime starts the resolved capability-bound execution without a shell")
       val result = try {
@@ -437,6 +855,7 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
       result.toOption.map(_.termination) shouldBe Some(ProcessExecutionTermination.Exited(0))
       result.toOption.map(x => _text(x.stdout)) shouldBe Some("stdout:$HOME")
       result.toOption.map(x => _text(x.stderr)) shouldBe Some("stderr")
+      events shouldBe empty
       driver.activeProcessCount shouldBe 0
       driver.activeHandleCount shouldBe 0
     }
@@ -486,7 +905,7 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
           completed <- handle.awaitC
         } yield completed
       } finally {
-        driver.close()
+        intercept[IllegalStateException](driver.close())
       }
 
       Then("the launcher fails before its environment-oblivious method can run")
@@ -645,7 +1064,7 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
           completed <- handle.awaitC
         } yield completed
       } finally {
-        driver.close()
+        intercept[IllegalStateException](driver.close())
       }
 
       Then("launch timeout is a terminal process outcome and no process is retained")
@@ -779,6 +1198,12 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
     }
   }
 
+  private def _await_condition(condition: => Boolean, millis: Long): Unit = {
+    val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(millis)
+    while (!condition && System.nanoTime() < deadline) Thread.sleep(1L)
+    if (!condition) throw new IllegalStateException("owned process fixture did not reach the required lifecycle state")
+  }
+
   private def _sbt_root(): Path = {
     val base = Files.createDirectories(Paths.get("target", "sbt-local-driver-spec").toAbsolutePath)
     Files.createTempDirectory(base, "case-")
@@ -836,15 +1261,17 @@ final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers wi
     workingdirectory: Option[WorkAreaRelativePath] = None,
     resourceTrees: Vector[ProcessExecutionResourceTreeInput] = Vector.empty,
     allowedresourcetrees: Map[ResourceTreeReference, ResourceTreeLimits] = Map.empty,
-    environment: Map[String, String] = Map.empty
+    environment: Map[String, String] = Map.empty,
+    executable: String = _java_path,
+    fixedarguments: Vector[String] = _fixed_arguments
   ): ResolvedProcessExecution = {
     val capability = ProcessCapabilityId.parseC("local-probe").toOption.get
     val definition = ProcessProgramDefinition.fromRuntimeC(
       capability,
       "local-probe",
-      _java_path,
-      _fixed_arguments,
-      ProcessArgumentPolicy(_fixed_arguments, arguments.toSet),
+      executable,
+      fixedarguments,
+      ProcessArgumentPolicy(fixedarguments, arguments.toSet),
       limits,
       outputs.map(_.name).toSet,
       allowsworkingdirectory = workingdirectory.nonEmpty,
