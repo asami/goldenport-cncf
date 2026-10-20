@@ -522,3 +522,128 @@ Non-goals for the first slice:
 - Whether deployment policy rejects unused requested capabilities.
 - How hard sandbox CARs communicate with CNCF runtime capability facades.
 - How capability grants are surfaced in manual/admin projections.
+
+
+## SAR Archetype and Capability Upper Bounds
+
+Updated: 2026-10-20
+
+A security review prompted by a specialized minimal-functionality HTTPS system clarified an additional CNCF direction. The external system obtains strength by narrowing its purpose and physically omitting unnecessary facilities. CNCF cannot adopt that strategy globally because it is a general-purpose enterprise runtime. CNCF should instead obtain the corresponding property semantically: facilities that are not admitted by the enclosing SAR/CAR capability boundary are unavailable to that execution, even if the generic runtime implements them.
+
+This extends the existing default-deny / opt-in capability model; it does not replace it.
+
+### Least Functionality through capability boundaries
+
+CNCF should distinguish three layers:
+
+```text
+least functionality
+  -> which capabilities may exist for this SAR/CAR
+least privilege
+  -> which of those capabilities are granted to this execution
+Guard / Authorization
+  -> whether the concrete subject/resource/action is allowed
+```
+
+For security purposes, an undeclared or forbidden capability is treated as absent from the component's semantic execution environment. A bug or exploit that reaches code attempting such an effect must still fail at the CNCF-managed capability boundary.
+
+The capability set is monotonically narrowing:
+
+```text
+Runtime Available Capabilities
+  >= SAR Capability Boundary
+  >= CAR Capability Boundary
+  >= Operation / ExecutionContext Effective Capabilities
+```
+
+A lower layer MUST NOT enlarge an upper capability boundary. In particular, a CAR cannot acquire a capability excluded by its SAR, and an Operation cannot acquire a capability excluded by its CAR.
+
+This gives the SAR an important defense-in-depth role: even an erroneous or compromised CAR declaration cannot exceed the SAR's admitted capability world.
+
+### Admission plus runtime enforcement
+
+Capability upper bounds are enforced twice:
+
+1. admission/lint detects impossible or suspicious declarations early; and
+2. runtime capability enforcement remains authoritative even if a bug or attack reaches an unexpected code path.
+
+Do not treat admission success as the security boundary. Static checking is early feedback; runtime denial is the final enforcement point.
+
+### SAR Archetype
+
+Introduce **SAR Archetype** as the reusable, use-case-oriented configuration archetype for a typical subsystem. An Archetype is not itself one flat security profile. It composes orthogonal profiles that describe different subsystem characteristics.
+
+Candidate decomposition:
+
+```text
+SAR Archetype
+  = Capability Profile
+  + Exposure Profile
+  + Data Profile
+  + Execution Profile
+  + Protection Profile
+```
+
+The names other than Capability Profile remain provisional and should be reconciled with existing CNCF vocabulary before becoming normative.
+
+- **Capability Profile**: named capability-set baseline / upper-bound policy for the use case.
+- **Exposure Profile**: ingress/exposure posture such as private, authenticated Web, public Web, internal API, or public API.
+- **Data Profile**: characteristics/classification of data handled by the SAR.
+- **Execution Profile**: execution form such as request-response, interactive, background, batch, scheduled, or event-driven.
+- **Protection Profile**: required protection strength such as standard, hardened, or high-assurance; intended to cover controls such as isolation, transport requirements, auditing, and secret handling rather than duplicate Capability semantics.
+
+Example:
+
+```text
+SAR Archetype: SimpleWeb
+  Capability Profile : ReadOnlyWeb
+  Exposure Profile   : PublicWeb
+  Data Profile       : Public
+  Execution Profile  : RequestResponse
+  Protection Profile : Standard
+```
+
+A concrete SAR selects an Archetype and describes only meaningful differences. Archetype composition/customization may add or remove characteristics while the SAR is being defined. Once resolved into a SAR capability boundary, lower layers may only narrow it.
+
+Conceptually:
+
+```text
+SAR Archetype
+  -> compose Profiles
+  -> apply explicit +/- customization
+  -> resolve SAR properties
+  -> establish SAR Capability Boundary and related policies
+  -> admit CAR requests within the boundary
+  -> construct Operation / ExecutionContext effective capabilities
+```
+
+### Read-only Web example
+
+A public reference-only Knowledge system is a motivating case. A ReadOnlyWeb capability profile may admit HTTPS ingress and read/query facilities while excluding datastore mutation, arbitrary filesystem access, process execution, arbitrary outbound network access, and administration capabilities. Application-specific query capabilities can then be added while keeping unrelated effects absent from the SAR's semantic execution world.
+
+The intent is not to remove these facilities from CNCF itself. The generic runtime remains capable. The SAR Archetype and resolved capability boundary make them unavailable to a particular subsystem deployment.
+
+### Security interpretation
+
+This provides a CNCF-native counterpart to specialized systems that reduce attack surface by removing features:
+
+```text
+specialized runtime:
+  remove unnecessary implementation -> feature cannot be attacked
+
+CNCF general runtime:
+  exclude unnecessary capability from SAR/CAR boundary
+    -> feature cannot be reached through the CNCF execution model
+```
+
+The latter is a semantic attack-surface reduction rather than physical code elimination. Hard isolation remains a process/container concern as described above. The two approaches are complementary.
+
+### Follow-up design questions
+
+- Define the normative SAR Capability Boundary model and its relation to existing Subsystem capability vocabulary.
+- Decide the exact semantics of Capability Profile: baseline, allowed set, forbidden set, required set, or a combination.
+- Reconcile Exposure/Data/Execution/Protection Profile names with existing CNCF models before freezing ABI vocabulary.
+- Define Archetype inheritance/composition and +/- customization without allowing lower-level privilege escalation.
+- Add CAR lint/admission diagnostics for CAR requests outside the resolved SAR boundary.
+- Define runtime evidence for capability-boundary violations.
+- Consider executable security properties such as: an operation without `process.exec` can never reach the managed process facility.
