@@ -32,7 +32,7 @@ trait ContinuationRuntimePersistence {
 
 object ContinuationRuntimePersistence {
   enum Status {
-    case Available, Claimed, Completed
+    case Available, Claimed, Completed, Superseded
   }
 
   final case class Record(
