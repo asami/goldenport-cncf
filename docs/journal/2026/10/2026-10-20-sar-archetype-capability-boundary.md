@@ -106,3 +106,17 @@ A second useful future direction is executable security properties: for example,
 ## Follow-up
 
 Record the architecture in the existing CAR Capability Sandbox note and later reconcile it with the normative Capability-Oriented Execution and Safety Sandbox designs. Candidate implementation work includes SAR Capability Boundary modeling, Capability Profile semantics, SAR Archetype composition, admission/lint checks, runtime violation evidence, and security-property tests.
+
+
+## Consolidated hardening follow-up
+
+Subsequent discussion completed the mapping into CNCF mechanisms.
+
+- **Managed JVM / Safe CAR baseline**: safe Rust is not itself a CNCF requirement. Managed JVM execution plus rejection of JNI, Unsafe, arbitrary native access, direct external IO, and comparable escape paths through CAR lint/admission covers the principal memory-corruption objective for normal CAR code. Native/unsafe workloads require Hard Sandbox isolation.
+- **Physical compartmentalization**: Capability isolation can be projected to per-CAR Docker/process spaces. Container network, filesystem, volumes, secrets, endpoints, and process constraints should follow the resolved CAR Capability Boundary. Hardened CARs communicate through CNCF-managed invocation rather than arbitrary direct networking.
+- **Supply-chain trust**: CAR electronic signatures establish authenticity/integrity across the Component Repository ecosystem. Executable content and security-relevant metadata, especially Capability declarations and configuration, belong to the signed unit. Trusted-publisher/provenance policy is enforced at admission and never widens SAR authority.
+- **Security Profile**: replaces the earlier Protection Profile working term. It owns allowed protocols, TLS/crypto/PQC baseline, isolation strength, signed-CAR/trusted-publisher requirements, secret handling, and audit/evidence posture. Capability Profile independently limits abilities.
+- **Security Property Verification**: explicit invariants such as read-only means no datastore mutation, no process Capability means no process execution, CAR communication follows governed paths, and only admitted protocols activate should be mechanically checked where feasible.
+- **Security Evidence**: a hardened SAR should expose evidence that its intended Archetype/Profile is actually realized: Capability resolution, signature/provenance verification, Safe JVM admission, container isolation, protocol/TLS/crypto settings, property results, and violation/audit records.
+
+The remaining unavoidable difference is the smaller physical code surface and trusted computing base achievable by a dedicated minimal runtime/hardware stack. Within CNCF's general-purpose constraint, the identified countermeasures now cover the major security dimensions through layered, model-driven enforcement.
