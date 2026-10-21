@@ -1,6 +1,6 @@
 package org.goldenport.cncf.component
 
-import java.nio.file.{Files, Path, StandardCopyOption}
+import java.nio.file.{Files, Path}
 import java.util.zip.{ZipEntry, ZipInputStream}
 import scala.jdk.CollectionConverters._
 import scala.util.Using
@@ -56,9 +56,18 @@ object SarExtractor {
   def resolveDirectory(root: Path): Consequence[SarExtracted] =
     _resolve_structure(root)
 
+  /** Expand only into a cache-owned unpublished destination. */
+  private[cncf] def extractToC(
+    sar: Path,
+    root: Path,
+    beforeWrite: Long => Unit = _ => ()
+  ): Consequence[SarExtracted] =
+    _unzip(sar, root, beforeWrite).flatMap(_ => _resolve_structure(root))
+
   private def _unzip(
     sar: Path,
-    root: Path
+    root: Path,
+    beforewrite: Long => Unit = _ => ()
   ): Consequence[Unit] = Consequence {
     Using.resource(new ZipInputStream(Files.newInputStream(sar))) { zip =>
       var entry: ZipEntry = zip.getNextEntry
@@ -71,7 +80,17 @@ object SarExtractor {
           Files.createDirectories(target)
         } else {
           Option(target.getParent).foreach(parent => Files.createDirectories(parent))
-          Files.copy(zip, target, StandardCopyOption.REPLACE_EXISTING)
+          Using.resource(Files.newOutputStream(target)) { output =>
+            val buffer = new Array[Byte](65536)
+            var count = zip.read(buffer)
+            while (count >= 0) {
+              if (count > 0) {
+                beforewrite(count.toLong)
+                output.write(buffer, 0, count)
+              }
+              count = zip.read(buffer)
+            }
+          }
         }
         zip.closeEntry()
         entry = zip.getNextEntry

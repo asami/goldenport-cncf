@@ -26,12 +26,12 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
 
 /*
  * @since   Jan. 12, 2026
- * version Jan. 29, 2026
- * version Feb.  5, 2026
- * version Mar. 22, 2026
- * version Apr. 25, 2026
- * version May. 25, 2026
- * version Aug. 27, 2026
+ *  version Jan. 29, 2026
+ *  version Feb.  5, 2026
+ *  version Mar. 22, 2026
+ *  version Apr. 25, 2026
+ *  version May. 25, 2026
+ *  version Aug. 27, 2026
  * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -2080,12 +2080,14 @@ object ComponentRepository extends GlobalObservable {
     params: ComponentCreate,
     origin: ComponentOrigin,
     log: BootstrapLog,
-    sardescriptor: Option[GenericSubsystemDescriptor] = None
+    sardescriptor: Option[GenericSubsystemDescriptor] = None,
+    parentgeneration: Option[org.goldenport.cncf.component.cache.SourceGeneration] = None
   ): Consequence[Vector[Component]] = {
     org.goldenport.cncf.component.cache.ManagedArchiveCache.fromC(
       params.configuration, params.managedCacheRoot
     ).flatMap { cache =>
-      cache.withRetainedCarC(carpath, params.subsystem.systemNode.ownRuntimeResourceC) { extracted =>
+      val register = params.subsystem.systemNode.ownRuntimeResourceC
+      val use: CarExtracted => Consequence[Vector[Component]] = { extracted =>
         _discover_component_from_car_common(
           extracted = extracted,
           artifactpath = carpath,
@@ -2095,6 +2097,10 @@ object ComponentRepository extends GlobalObservable {
           sardescriptor = sardescriptor,
           sourcetype = sardescriptor.map(_ => "sar+car").getOrElse("car")
         )
+      }
+      parentgeneration match {
+        case Some(parent) => cache.withRetainedEmbeddedCarC(carpath, parent, register)(use)
+        case None => cache.withRetainedCarC(carpath, register)(use)
       }
     }
   }
@@ -2397,9 +2403,11 @@ object ComponentRepository extends GlobalObservable {
     origin: ComponentOrigin,
     log: BootstrapLog
   ): Consequence[Vector[Component]] = {
-    params.subsystem.systemNode.workAreaSpaceC.flatMap { areas =>
-      SarExtractor.withRetainedExtracted(sarpath, areas, params.subsystem.systemNode.ownRuntimeResourceC) { extracted =>
-        _discover_component_from_sar_extracted(extracted, params, origin, log)
+    org.goldenport.cncf.component.cache.ManagedArchiveCache.fromC(
+      params.configuration, params.managedCacheRoot
+    ).flatMap { cache =>
+      cache.withRetainedSarC(sarpath, params.subsystem.systemNode.ownRuntimeResourceC) { (extracted, generation) =>
+        _discover_component_from_sar_extracted(extracted, params, origin, log, Some(generation))
       }
     }
   }
@@ -2423,7 +2431,8 @@ object ComponentRepository extends GlobalObservable {
     extracted: SarExtracted,
     params: ComponentCreate,
     origin: ComponentOrigin,
-    log: BootstrapLog
+    log: BootstrapLog,
+    parentgeneration: Option[org.goldenport.cncf.component.cache.SourceGeneration] = None
   ): Consequence[Vector[Component]] = {
     if (extracted.carArtifacts.isEmpty && extracted.carDirectories.isEmpty) {
       log.warn(s"[component-dir] sar=${extracted.root.getFileName} contains no embedded component artifact")
@@ -2437,7 +2446,8 @@ object ComponentRepository extends GlobalObservable {
               params = params,
               origin = origin,
               log = log,
-              sardescriptor = Some(extracted.descriptor)
+              sardescriptor = Some(extracted.descriptor),
+              parentgeneration = parentgeneration
             )
           }
         )

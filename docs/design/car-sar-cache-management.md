@@ -1,6 +1,6 @@
 # CAR/SAR Cache Lifecycle
 
-Status: accepted target design; CC-01 validated, independently reviewed and committed; CC-02 implementation under validation.
+Status: accepted target design; CC-01 and CC-02 accepted and committed; CC-03 implementation underway.
 
 The [specification](../spec/car-sar-cache-management.md) owns observable behavior.
 This design separates repository selection, cache storage and runtime lifetime.
@@ -137,9 +137,10 @@ requires its own declared extraction profile and resource-contract alignment.
 
 ## CC-01: concrete runtime integration contract
 
-This section fixes the implementation boundary against the current APIs. It
-does not claim that the following new types or cache behavior already exist.
-The current Phase Session has issued CC-01; executable delivery begins at CC-02.
+This section records the integration boundary frozen at CC-01. That contract
+acceptance did not establish implemented behavior. CC-02 has since delivered
+and accepted the CAR route; SAR/SNAPSHOT, recovery and capacity retain their
+separate CC-03/CC-04 validation and acceptance obligations.
 
 ### Existing ownership and authoritative checks
 

@@ -1,6 +1,6 @@
 # Phase 116 — CAR/SAR Managed Archive and Extraction Cache
 
-Status: IN_PROGRESS — CC-01 accepted and committed; CC-02 implementation underway
+Status: IN_PROGRESS — CC-01 and CC-02 accepted and committed; CC-03 implementation underway
 Created: 2026-10-21
 Owner: CNCF Component Repository / runtime resource lifecycle
 Checklist: [Phase 116 checklist](phase-116-checklist.md)
@@ -28,8 +28,9 @@ ClassLoader/resource lifetime and existing repository/admission semantics.
 5. **CC-05 Integrated acceptance:** repository/runtime regressions, representative
    consumer launch/close/relaunch and operational handoff.
 
-Detailed acceptance and progress live in the checklist; all acceptance items
-remain OPEN pending their actual owning validation and review. The original
+Detailed acceptance and progress live in the checklist; CC-01 and CC-02 are
+closed, while CC-03 through CC-05 remain open pending their actual owning
+validation and review. The original
 planning record is preserved; Phase execution now proceeds through the existing
 sm-workflow host at this repository's native `main` checkout.
 
@@ -42,8 +43,19 @@ independent bounded quota reservations and concrete defaults. Only the five
 issued CC-01 documents were edited. No cache code or cache-validation success
 is claimed at this contract stage. Native contract-compile passed, the independent
 review was accepted, and the Workflow committed CC-01 as
-`0f3a433809e2f9ee6b575d114d1fcb7ba8c7b5cc`. The same Session now issues CC-02;
-shared-cache acceptance remains open.
+`0f3a433809e2f9ee6b575d114d1fcb7ba8c7b5cc`. The same Session subsequently accepted and committed CC-02 as recorded below.
+
+## CC-02 acceptance and CC-03 continuation
+
+The native CAR check passed 10/10 examples after the retained repairs, and the
+affected independent re-review was accepted. Public closure recovery preserved
+the unknown old intent and every original receipt, authorized a distinct new
+attempt and committed exactly the reviewed 13 paths as
+`9da7d491d87d0e01ab630cbdd7cd05ba2181816a`. The same Session now issues
+`ImplementStep / CC-03`; no Start, accepted Submit, successful check or review
+was replayed. The four separate runtime-recovery files remain outside this
+managed-cache candidate. CC-03 authoring does not yet establish SAR/SNAPSHOT
+validation or acceptance.
 
 ## Completion boundary
 

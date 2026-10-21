@@ -34,10 +34,10 @@ import org.goldenport.configuration.ConfigurationTrace
 
 /*
  * @since   Feb.  4, 2026
- * version Apr. 25, 2026
- * version May. 25, 2026
- * version Jul. 31, 2026
- * version Aug. 27, 2026
+ *  version Apr. 25, 2026
+ *  version May. 25, 2026
+ *  version Jul. 31, 2026
+ *  version Aug. 27, 2026
  * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -166,15 +166,11 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
             Then("loaders close before backing is released and source artifacts remain")
             loadersclosedbeforeremoval shouldBe true
             subsystem.componentClassLoaderSnapshot shouldBe empty
-            if (mode == "sar-directory")
-              extractedroots.foreach(path => Files.exists(path) shouldBe false)
-            else {
-              extractedroots.foreach(path => Files.exists(path) shouldBe true)
-              val cache = new org.goldenport.cncf.component.cache.ManagedArchiveCache(
-                org.goldenport.cncf.component.cache.ManagedCachePolicy(_fixture_cache_root.get, idleMillis = 0))
-              cache.collectC().TAKE.reclaimedCount shouldBe 1
-              extractedroots.foreach(path => Files.exists(path) shouldBe false)
-            }
+            extractedroots.foreach(path => Files.exists(path) shouldBe true)
+            val cache = new org.goldenport.cncf.component.cache.ManagedArchiveCache(
+              org.goldenport.cncf.component.cache.ManagedCachePolicy(_fixture_cache_root.get, idleMillis = 0))
+            cache.collectC().TAKE.reclaimedCount shouldBe (if (mode == "sar-car") 2 else 1)
+            extractedroots.foreach(path => Files.exists(path) shouldBe false)
             embeddedarchives.foreach(path => Files.exists(path) shouldBe false)
             Files.isRegularFile(artifact) shouldBe true
           } finally {

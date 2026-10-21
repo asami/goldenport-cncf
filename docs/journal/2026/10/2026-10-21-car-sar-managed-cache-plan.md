@@ -258,3 +258,163 @@ from that mismatch. The Workflow retained that failure as `issue-5` and issued
 the next bounded repair at ordinary/automatic counts 2/2 of 10. The helper and
 all call sites now use `withCacheFixture`; the original three rule corrections
 remain. Fresh native validation and affected independent review are still owed.
+
+## 2026-10-22: CC-02 closure recovered; CC-03 resumed
+
+The corrected fixture helper passed the native CAR check (10/10), and the
+affected independent re-review accepted the three rule corrections. The next
+Step closure stopped after recording a commit intent because its host selection
+included two nonexistent system-package paths. Its original result remains
+UNKNOWN; absence of a response was never treated as non-execution.
+
+The runtime owner implemented and qualified a public closure-recovery route
+(CNCF 43/43, application 39 pure and 19 CLI regressions, isolated installed
+closure scenarios 2/2), independently reviewed it and completed ordinary local
+publication. Two unrelated opt-in tests were canceled, not counted as passes.
+The host selection was limited to the actual reviewed 13 files. Public describe,
+passive evidence preparation, explicit AuthorizeNewAttempt and one ordinary
+Advance completed CC-02 as `9da7d491d87d0e01ab630cbdd7cd05ba2181816a`, tree
+`ba88a443e70da7a8fa0196ae59b94e0acffb74e8`. The original history and mechanical
+receipts remain unchanged. The new attempt has its own successful exit/commit
+receipt. No accepted check/review, Start or Submit was repeated, and no push was
+performed. Details remain in the original task's
+`cc02-public-recovery-20261022/completion-handoff.md`; evidence was not moved.
+
+The user then requested continuation. The actual normal response issues
+`ImplementStep / CC-03` in Session `06016330fa63b5eac6097ff2b8ff42c2`,
+continuation `ordered-implementation:169`, expected revision 170. Its supplied
+repair counts are automatic 0 / ordinary 0 / limit 10 for the new Step.
+Authoring now targets SAR parent/child backing leases and SNAPSHOT generation
+switch/retirement through the existing repository/extractor/runtime owner.
+Four unstaged process-execution recovery files remain separately owned and
+untouched. CC-03 checks and independent acceptance remain pending. The original
+WorkArea 116/116 result remains valid only for its ownership/cleanup boundary.
+
+## CC-03 authored candidate and native validation handoff
+
+Registered `sm_workflow_implementation` agent
+`/root/p116_cc03_implementation` (gpt-6.1-sol / medium) authored the assigned
+SAR/SNAPSHOT implementation without running commands or accepting its own work.
+The candidate adds immutable coordinate selections with revision comparison,
+parent/alias references, independent source/tree retirement and protected reads
+of cache-owned originals; SAR destination extraction reuses its existing
+structure checks. Directory children retain their parent lease with the existing
+SystemNode, and packed children acquire independently reusable CAR expansions.
+Eight visible metadata/GWT examples cover real repository owners, generated
+source/tree release orders, same-content/alias reuse, failed refresh, stale
+revision rejection, native contention/retry, managed input and another JVM's
+old reader. Their actual validation is still pending. Existing SAR repository
+ownership assertions now distinguish reusable trees from explicit collection.
+
+The CC-03 public host check/index/commit bindings now select the exact eleven
+existing candidate files, avoiding the original nonexistent system-package
+prefixes. The immutable business Plan, routing and previous selections were
+not changed. The four unrelated runtime-recovery files remain unmodified and
+outside this candidate. No test success, review acceptance or Step commit is
+claimed by this authored result.
+
+## CC-03 first native check and independent repair findings
+
+The ordinary implementation Submit was accepted. Its one paired Advance
+completed `sar-snapshot-generations` with 8/8 tests, no canceled/failed/aborted
+cases, actual SBT Exited(0), and issued ReviewStep at candidate
+`5b3420ea5c50d9d78ae4f73803d80a418728da89`, receipt
+`06016330fa63b5eac6097ff2b8ff42c2:ordered-validation:199:validation`. The
+initial helper preparation had stopped before CLI launch because its empty
+output directory was absent; correcting that confirmed non-execution did not
+repeat a native operation.
+
+Independent read-only reviewer `/root/p116_cc03_independent_review`
+(gpt-6.1-sol / medium) assessed all eleven paths and requested three repairs.
+`issue-6` identifies extraction/source lease cleanup after exceptional
+finalization; `issue-7` identifies embedded-source retirement starvation when
+metadata exceeds the bounded scan prefix; `issue-8` identifies inconsistent
+source dates after native normalization (new files had a local Oct22 creation
+date but the normalizer selected its owning call's current UTC date, Oct21).
+The actual clock was Oct21 UTC / Oct22 Asia/Tokyo, not a stale or fixed clock.
+The owning date contract needs consistent interpretation; no clock offset,
+history suppression or dependency edit is adopted to conceal the mismatch.
+
+Ordinary review preparation, accepted Submit and one Advance issued RepairStep
+with automatic 1 / ordinary 1 / limit 10. Prior issues 1–5 remain resolved.
+The registered `sm_workflow_repair` agent authors the bounded lease/retirement
+corrections and regression examples; new native checks and affected independent
+re-review remain owed. Existing successful evidence and old unknown intent
+remain intact.
+
+## CC-03 bounded repair authoring and date-contract clarification
+
+The original independent reviewer clarified issue-8 against RULE.md's current
+system-date requirement: the rules do not mandate Asia/Tokyo. The actual
+owning call's UTC date, Oct21, is a legitimate creation/version date. Its
+original demand for Oct22 specifically was overstated; the concrete mismatch
+between new-file creation and version dates still requires repair. The six
+touched Scala headers use the owning UTC date consistently, preserving earlier
+creation dates and canonical compressed history. Local journal headings retain
+Oct22. No clock producer, runtime configuration or dependency change is needed.
+
+The assigned repair retains acquisition cleanup ownership until finalization
+has succeeded and attempts every reverse-order cleanup while retaining primary
+and suppressed failures. It also records parent-to-embedded dependencies so a
+parent replacement reconciles affected sources directly, independently of the
+bounded general scan. New E9/E10 examples exercise actual native pins with
+filesystem cleanup errors and retirement beyond a scan limit of one, including
+another current alias. These are authored corrections, not validation or
+independent acceptance. E1-E8 and the separately owned recovery changes remain.
+
+## CC-03 repair validation and remaining formatter incompatibility
+
+The first repair Submit was accepted. Its paired native Advance passed all
+10 ManagedSarCacheSpec examples (including E9/E10), Exited(0), receipt
+`06016330fa63b5eac6097ff2b8ff42c2:ordered-validation:234:validation`, candidate
+`d82d4fade1ddd6489ca0c31bc4c19639c9d755f1`. The same independent reviewer
+accepted the lease cleanup and targeted retirement corrections. Their genuine
+affected re-review was prepared and submitted through the ordinary route;
+the subsequent RepairStep has issues 1-7 RESOLVED, only issue-8 OPEN, and
+automatic 2 / ordinary 2 / limit 10. No successful check was replayed to
+manufacture an acceptance result.
+
+The date correction is valid, but eleven historical lines still use one space
+after `*`, contrary to RULE.md's two-space history format. Read-only inspection
+and the independent reviewer confirmed the actual producer limitation:
+sm-workflow's `WorkflowSourceHistoryRule._date_line` shares one prefix between
+history and latest tags, while its tag validator disallows embedded whitespace.
+The unchanged public rule cannot express both required forms. Native
+normalization would undo a consumer-only spacing edit, so another identical
+edit/check cycle cannot resolve this issue. A bounded dependency-scope proposal
+is being prepared; no dependency source or runtime configuration was changed,
+no Human approval is claimed, and CC-03 remains uncommitted.
+
+The assigned repair agent returned the four-file proposal
+`cncf-cc03-source-history-spacing@1` through ordinary `decision-needed` work.
+Its actual Submit was accepted and the paired Advance issued Human question
+`06016330fa63b5eac6097ff2b8ff42c2:ordered-human:241`, with exactly
+ApproveDependencyScope / RejectDependencyScope / Defer / Cancel. It retains
+the same Session, original base, completed Steps and 2/2/10 repair counts.
+The four literal sm-workflow paths and focused pure/File-UoW acceptance are
+retained in the task's `cc03-resume-20261022/dependency-scope-submission-01.json`.
+The dependency's ongoing owner edits are outside this task and preserved.
+The question has been presented to the user; no answer, dependency edit,
+runtime publication, Step commit or Phase completion is claimed.
+
+## CC-03 resumes with independently provided formatter repair
+
+The sm-workflow owner subsequently corrected the real formatter's tag alignment
+and existing comment indentation. Its retained handoff reports 45 pure examples
+and one ordinary native normalization example passed, independent review PASS,
+normal publishLocal Completed and runtime Activated. Current selection matches
+installation `1c5ea235-0027-48dd-9425-31d04578795f`, update
+`c74b7fd4-753b-4dac-ac6b-bbb7d3329026`; evidence remains in
+`/private/tmp/sm-workflow-p64-resume-20261022/completion-handoff.md` and
+`history-activation.json`. These supplied dependency results do not replace
+CNCF's own pending validation or review. This task made no dependency edits.
+
+The human explicitly answered “追加修正不要として続行（RejectDependencyScope）”
+to the presented question. Normal evidence preparation, accepted ordered Human
+Submit and its one paired Advance returned the same CC-03 RepairStep, retaining
+the complete proposal/rejection rationale and genuine decision reference
+`p116-cc03-provided-fix-human-direction@1`. Source/base/history, completed Steps,
+resolved issues 1-7 and automatic 2 / ordinary 2 / limit 10 remain intact.
+Only issue-8's consumer header correction remains assigned; no new dependency
+scope is approved or needed. The six CC-03 headers are being normalized under
+the existing date contract before native checks and affected re-review.

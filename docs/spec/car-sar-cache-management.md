@@ -1,6 +1,6 @@
 # CAR/SAR Cache Management
 
-Status: accepted target specification; CC-01 validated, independently reviewed and committed; CC-02 implementation under validation.
+Status: accepted target specification; CC-01 and CC-02 accepted and committed; CC-03 implementation underway.
 
 ## Scope and authority
 

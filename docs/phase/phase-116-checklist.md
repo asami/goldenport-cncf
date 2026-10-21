@@ -1,9 +1,13 @@
 # Phase 116 Checklist
 
-Status: IN_PROGRESS — CC-01 accepted and committed; CC-02 implementation underway
+Status: IN_PROGRESS — CC-01 and CC-02 accepted and committed; CC-03 implementation underway
 Acceptance entries close only after their actual checks and independent
 acceptance. CC-01 passed contract-compile and independent review and was committed
 by the native Workflow as `0f3a433809e2f9ee6b575d114d1fcb7ba8c7b5cc`.
+CC-02 passed its native 10-example CAR check, affected independent re-review and
+public same-Session closure recovery, and was committed as
+`9da7d491d87d0e01ab630cbdd7cd05ba2181816a`. Its evidence covers CAR only;
+SAR/SNAPSHOT acceptance remains open.
 
 ## CC-01 Contract binding
 
@@ -15,12 +19,12 @@ by the native Workflow as `0f3a433809e2f9ee6b575d114d1fcb7ba8c7b5cc`.
 
 ## CC-02 CAR main route
 
-- [ ] Cache miss publishes one complete generation; a later hit performs no repeated extraction.
-- [ ] Two runtimes in one JVM share it; closing one preserves the other's lazy class/resource access; closing the last permits collection.
-- [ ] Two test-owned JVMs share the same entry and cannot collect it while either holds a lease.
-- [ ] Concurrent builders converge; acquisition racing with eviction never returns a missing/partial path; unrelated keys remain independent.
-- [ ] Exceptional startup and ordinary shutdown release leases after dependent ClassLoaders close; repeated close is harmless.
-- [ ] An evicted expansion is rebuilt offline from its retained source through the actual ComponentRepository route.
+- [x] Cache miss publishes one complete generation; a later hit performs no repeated extraction.
+- [x] Two runtimes in one JVM share it; closing one preserves the other's lazy class/resource access; closing the last permits collection.
+- [x] Two test-owned JVMs share the same entry and cannot collect it while either holds a lease.
+- [x] Concurrent builders converge; acquisition racing with eviction never returns a missing/partial path; unrelated keys remain independent.
+- [x] Exceptional startup and ordinary shutdown release leases after dependent ClassLoaders close; repeated close is harmless.
+- [x] An evicted expansion is rebuilt offline from its retained source through the actual ComponentRepository route.
 
 ## CC-03 SAR composition and source generations
 
