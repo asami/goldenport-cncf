@@ -162,24 +162,28 @@ private[cncf] object SbtExecutionAdmission {
         Consequence.serviceUnavailable("Process Execution admission is not configured")
       )
       execution <- admission.admitSbtForScopeC(context.cncfCore.scope, binding, operation, target.scenario)
-      installed <- RuntimeConfig.installedRuntimeDistributionC(context.resolvedParameters)
-      bound <- installed match {
-        case None => Consequence.success(execution)
-        case Some(distribution) =>
-          val definition = execution.definition
-          definition._sbt_metadata match {
-            case Some(metadata) =>
-              val arguments = definition.fixedArguments.dropRight(1) ++ Vector(
-                s"-D${RuntimeConfig.installedRuntimeManifestKey}=${distribution.manifest}",
-                "-Dcncf.installed-runtime.required=true",
-                "cozyCheckInstalledRuntime",
-                definition.fixedArguments.last
-              )
-              ProcessProgramDefinition.fromSbtRuntimeC(
-                definition.capability, definition.safeProgramIdentity, definition._executable_location,
-                arguments, definition.maximumLimits, definition._environment.values, metadata
-              ).map(bound => execution.copy(definition = bound))
-            case None => Consequence.serviceUnavailable("Typed SBT program metadata is unavailable")
+      mode <- RuntimeConfig.sbtRuntimeBindingC(context.resolvedParameters, target.workspaceId)
+      bound <- mode match {
+        case RuntimeConfig.SbtRuntimeBinding.Project => Consequence.success(execution)
+        case RuntimeConfig.SbtRuntimeBinding.Installed =>
+          RuntimeConfig.installedRuntimeDistributionC(context.resolvedParameters).flatMap {
+            case None => Consequence.resourceInvalid("Installed SBT runtime binding requires an installed runtime manifest")
+            case Some(distribution) =>
+              val definition = execution.definition
+              definition._sbt_metadata match {
+                case Some(metadata) =>
+                  val arguments = definition.fixedArguments.dropRight(1) ++ Vector(
+                    s"-D${RuntimeConfig.installedRuntimeManifestKey}=${distribution.manifest}",
+                    "-Dcncf.installed-runtime.required=true",
+                    "cozyCheckInstalledRuntime",
+                    definition.fixedArguments.last
+                  )
+                  ProcessProgramDefinition.fromSbtRuntimeC(
+                    definition.capability, definition.safeProgramIdentity, definition._executable_location,
+                    arguments, definition.maximumLimits, definition._environment.values, metadata
+                  ).map(bound => execution.copy(definition = bound))
+                case None => Consequence.serviceUnavailable("Typed SBT program metadata is unavailable")
+              }
           }
       }
     } yield bound

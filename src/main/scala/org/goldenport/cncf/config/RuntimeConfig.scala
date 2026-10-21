@@ -17,15 +17,16 @@ import org.goldenport.cncf.context.{ExecutionProfileResolver, IdGenerationContex
 import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizationConfig, ObservabilityEngine, OpenTelemetryExportConfig}
 import org.goldenport.cncf.blob.BlobStoreConfig
 import org.goldenport.cncf.resource.{ResourceReadLimits, ResourceTreePolicy, ResourceTreeQueryLimits, ResourceUrlPolicy, TextusUrnResourcePolicy, UrnResourceProvider, UrnResourceProviderConfig}
+import org.goldenport.cncf.workspace.WorkspaceId
 
 /*
  * @since   Jan. 18, 2026
- *  version Jan. 30, 2026
- *  version Feb.  1, 2026
- *  version Mar. 28, 2026
- *  version Apr. 30, 2026
- *  version Jun. 19, 2026
- *  version Jul. 30, 2026
+ * version Jan. 30, 2026
+ * version Feb.  1, 2026
+ * version Mar. 28, 2026
+ * version Apr. 30, 2026
+ * version Jun. 19, 2026
+ * version Jul. 30, 2026
  * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -72,6 +73,27 @@ final case class RuntimeConfig(
 
 object RuntimeConfig {
   val installedRuntimeManifestKey = "cncf.installed-runtime.manifest"
+
+  private[cncf] enum SbtRuntimeBinding {
+    case Project, Installed
+  }
+
+  private[cncf] def sbtRuntimeBindingKey(workspaceId: WorkspaceId): String =
+    s"cncf.sbt.runtime-binding.${workspaceId.value}"
+
+  /** Each target selects its build binding independently of the owning CLI installation. */
+  private[cncf] def sbtRuntimeBindingC(
+    parameters: ResolvedParameters,
+    workspaceId: WorkspaceId
+  ): Consequence[SbtRuntimeBinding] =
+    parameters.get(sbtRuntimeBindingKey(workspaceId)) match {
+      case None => Consequence.success(SbtRuntimeBinding.Project)
+      case Some(parameter) => parameter.value match {
+        case ConfigurationValue.StringValue("project") => Consequence.success(SbtRuntimeBinding.Project)
+        case ConfigurationValue.StringValue("installed") => Consequence.success(SbtRuntimeBinding.Installed)
+        case _ => Consequence.resourceInvalid("SBT runtime binding configuration must be project or installed")
+      }
+    }
 
   /** Operational binding comes from ordinary resolved configuration, never a property bypass. */
   def installedRuntimeDistributionC(

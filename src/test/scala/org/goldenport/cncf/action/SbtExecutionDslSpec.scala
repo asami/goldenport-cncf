@@ -6,6 +6,7 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Using
 import cats.syntax.all.*
 import org.goldenport.{Conclusion, Consequence}
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.observation.Descriptor
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.context.{ExecutionContext, GlobalContext, ScopeContext, ScopeKind}
@@ -661,6 +662,42 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
 
   "E5 Installed runtime typed SBT binding" should afterWord(
     "in spec:installed-runtime-distribution, example:E5, rules:R4,R5,R6, phase:64") {
+    "retain ordinary Compile, Test and TestOnly for default and explicit project mode with an installed application" in {
+      Vector(None, Some("project")).foreach { mode =>
+        Given("docs/spec/installed-runtime-distribution.md R4-R6 E5 and an installed CLI with a project build target")
+        val fixture = _fixture(_selection_process(Vector("org.example.SelectedSpec")))
+        fixture.context.runtime.setResolvedParameters(ResolvedParameters.empty())
+        val operations = Vector(SbtOperation.Compile, SbtOperation.Test, SbtOperation.TestOnly)
+        val original = operations.map(operation => SbtExecutionAdmission.resolveC(fixture.context, fixture.target, operation).toOption.get)
+        val manifest = InstalledRuntimeDistributionSpec.writeFixture(fixture.root)
+        val parameters = _runtime_parameters(Some(manifest), mode.toVector.map(value =>
+          _workspace_id -> ConfigurationValue.StringValue(value)))
+        fixture.context.runtime.setResolvedParameters(parameters)
+        try {
+          When("the same project intents are admitted with the application's manifest still resolved")
+          val executions = operations.map(operation => SbtExecutionAdmission.resolveC(fixture.context, fixture.target, operation).toOption.get)
+
+          Then("the complete original executions retain their tagged definitions, arguments, requests and limits")
+          executions shouldBe original
+          fixture.profile.driver.executions shouldBe empty
+          parameters.get(RuntimeConfig.installedRuntimeManifestKey).map(_.value) shouldBe
+            Some(ConfigurationValue.StringValue(manifest.toString))
+
+          When("the owning UnitOfWork interprets each ordinary project intent")
+          val results = operations.map(operation => new UnitOfWorkInterpreter(new UnitOfWork(fixture.context)).interpret(
+            UnitOfWorkOp.SbtExecAttempt(fixture.target, operation)))
+
+          Then("the original results and selected-suite interpretation remain unchanged")
+          results.map(_.toOption) shouldBe Vector(
+            Some(SbtExecutionAttempt.Observed(SbtExecutionResult(fixture.target, SbtOperation.Compile, fixture.result))),
+            Some(SbtExecutionAttempt.Observed(SbtExecutionResult(fixture.target, SbtOperation.Test, fixture.result))),
+            Some(SbtExecutionAttempt.Observed(SbtExecutionResult(fixture.target, SbtOperation.TestOnly, fixture.result,
+              Some(SbtTestSelectionResult.Verified(Vector("org.example.SelectedSpec"), 1, 7L))))))
+          fixture.profile.driver.executions shouldBe original
+        } finally _close(fixture.root)
+      }
+    }
+
     "bind Compile, Test and TestOnly after admission while preserving the empty request and limits" in {
       Given("docs/spec/installed-runtime-distribution.md R4-R6 E5 and an admitted current runtime installation")
       val fixture = _fixture(_selection_process(Vector("org.example.SelectedSpec")))
@@ -668,7 +705,8 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
       val operations = Vector(SbtOperation.Compile, SbtOperation.Test, SbtOperation.TestOnly)
       val original = operations.map(operation => SbtExecutionAdmission.resolveC(fixture.context, fixture.target, operation).toOption.get)
       val manifest = InstalledRuntimeDistributionSpec.writeFixture(fixture.root)
-      fixture.context.runtime.setResolvedParameters(InstalledRuntimeDistributionSpec.parameters(manifest))
+      fixture.context.runtime.setResolvedParameters(_runtime_parameters(Some(manifest),
+        Vector(_workspace_id -> ConfigurationValue.StringValue("installed"))))
       try {
         When("the same typed intents are admitted with current resolved configuration")
         val bound = operations.map(operation => SbtExecutionAdmission.resolveC(fixture.context, fixture.target, operation).toOption.get)
@@ -698,25 +736,134 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
       } finally _close(fixture.root)
     }
 
-    "reject unavailable explicit bindings without starting a process or granting denied capabilities" in {
-      Given("docs/spec/installed-runtime-distribution.md R4-R6 E5 and granted and denied contexts with invalid bindings")
+    "select installed binding only for the configured logical workspace" in {
+      Given("docs/spec/installed-runtime-distribution.md R4-R6 E5 and two targets sharing the same resolved configuration")
+      val otherid = WorkspaceId.parseC("other-project").toOption.get
       val fixtures = Vector(_fixture(_result(ProcessExecutionTermination.Exited(0))),
-        _fixture(_result(ProcessExecutionTermination.Exited(0)), capabilitygranted = false))
+        _fixture(_result(ProcessExecutionTermination.Exited(0)), workspaceid = otherid))
       fixtures.foreach(_.context.runtime.setResolvedParameters(ResolvedParameters.empty()))
-      val denied = _failure_conclusion(SbtExecutionAdmission.resolveC(fixtures(1).context, fixtures(1).target, SbtOperation.Test))
-      fixtures.foreach(fixture => fixture.context.runtime.setResolvedParameters(
-        InstalledRuntimeDistributionSpec.parameters(fixture.root.resolve("missing-manifest.json"))))
+      val operations = Vector(SbtOperation.Compile, SbtOperation.Test, SbtOperation.TestOnly)
+      val original = fixtures.map(fixture => operations.map(operation =>
+        SbtExecutionAdmission.resolveC(fixture.context, fixture.target, operation).toOption.get))
+      val manifest = InstalledRuntimeDistributionSpec.writeFixture(fixtures.head.root)
+      val parameters = _runtime_parameters(Some(manifest), Vector(_workspace_id -> ConfigurationValue.StringValue("installed")))
+      fixtures.foreach(_.context.runtime.setResolvedParameters(parameters))
       try {
-        When("typed Test admission receives an invalid operational binding")
-        val results = fixtures.map(fixture => SbtExecutionAdmission.resolveC(fixture.context, fixture.target, SbtOperation.Test))
-        Then("the granted context rejects configuration and the denied context retains its grant diagnostic")
-        results.foreach(_.isFaillure shouldBe true)
-        val conclusion = _failure_conclusion(results(1))
-        conclusion.observation.taxonomy shouldBe denied.observation.taxonomy
-        conclusion.observation.cause.kind shouldBe denied.observation.cause.kind
+        When("both targets admit their Compile, Test and TestOnly intents")
+        val executions = fixtures.map(fixture => operations.map(operation =>
+          SbtExecutionAdmission.resolveC(fixture.context, fixture.target, operation).toOption.get))
+
+        Then("only the named target receives the installed prerequisite and the other remains an ordinary project")
+        executions.head.zip(original.head).foreach { case (execution, previous) =>
+          execution.effectiveArguments shouldBe previous.effectiveArguments.dropRight(1) ++ Vector(
+            s"-D${RuntimeConfig.installedRuntimeManifestKey}=$manifest",
+            "-Dcncf.installed-runtime.required=true", "cozyCheckInstalledRuntime", previous.effectiveArguments.last)
+        }
+        executions(1) shouldBe original(1)
         fixtures.foreach(_.profile.driver.executions shouldBe empty)
       } finally fixtures.foreach(fixture => _close(fixture.root))
     }
+
+    "reject explicit installed mode with missing or invalid manifest rather than falling back to project" in {
+      Given("docs/spec/installed-runtime-distribution.md R4-R6 E5 and a granted target selecting installed binding")
+      val fixture = _fixture(_result(ProcessExecutionTermination.Exited(0)))
+      val malformed = Files.writeString(fixture.root.resolve("malformed-manifest.json"), "{}")
+      val bindings = Vector(_workspace_id -> ConfigurationValue.StringValue("installed"))
+      val parameters = Vector(None, Some(fixture.root.resolve("missing-manifest.json")), Some(malformed))
+        .map(manifest => _runtime_parameters(manifest, bindings))
+      try {
+        parameters.foreach { configuration =>
+          fixture.context.runtime.setResolvedParameters(configuration)
+          When("the owning UnitOfWork interprets an explicitly installed intent without a valid concrete manifest")
+          val results = Vector(SbtOperation.Compile, SbtOperation.Test, SbtOperation.TestOnly).map(operation =>
+            new UnitOfWorkInterpreter(new UnitOfWork(fixture.context)).interpret(
+              UnitOfWorkOp.SbtExecAttempt(fixture.target, operation)))
+
+          Then("every intent is rejected before process execution and no project-mode retry occurs")
+          results.zip(Vector(SbtOperation.Compile, SbtOperation.Test, SbtOperation.TestOnly)).foreach { case (result, operation) =>
+            result.toOption.get match {
+              case SbtExecutionAttempt.AdmissionRejected(target, kind, _) =>
+                target shouldBe fixture.target
+                kind shouldBe operation
+              case other => fail(s"Expected installed binding rejection, received $other")
+            }
+          }
+          fixture.profile.driver.executions shouldBe empty
+        }
+      } finally _close(fixture.root)
+    }
+
+    "reject unknown modes and non-string modes before driver execution" in {
+      Given("docs/spec/installed-runtime-distribution.md R4-R6 E5 and closed binding values with no parser aliases")
+      val fixture = _fixture(_result(ProcessExecutionTermination.Exited(0)))
+      val manifest = InstalledRuntimeDistributionSpec.writeFixture(fixture.root)
+      val invalid = Vector("", "unknown", "Installed", " project", "project,installed")
+        .map(ConfigurationValue.StringValue(_)) ++ Vector(
+          ConfigurationValue.BooleanValue(true), ConfigurationValue.NumberValue(BigDecimal(1)),
+          ConfigurationValue.ListValue(List(ConfigurationValue.StringValue("project"))),
+          ConfigurationValue.ObjectValue(Map.empty), ConfigurationValue.NullValue)
+      try {
+        invalid.foreach { value =>
+          fixture.context.runtime.setResolvedParameters(_runtime_parameters(Some(manifest), Vector(_workspace_id -> value)))
+          When("the owning UnitOfWork interprets the target with an unsupported binding value or type")
+          val result = new UnitOfWorkInterpreter(new UnitOfWork(fixture.context)).interpret(
+            UnitOfWorkOp.SbtExecAttempt(fixture.target, SbtOperation.Test))
+
+          Then("mode admission rejects the intent even though the application manifest is valid")
+          result.toOption.get match {
+            case SbtExecutionAttempt.AdmissionRejected(target, operation, _) =>
+              target shouldBe fixture.target
+              operation shouldBe SbtOperation.Test
+            case other => fail(s"Expected mode rejection, received $other")
+          }
+          fixture.profile.driver.executions shouldBe empty
+        }
+      } finally _close(fixture.root)
+    }
+
+    "retain denied workspace and process grant precedence over invalid binding configuration" in {
+      Given("docs/spec/installed-runtime-distribution.md R4-R6 E5 and contexts missing either independent grant")
+      val fixtures = Vector(_fixture(_result(ProcessExecutionTermination.Exited(0)), workspacegranted = false),
+        _fixture(_result(ProcessExecutionTermination.Exited(0)), capabilitygranted = false))
+      fixtures.foreach(_.context.runtime.setResolvedParameters(ResolvedParameters.empty()))
+      val denied = fixtures.map(fixture => _failure_conclusion(
+        SbtExecutionAdmission.resolveC(fixture.context, fixture.target, SbtOperation.Test)))
+      val parameters = Vector(
+        _runtime_parameters(None, Vector(_workspace_id -> ConfigurationValue.StringValue("installed"))),
+        _runtime_parameters(None, Vector(_workspace_id -> ConfigurationValue.StringValue("unknown"))),
+        _runtime_parameters(None, Vector(_workspace_id -> ConfigurationValue.BooleanValue(true))))
+      try {
+        parameters.foreach { configuration =>
+          fixtures.foreach(_.context.runtime.setResolvedParameters(configuration))
+          When("typed Test admission receives invalid configuration after an already denied grant")
+          val results = fixtures.map(fixture =>
+            SbtExecutionAdmission.resolveC(fixture.context, fixture.target, SbtOperation.Test))
+
+          Then("each original structured grant diagnostic remains authoritative and no driver starts")
+          results.zip(denied).foreach { case (result, previous) =>
+            val conclusion = _failure_conclusion(result)
+            conclusion.status shouldBe previous.status
+            conclusion.observation.taxonomy shouldBe previous.observation.taxonomy
+            conclusion.observation.cause.kind shouldBe previous.observation.cause.kind
+            conclusion.observation.cause.descriptor.facets.filterNot(_.isInstanceOf[Descriptor.Facet.SrcPos]) shouldBe
+              previous.observation.cause.descriptor.facets.filterNot(_.isInstanceOf[Descriptor.Facet.SrcPos])
+          }
+          fixtures.foreach(_.profile.driver.executions shouldBe empty)
+        }
+      } finally fixtures.foreach(fixture => _close(fixture.root))
+    }
+  }
+
+  private def _runtime_parameters(
+    manifest: Option[Path],
+    bindings: Vector[(WorkspaceId, ConfigurationValue)]
+  ): ResolvedParameters = {
+    val values = manifest.map(path => RuntimeConfig.installedRuntimeManifestKey ->
+      ConfigurationValue.StringValue(path.toString)).toMap ++ bindings.map { case (workspaceid, value) =>
+      RuntimeConfig.sbtRuntimeBindingKey(workspaceid) -> value
+    }
+    ResolvedParameters.fromResolvedConfiguration(
+      ResolvedConfiguration(Configuration(values), ConfigurationTrace.empty))
   }
 
   private def _failure_conclusion[A](result: Consequence[A]): Conclusion = result match {
@@ -745,14 +892,15 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
     workspacegranted: Boolean = true,
     driverinstalled: Boolean = true,
     testclasses: Vector[String] = Vector("org.example.SelectedSpec"),
-    driver: Option[ProcessExecutionDriver] = None
+    driver: Option[ProcessExecutionDriver] = None,
+    workspaceid: WorkspaceId = _workspace_id
   ): Fixture = {
     val base = Files.createDirectories(Paths.get("target", "sbt-execution-dsl-spec").toAbsolutePath)
     val root = Files.createTempDirectory(base, "case-")
     val checkout = Files.createDirectory(root.resolve("checkout"))
-    val workspacegrants = if (workspacegranted) Vector(WorkspaceGrant(_owner, _workspace_id, permission)) else Vector.empty
-    val workspace = WorkspaceExecutionAdmission.createC(Vector(_workspace_id -> checkout), workspacegrants).toOption.get
-    val binding = workspace.bindingC(_workspace_id).toOption.get
+    val workspacegrants = if (workspacegranted) Vector(WorkspaceGrant(_owner, workspaceid, permission)) else Vector.empty
+    val workspace = WorkspaceExecutionAdmission.createC(Vector(workspaceid -> checkout), workspacegrants).toOption.get
+    val binding = workspace.bindingC(workspaceid).toOption.get
     val definitions = Vector(
       SbtOperation.Compile -> _compile_capability, SbtOperation.Test -> _test_capability,
       SbtOperation.TestOnly -> _test_only_capability
@@ -767,7 +915,7 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
     val profile = ProcessExecutionTestProfile(Map(_compile_capability -> result, _test_capability -> result, _test_only_capability -> result))
     val context = _context(if (workspaceinstalled) Some(workspace) else None,
       if (processinstalled) Some(admission) else None, profile, owner, driverinstalled, driver)
-    Fixture(root, SbtTarget(_workspace_id), result, workspace, definitions, policy, admission, profile, context)
+    Fixture(root, SbtTarget(workspaceid), result, workspace, definitions, policy, admission, profile, context)
   }
 
   private def _context(

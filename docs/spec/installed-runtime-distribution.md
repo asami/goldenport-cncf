@@ -1,8 +1,10 @@
 # Installed Runtime Distribution
 
-The installed command and typed SBT admission use one concrete installation of
-the `sm-workflow` application. Installation construction and atomic selection
-belong to the workstation updater; CNCF interprets its versioned manifest.
+The installed command uses one concrete installation of the `sm-workflow`
+application. Typed SBT targets independently select ordinary project builds or
+explicit binding to that installation. Installation construction and atomic
+selection belong to the workstation updater; CNCF interprets its versioned
+manifest.
 
 ## Rules
 
@@ -26,6 +28,7 @@ belong to the workstation updater; CNCF interprets its versioned manifest.
   contains an absolute concrete manifest filename. Bootstrap validates it before
   runtime launch, including Help. Missing configuration preserves existing
   behavior. A JVM property alone does not create this resolved binding.
+  This application-runtime configuration alone does not bind target SBT builds.
   After final ordinary configuration and argument admission, the installed
   profile requires an active component-file source resolving to the pinned CAR;
   every effective active/search source must be that CAR. Additional component,
@@ -35,18 +38,35 @@ belong to the workstation updater; CNCF interprets its versioned manifest.
   inheritance suppression. Normal assembly-descriptor configuration remains
   supported; any activation sources it contributes receive the same admission.
 - R5: Typed SBT admission first performs the existing workspace and process grant
-  admission. An explicit current resolved binding derives a tagged definition
-  using the same capability, executable, environment, metadata and limits. Before
-  its original final task it adds fixed
+  admission, then reads `cncf.sbt.runtime-binding.<WorkspaceId>` for the target's
+  logical workspace from `ExecutionContext.resolvedParameters` through
+  `RuntimeConfig`. Its only accepted values are the exact strings `project` and
+  `installed`; an absent key means `project`. Other values and types reject
+  before driver execution, without comma/list aliases or coercion. Configuration
+  for one workspace does not select another workspace's binding. Project mode,
+  including explicit `project`, retains the original tagged definition,
+  arguments, request, environment, working directory and limits even when the
+  owning CLI has a resolved installed-runtime manifest.
+  Explicit `installed` requires a valid concrete manifest under R4; missing or
+  invalid manifests reject. It derives a tagged definition using the same
+  capability, executable, environment, metadata and limits. Before its original
+  final task it adds fixed
   `-Dcncf.installed-runtime.manifest=<concrete filename>`,
   `-Dcncf.installed-runtime.required=true` and `cozyCheckInstalledRuntime`.
-  The prerequisite fails when sbt-cozy support or its classpath mapping is absent.
+  This explicit profile presumes host-declared sbt-cozy support. Its prerequisite
+  fails when that support or its classpath mapping is absent; the original task
+  never continues without a successful prerequisite.
   The admitted request remains empty and the effective limits remain unchanged.
   No process request override or generic execution route is introduced.
 - R6: Operational binding neither changes persisted program declarations nor
   asserts historical execution facts. It grants no workflow recovery, retry,
-  publication or effect authority. No selected-reference lookup, resolver fallback,
-  hashes, locks, leases, pruning or automatic replay is part of CNCF admission.
+  publication or effect authority. Mode selection does not use JVM properties,
+  operation arguments, build-file inspection or capability/task-discovery probes.
+  There is no fallback from installed to project mode, plugin-absence fallback,
+  automatic mode retry or generic-adapter support claim. No selected-reference
+  lookup, resolver fallback, hashes, locks, leases, pruning or automatic replay is
+  part of CNCF admission. CLI bootstrap retains all R1-R4 manifest and activation
+  input validation independently of the target's project or installed mode.
 
 Construction checks fully read copied archives and perform ordinary staged CAR
 identity/ABI admission and Help before activation. Bootstrap continues to use
