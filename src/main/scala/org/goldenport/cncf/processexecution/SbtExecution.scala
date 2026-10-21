@@ -4,12 +4,13 @@ import java.nio.file.{Files, Path}
 import scala.util.control.NonFatal
 import org.goldenport.{Consequence, Conclusion}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.effect.{ExternalEffect, ExternalEffectKind}
 import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePermission}
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection] = None)
@@ -161,7 +162,27 @@ private[cncf] object SbtExecutionAdmission {
         Consequence.serviceUnavailable("Process Execution admission is not configured")
       )
       execution <- admission.admitSbtForScopeC(context.cncfCore.scope, binding, operation, target.scenario)
-    } yield execution
+      installed <- RuntimeConfig.installedRuntimeDistributionC(context.resolvedParameters)
+      bound <- installed match {
+        case None => Consequence.success(execution)
+        case Some(distribution) =>
+          val definition = execution.definition
+          definition._sbt_metadata match {
+            case Some(metadata) =>
+              val arguments = definition.fixedArguments.dropRight(1) ++ Vector(
+                s"-D${RuntimeConfig.installedRuntimeManifestKey}=${distribution.manifest}",
+                "-Dcncf.installed-runtime.required=true",
+                "cozyCheckInstalledRuntime",
+                definition.fixedArguments.last
+              )
+              ProcessProgramDefinition.fromSbtRuntimeC(
+                definition.capability, definition.safeProgramIdentity, definition._executable_location,
+                arguments, definition.maximumLimits, definition._environment.values, metadata
+              ).map(bound => execution.copy(definition = bound))
+            case None => Consequence.serviceUnavailable("Typed SBT program metadata is unavailable")
+          }
+      }
+    } yield bound
 
   /** Tagged executions have no WorkArea projections or caller-provided process input. */
   def validateRequestC(request: ProcessExecutionRequest): Consequence[Unit] =

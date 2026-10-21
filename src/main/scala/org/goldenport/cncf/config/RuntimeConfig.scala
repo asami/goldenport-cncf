@@ -3,8 +3,8 @@ package org.goldenport.cncf.config
 import java.nio.file.{Path, Paths}
 
 import org.goldenport.Consequence
-import org.goldenport.configuration.ResolvedConfiguration
-import org.goldenport.cncf.cli.RunMode
+import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.cncf.cli.{InstalledRuntimeDistribution, RunMode}
 import org.goldenport.cncf.log.LogBackend
 import org.goldenport.cncf.observability.LogLevel
 import org.goldenport.cncf.http.{HttpDriver, FakeHttpDriver, HttpDriverFactory, StaticFormAppRendererConfig}
@@ -26,7 +26,7 @@ import org.goldenport.cncf.resource.{ResourceReadLimits, ResourceTreePolicy, Res
  *  version Apr. 30, 2026
  *  version Jun. 19, 2026
  *  version Jul. 30, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -71,6 +71,24 @@ final case class RuntimeConfig(
 }
 
 object RuntimeConfig {
+  val installedRuntimeManifestKey = "cncf.installed-runtime.manifest"
+
+  /** Operational binding comes from ordinary resolved configuration, never a property bypass. */
+  def installedRuntimeDistributionC(
+    parameters: ResolvedParameters
+  ): Consequence[Option[InstalledRuntimeDistribution]] =
+    parameters.get(installedRuntimeManifestKey) match {
+      case None => Consequence.success(None)
+      case Some(parameter) => parameter.value match {
+        case ConfigurationValue.StringValue(value) if value.nonEmpty && !value.exists(_.isControl) =>
+          try InstalledRuntimeDistribution.readC(Paths.get(value)).map(Some(_))
+          catch {
+            case scala.util.control.NonFatal(_) => Consequence.resourceInvalid("Invalid installed runtime manifest path")
+          }
+        case _ => Consequence.resourceInvalid("Installed runtime manifest configuration must be an absolute filename")
+      }
+    }
+
   /** Parsed runtime settings, without owning any storage resources. */
   private[cncf] final case class Settings(
     logBackend: LogBackend,
