@@ -3,6 +3,7 @@ package org.goldenport.cncf.workflow
 import io.circe.Json
 import io.circe.parser.parse
 import java.nio.file.{Files, Path}
+import java.nio.charset.StandardCharsets.UTF_8
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.context.ExecutionContext
@@ -21,7 +22,7 @@ import org.scalacheck.{Gen, Prop, Test}
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 21, 2026
  */
 final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private given ExecutionContext = ExecutionContext.create()
@@ -58,8 +59,171 @@ final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers w
   private val _catalog = _take(WorkflowInstanceRecordJsonV1.catalogC(Vector(_definition)))
   private val _intent = Intent(_config, Reference("checkpoint", "1"), _active, _active.revision, _entry,
     TypedValue(_codec.typeIdentity, "known planning"))
+  private val _capacity_metadata = afterWord("in spec:workflow-mechanical-receipt-capacity, example:E2, rules:R1,R3,R4, phase:capacity-repair")
+  private val _sqlite_capacity_metadata = afterWord("in spec:workflow-mechanical-receipt-capacity, example:E3, rules:R3,R4,R5, phase:capacity-repair")
 
   "Mechanical transition data admission" should {
+    "E2 retain the one MiB default and admit an explicitly larger complete receipt" must _capacity_metadata {
+      "when the full payload exceeds the default capacity" in {
+        Given("Spec: docs/spec/workflow-mechanical-receipt-capacity.md; Rules: R1,R3,R4; Example: E2; a complete receipt with more than one MiB of payload")
+        val limits = _take(WorkflowMechanicalReceiptLimits.createC(16 * 1024 * 1024))
+        val receipt = _take(admitC(_component, _operation,
+          _intent.copy(payload = TypedValue(_codec.typeIdentity, "x" * 1048576))))
+        When("default and explicitly selected writers and readers consume the same complete receipt")
+        val refused = WorkflowMechanicalTransitionJsonV1.encodeC(receipt, _codec)
+        val encoded = _take(WorkflowMechanicalTransitionJsonV1.encodeC(receipt, _codec, limits))
+        val recovered = _take(WorkflowMechanicalTransitionJsonV1.decodeC(encoded, _catalog, _codec, limits))
+        val lowerreader = WorkflowMechanicalTransitionJsonV1.decodeC(encoded, _catalog, _codec)
+        Then("only the selected larger policy admits the entire unchanged envelope")
+        refused shouldBe a[Consequence.Failure[?]]
+        encoded.getBytes(UTF_8).length should be > 1048576
+        recovered shouldBe receipt
+        lowerreader shouldBe a[Consequence.Failure[?]]
+      }
+    }
+
+    "E2 count escaped multibyte payload and both complete histories at the inclusive byte boundary" must _capacity_metadata {
+      "when the exact full envelope capacity is selected" in {
+        Given("Spec: docs/spec/workflow-mechanical-receipt-capacity.md; Rules: R3,R4; Example: E2; generated escaped UTF-8 history and payload data")
+        val property = Prop.forAll(Gen.choose(1, 80)) { count =>
+          val text = "日本語\"\\\n" * count
+          val cause = CausationReference(text)
+          val current = _active.copy(causation = cause, history = _active.history.map(_.copy(causation = cause)))
+          val receipt = _take(admitC(_component, _operation, _intent.copy(current = current,
+            entry = _entry.copy(causation = cause), payload = TypedValue(_codec.typeIdentity, text))))
+          val encoded = _take(WorkflowMechanicalTransitionJsonV1.encodeC(receipt, _codec))
+          val bytes = encoded.getBytes(UTF_8).length
+          val exact = _take(WorkflowMechanicalReceiptLimits.createC(bytes))
+          val lower = _take(WorkflowMechanicalReceiptLimits.createC(bytes - 1))
+          bytes > encoded.length &&
+            WorkflowMechanicalTransitionJsonV1.encodeC(receipt, _codec, exact).toOption.contains(encoded) &&
+            WorkflowMechanicalTransitionJsonV1._encode_c_unchecked(receipt, _codec, exact).toOption.contains(encoded) &&
+            WorkflowMechanicalTransitionJsonV1.decodeC(encoded, _catalog, _codec, exact).toOption.contains(receipt) &&
+            !WorkflowMechanicalTransitionJsonV1.encodeC(receipt, _codec, lower).isSuccess &&
+            !WorkflowMechanicalTransitionJsonV1._encode_c_unchecked(receipt, _codec, lower).isSuccess &&
+            !WorkflowMechanicalTransitionJsonV1.decodeC(encoded, _catalog, _codec, lower).isSuccess
+        }
+        When("the complete-envelope UTF-8 capacity property is checked")
+        val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(50), property)
+        Then("the exact byte count succeeds and one byte less refuses on every encode and decode path")
+        checked.passed shouldBe true
+      }
+    }
+
+    "E2 retain five-argument configuration construction and resolve optional byte limits" must _capacity_metadata {
+      "when existing callers supply the original five policies" in {
+        Given("Spec: docs/spec/workflow-mechanical-receipt-capacity.md; Rules: R1,R3; Example: E2; original constructor and companion calls")
+        val constructed = new Configuration(_config.workflowStore, _config.migrationPolicy, _config.retentionPolicy,
+          _config.leasePolicy, _config.delivery)
+        When("the configurations are validated")
+        val accepted = _take(constructed.validateC)
+        val endpoints = Vector(1, WorkflowMechanicalReceiptLimits.maximumBytes).map { bytes =>
+          _take(_config.copy(mechanicalReceiptMaxBytes = Some(bytes)).validateC)
+        }
+        Then("both existing construction forms retain None and resolve one MiB while explicit endpoints resolve exactly")
+        accepted.mechanicalReceiptMaxBytes shouldBe None
+        _config.mechanicalReceiptMaxBytes shouldBe None
+        _take(accepted.mechanicalReceiptLimitsC).maxBytes shouldBe 1048576
+        _take(_config.mechanicalReceiptLimitsC).maxBytes shouldBe 1048576
+        endpoints.map(value => _take(value.mechanicalReceiptLimitsC).maxBytes) shouldBe
+          Vector(1, WorkflowMechanicalReceiptLimits.maximumBytes)
+      }
+    }
+
+    "E2 refuse invalid optional byte limits before binding any mechanical effects" must _capacity_metadata {
+      "when the container is null or an explicit integer is outside the finite range" in {
+        Given("Spec: docs/spec/workflow-mechanical-receipt-capacity.md; Rules: R1,R3; Example: E2; an existing native root and no checkpoint")
+        val instances = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "invalidcapacity", "instances"))
+        val checkpoints = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "invalidcapacity", "checkpoints"))
+        val owner = _take(DataStoreComponentOwner.create(_component.name))
+        val store = new DataStore.InMemoryDataStore(CommitRecorder.noop)
+        val roots = _take(WorkflowInstanceDataStorePersistence.bindC(store, _config, Vector(_definition), instances))
+        _take(roots.create(_config, _initial))
+        val instanceid = DataStore.StringEntryId(_initial.identity.value)
+        val checkpointid = DataStore.StringEntryId(_take(keyC(_intent.reference)))
+        val before = _take(store.load(instances, instanceid))
+        val invalid = Vector[Option[Int]](null, Some(0), Some(-1),
+          Some(WorkflowMechanicalReceiptLimits.maximumBytes + 1), Some(Int.MaxValue))
+        When("configuration validation, limit resolution and adapter binding consume each invalid selection")
+        val results = invalid.map { bytes =>
+          val config = _config.copy(mechanicalReceiptMaxBytes = bytes)
+          (config.validateC, config.mechanicalReceiptLimitsC,
+            WorkflowMechanicalTransitionDataStorePersistence.bindC(store, config, _component,
+              _operation, Vector(_definition), instances, checkpoints, _codec, owner))
+        }
+        val after = _take(store.load(instances, instanceid))
+        val absent = _take(store.load(checkpoints, checkpointid))
+        Then("every invalid selection fails as a typed result and neither native row changes")
+        results.foreach { case (validated, resolved, bound) =>
+          validated shouldBe a[Consequence.Failure[?]]
+          resolved shouldBe a[Consequence.Failure[?]]
+          bound shouldBe a[Consequence.Failure[?]]
+        }
+        after shouldBe before
+        absent shouldBe None
+      }
+    }
+
+    "E3 refuse an oversized SQLite preparation atomically and physically reopen under the selected policy" must _sqlite_capacity_metadata {
+      "when one complete receipt exceeds the reader and writer default" in {
+        Given("Spec: docs/spec/workflow-mechanical-receipt-capacity.md; Rules: R3,R4,R5; Example: E3; native SQLite root and checkpoint collections")
+        val instances = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "mechanicalcapacity", "instances"))
+        val checkpoints = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "mechanicalcapacity", "checkpoints"))
+        val owner = _take(DataStoreComponentOwner.create(_component.name))
+        val config = _config.copy(mechanicalReceiptMaxBytes = Some(16 * 1024 * 1024))
+        val intent = _intent.copy(configuration = config, payload = TypedValue(_codec.typeIdentity, "日本語\"\\\n" * 180000))
+        val directory = Path.of("target", "phase105", "work", "mechanical")
+        Files.createDirectories(directory)
+        val path = Files.createTempDirectory(directory, "capacity-").resolve("workflow.sqlite")
+        val checkpointid = DataStore.StringEntryId(_take(keyC(intent.reference)))
+        val instanceid = DataStore.StringEntryId(_initial.identity.value)
+        val first = SqlDataStore.sqlite(path.toString)
+        try {
+          val roots = _take(WorkflowInstanceDataStorePersistence.bindC(first, config, Vector(_definition), instances))
+          _take(roots.create(config, _initial))
+          _take(roots.append(config, _initial.identity, initialRevision, _active.history.head))
+          val before = _take(first.load(instances, instanceid))
+          val lower = _take(WorkflowMechanicalTransitionDataStorePersistence.bindC(first, _config, _component,
+            _operation, Vector(_definition), instances, checkpoints, _codec, owner))
+          When("the default adapter prepares the oversized complete receipt")
+          val rejected = lower.prepareC(intent)
+          val after = _take(first.load(instances, instanceid))
+          val absent = _take(first.load(checkpoints, checkpointid))
+          Then("refusal leaves the full native root and checkpoint unchanged")
+          rejected shouldBe a[Consequence.Failure[?]]
+          after shouldBe before
+          absent shouldBe None
+
+          When("the same native pair is prepared and committed with the explicit sixteen MiB configuration")
+          val selected = _take(WorkflowMechanicalTransitionDataStorePersistence.bindC(first, config, _component,
+            _operation, Vector(_definition), instances, checkpoints, _codec, owner))
+          val committed = _take(_take(selected.prepareC(intent)).commitC())
+          val lowerread = lower.loadRetainedC(intent.reference)
+          Then("the full payload commits once and the lower reader refuses the retained row")
+          committed.payload shouldBe intent.payload
+          committed.next.history shouldBe _active.history :+ _entry
+          lowerread shouldBe a[Consequence.Failure[?]]
+        } finally _take(first.closeC())
+
+        When("a new physical SQLite provider opens the file under the same selected configuration")
+        val reopened = SqlDataStore.sqlite(path.toString)
+        try {
+          val selected = _take(WorkflowMechanicalTransitionDataStorePersistence.bindC(reopened, config, _component,
+            _operation, Vector(_definition), instances, checkpoints, _codec, owner))
+          val recovered = _take(selected.loadRetainedC(intent.reference)).get
+          val lower = _take(WorkflowMechanicalTransitionDataStorePersistence.bindC(reopened, _config, _component,
+            _operation, Vector(_definition), instances, checkpoints, _codec, owner))
+          val lowerread = lower.loadRetainedC(intent.reference)
+          Then("physical reopen recovers the entire receipt and a lower policy still refuses without relaxation")
+          recovered._1.payload shouldBe intent.payload
+          recovered._1.current.history shouldBe _active.history
+          recovered._1.next.history shouldBe _active.history :+ _entry
+          recovered._2 shouldBe recovered._1.next
+          lowerread shouldBe a[Consequence.Failure[?]]
+        } finally _take(reopened.closeC())
+      }
+    }
+
     "roundtrip one exact ordinary append without any issued interaction or AI result" in {
       Given("an active unsuspended instance, typed planning payload and one explicit next entry")
       val receipt = _take(admitC(_component, _operation, _intent))

@@ -13,18 +13,19 @@ import org.simplemodeling.model.datatype.EntityRevision
 /**
  * Private borrowed adapter: prepares a pair, never owns or commits a store.
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 21, 2026
  */
 private[workflow] final class WorkflowMechanicalTransitionDataStorePersistence[A] private (
   store: DataStore & EntityConditionalTransitionDataStore,
   configuration: Configuration, component: ComponentId, operation: StateMachineOperationIdentity,
   instances: WorkflowInstanceDataStorePersistence, catalog: WorkflowInstanceRecordJsonV1.Catalog,
   instancecollection: DataStore.CollectionId, checkpointcollection: DataStore.CollectionId,
-  codec: PayloadCodec[A], owner: DataStoreComponentOwner
+  codec: PayloadCodec[A], owner: DataStoreComponentOwner, receiptlimits: WorkflowMechanicalReceiptLimits
 )(using ExecutionContext) {
   import WorkflowInstanceDataStorePersistence.{configurationField, recordField,
     revisionField, storageText, storageJsonC}
   import WorkflowMechanicalTransitionDataStorePersistence.payloadField
+  private val _receipt_limits = receiptlimits
 
   def prepareC(intent: Intent[A]): Consequence[WorkflowPreparedDataStoreTransition[Receipt[A]]] = {
     for {
@@ -34,7 +35,7 @@ private[workflow] final class WorkflowMechanicalTransitionDataStorePersistence[A
       loaded <- instances.load(configuration, intent.current.identity)
       current <- loaded.map(Consequence.success).getOrElse(Consequence.stateConflict("Mechanical instance is absent"))
       receipt <- _admit_loaded_c_unchecked(component, operation, intent.copy(configuration = configuration, current = current))
-      receiptbytes <- WorkflowMechanicalTransitionJsonV1._encode_c_unchecked(receipt, codec)
+      receiptbytes <- WorkflowMechanicalTransitionJsonV1._encode_c_unchecked(receipt, codec, _receipt_limits)
       nextbytes = WorkflowInstanceRecordJsonV1._encode_unchecked(receipt.next)
       key <- keyC(receipt.reference)
       expected <- EntityRevision.createC(current.revision.value + 1L)
@@ -95,7 +96,7 @@ private[workflow] final class WorkflowMechanicalTransitionDataStorePersistence[A
     payload <- stored.getString(payloadField).map(Consequence.success)
       .getOrElse(Consequence.stateConflict("Mechanical checkpoint payload is absent"))
     raw <- storageJsonC(payload)
-    receipt <- WorkflowMechanicalTransitionJsonV1.decodeC(raw, catalog, codec)
+    receipt <- WorkflowMechanicalTransitionJsonV1.decodeC(raw, catalog, codec, _receipt_limits)
     _ <- if (receipt.reference == reference && receipt.component == component && receipt.operation == operation)
       Consequence.unit else Consequence.stateConflict("Mechanical checkpoint owner, operation or reference differs")
   } yield receipt
@@ -121,7 +122,8 @@ private[workflow] object WorkflowMechanicalTransitionDataStorePersistence {
       }
       catalog <- WorkflowInstanceRecordJsonV1.catalogC(definitions)
       adapter <- WorkflowInstanceDataStorePersistence.bindC(store, configuration, definitions, instances)
+      limits <- configuration.mechanicalReceiptLimitsC
     } yield new WorkflowMechanicalTransitionDataStorePersistence(compound, configuration, component, operation,
-      adapter, catalog, instances, checkpoints, codec, owner)
+      adapter, catalog, instances, checkpoints, codec, owner, limits)
   }
 }
