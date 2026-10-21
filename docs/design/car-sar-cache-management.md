@@ -1,6 +1,6 @@
 # CAR/SAR Cache Lifecycle
 
-Status: accepted target design; Phase 116 CC-01 contract authored, validation and independent acceptance pending.
+Status: accepted target design; CC-01 validated, independently reviewed and committed; CC-02 implementation under validation.
 
 The [specification](../spec/car-sar-cache-management.md) owns observable behavior.
 This design separates repository selection, cache storage and runtime lifetime.

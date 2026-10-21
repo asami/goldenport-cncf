@@ -1,6 +1,6 @@
 # CAR/SAR Cache Management
 
-Status: accepted target specification; Phase 116 started, CC-01 contract awaiting validation and independent acceptance.
+Status: accepted target specification; CC-01 validated, independently reviewed and committed; CC-02 implementation under validation.
 
 ## Scope and authority
 
@@ -187,6 +187,6 @@ coordinate layout. Capacity includes construction and retained coordinate-body
 copies; staging is not an extra unbounded allowance. Default reusable originals
 remain retained, and source exhaustion is reported independently.
 
-This is the selected contract for CC-02 onward, subject to CC-01's ordinary
-validation and independent review. Authoring it establishes no shared cache,
-cross-JVM protection or Phase completion.
+This contract was accepted for CC-02 onward through CC-01's ordinary compile,
+independent review and Step commit. That acceptance establishes no implemented
+shared cache, cross-JVM protection or Phase completion.

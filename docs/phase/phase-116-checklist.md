@@ -1,16 +1,17 @@
 # Phase 116 Checklist
 
-Status: IN_PROGRESS — CC-01 contract authored, awaiting native validation/review
-All acceptance entries remain OPEN until their actual checks and independent
-acceptance; the authored contract is linked from the lifecycle design.
+Status: IN_PROGRESS — CC-01 accepted and committed; CC-02 implementation underway
+Acceptance entries close only after their actual checks and independent
+acceptance. CC-01 passed contract-compile and independent review and was committed
+by the native Workflow as `0f3a433809e2f9ee6b575d114d1fcb7ba8c7b5cc`.
 
 ## CC-01 Contract binding
 
-- [ ] Bind C1–C6 to existing ComponentRepository, extractors, resource ownership and configuration APIs without a second resolver.
-- [ ] Freeze typed source/extraction lease and collection results, internal mutable-source generation storage and publication metadata.
-- [ ] Freeze SNAPSHOT current-selection/retirement state and coordinate update versus generation usage locks, with nonblocking acquisition retries and consistent current-reference checks.
-- [ ] Freeze operation/configuration names, concrete byte/idle/collection defaults and peak staging-space policy; keep original retention separate.
-- [ ] Record supported local-filesystem lock/atomic-publication behavior and explicit unsupported outcomes.
+- [x] Bind C1–C6 to existing ComponentRepository, extractors, resource ownership and configuration APIs without a second resolver.
+- [x] Freeze typed source/extraction lease and collection results, internal mutable-source generation storage and publication metadata.
+- [x] Freeze SNAPSHOT current-selection/retirement state and coordinate update versus generation usage locks, with nonblocking acquisition retries and consistent current-reference checks.
+- [x] Freeze operation/configuration names, concrete byte/idle/collection defaults and peak staging-space policy; keep original retention separate.
+- [x] Record supported local-filesystem lock/atomic-publication behavior and explicit unsupported outcomes.
 
 ## CC-02 CAR main route
 

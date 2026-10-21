@@ -1,6 +1,6 @@
 # Phase 116 — CAR/SAR Managed Archive and Extraction Cache
 
-Status: IN_PROGRESS — CC-01 contract authored; native validation/review pending
+Status: IN_PROGRESS — CC-01 accepted and committed; CC-02 implementation underway
 Created: 2026-10-21
 Owner: CNCF Component Repository / runtime resource lifecycle
 Checklist: [Phase 116 checklist](phase-116-checklist.md)
@@ -40,8 +40,10 @@ configuration and SystemNode resource-owner APIs, with typed lease/result names,
 stable source generations, complete reference checks for SNAPSHOT retirement,
 independent bounded quota reservations and concrete defaults. Only the five
 issued CC-01 documents were edited. No cache code or cache-validation success
-is claimed at this contract stage. CC-02 begins only after ordinary Step
-validation, independent review and the actual Step commit.
+is claimed at this contract stage. Native contract-compile passed, the independent
+review was accepted, and the Workflow committed CC-01 as
+`0f3a433809e2f9ee6b575d114d1fcb7ba8c7b5cc`. The same Session now issues CC-02;
+shared-cache acceptance remains open.
 
 ## Completion boundary
 

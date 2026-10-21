@@ -142,3 +142,119 @@ This entry records engineering decisions, not a native Journal Entry or an
 accepted Step. Compile, independent review, real cache behavior and integrated
 acceptance remain pending. Earlier WorkArea results, Goals, histories and repair
 counts retain their original meaning; no previous evidence was moved or reset.
+# CC-02 implementation candidate
+
+The corrected installed sm-workflow completed the original CC-01 compile check.
+Independent review accepted its contract, and the native Workflow created Step
+commit `0f3a433809e2f9ee6b575d114d1fcb7ba8c7b5cc` before issuing CC-02 in the same
+Session `06016330fa63b5eac6097ff2b8ff42c2`. No sbt-cozy plugin was added.
+
+The CC-02 candidate connects the existing packed-CAR discovery route to immutable
+captured sources and generation-specific shared extraction leases. Existing
+CarExtractor structure/admission and SystemNode resource ownership remain the
+boundaries; ClassLoaders close before the backing lease. Shared native file locks
+use one JVM registry entry per stable generation lock, outside payload deletion.
+Publication is atomic and collection requires exclusive generation protection.
+Explicit StandardRepository roots override runtime cache configuration.
+
+ManagedCarCacheSpec supplies local CAR fixtures for two runtime owners, two
+fixture-owned JVMs, concurrent builders, acquire/collect races, unrelated-key
+progress, exceptional startup, idempotent shutdown and offline rebuild through
+ComponentDirRepository. Existing repository ownership tests now isolate their
+managed cache and distinguish WorkArea cleanup from explicit cache collection.
+These are authored checks, not yet successful validation or CC-02 acceptance.
+SAR composition, coordinate/SNAPSHOT switching, automatic retirement, crash
+recovery and complete root capacity reservations remain CC-03/CC-04 work.
+
+## CC-02 interrupted native progression and development validation
+
+The CC-02 implementation Submit was accepted. Its one paired native Advance
+terminated before SBT with `Source history rule: unterminated literal` and no
+business response. The runtime owner identified a legal Scala terminal quote
+run in the existing repository specification. Four earlier history effects
+succeeded; the fifth effect remains unknown. Preserve that prefix and unknown
+outcome, the accepted Submit, original Session, Plan/base and repair history.
+Do not replay Submit/Advance or treat absence of a response as non-execution.
+The runtime owner is qualifying a bounded normal continuation; neither source
+corrections nor fixture consent establish live Human recovery authorization.
+
+An ownership overlap was also found: the runtime owner's RuntimeConfig change
+is covered by CC-02's broad config candidate path. The earlier implementation
+summary's statement that all four runtime-owner files were outside the candidate
+was inaccurate. Preserve those changes and settle their separate attribution
+before CC-02 staging/commit; no implicit adoption or rollback is permitted.
+
+Independent development validation through the registered command runner selected
+`testOnly org.goldenport.cncf.component.cache.ManagedCarCacheSpec org.goldenport.cncf.component.repository.ComponentRepositoryCarSpec`.
+Attempt `p116-cc02-development-b41c1ea84d79422688c7e862e363603e@1` terminated
+with SBT/wrapper exit 1 before tests. Two local `_complete_` declarations needed
+explicit parameter parentheses to avoid Scala's underscore/colon tokenization;
+the six diagnostics included their four cascading unresolved references.
+Those declarations and calls were corrected for the next focused execution.
+This is development evidence, not a native validation receipt, Step acceptance,
+repair-counter reset or shared-cache success. The original failed result and
+complete logs remain under the original disposable allocations.
+
+After the syntax correction, independent development attempt
+`p116-cc02-development-121e608c00aa42d6b4010092c5b080fa@1`, subject
+`p116-cc02-development-subject@2`, completed both selected suites: 91 tests
+passed, none failed or aborted; SBT/wrapper exit 0 and the actual process
+termination marker were retained and admitted against the current selection.
+The new suite exercised same-JVM and cold two-JVM sharing, lazy reads after one
+owner closes, active-generation collection skips, final-release collection,
+offline reconstruction, generated close orders and concurrent publication.
+The existing CAR repository suite also passed with its isolated cache fixtures.
+This establishes the selected development tests only. Native CC-02 validation,
+independent review/Step commit and later-Step behavior remain outstanding.
+
+## Runtime prerequisite review observation
+
+The separately owned ordinary-project SBT binding repair has its own accepted
+focused source review and 44/44 successful tests. It is a prerequisite repair,
+not part of the managed-cache program implementation. The following nonblocking
+observation comes from reviewer `/root/project_build_binding_independent_review`
+and is retained here with that attribution; this entry neither adopts a config
+refactor into Phase 116 nor changes CC-02 acceptance.
+
+HYG-RUNTIME-CONFIG-SIZE-001 — RuntimeConfig.scala remains pre-existing
+ordinary-source size debt (1,146 baseline / 1,168 current lines, >1,000 threshold).
+The ordinary-project SBT binding fix adds one cohesive setting without a
+discovered correctness defect. Defer coherent configuration-role split
+assessment to a separately selected CNCF maintenance task; no refactor is
+admitted by CB-RUNTIME-V3-004.
+
+## 2026-10-22: same-Session recovery and CC-02 review repair
+
+The runtime owner's two installed-CLI recovery qualification cases passed 2/2
+through the newly authorized registered command runner. The separate four-file
+ordinary-project SBT prerequisite repair was committed as
+`3ee1d844a8ac8d85f4f34f08391bf02c41170d1e`, preserving the accepted CC-01 commit
+and the cache candidate. The actual user then answered the native recovery
+question with `AuthorizeNewAttempt`. Its independently retained Human record was
+prepared and accepted through the ordinary installed CLI; the single subsequent
+Advance inspected the new candidate and completed `car-shared-main-route` with
+10/10 successful tests. The original unknown source-history effect, successful
+prefix, original base, Plan, Session and prior validation history remain retained.
+
+Independent reviewer `/root/p116_cc02_independent_review` found no CAR behavioral
+blocker within CC-02, and returned three concrete repository-rule corrections.
+The native Workflow accepted that repair verdict and issued `issue-2` through
+`issue-4` in the same Session, with ordinary/automatic repair counts 1/1 of 10.
+
+The repair binds all ten executable examples to their real C1–C6 contract clauses
+with visible E1–E10, `afterWord` metadata and specification-path/contract/example
+Given descriptions; it preserves GWT execution boundaries and generated close
+order coverage. The package-visible fixture helpers now use `withFixture` and
+`fileIdentity`. `CacheCollectionResult` supplies a default empty argument,
+canonical `empty` and explicit zero-argument `apply()`. These are authored
+corrections awaiting native revalidation and affected independent re-review;
+they do not establish Step acceptance or Phase completion.
+
+The first repair's native test-only invocation terminated with exit 1 during
+Test compilation: the new `withFixture` helper name collided with inherited
+ScalaTest `withFixture`, so the lambda was interpreted as `NoArgTest` rather
+than the intended `Path => A`. The other missing-default diagnostics cascaded
+from that mismatch. The Workflow retained that failure as `issue-5` and issued
+the next bounded repair at ordinary/automatic counts 2/2 of 10. The helper and
+all call sites now use `withCacheFixture`; the original three rule corrections
+remain. Fresh native validation and affected independent review are still owed.

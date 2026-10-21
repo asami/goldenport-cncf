@@ -26,12 +26,12 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
 
 /*
  * @since   Jan. 12, 2026
- *  version Jan. 29, 2026
- *  version Feb.  5, 2026
- *  version Mar. 22, 2026
- *  version Apr. 25, 2026
- *  version May. 25, 2026
- *  version Aug. 27, 2026
+ * version Jan. 29, 2026
+ * version Feb.  5, 2026
+ * version Mar. 22, 2026
+ * version Apr. 25, 2026
+ * version May. 25, 2026
+ * version Aug. 27, 2026
  * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -978,7 +978,7 @@ object ComponentRepository extends GlobalObservable {
       _ensure_requested_component_artifacts()
       val repository = new ComponentDirRepository(
         cacheRoot,
-        with_assembly_api_class_loader(params),
+        with_assembly_api_class_loader(params).withManagedCacheRoot(cacheRoot),
         packagePrefixes,
         releaseonly = true
       )
@@ -2082,8 +2082,10 @@ object ComponentRepository extends GlobalObservable {
     log: BootstrapLog,
     sardescriptor: Option[GenericSubsystemDescriptor] = None
   ): Consequence[Vector[Component]] = {
-    params.subsystem.systemNode.workAreaSpaceC.flatMap { areas =>
-      CarExtractor.withRetainedExtracted(carpath, areas, params.subsystem.systemNode.ownRuntimeResourceC) { extracted =>
+    org.goldenport.cncf.component.cache.ManagedArchiveCache.fromC(
+      params.configuration, params.managedCacheRoot
+    ).flatMap { cache =>
+      cache.withRetainedCarC(carpath, params.subsystem.systemNode.ownRuntimeResourceC) { extracted =>
         _discover_component_from_car_common(
           extracted = extracted,
           artifactpath = carpath,
