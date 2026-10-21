@@ -1,7 +1,8 @@
 # Phase 116 Checklist
 
-Status: PLANNED
-All entries are OPEN; planning is not implementation acceptance.
+Status: IN_PROGRESS — CC-01 contract authored, awaiting native validation/review
+All acceptance entries remain OPEN until their actual checks and independent
+acceptance; the authored contract is linked from the lifecycle design.
 
 ## CC-01 Contract binding
 

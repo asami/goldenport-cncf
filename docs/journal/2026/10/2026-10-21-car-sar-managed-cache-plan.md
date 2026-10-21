@@ -112,3 +112,33 @@ to an old generation, collection after release, same-content reuse and interrupt
 retirement. These are planned acceptance obligations, not new test results.
 Phase 116 remains PLANNED; existing implementation, evidence and active work are
 preserved. This refinement changes documentation only.
+
+## CC-01 contract authoring
+
+After the pre-existing work was preserved in purpose-separated local commits,
+the ordinary host issued CC-01. The lifecycle design now binds actual APIs:
+`ComponentCreate.configuration`, `StandardRepository.cacheRoot`, the existing
+CAR/SAR discovery and extraction paths, `SystemNode.ownRuntimeResourceC` and
+`Subsystem.shutdownOwned`. The latter keeps ClassLoader shutdown before backing
+lease release. The owner is the existing `subsystem` package; an absent `system`
+directory is not a reason to introduce a parallel owner.
+
+The selected design fixes typed source/tree leases, independently immutable
+captured source bodies, current-selection revisions, conservative coordinate
+reference publication and collection rechecks. A collector obtains known
+coordinate locks before generation exclusion, rereads the full reference set
+and retries if it discovers another coordinate. Prepared candidates stay pinned
+across the switch; a stale refresh cannot overwrite a newer pointer revision.
+Retired source and tree payloads have independent use and collection decisions.
+
+Capacity defaults distinguish 16 GiB of source payloads, 8 GiB of expansions and
+a 2 GiB staging subset. Persistent per-pool slot reservations avoid a global
+cache lock, include temporary copies and survive interruption conservatively.
+Retained coordinate bodies and independent captured originals both count.
+Inspection distinguishes exact bytes from rounded reservations; insufficient
+safe capacity yields a structured failure. Existing admission remains authoritative.
+
+This entry records engineering decisions, not a native Journal Entry or an
+accepted Step. Compile, independent review, real cache behavior and integrated
+acceptance remain pending. Earlier WorkArea results, Goals, histories and repair
+counts retain their original meaning; no previous evidence was moved or reset.

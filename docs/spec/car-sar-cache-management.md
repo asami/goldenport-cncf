@@ -1,6 +1,6 @@
 # CAR/SAR Cache Management
 
-Status: accepted target specification; implementation planned in Phase 116.
+Status: accepted target specification; Phase 116 started, CC-01 contract awaiting validation and independent acceptance.
 
 ## Scope and authority
 
@@ -175,3 +175,18 @@ Use local fixtures; Docker and external services are not required.
 
 Design: [cache lifecycle](../design/car-sar-cache-management.md).
 Delivery: [Phase 116](../phase/phase-116.md) and its checklist.
+
+## CC-01 contract selection
+
+The design's [concrete runtime integration contract](../design/car-sar-cache-management.md#cc-01-concrete-runtime-integration-contract)
+fixes the existing API attachment points, typed source/extraction leases, internal
+immutable source mapping, current/reference/retirement publication protocol,
+nonblocking lock order, inspection/collection results, capacity keys/defaults
+and supported filesystem outcomes. It preserves C1–C6 and the public repository
+coordinate layout. Capacity includes construction and retained coordinate-body
+copies; staging is not an extra unbounded allowance. Default reusable originals
+remain retained, and source exhaustion is reported independently.
+
+This is the selected contract for CC-02 onward, subject to CC-01's ordinary
+validation and independent review. Authoring it establishes no shared cache,
+cross-JVM protection or Phase completion.
