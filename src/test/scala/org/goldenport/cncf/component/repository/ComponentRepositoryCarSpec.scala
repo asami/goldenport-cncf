@@ -7,12 +7,12 @@ import java.util.jar.JarFile
 import java.util.zip.{ZipEntry, ZipOutputStream}
 
 import scala.jdk.CollectionConverters._
-import scala.util.Using
+import scala.util.{Try, Using}
 
 import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
-import org.scalatest.BeforeAndAfterAll
+import org.scalatest.BeforeAndAfterEach
 
 import org.goldenport.{Consequence, ConsequenceException}
 import org.goldenport.cncf.CncfVersion
@@ -38,10 +38,10 @@ import org.goldenport.configuration.ConfigurationTrace
  *  version May. 25, 2026
  *  version Jul. 31, 2026
  *  version Aug. 27, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
-class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
+class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterEach with GivenWhenThen {
   private val _e1 = afterWord("in spec:component-repository-car, example:E1, rules:CID05C-R9, phase:56, slice:CID-05C")
   private val _e2 = afterWord("in spec:component-repository-car, example:E2, rules:CID05C-R9, phase:56, slice:CID-05C")
   private val _e3 = afterWord("in spec:component-repository-car, example:E3, rules:CID05C-R9, phase:56, slice:CID-05C")
@@ -49,9 +49,119 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
   private val _e5 = afterWord("in spec:component-repository-car, example:E5, rules:CID05C-R9, phase:56, slice:CID-05C")
   private def _metadata(exampleid: String) =
     afterWord(s"in spec:component-repository-car, example:$exampleid, rules:CID05C-R9, phase:56, slice:CID-05C")
-  override def beforeAll(): Unit = {
+  private var _fixture_workarea: Option[WorkAreaSpace] = None
+  private var _previous_global_context: Option[GlobalContext] = None
+
+  override def beforeEach(): Unit = {
+    super.beforeEach()
+    _previous_global_context = Try(GlobalContext.globalContext).toOption
     val workarea = WorkAreaSpace.create(RuntimeConfig.default)
+    _fixture_workarea = Some(workarea)
     GlobalContext.set(GlobalContext(workarea))
+  }
+
+  override def afterEach(): Unit =
+    try {
+      _fixture_workarea.foreach(_.close())
+    } finally {
+      _fixture_workarea = None
+      try {
+        _previous_global_context.foreach(GlobalContext.set)
+      } finally {
+        _previous_global_context = None
+        super.afterEach()
+      }
+    }
+
+  "Repository extraction ownership" should {
+    "retain packed CAR and SAR resources for lazy access and remove them after loader shutdown" in {
+      Vector("car", "sar-car", "sar-directory").foreach { mode =>
+        _with_temp_dir { root =>
+          Given(s"a $mode repository artifact with a component JAR containing unread resources")
+          val repositorydir = Files.createDirectory(root.resolve("repository"))
+          val subsystem = TestComponentFactory.emptySubsystem(s"retained-$mode")
+          subsystem.systemNode.ownRuntimeResourceC(WorkAreaSpace.create(RuntimeConfig.default)).TAKE
+          val other = TestComponentFactory.emptySubsystem(s"other-$mode")
+          val otherarea = WorkAreaSpace.create(RuntimeConfig.default)
+          other.systemNode.ownRuntimeResourceC(otherarea).TAKE
+          GlobalContext.set(GlobalContext(otherarea))
+          val origin = ComponentOrigin.Repository("component-dir")
+          val componentid = "org.goldenport.fixture.CanonicalArchiveFixture"
+          val content = root.resolve("content")
+          val componentjar = _create_class_component_jar(
+            root.resolve("assets").resolve("fixture.jar"),
+            Seq(classOf[CanonicalArchiveFixtureFactory], classOf[CanonicalArchiveFixtureComponent]),
+            Seq("workarea-retention/lazy.txt" -> "lazy payload", "workarea-retention/after-close.txt" -> "closed")
+          )
+          val packedcar = root.resolve("fixture.car")
+          _create_canonical_component_car(packedcar, content, componentid, "0.1.0", componentjar)
+          val artifact = if (mode == "car") {
+            Files.copy(packedcar, repositorydir.resolve("fixture.car"))
+          } else {
+            val descriptor = Files.writeString(
+              root.resolve("subsystem-descriptor.json"),
+              """{"name":"retained-subsystem","version":"1.0.0","subsystem":"retained","components":[{"namespace":"org.goldenport.fixture","id":"CanonicalArchiveFixture","version":"0.1.0"}]}"""
+            )
+            val embedded = if (mode == "sar-car") {
+              Vector("component/fixture.car" -> packedcar)
+            } else {
+              Using.resource(Files.walk(content)) { stream =>
+                stream.iterator().asScala.filter(Files.isRegularFile(_)).toVector.map { path =>
+                  s"component/expanded/${content.relativize(path).toString.replace('\\', '/')}" -> path
+                }
+              }
+            }
+            val sar = repositorydir.resolve("fixture.sar")
+            _create_zip(sar, Vector("subsystem-descriptor.json" -> descriptor) ++ embedded)
+            sar
+          }
+          val repository = new ComponentRepository.ComponentDirRepository(
+            repositorydir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes()
+          )
+          try {
+            When("repository discovery for the first owner runs after another owner replaced GlobalContext, then that other owner shuts down")
+            val components = repository.discover()
+            Subsystem.shutdownOwned(other)
+            val loaders = subsystem.componentClassLoaderSnapshot
+            val jars = loaders.flatMap(_.getURLs.toVector).filter(_.getProtocol == "file")
+              .map(url => Path.of(url.toURI)).filter(_.getFileName.toString == "main.jar")
+
+            Then("the first owner's retained JARs still exist and their resources can be loaded lazily")
+            components.map(_.componentId.name) should contain(componentid)
+            loaders should not be empty
+            jars should not be empty
+            jars.foreach(path => Files.isRegularFile(path) shouldBe true)
+            val resource = loaders.iterator.flatMap(loader => Option(loader.getResourceAsStream("workarea-retention/lazy.txt"))).next()
+            Using.resource(resource) { stream =>
+              new String(stream.readAllBytes(), StandardCharsets.UTF_8) shouldBe "lazy payload"
+            }
+            val extractedroots = jars.map(_.getParent.getParent)
+            val embeddedarchives = components.flatMap(_.artifactMetadata).flatMap(_.archivePath)
+              .map(Path.of(_)).filter(_ != artifact)
+            var loadersclosedbeforeremoval = false
+            subsystem.systemNode.ownRuntimeResourceC(new AutoCloseable {
+              def close(): Unit = {
+                loadersclosedbeforeremoval = jars.forall(path => Files.exists(path)) &&
+                  loaders.forall(_.findResource("workarea-retention/after-close.txt") == null)
+              }
+            }).TAKE
+
+            When("the owning subsystem and SystemNode shut down")
+            Subsystem.shutdownOwned(subsystem)
+
+            Then("loaders close before owned extraction disappears and source artifacts remain")
+            loadersclosedbeforeremoval shouldBe true
+            subsystem.componentClassLoaderSnapshot shouldBe empty
+            extractedroots.foreach(path => Files.exists(path) shouldBe false)
+            embeddedarchives.foreach(path => Files.exists(path) shouldBe false)
+            Files.isRegularFile(artifact) shouldBe true
+          } finally {
+            Subsystem.shutdownOwned(subsystem)
+            Subsystem.shutdownOwned(other)
+          }
+        }
+      }
+    }
   }
 
   "ComponentDirRepository" should {
@@ -932,14 +1042,18 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           modeHint = Some(org.goldenport.cncf.cli.RunMode.Command)
         ).TAKE
 
-        Then("every boundary retains one inferred development component identity")
-        inferred shouldBe Vector("org.goldenport.fixture.DevDirSample")
-        descriptor.map(_.subsystemName) shouldBe Some("devdirsample")
-        descriptor.toVector.flatMap(_.componentBindings.map(_.componentName)) shouldBe Vector("org.goldenport.fixture.DevDirSample")
-        initialized.components.map(_.name) should contain ("org.goldenport.fixture.DevDirSample")
-        initialized.components.count(_.name == "org.goldenport.fixture.DevDirSample") shouldBe 1
-        initialized.components.find(_.name == "org.goldenport.fixture.DevDirSample").map(_.getClass.getName) shouldBe
-          Some(classOf[devdirsample.DevDirSamplePrimaryComponent].getName)
+        try {
+          Then("every boundary retains one inferred development component identity")
+          inferred shouldBe Vector("org.goldenport.fixture.DevDirSample")
+          descriptor.map(_.subsystemName) shouldBe Some("devdirsample")
+          descriptor.toVector.flatMap(_.componentBindings.map(_.componentName)) shouldBe Vector("org.goldenport.fixture.DevDirSample")
+          initialized.components.map(_.name) should contain ("org.goldenport.fixture.DevDirSample")
+          initialized.components.count(_.name == "org.goldenport.fixture.DevDirSample") shouldBe 1
+          initialized.components.find(_.name == "org.goldenport.fixture.DevDirSample").map(_.getClass.getName) shouldBe
+            Some(classOf[devdirsample.DevDirSamplePrimaryComponent].getName)
+        } finally {
+          Subsystem.shutdownOwned(initialized)
+        }
       }
       }
     }
@@ -1819,11 +1933,15 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           modeHint = Some(org.goldenport.cncf.cli.RunMode.Command)
         ).TAKE
 
-        Then("the declared provider component is activated from the search repository")
-        initialized.descriptor.toVector.flatMap(_.componentBindings.map(_.componentName)) should contain ("org.goldenport.fixture.PlainAiRunnerProvider")
-        initialized.components.map { component =>
-          component.displayName
-        } should contain ("plain-ai-runner-provider")
+        try {
+          Then("the declared provider component is activated from the search repository")
+          initialized.descriptor.toVector.flatMap(_.componentBindings.map(_.componentName)) should contain ("org.goldenport.fixture.PlainAiRunnerProvider")
+          initialized.components.map { component =>
+            component.displayName
+          } should contain ("plain-ai-runner-provider")
+        } finally {
+          Subsystem.shutdownOwned(initialized)
+        }
       }
       }
     }
@@ -3168,7 +3286,8 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
 
   private def _create_class_component_jar(
     target: Path,
-    classes: Seq[Class[?]]
+    classes: Seq[Class[?]],
+    resources: Seq[(String, String)] = Seq.empty
   ): Path = {
     Option(target.getParent).foreach(Files.createDirectories(_))
     Using.resource(new ZipOutputStream(Files.newOutputStream(target))) { zos =>
@@ -3180,6 +3299,11 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         Using.resource(resource.openStream()) { in =>
           in.transferTo(zos)
         }
+        zos.closeEntry()
+      }
+      resources.foreach { case (name, value) =>
+        zos.putNextEntry(new ZipEntry(name))
+        zos.write(value.getBytes(StandardCharsets.UTF_8))
         zos.closeEntry()
       }
     }

@@ -5,12 +5,13 @@ import java.util.zip.{ZipEntry, ZipInputStream}
 import scala.jdk.CollectionConverters._
 import scala.util.Using
 import org.goldenport.Consequence
-import org.goldenport.cncf.workarea.WorkAreaSpace
+import org.goldenport.cncf.workarea.{WorkAreaHandle, WorkAreaSpace}
 import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
 
 /*
  * @since   Mar. 22, 2026
- * @version Apr.  8, 2026
+ *  version Apr.  8, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SarExtracted(
@@ -28,7 +29,22 @@ object SarExtractor {
     workarea: WorkAreaSpace
   )(
     use: SarExtracted => Consequence[R]
-  ): Consequence[R] = workarea.execute { handle =>
+  ): Consequence[R] = workarea.execute(handle => _with_extracted(sar, handle, use))
+
+  private[cncf] def withRetainedExtracted[R](
+    sar: Path,
+    workarea: WorkAreaSpace,
+    register: AutoCloseable => Consequence[Unit]
+  )(
+    use: SarExtracted => Consequence[R]
+  ): Consequence[R] =
+    workarea.executeRetained(register)(handle => _with_extracted(sar, handle, use))
+
+  private def _with_extracted[R](
+    sar: Path,
+    handle: WorkAreaHandle,
+    use: SarExtracted => Consequence[R]
+  ): Consequence[R] =
     handle.createTempDir("sar-").flatMap { tmproot =>
       for {
         _ <- _unzip(sar, tmproot)
@@ -36,7 +52,6 @@ object SarExtractor {
         result <- use(extracted)
       } yield result
     }
-  }
 
   def resolveDirectory(root: Path): Consequence[SarExtracted] =
     _resolve_structure(root)

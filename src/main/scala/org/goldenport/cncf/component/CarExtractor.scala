@@ -7,13 +7,14 @@ import scala.jdk.CollectionConverters._
 import scala.util.Using
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.workarea.WorkAreaSpace
+import org.goldenport.cncf.workarea.{WorkAreaHandle, WorkAreaSpace}
 
 /*
  * @since   Feb.  3, 2026
  *  version Mar. 22, 2026
  *  version Apr.  8, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class CarExtracted(
@@ -40,7 +41,22 @@ object CarExtractor {
     workarea: WorkAreaSpace
   )(
     use: CarExtracted => Consequence[R]
-  ): Consequence[R] = workarea.execute { handle =>
+  ): Consequence[R] = workarea.execute(handle => _with_extracted(car, handle, use))
+
+  private[cncf] def withRetainedExtracted[R](
+    car: Path,
+    workarea: WorkAreaSpace,
+    register: AutoCloseable => Consequence[Unit]
+  )(
+    use: CarExtracted => Consequence[R]
+  ): Consequence[R] =
+    workarea.executeRetained(register)(handle => _with_extracted(car, handle, use))
+
+  private def _with_extracted[R](
+    car: Path,
+    handle: WorkAreaHandle,
+    use: CarExtracted => Consequence[R]
+  ): Consequence[R] =
     handle.createTempDir("car-").flatMap { tmproot =>
       for {
         _ <- _unzip(car, tmproot)
@@ -49,7 +65,6 @@ object CarExtractor {
         result <- use(extracted)
       } yield result
     }
-  }
 
   def resolveDirectory(root: Path): Consequence[CarExtracted] =
     _resolve_structure(root, root).flatMap { extracted =>

@@ -92,7 +92,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Jul. 30, 2026
  *  version Aug. 19, 2026
  *  version Sep.  8, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cli] trait CncfRuntimeInstanceLifecyclePart {
@@ -120,12 +120,11 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
 
   private[cli] val _runtime_protocol_engine = ProtocolEngine.create(_runtime_protocol)
 
-  private[cli] def _create_global_context(config: RuntimeConfig): Unit =
-    GlobalContext.set(
-      GlobalContext(
-        WorkAreaSpace.create(config)
-      )
-    )
+  private[cli] def _create_global_context(config: RuntimeConfig): WorkAreaSpace = {
+    val workarea = WorkAreaSpace.create(config)
+    GlobalContext.set(GlobalContext(workarea))
+    workarea
+  }
 
   private[cli] var _global_runtime_context: Option[GlobalRuntimeContext] = None
 
@@ -410,7 +409,6 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
     val aliasresolver = AliasLoader.load(configuration.configuration)
     LogBackendHolder.install(runconfig.logBackend)
     ObservabilityEngine.updateVisibilityPolicy(VisibilityPolicy(minLevel = runconfig.logLevel))
-    _create_global_context(runconfig)
     _reset_global_runtime_context() // TODO
     val mode = runconfig.mode
     val systemnodeshutdownconfiguration = runtimeconfigurationpreflight.fold(SystemNodeShutdownConfiguration.default) { preflight =>
@@ -419,6 +417,17 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
     observe_info(systemnodeshutdownconfiguration.observationMessage)
     val systemnode = SystemNode.create(systemnodeshutdownconfiguration)
     val subsystem0 = try {
+      val workarea = _create_global_context(runconfig)
+      systemnode.ownRuntimeResourceC(workarea) match {
+        case Consequence.Success(_) => ()
+        case Consequence.Failure(conclusion) =>
+          val failure = conclusion.getException.getOrElse(new IllegalStateException(conclusion.show))
+          try workarea.close()
+          catch {
+            case cleanup: Throwable => failure.addSuppressed(cleanup)
+          }
+          throw failure
+      }
       val processdriver = processplan.map { _ =>
         val driver = new LocalProcessExecutionDriver(progress = ProcessExecutionProgress.stderr)
         systemnode.ownRuntimeResourceC(driver) match {

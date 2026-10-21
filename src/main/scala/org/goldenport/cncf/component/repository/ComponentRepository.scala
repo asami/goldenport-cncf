@@ -16,7 +16,6 @@ import org.goldenport.observation.Descriptor
 import org.goldenport.protocol.Protocol
 import org.goldenport.observation.{Observation, ObservationRender, Taxonomy}
 import org.goldenport.cncf.bootstrap.BootstrapLog
-import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.observability.global.{GlobalObservable, ObservabilityScopeDefaults, PersistentBootstrapLog}
 import org.goldenport.cncf.component.*
 import org.goldenport.cncf.component.identity.{ComponentIdentityProjection, ComponentReleaseCoordinate}
@@ -33,7 +32,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Apr. 25, 2026
  *  version May. 25, 2026
  *  version Aug. 27, 2026
- * @version Oct.  2, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -2083,17 +2082,18 @@ object ComponentRepository extends GlobalObservable {
     log: BootstrapLog,
     sardescriptor: Option[GenericSubsystemDescriptor] = None
   ): Consequence[Vector[Component]] = {
-    val areas = GlobalContext.globalContext.workAreaSpace
-    CarExtractor.withExtracted(carpath, areas) { extracted =>
-      _discover_component_from_car_common(
-        extracted = extracted,
-        artifactpath = carpath,
-        params = params,
-        origin = origin,
-        log = log,
-        sardescriptor = sardescriptor,
-        sourcetype = sardescriptor.map(_ => "sar+car").getOrElse("car")
-      )
+    params.subsystem.systemNode.workAreaSpaceC.flatMap { areas =>
+      CarExtractor.withRetainedExtracted(carpath, areas, params.subsystem.systemNode.ownRuntimeResourceC) { extracted =>
+        _discover_component_from_car_common(
+          extracted = extracted,
+          artifactpath = carpath,
+          params = params,
+          origin = origin,
+          log = log,
+          sardescriptor = sardescriptor,
+          sourcetype = sardescriptor.map(_ => "sar+car").getOrElse("car")
+        )
+      }
     }
   }
 
@@ -2395,9 +2395,10 @@ object ComponentRepository extends GlobalObservable {
     origin: ComponentOrigin,
     log: BootstrapLog
   ): Consequence[Vector[Component]] = {
-    val areas = GlobalContext.globalContext.workAreaSpace
-    SarExtractor.withExtracted(sarpath, areas) { extracted =>
-      _discover_component_from_sar_extracted(extracted, params, origin, log)
+    params.subsystem.systemNode.workAreaSpaceC.flatMap { areas =>
+      SarExtractor.withRetainedExtracted(sarpath, areas, params.subsystem.systemNode.ownRuntimeResourceC) { extracted =>
+        _discover_component_from_sar_extracted(extracted, params, origin, log)
+      }
     }
   }
 
