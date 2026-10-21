@@ -25,7 +25,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class FileExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -37,6 +37,118 @@ final class FileExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhe
   private val _path = WorkspaceFilePath.parseC("message\n\\.txt").toOption.get
 
   "Typed File DSL under the owning UoW" should {
+    "prepare and store exact-name gzip using B's root and byte policy for a program constructed under A" in {
+      Given("independent normally assembled A and B workspaces with different current limits")
+      val contexta = _fixture(cap = 128)
+      val contextb = _fixture(cap = 32)
+      val behavior = new FileDslBehavior(Behavior.Core(contexta.context, None, None))
+      val directory = WorkspaceFilePath.parseC("archive/nested").toOption.get
+      val path = WorkspaceFilePath.parseC("archive/nested/selected.gz").toOption.get
+      val bytes = Vector[Byte](0, -1, -128, 42)
+      val program = for {
+        prepared <- behavior.prepare(_target, directory)
+        written <- behavior.writeBytes(_target, path, bytes, FileRepresentation.Gzip)
+        read <- behavior.readBytes(_target, path, FileRepresentation.Gzip)
+      } yield (prepared, written, read)
+      val beforeinterpretation = _names(contexta.checkout) -> _names(contextb.checkout)
+      val oversized = behavior.writeBytes(_target, WorkspaceFilePath.parseC("too-large").toOption.get,
+        Vector.fill[Byte](33)(1), FileRepresentation.Identity)
+      try {
+        When("B's actual UoW interprets the already constructed directory and byte programs")
+        val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(contextb.context))
+        val result = interpreter.run(program)
+        val rejected = interpreter.run(oversized)
+        Then("construction has no IO, B alone changes and B's smaller current cap rejects the oversized input")
+        beforeinterpretation shouldBe (Set.empty[String] -> Set.empty[String])
+        val (prepared, written, read) = result.toOption.get
+        prepared.outcome shouldBe FilePrepareDirectoryOutcome.Created
+        written.outcome shouldBe FileWriteOutcome.Created
+        read.bytes shouldBe Some(bytes)
+        read.representation shouldBe FileRepresentation.Gzip
+        _names(contexta.checkout) shouldBe empty
+        _names(contextb.checkout) shouldBe Set("archive")
+        _names(contextb.checkout.resolve(directory.value)) shouldBe Set("selected.gz")
+        rejected.isFaillure shouldBe true
+        rejected.toString should not include contextb.checkout.toString
+      } finally {
+        _close(contextb)
+        _close(contexta)
+      }
+    }
+
+    "record directory and repeated byte intents as separate payload-safe External occurrences without services" in {
+      Given("an unconfigured construction context and typed stub results for every new File intent")
+      val context = ExecutionContext.create()
+      val behavior = new FileDslBehavior(Behavior.Core(context, None, None))
+      val bytes = "private binary payload".getBytes(StandardCharsets.UTF_8).toVector
+      val directoryresult = FilePrepareDirectoryResult(_target, _path, FilePrepareDirectoryOutcome.Created)
+      val writeresult = FileWriteBytesResult(_target, _path, FileRepresentation.Gzip, FileWriteOutcome.Created)
+      val readresult = FileReadBytesResult(_target, _path, FileRepresentation.Gzip, Some(bytes))
+      val provider = new UnitOfWorkProgramStubProvider {
+        def resultFor[A](ordinal: Int, operation: UnitOfWorkOp[A]): Consequence[A] = operation match {
+          case UnitOfWorkOp.FilePrepareDirectory(_, _) => Consequence.success(directoryresult)
+          case UnitOfWorkOp.FileWriteBytes(_, _, _, _) => Consequence.success(writeresult)
+          case UnitOfWorkOp.FileReadBytes(_, _, _) => Consequence.success(readresult)
+          case _ => Consequence.notImplemented("unexpected File recording operation")
+        }
+      }
+      When("construction and recording consume directory, equal repeated writes and equal repeated reads")
+      val program = for {
+        prepared <- behavior.prepare(_target, _path)
+        first <- behavior.writeBytes(_target, _path, bytes, FileRepresentation.Gzip)
+        second <- behavior.writeBytes(_target, _path, bytes, FileRepresentation.Gzip)
+        read <- behavior.readBytes(_target, _path, FileRepresentation.Gzip)
+        again <- behavior.readBytes(_target, _path, FileRepresentation.Gzip)
+      } yield (prepared, first, second, read, again)
+      val recording = UnitOfWorkProgramRecorder.record(program, provider)
+      Then("five original occurrences survive separately and no authority or private payload is captured in display")
+      recording.result.toOption shouldBe Some((directoryresult, writeresult, writeresult, readresult, readresult))
+      recording.occurrences.map(_.operation) shouldBe Vector(
+        UnitOfWorkOp.FilePrepareDirectory(_target, _path),
+        UnitOfWorkOp.FileWriteBytes(_target, _path, bytes, FileRepresentation.Gzip),
+        UnitOfWorkOp.FileWriteBytes(_target, _path, bytes, FileRepresentation.Gzip),
+        UnitOfWorkOp.FileReadBytes(_target, _path, FileRepresentation.Gzip),
+        UnitOfWorkOp.FileReadBytes(_target, _path, FileRepresentation.Gzip))
+      recording.occurrences.map(_.ordinal) shouldBe Vector(0, 1, 2, 3, 4)
+      recording.occurrences.map(_.effectClass) shouldBe Vector.fill(5)(UnitOfWorkEffectClass.External)
+      context.workspaceExecutionAdmissionOption shouldBe None
+      context.resourceReadLimitsC.isFaillure shouldBe true
+      Vector(recording.occurrences.mkString, readresult.toString, writeresult.toString, directoryresult.toString).foreach { display =>
+        display should not include "private binary payload"
+        display should not include bytes.toString
+        display should not include _path.value
+      }
+    }
+
+    "use B's actual ReadOnly grant and actual Component ancestry for every new File intent" in {
+      Given("a program owner A and ReadOnly B with one Identity leaf")
+      val contexta = _fixture()
+      val contextb = _fixture(permission = WorkspacePermission.ReadOnly)
+      Files.write(contextb.checkout.resolve(_path.value), Array[Byte](0, -1))
+      val behavior = new FileDslBehavior(Behavior.Core(contexta.context, None, None))
+      val prepare = behavior.prepare(_target, WorkspaceFilePath.parseC("new/nested").toOption.get)
+      val write = behavior.writeBytes(_target, WorkspaceFilePath.parseC("new.gz").toOption.get, Vector.empty, FileRepresentation.Gzip)
+      val read = behavior.readBytes(_target, _path, FileRepresentation.Identity)
+      val scope = contextb.subsystem.globalRuntimeContext.createChildScope(ScopeKind.Component, _owner.name)
+      val impostor = ExecutionContext.create().withScope(scope)
+      try {
+        When("B and a same-labelled generic Component scope interpret A's programs")
+        val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(contextb.context))
+        val denied = Vector(interpreter.run(prepare).isFaillure, interpreter.run(write).isFaillure)
+        val allowed = interpreter.run(read)
+        val rejected = new UnitOfWorkInterpreter(new UnitOfWork(impostor)).run(read)
+        Then("B permits only reads and a label cannot substitute for actual Component ancestry")
+        denied shouldBe Vector(true, true)
+        allowed.toOption.get.bytes shouldBe Some(Vector[Byte](0, -1))
+        rejected.isFaillure shouldBe true
+        _names(contexta.checkout) shouldBe empty
+        _names(contextb.checkout) shouldBe Set(_path.value)
+      } finally {
+        _close(contextb)
+        _close(contexta)
+      }
+    }
+
     "compose read, create, read, update and read through a normal workspace-only V3 runtime" in {
       Given("normal embedding assembly with a V3 workspace/grant declaration, a small runtime cap and no process definitions")
       val fixture = _fixture()
@@ -168,7 +280,13 @@ final class FileExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhe
         UnitOfWorkOp.FileReadText(null, _path), UnitOfWorkOp.FileReadText(FileTarget(null.asInstanceOf[WorkspaceId]), _path),
         UnitOfWorkOp.FileReadText(_target, null), UnitOfWorkOp.FileReadText(_target, _forged_path("../private")),
         UnitOfWorkOp.FileWriteText(_target, _path, null, FileWriteMode.CreateNew),
-        UnitOfWorkOp.FileWriteText(_target, _path, "new", null)
+        UnitOfWorkOp.FileWriteText(_target, _path, "new", null),
+        UnitOfWorkOp.FilePrepareDirectory(null, _path),
+        UnitOfWorkOp.FilePrepareDirectory(_target, _forged_path("../private")),
+        UnitOfWorkOp.FileWriteBytes(_target, _path, null, FileRepresentation.Identity),
+        UnitOfWorkOp.FileWriteBytes(_target, _path, Vector.empty, null),
+        UnitOfWorkOp.FileReadBytes(_target, _path, null),
+        UnitOfWorkOp.FileReadBytes(_target, null, FileRepresentation.Gzip)
       )
       val admission = fixture.context.workspaceExecutionAdmissionOption.get
       val nonglobal = org.goldenport.cncf.context.ScopeContext(ScopeKind.Runtime, "no-global", None,
@@ -178,12 +296,15 @@ final class FileExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhe
       try {
         When("the ordinary interpreter consumes missing-service programs and malformed operations")
         val unconfigured = new UnitOfWorkInterpreter(new UnitOfWork(absent))
-        val missingservice = Vector(unconfigured.run(readprogram).isFaillure, unconfigured.run(writeprogram).isFaillure)
+        val missingservice = Vector(unconfigured.run(readprogram).isFaillure, unconfigured.run(writeprogram).isFaillure,
+          unconfigured.run(behavior.prepare(_target, _path)).isFaillure,
+          unconfigured.run(behavior.writeBytes(_target, _path, Vector.empty, FileRepresentation.Identity)).isFaillure,
+          unconfigured.run(behavior.readBytes(_target, _path, FileRepresentation.Identity)).isFaillure)
         val noglobal = new UnitOfWorkInterpreter(new UnitOfWork(missingglobal)).run(writeprogram)
         val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
         val rejected = invalid.map(operation => interpreter.interpret(operation).isFaillure)
         Then("construction requires no services and every invalid interpretation fails before filesystem effects")
-        missingservice shouldBe Vector(true, true)
+        missingservice shouldBe Vector.fill(5)(true)
         noglobal.isFaillure shouldBe true
         rejected shouldBe Vector.fill(invalid.size)(true)
         _names(fixture.checkout) shouldBe empty
@@ -266,6 +387,11 @@ object FileExecutionDslSpec {
 }
 
 private final class FileDslBehavior(val behaviorCore: Behavior.Core) extends Behavior {
+  def prepare(target: FileTarget, path: WorkspaceFilePath) = file_prepare_directory(target, path)
+  def writeBytes(target: FileTarget, path: WorkspaceFilePath, bytes: Vector[Byte], representation: FileRepresentation) =
+    file_write_bytes(target, path, bytes, representation)
+  def readBytes(target: FileTarget, path: WorkspaceFilePath, representation: FileRepresentation) =
+    file_read_bytes(target, path, representation)
   def read(target: FileTarget, path: WorkspaceFilePath) = file_read_text(target, path)
   def write(target: FileTarget, path: WorkspaceFilePath, text: String, mode: FileWriteMode) = file_write_text(target, path, text, mode)
 }

@@ -1,6 +1,6 @@
 package org.goldenport.cncf.workspace
 
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, LinkOption, Path}
 import java.nio.file.attribute.BasicFileAttributes
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
@@ -9,7 +9,7 @@ import org.goldenport.cncf.context.ScopeContext
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 opaque type WorkspaceId = String
@@ -86,6 +86,19 @@ private[cncf] final class WorkspaceBinding private (
 
   private[cncf] def resolveFileC(path: WorkspaceFilePath): Consequence[Path] =
     WorkspaceFilePath.parseC(path.value).flatMap(valid => _resolve_c(valid.value))
+
+  /** Ordinary directory identity for cooperating nested-directory preparation. */
+  private[cncf] def directoryIdentityC(path: WorkspaceFilePath): Consequence[Option[AnyRef]] =
+    resolveFileC(path).flatMap { resolved =>
+      try {
+        val attributes = Files.readAttributes(resolved, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS)
+        if (attributes.isDirectory && !attributes.isSymbolicLink)
+          workingDirectoryC.map(_ => Option(attributes.fileKey()))
+        else WorkspaceBinding.unavailableC
+      } catch {
+        case NonFatal(_) => WorkspaceBinding.unavailableC
+      }
+    }
 
   private def _resolve_c(path: String): Consequence[Path] =
     workingDirectoryC.flatMap { root =>

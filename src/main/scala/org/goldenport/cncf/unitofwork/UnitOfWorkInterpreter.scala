@@ -60,7 +60,7 @@ import org.simplemodeling.model.directive.Update
  *  version May. 11, 2026
  *  version Aug.  1, 2026
  *  version Sep. 19, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -1331,6 +1331,21 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         _with_process_execution_calltree(execution) {
           _execute_process_c(execution)
         }
+      }
+
+    case UnitOfWorkOp.FilePrepareDirectory(target, path) =>
+      _with_calltree("uow:file:prepare-directory") {
+        org.goldenport.cncf.workspace.WorkspaceFileExecution.prepareDirectoryC(uow.executionContext, target, path)
+      }
+
+    case UnitOfWorkOp.FileWriteBytes(target, path, bytes, representation) =>
+      _with_calltree("uow:file:write-bytes") {
+        org.goldenport.cncf.workspace.WorkspaceFileExecution.writeBytesC(uow.executionContext, target, path, bytes, representation)
+      }
+
+    case UnitOfWorkOp.FileReadBytes(target, path, representation) =>
+      _with_calltree("uow:file:read-bytes") {
+        org.goldenport.cncf.workspace.WorkspaceFileExecution.readBytesC(uow.executionContext, target, path, representation)
       }
 
     case UnitOfWorkOp.FileReadText(target, path) =>

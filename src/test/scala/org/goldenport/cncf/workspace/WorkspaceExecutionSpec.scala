@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkspaceExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -22,6 +22,35 @@ final class WorkspaceExecutionSpec extends AnyWordSpec with Matchers with GivenW
   private val _owner = ComponentId("org.goldenport.spec.WorkspaceOwner")
 
   "Shared logical workspace admission" should {
+    "recheck literal directory identity without following linked segments or a retargeted root" in {
+      Given("a root alias with an ordinary literal-named nested directory, a file and a relative directory link")
+      val root = _root()
+      val first = Files.createDirectory(root.resolve("first"))
+      val second = Files.createDirectory(root.resolve("second"))
+      val configured = Files.createSymbolicLink(root.resolve("configured"), first)
+      val directory = Files.createDirectory(first.resolve("literal\n\\name"))
+      Files.createSymbolicLink(first.resolve("link"), directory)
+      Files.write(first.resolve("file"), Array[Byte](1))
+      val binding = WorkspaceBinding.createC(_id, configured).toOption.get
+      val path = WorkspaceFilePath.parseC("literal\n\\name").toOption.get
+      try {
+        When("the binding resolves current ordinary directory identity and later sees a retargeted configured alias")
+        val original = binding.directoryIdentityC(path)
+        val repeated = binding.directoryIdentityC(path)
+        val denied = Vector("link", "link/child", "file", "missing").map(name =>
+          binding.directoryIdentityC(WorkspaceFilePath.parseC(name).toOption.get))
+        Files.delete(configured)
+        Files.createSymbolicLink(configured, second)
+        val retargeted = binding.directoryIdentityC(path)
+        Then("identity remains stable for the ordinary directory and all linked, non-directory or rebound selections fail")
+        original.isSuccess shouldBe true
+        repeated.toOption shouldBe original.toOption
+        denied.foreach(_.isFaillure shouldBe true)
+        retargeted.isFaillure shouldBe true
+        retargeted.toString should not include root.toString
+      } finally _close(root)
+    }
+
     "accept safe logical IDs and normalized relative paths while rejecting host and traversal forms" in {
       Given("generated lowercase logical IDs and explicit unsafe ID and relative-path forms")
       val names = Gen.listOfN(8, Gen.alphaLowerChar).map(_.mkString)

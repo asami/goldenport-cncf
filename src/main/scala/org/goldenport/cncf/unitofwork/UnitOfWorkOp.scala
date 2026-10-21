@@ -24,7 +24,7 @@ import org.goldenport.cncf.processexecution.{GitExecutionResult, GitOperation, G
 import org.goldenport.cncf.operation.evaluation.OperationEvaluationSupplementalIntent
 import org.goldenport.cncf.workflow.{ActionExecution, ProviderExecutionRequest, StateMachineProvidedApiRequest}
 import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
-import org.goldenport.cncf.workspace.{FileReadTextResult, FileTarget, FileWriteMode, FileWriteTextResult, WorkspaceFilePath}
+import org.goldenport.cncf.workspace.{FilePrepareDirectoryResult, FileReadBytesResult, FileReadTextResult, FileRepresentation, FileTarget, FileWriteBytesResult, FileWriteMode, FileWriteTextResult, WorkspaceFilePath}
 
 /*
  * UnitOfWork operation algebra.
@@ -41,7 +41,7 @@ import org.goldenport.cncf.workspace.{FileReadTextResult, FileTarget, FileWriteM
  *  version Apr. 29, 2026
  *  version May.  4, 2026
  *  version Jul. 26, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -132,6 +132,30 @@ object UnitOfWorkOp {
     target: GitTarget,
     operation: GitOperation[A]
   ) extends UnitOfWorkOp[GitExecutionResult[A]]
+
+  final case class FilePrepareDirectory(
+    target: FileTarget,
+    path: WorkspaceFilePath
+  ) extends UnitOfWorkOp[FilePrepareDirectoryResult] {
+    override def toString: String = s"FilePrepareDirectory($target,FileWrite)"
+  }
+
+  final case class FileWriteBytes(
+    target: FileTarget,
+    path: WorkspaceFilePath,
+    bytes: Vector[Byte],
+    representation: FileRepresentation
+  ) extends UnitOfWorkOp[FileWriteBytesResult] {
+    override def toString: String = s"FileWriteBytes($target,$representation,FileWrite)"
+  }
+
+  final case class FileReadBytes(
+    target: FileTarget,
+    path: WorkspaceFilePath,
+    representation: FileRepresentation
+  ) extends UnitOfWorkOp[FileReadBytesResult] {
+    override def toString: String = s"FileReadBytes($target,$representation,FileRead)"
+  }
 
   final case class FileReadText(
     target: FileTarget,
