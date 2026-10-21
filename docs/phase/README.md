@@ -15,6 +15,12 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
+- [Phase 116](phase-116.md) / [checklist](phase-116-checklist.md) is PLANNED:
+  CAR/SAR original archives and reusable expansions under `~/.cncf/cache`,
+  runtime/JVM usage protection and bounded unused-cache collection. Establish
+  the shared CAR lifetime/collection route first, then SAR and recovery policy.
+  This preserves the WorkArea repair and all ongoing work; no Phase is started.
+
 - [Phase 115](phase-115.md) / [checklist](phase-115-checklist.md) is CLOSED
   on 2026-10-18 under `phase115-final-closure-20261018-01@1`, taking effect through
   the containing local release commit. All five RCP obligations are DONE: Core

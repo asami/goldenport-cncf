@@ -5553,3 +5553,32 @@ of this closure record, the distinct final local release commit is pending paren
 execution and committed-tree verification; its actual outcome belongs to the
 native commit receipt. This closure starts no successor or remote
 publication and leaves the other Phase histories unchanged.
+
+## Phase 116 — Managed CAR/SAR Cache (planned 2026-10-21)
+
+[Phase 116](../phase/phase-116.md) and its
+[checklist](../phase/phase-116-checklist.md) establish reusable archive extraction
+as a managed cache under `~/.cncf/cache`, separate from original CAR/SAR archives
+and mutable WorkArea execution files. The
+[specification](../spec/car-sar-cache-management.md) and
+[design](../design/car-sar-cache-management.md) define immutable generations,
+runtime/JVM leases, atomic publication and unused-entry collection.
+
+Delivery prioritizes the connected CAR route: two consumers share one expansion,
+one can close without breaking the other, and collection becomes possible only
+after the final lease ends. Cross-JVM protection is part of that main route.
+SAR composition, source-generation changes, interrupted staging and bounded
+capacity operations follow. Retain current/reusable original archives for offline
+re-extraction by default; ordinary source eviction has its own explicit policy.
+SNAPSHOT switches its current immutable generation under a short coordinate
+update lock; generation usage locks retain old payloads only during actual use.
+Unused superseded payloads are reclaimed at replacement or final release, with
+retryable recovery rather than historical retention.
+
+Reuse existing repository selection, admission and resource authorization. The
+WorkArea incident repair and evidence remain the baseline, not proof that cache
+reuse is implemented. Preserve active work and histories; do not automatically
+sweep old unleased temporary directories. Phase 112 documentation projection is
+related but is not a prerequisite. This plan starts no Phase or consumer change.
+The [handoff journal](../journal/2026/10/2026-10-21-car-sar-managed-cache-plan.md)
+records the decision and implementation order.
