@@ -1,7 +1,8 @@
 package org.goldenport.cncf.http
 
 import io.circe.{Json, JsonObject}
-import io.circe.parser.parse
+import io.circe.jawn.CirceSupportParser
+import org.typelevel.jawn.{Facade, FContext, Parser}
 import org.goldenport.Consequence
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.operation.CmlOperationDefinition
@@ -15,7 +16,7 @@ import org.goldenport.schema.{Multiplicity, XJson}
  * Foreign JSON syntax admission for the selected Operation's actual parameters.
  *
  * @since   Oct. 18, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 private[http] object OperationJsonBodyDecoder {
@@ -24,10 +25,72 @@ private[http] object OperationJsonBodyDecoder {
     parameters: Seq[ParameterDefinition],
     operation: Option[CmlOperationDefinition] = None
   ): Consequence[Option[Record]] =
-    parse(text).toOption.flatMap(_.asObject) match {
+    _parse_object(text) match {
       case None => Consequence.success(None)
-      case Some(fields) => _decode_object(fields, parameters, operation).map(Some(_))
+      case Some(parsed) if parsed.occurrences.map(_._1).distinct.size == parsed.occurrences.size =>
+        _decode_object(parsed.fields, parameters, operation).map(Some(_))
+      case Some(parsed) =>
+        Consequence.zipN(parsed.occurrences.map { case (key, value) =>
+          _decode_object(JsonObject.singleton(key, value), parameters, operation)
+        }).map(records => Some(Record(records.toVector.flatMap(_.fields))))
     }
+
+  private case class ParsedObject(fields: JsonObject, occurrences: Vector[(String, Json)])
+
+  private def _parse_object(text: String): Option[ParsedObject] = {
+    var rootfields = Vector.empty[(String, Json)]
+    given Facade[Json] = new RootOccurrenceFacade(fields => rootfields = fields)
+    Parser.parseFromString[Json](text).toOption.flatMap(_.asObject.map(fields => ParsedObject(fields, rootfields)))
+  }
+
+  private final class RootOccurrenceFacade(capture: Vector[(String, Json)] => Unit) extends Facade[Json] {
+    private val _delegate = new CirceSupportParser(None, true).facade
+    private var _object_started = false
+
+    override def singleContext(index: Int): FContext[Json] = _delegate.singleContext(index)
+    override def arrayContext(index: Int): FContext[Json] = _delegate.arrayContext(index)
+    override def objectContext(index: Int): FContext[Json] = {
+      val context = _delegate.objectContext(index)
+      if (_object_started) context
+      else {
+        _object_started = true
+        new RootObjectContext(context, _delegate, capture)
+      }
+    }
+    override def jnull(index: Int): Json = _delegate.jnull(index)
+    override def jfalse(index: Int): Json = _delegate.jfalse(index)
+    override def jtrue(index: Int): Json = _delegate.jtrue(index)
+    override def jnum(s: CharSequence, decIndex: Int, expIndex: Int, index: Int): Json =
+      _delegate.jnum(s, decIndex, expIndex, index)
+    override def jstring(s: CharSequence, index: Int): Json = _delegate.jstring(s, index)
+  }
+
+  private final class RootObjectContext(delegate: FContext[Json], facade: Facade[Json],
+      capture: Vector[(String, Json)] => Unit) extends FContext[Json] {
+    private var _pending_key = Option.empty[String]
+    private var _fields = Vector.empty[(String, Json)]
+
+    override def add(s: CharSequence, index: Int): Unit = {
+      delegate.add(s, index)
+      _pending_key match {
+        case None => _pending_key = Some(s.toString)
+        case Some(key) =>
+          _fields :+= key -> facade.jstring(s, index)
+          _pending_key = None
+      }
+    }
+    override def add(v: Json, index: Int): Unit = {
+      delegate.add(v, index)
+      _pending_key.foreach(key => _fields :+= key -> v)
+      _pending_key = None
+    }
+    override def finish(index: Int): Json = {
+      val result = delegate.finish(index)
+      capture(_fields)
+      result
+    }
+    override def isObj: Boolean = delegate.isObj
+  }
 
   private def _decode_object(
     fields: JsonObject,

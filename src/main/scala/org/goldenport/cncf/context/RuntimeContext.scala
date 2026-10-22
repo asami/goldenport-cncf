@@ -34,7 +34,7 @@ import org.goldenport.util.StringUtils
  *  version May. 10, 2026
  *  version Jun. 18, 2026
  *  version Aug. 12, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContext(
@@ -125,6 +125,13 @@ final class RuntimeContext(
   def withUnitOfWorkContext(
     @deprecatedName("executionContext", "0.5.1") executioncontext: => ExecutionContext,
     @deprecatedName("newToken", "0.5.1") newtoken: String = toToken
+  ): RuntimeContext =
+    _with_unit_of_work_context(executioncontext, newtoken, core)
+
+  private def _with_unit_of_work_context(
+    executioncontext: => ExecutionContext,
+    newtoken: String,
+    selectedcore: ScopeContext.Core
   ): RuntimeContext = {
     lazy val reboundunitofwork: UnitOfWork =
       unitOfWork.withContext(executioncontext)
@@ -133,7 +140,7 @@ final class RuntimeContext(
         new UnitOfWorkInterpreter(reboundunitofwork).interpret(fa)
     }
     val runtime = new RuntimeContext(
-      core = core,
+      core = selectedcore,
       unitofworksupplier = () => reboundunitofwork,
       unitofworkinterpreterfn = interpreter,
       commitaction = commitaction,
@@ -150,10 +157,12 @@ final class RuntimeContext(
     runtime
   }
 
-  private[cncf] def withActionUnitOfWorkContext(
-    executioncontext: => ExecutionContext
+  private[cncf] def _with_action_unit_of_work_context(
+    executioncontext: => ExecutionContext,
+    scope: ScopeContext
   ): RuntimeContext = {
-    val runtime = withUnitOfWorkContext(executioncontext)
+    val selectedcore = core.copy(entityspace = Some(EntitySpaceContext(scope.entitySpace)))
+    val runtime = _with_unit_of_work_context(executioncontext, toToken, selectedcore)
     runtime._execution_metadata_cell = _execution_metadata_cell
     runtime
   }

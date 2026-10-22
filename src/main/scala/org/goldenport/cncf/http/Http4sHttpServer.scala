@@ -35,7 +35,7 @@ import org.goldenport.http.{HttpContext, HttpPath, HttpRequest, HttpResponse, Ht
 import org.goldenport.cncf.component.builtin.BuiltinComponentIdentity
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
 import org.goldenport.cncf.component.{ComponentId, ComponentIdentityCompatibilityAdapter, ComponentIdentityCompatibilityObserver}
-import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.context.{ExecutionContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel, SubjectKind}
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig, RuntimeOperationSecurityPolicy}
 import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, SubsystemCurrentUserEvidence}
 import org.goldenport.cncf.blob.{BlobKind, BlobPayloadSupport, BlobRepository, BlobStoreFactory, BlobStorageRef}
@@ -69,7 +69,8 @@ import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
  *  version Aug. 14, 2026
  *  version Aug. 15, 2026
  *  version Sep. 29, 2026
- * @version Oct. 20, 2026
+ *  version Oct. 20, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -86,6 +87,12 @@ final class Http4sHttpServer(
   private val _runtime_config = RuntimeConfig.from(engine.runtimeSubsystem.configuration)
   private val _operation_security_policy = engine.runtimeSubsystem.runtimeOperationSecurityPolicyC.getOrElse(
     throw new IllegalStateException("runtime operation security policy bindings have not been admitted")
+  )
+  private val _oauth_connections = new OAuthConnectionHttp(
+    app => _component(app),
+    (req, component) => _request_execution_context(req, Some(component.componentId.name)),
+    component => _oauth_callback_context(component),
+    _operation_mode
   )
   private val _static_form_app_renderer =
     new StaticFormAppRenderer(_runtime_config.staticFormAppRendererConfig)
@@ -143,7 +150,7 @@ final class Http4sHttpServer(
   }
 
   private[http] def routes(wsb: WebSocketBuilder2[IO]): HttpRoutes[IO] =
-    _routes(wsb, None)
+    _oauth_connections.routes <+> _routes(wsb, None)
 
   private def _routes(wsb: WebSocketBuilder2[IO], originalmethod: Option[Method]): HttpRoutes[IO] = HttpRoutes.of[IO] {
       case req if req.method == Method.HEAD =>
@@ -6217,6 +6224,22 @@ final class Http4sHttpServer(
   ): Consequence[ExecutionContext] =
     _request_execution_context(req, componentname, Set.empty)
 
+  /** A matched browser flow is completion authority only, never ingress authentication. */
+  private def _oauth_callback_context(
+    component: org.goldenport.cncf.component.Component
+  ): Consequence[ExecutionContext] =
+    WebExecutionResolutionPolicy.resolveForRuntimeSubsystem(engine.runtimeSubsystem).flatMap { _ =>
+      engine.runtimeSubsystem.executionProfileC.map { _ =>
+        ExecutionContext.withSecurityContext(component.logic.executionContext(), SecurityContext(
+          Http4sHttpServer.OAuthCallbackPrincipal,
+          Set.empty,
+          SecurityLevel("anonymous"),
+          SubjectKind.Anonymous,
+          None
+        ))
+      }
+    }
+
   private def _static_request_execution_context(
     req: org.http4s.Request[IO],
     componentname: Option[String]
@@ -7975,6 +7998,10 @@ final class Http4sHttpServer(
 }
 
 object Http4sHttpServer {
+  private object OAuthCallbackPrincipal extends Principal {
+    val id: PrincipalId = PrincipalId("anonymous")
+    val attributes: Map[String, String] = Map("anonymous" -> "true")
+  }
   private[http] def _plain_structured_error_body(error: Record): String =
     Vector(
       error.getString("message"),

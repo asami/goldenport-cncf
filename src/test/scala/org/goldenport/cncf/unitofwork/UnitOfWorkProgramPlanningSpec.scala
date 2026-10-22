@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *
  * @since   Sep.  8, 2026
  *  version Sep. 28, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkProgramPlanningSpec
@@ -27,6 +27,7 @@ final class UnitOfWorkProgramPlanningSpec
   private val _control = UnitOfWorkOp.Authorize(_authorization)
   private val _local = UnitOfWorkOp.LocalDataDir("component")
   private val _external = UnitOfWorkOp.HttpGet("/external")
+  private val _binary_put = UnitOfWorkOp.HttpPutBag("/binary", Some(org.goldenport.bag.Bag.binary(Array[Byte](0, -1))), Map.empty)
   private val _sbt_target = SbtTarget(WorkspaceId.parseC("planning").toOption.get)
   private val _sbt_compile = UnitOfWorkOp.SbtExec(_sbt_target, SbtOperation.Compile)
   private val _sbt_test = UnitOfWorkOp.SbtExec(_sbt_target, SbtOperation.Test)
@@ -71,6 +72,22 @@ final class UnitOfWorkProgramPlanningSpec
   )
 
   "UnitOfWorkProgramPlanner" should {
+    "retain equal binary PUT occurrences as distinct External boundaries at their original ordinals" in {
+      Given("a binary PUT repeated between local and control operations")
+      val operations = Vector(_local, _binary_put, _binary_put, _control)
+      When("the passive sequence is planned")
+      val plan = UnitOfWorkProgramPlanner.plan(operations)
+      Then("both equal writes remain separate External occurrences without reading their bodies")
+      plan.occurrences.map(_.operation) shouldBe operations
+      plan.occurrences.map(_.ordinal) shouldBe Vector(0, 1, 2, 3)
+      plan.occurrences.map(_.effectClass) shouldBe Vector(UnitOfWorkEffectClass.Local,
+        UnitOfWorkEffectClass.External, UnitOfWorkEffectClass.External, UnitOfWorkEffectClass.Control)
+      plan.segments shouldBe Vector(UnitOfWorkPlanSegment.LocalAtomic(plan.occurrences.take(1)),
+        UnitOfWorkPlanSegment.ExternalBoundary(plan.occurrences(1)),
+        UnitOfWorkPlanSegment.ExternalBoundary(plan.occurrences(2)),
+        UnitOfWorkPlanSegment.LocalAtomic(plan.occurrences.drop(3)))
+    }
+
     "retain File reads and repeated writes in order beside local, control, Git and SBT intents" in {
       Given("logical File read and write intents mixed with existing control, local, Git and SBT operations")
       val id = WorkspaceId.parseC("planning").toOption.get
@@ -252,18 +269,19 @@ final class UnitOfWorkProgramPlanningSpec
     }
 
     "preserve arbitrary safe category order without merging across external occurrences" in {
-      Given("generated sequences made from bounded control, local, HTTP, typed SBT and state-machine representatives")
-      val operations = Gen.listOf(
+      Given("generated sequences made from bounded control, local, HTTP including binary PUT, typed SBT and state-machine representatives")
+      val operations = Gen.choose(0, 100).flatMap(length => Gen.listOfN(length,
         Gen.oneOf(
           _control,
           _local,
           _external,
+          _binary_put,
           _sbt_compile,
           _sbt_test,
           _provider_operation,
           _provided_api_operation
         )
-      ).map(_.toVector)
+      )).map(_.toVector)
 
       When("each generated sequence is planned")
       val property = Prop.forAll(operations) { input =>
@@ -289,12 +307,14 @@ final class UnitOfWorkProgramPlanningSpec
         }
       }
 
-      Then("the bounded ScalaCheck run proves order preservation and external separation")
       val result = Test.check(
-        Test.Parameters.default.withMinSuccessfulTests(50),
+        Test.Parameters.default.withMinSuccessfulTests(100),
         property
       )
+      Then("the bounded ScalaCheck run proves order preservation and external separation")
       result.passed shouldBe true
+      result.succeeded should be >= 100
+      result.discarded shouldBe 0
     }
   }
 }
