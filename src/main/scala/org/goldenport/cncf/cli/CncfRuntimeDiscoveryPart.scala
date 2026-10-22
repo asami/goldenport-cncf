@@ -33,7 +33,8 @@ import org.goldenport.cncf.observability.global.GlobalObservable
  *  version May. 25, 2026
  *  version Jun. 29, 2026
  *  version Jul. 30, 2026
- * @version Aug. 19, 2026
+ *  version Aug. 19, 2026
+ * @version Oct. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cli] trait CncfRuntimeDiscoveryPart {
@@ -361,7 +362,7 @@ private[cli] trait CncfRuntimeDiscoveryPart {
     componentname: String,
     version: Option[String] = None
   ): Option[java.nio.file.Path] =
-    specs.iterator.flatMap(_.resolveComponentArchivePath(componentname, version)).toSeq.headOption
+    specs.iterator.flatMap(_.resolveComponentArchivePath(componentname, version)).nextOption()
 
   private[cli] def _spec_argument(
     spec: ComponentRepository.Specification

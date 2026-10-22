@@ -1,6 +1,9 @@
 package org.goldenport.cncf.cli
 
 import java.time.Instant
+import java.net.InetSocketAddress
+import java.util.concurrent.atomic.AtomicInteger
+import com.sun.net.httpserver.{HttpExchange, HttpHandler, HttpServer}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.security.MessageDigest
@@ -21,7 +24,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Apr. 15, 2026
  *  version Apr. 25, 2026
  *  version Jul. 31, 2026
- * @version Aug. 15, 2026
+ *  version Aug. 15, 2026
+ * @version Oct. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -716,10 +720,29 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
       )
       val specs = bootstrap.repositories.searchRepositories.toOption.get
 
-      val resolved = CncfRuntime.resolveSubsystemInvocation(bootstrap.invocation, specs)
+      val requests = new AtomicInteger(0)
+      val fallback = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0)
+      fallback.createContext("/", new HttpHandler {
+        def handle(exchange: HttpExchange): Unit = {
+          requests.incrementAndGet()
+          try exchange.sendResponseHeaders(503, -1L)
+          finally exchange.close()
+        }
+      })
+      fallback.start()
+      try {
+        val bounded = specs.map {
+          case standard: ComponentRepository.StandardRepository.Specification =>
+            standard.copy(baseUrl = s"http://127.0.0.1:${fallback.getAddress.getPort}",
+              cacheRoot = cwd.resolve("fallback-cache"))
+          case local => local
+        }
+        val resolved = CncfRuntime.resolveSubsystemInvocation(bootstrap.invocation, bounded)
 
-      Then("the repository CAR is appended as the component file")
-      resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.componentFileKey}=${car}")
+        Then("the first matching local CAR is appended without consulting any later remote repository")
+        resolved.actualArgs.toVector should contain (s"--${RuntimeConfig.componentFileKey}=${car}")
+        requests.get shouldBe 0
+      } finally fallback.stop(0)
     }
 
     "reject a bare named selector and avoid injecting a foreign same-looking local CAR" in _with_workspace("textus-component-name-identity") { root =>
@@ -1103,9 +1126,18 @@ final class CncfRuntimeConfigFileSpec extends AnyWordSpec with Matchers with Giv
     val target = Paths.get("target").toAbsolutePath.normalize
     Files.createDirectories(target)
     val workspace = Files.createTempDirectory(target, s"$prefix-")
+    Files.createDirectories(workspace.resolve(".textus"))
+    Files.createDirectories(workspace.resolve(".cncf"))
+    val previoushome = sys.props.get("user.home")
+    val home = Files.createDirectories(workspace.resolve("home"))
     try {
+      System.setProperty("user.home", home.toString)
       f(workspace)
     } finally {
+      previoushome match {
+        case Some(value) => System.setProperty("user.home", value)
+        case None => System.clearProperty("user.home")
+      }
       _delete_recursively(workspace)
     }
   }

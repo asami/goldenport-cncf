@@ -7,7 +7,8 @@ import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
 import org.goldenport.cncf.cli.{CncfRuntime, RunMode}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
-import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
+import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.entity.EntityPersistable
 import org.goldenport.cncf.entity.aggregate.AggregateDefinition
 import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimePlan, PartitionStrategy, WorkingSetDefinition}
@@ -26,13 +27,18 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version May.  3, 2026
  *  version Aug. 19, 2026
  *  version Sep. 17, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryRuntimePlanActivationSpec
   extends AnyWordSpec
   with Matchers
   with GivenWhenThen {
+  override protected def withFixture(test: NoArgTest): org.scalatest.Outcome = {
+    val previous = GlobalRuntimeContext.current
+    try super.withFixture(test)
+    finally GlobalRuntimeContext.current = previous
+  }
 
   "ComponentFactory discover bootstrap" should {
     "activate runtime plans supplied by component provider" in {
@@ -202,13 +208,15 @@ final class ComponentFactoryRuntimePlanActivationSpec
           "--no-default-components"
         )
       )
-      val socket = consumeropt.getOrElse(fail("missing runtime extra consumer"))
+      try {
+        val socket = consumeropt.getOrElse(fail("missing runtime extra consumer"))
 
-      Then("the runtime extra socket receives the provider SPI")
-      subsystem.components.toVector.map(_.name) should contain("org.goldenport.cncf.test.RuntimeExtraSpiConsumer")
-      socket.isSpiInstalled shouldBe true
-      given ExecutionContext = ExecutionContext.create()
-      socket.aiRunner.generate(AiGenerateRequest("hello")).toOption.get.text shouldBe "runtime-extra:hello"
+        Then("the runtime extra socket receives the provider SPI")
+        subsystem.components.toVector.map(_.name) should contain("org.goldenport.cncf.test.RuntimeExtraSpiConsumer")
+        socket.isSpiInstalled shouldBe true
+        given ExecutionContext = ExecutionContext.create()
+        socket.aiRunner.generate(AiGenerateRequest("hello")).toOption.get.text shouldBe "runtime-extra:hello"
+      } finally Subsystem.shutdownOwned(subsystem)
     }
   }
 

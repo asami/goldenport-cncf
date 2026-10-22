@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /** Owning-runtime SPI specs. These are not workflow semantic acceptance or a product SBT bridge. */
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeProcessExecutionInitializationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -61,13 +61,16 @@ final class CncfRuntimeProcessExecutionInitializationSpec extends AnyWordSpec wi
         |  ordering:
         |    mode: deterministic
         |""".stripMargin)
-    Array(s"--textus.test.descriptor=$path")
+    val home = Files.createDirectories(cwd.resolve("home"))
+    Array(s"--textus.test.descriptor=$path", s"--textus.test.home.path=$home",
+      "--textus.test.home.inherit.runtime=false")
   }
   private def _host_directory(configured: Boolean): Path = {
     val workroot = Files.createDirectories(Paths.get("target/cncf/work/runtime-process-bootstrap").toAbsolutePath.normalize)
     val cwd = Files.createTempDirectory(workroot, "episode-")
+    val directory = Files.createDirectories(cwd.resolve(".textus"))
+    Files.createDirectories(cwd.resolve(".cncf"))
     if (configured) {
-      val directory = Files.createDirectories(cwd.resolve(".textus"))
       Files.writeString(directory.resolve("config.json"), Json.obj(_key -> Json.fromString(_text)).noSpaces)
     }
     cwd

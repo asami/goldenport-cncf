@@ -16,7 +16,7 @@ import org.scalatest.BeforeAndAfterEach
 
 import org.goldenport.{Consequence, ConsequenceException}
 import org.goldenport.cncf.CncfVersion
-import org.goldenport.cncf.context.GlobalContext
+import org.goldenport.cncf.context.{GlobalContext, GlobalRuntimeContext}
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.config.{ComponentParameterProvenance, RuntimeConfig}
 import org.goldenport.cncf.component.{AssemblyApiClassLoader, CarExtractor, Component, ComponentCreate, ComponentDependencyManifest, ComponentDependencyPool, ComponentDescriptor, ComponentDescriptorLoader, ComponentFactory, ComponentId, ComponentInit, ComponentInstanceId, ComponentLocalFirstClassLoader, ComponentOrigin, CoursierComponentDependencyResolver, RepositoryParameterProbeComponent, RepositoryParameterProbeFactory}
@@ -38,10 +38,15 @@ import org.goldenport.configuration.ConfigurationTrace
  *  version May. 25, 2026
  *  version Jul. 31, 2026
  *  version Aug. 27, 2026
- * @version Oct. 21, 2026
+ * @version Oct. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterEach with GivenWhenThen {
+  override protected def withFixture(test: NoArgTest): org.scalatest.Outcome = {
+    val previous = GlobalRuntimeContext.current
+    try super.withFixture(test)
+    finally GlobalRuntimeContext.current = previous
+  }
   private val _e1 = afterWord("in spec:component-repository-car, example:E1, rules:CID05C-R9, phase:56, slice:CID-05C")
   private val _e2 = afterWord("in spec:component-repository-car, example:E2, rules:CID05C-R9, phase:56, slice:CID-05C")
   private val _e3 = afterWord("in spec:component-repository-car, example:E3, rules:CID05C-R9, phase:56, slice:CID-05C")

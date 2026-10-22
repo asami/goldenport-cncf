@@ -4,16 +4,26 @@ import java.io.{ByteArrayOutputStream, PrintStream}
 import java.nio.file.{Files, Paths}
 import io.circe.parser.parse
 import org.goldenport.cncf.subsystem.{Subsystem, SystemNode}
+import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 20, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeBootstrapTerminationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+  override protected def withFixture(test: NoArgTest): org.scalatest.Outcome = {
+    val previous = GlobalRuntimeContext.current
+    val previouslegacy = CncfRuntime._global_runtime_context
+    try super.withFixture(test)
+    finally {
+      GlobalRuntimeContext.current = previous
+      CncfRuntime._global_runtime_context = previouslegacy
+    }
+  }
   "Companion bootstrap command termination" should {
     Vector(false, true).foreach { extra =>
       s"install the invocation hook around the actual companion command with extra components set to $extra" in {

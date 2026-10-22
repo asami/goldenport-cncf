@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Aug.  6, 2026
  *  version Aug. 13, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeLaunchFailureSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -25,8 +25,11 @@ final class RuntimeLaunchFailureSpec extends AnyWordSpec with Matchers with Give
       "when a local runtime datastore omits its required path" in {
         Given("Spec: phase-12-art-scene-runtime-matrix; Rules: P12-AF-F1; Example: E1; an isolated test descriptor selecting a local runtime datastore without a path")
         Files.createDirectories(Paths.get("target"))
-        val root = Files.createTempDirectory(Paths.get("target"), "cncf-runtime-launch-failure-")
+        val root = Files.createTempDirectory(Paths.get("target"), "cncf-runtime-launch-failure-").toAbsolutePath.normalize
         try {
+        Files.createDirectories(root.resolve(".textus"))
+        Files.createDirectories(root.resolve(".cncf"))
+        val home = Files.createDirectories(root.resolve("home"))
         val descriptor = root.resolve("test.yaml")
         Files.writeString(
           descriptor,
@@ -46,16 +49,24 @@ final class RuntimeLaunchFailureSpec extends AnyWordSpec with Matchers with Give
         val previous = propertynames.map(name => name -> Option(System.getProperty(name))).toMap
 
         try {
-          When("the legacy runWithExtraComponents boundary is invoked")
+          When("the legacy launch preflight uses the isolated project and HOME")
           val err = new ByteArrayOutputStream()
           val errps = new PrintStream(err)
-          val code =
-            Console.withErr(errps) {
-              CncfRuntime.runWithExtraComponents(
-                Array(s"--textus.test.descriptor=${descriptor.toString}", "command"),
-                _ => Nil
-              )
-            }
+          val result = CncfRuntime._prepare_launch_consequence(
+            root,
+            Array(
+              s"--textus.test.descriptor=${descriptor.toString}",
+              s"--textus.test.home.path=$home",
+              "--textus.test.home.inherit.runtime=false",
+              "command"
+            )
+          )
+          val failure = result match {
+            case Consequence.Failure(conclusion) => conclusion
+            case Consequence.Success(_) => fail("missing datastore path must fail during launch preflight")
+          }
+          Console.withErr(errps) { CncfRuntime._print_error(failure) }
+          val code = CncfRuntime._exit_code(result)
           errps.flush()
           val message = err.toString("UTF-8")
 
@@ -69,7 +80,6 @@ final class RuntimeLaunchFailureSpec extends AnyWordSpec with Matchers with Give
             case (name, None) => System.clearProperty(name)
           }
           Files.deleteIfExists(descriptor)
-          Files.deleteIfExists(root)
         }
         } finally {
           _delete_tree(root)
