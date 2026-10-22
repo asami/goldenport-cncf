@@ -1,7 +1,6 @@
 package org.goldenport.cncf.component.cache
 
-import java.nio.channels.FileChannel
-import java.nio.file.{AtomicMoveNotSupportedException, Files, Path, StandardCopyOption, StandardOpenOption}
+import java.nio.file.{AtomicMoveNotSupportedException, Files, Path, StandardCopyOption}
 import java.security.MessageDigest
 import java.util.UUID
 import scala.jdk.CollectionConverters.*
@@ -13,9 +12,9 @@ import io.circe.parser.parse
 /** Short coordinate transactions; payload use remains protected by native generation locks.
   * References are conservative: only a protected current pointer proves liveness.
   * @since   Oct. 21, 2026
-  * @version Oct. 21, 2026
+  * @version Oct. 22, 2026
   */
-private[cache] final class ManagedGenerationSelection(root: Path, policy: ManagedCachePolicy) {
+private[cache] final class ManagedGenerationSelection(root: Path, policy: ManagedCachePolicy, files: ManagedCacheFiles = ManagedCacheFiles) {
   import ManagedGenerationSelection.Selection
 
   def coordinate(archive: Path, kind: ArchiveKind): String = {
@@ -41,6 +40,21 @@ private[cache] final class ManagedGenerationSelection(root: Path, policy: Manage
       require(cursor.get[String]("profile").contains(source.kind.profile), "invalid selection profile")
       Some(Selection(cursor.get[String]("revision").fold(throw _, identity), source))
     }
+  }
+
+  def withCoordinate[A](key: String)(body: => A): A = {
+    val pin = ManagedCacheLocks.acquire(_coordinate_lock(key), false, policy)
+    try body finally pin.close()
+  }
+
+  def collectCoordinate(key: String)(use: => Unit): Boolean = {
+    val coordinate = ManagedCacheLocks.tryAcquire(_coordinate_lock(key), false)
+    if (coordinate.isEmpty) false
+    else try {
+      val body = ManagedCacheLocks.tryAcquire(_generation_lock("coordinate-" + key), false)
+      if (body.isEmpty) false
+      else try { use; true } finally body.get.close()
+    } finally coordinate.get.close()
   }
 
   def observe(key: String): Option[Selection] = {
@@ -86,7 +100,8 @@ private[cache] final class ManagedGenerationSelection(root: Path, policy: Manage
     val path = _metadata(target).resolve("references").resolve(coordinate)
     val previous = if (Files.isRegularFile(path)) parse(Files.readString(path)).toOption.toVector
       .flatMap(_.hcursor.get[Vector[String]]("sources").getOrElse(Vector.empty)) else Vector.empty
-    _atomic_json(path, Json.obj("sources" -> Json.arr((previous :+ expected.key).distinct.map(Json.fromString)*)))
+    if (!previous.contains(expected.key))
+      _atomic_json(path, Json.obj("sources" -> Json.arr((previous :+ expected.key).distinct.map(Json.fromString)*)))
   }
 
   /** Immutable embedded CARs have no permanent path alias. Their references
@@ -125,7 +140,9 @@ private[cache] final class ManagedGenerationSelection(root: Path, policy: Manage
   }
 
   def markRetired(source: SourceGeneration): Unit = _keys(source).foreach { key =>
-    _atomic_json(_metadata(key).resolve("retirement.json"), Json.obj("pending" -> Json.fromBoolean(true)))
+    val pending = _metadata(key).resolve("retirement.json")
+    if (!Files.isRegularFile(pending))
+      _atomic_json(pending, Json.obj("pending" -> Json.fromBoolean(true)))
   }
 
   private def _references(key: String): Vector[String] = {
@@ -139,49 +156,54 @@ private[cache] final class ManagedGenerationSelection(root: Path, policy: Manage
     * reference forces a later retry with the complete deterministic lock set.
     */
   def collectRetired(source: SourceGeneration, extracted: Boolean, delete: () => Unit): Unit = {
-    val key = if (extracted) ExtractionGeneration(source).key else source.key
-    val pending = _metadata(key).resolve("retirement.json")
-    if (Files.isRegularFile(pending)) {
-      val references = _references(key)
-      var pins = Vector.empty[ManagedCacheLocks.Pin]
-      var complete = true
-      try {
-        references.foreach { coordinate =>
-          if (complete) ManagedCacheLocks.tryAcquire(_coordinate_lock(coordinate), false) match {
-            case Some(pin) => pins :+= pin
-            case None => complete = false
-          }
-        }
-        if (complete) ManagedCacheLocks.tryAcquire(_generation_lock(key), false).foreach { exclusion =>
-          try {
-            if (_references(key) == references && !references.exists(coordinate => _is_current_reference(key, coordinate))) {
-              delete()
-              Files.deleteIfExists(pending)
-            }
-          } catch {
-            case NonFatal(error) => _atomic_json(pending, Json.obj("pending" -> Json.fromBoolean(true), "failure" -> Json.fromString(error.toString)))
-          } finally exclusion.close()
-        }
-      } finally pins.reverse.foreach(_.close())
-    }
+    try collectProtected(source, extracted, false) { (current, pending) =>
+      if (!current && pending) { delete(); true } else false
+    } catch { case NonFatal(_) => () } // durable pending failure is retried by explicit collection
+    ()
   }
 
-  def pendingSources(): Vector[SourceGeneration] = {
-    val directory = root.resolve("metadata/generations")
-    if (!Files.isDirectory(directory)) Vector.empty
-    else Using.resource(Files.list(directory))(_.iterator().asScala.map(_.getFileName.toString).toVector.sorted)
-      .flatMap { key => ArchiveKind.values.toVector.flatMap { kind =>
-        val digest = key.stripPrefix("source-" + kind.directory + "-")
-        if (digest.matches("[0-9a-f]{64}")) Some(SourceGeneration(kind, digest)) else None
-      } }
+  /** Coordinate-before-generation protection is shared by retirement and policy
+    * collection. Dry-run executes the same checks without changing metadata.
+    */
+  def collectProtected(source: SourceGeneration, extracted: Boolean, dryRun: Boolean)(
+    use: (Boolean, Boolean) => Boolean
+  ): Boolean = {
+    val key = if (extracted) ExtractionGeneration(source).key else source.key
+    val pending = _metadata(key).resolve("retirement.json")
+    val references = _references(key)
+    var pins = Vector.empty[ManagedCacheLocks.Pin]
+    var complete = true
+    var acquired = false
+    try {
+      references.foreach { coordinate =>
+        if (complete) ManagedCacheLocks.tryAcquire(_coordinate_lock(coordinate), false) match {
+          case Some(pin) => pins :+= pin
+          case None => complete = false
+        }
+      }
+      if (complete) ManagedCacheLocks.tryAcquire(_generation_lock(key), false).foreach { exclusion =>
+        try {
+          if (_references(key) == references) {
+            acquired = true
+            val current = references.exists(coordinate => _is_current_reference(key, coordinate))
+            if (use(current, Files.isRegularFile(pending)) && !dryRun) Files.deleteIfExists(pending)
+          }
+        } catch {
+          case NonFatal(error) =>
+            if (!dryRun) _atomic_json(pending, Json.obj("pending" -> Json.fromBoolean(true), "failure" -> Json.fromString(error.toString)))
+            throw error
+        } finally exclusion.close()
+      }
+    } finally pins.reverse.foreach(_.close())
+    acquired
   }
 
   private def _atomic_json(path: Path, value: Json): Unit = {
+    if (Files.isRegularFile(path) && Files.readString(path) == value.noSpaces) return
     Files.createDirectories(path.getParent)
     val temporary = path.resolveSibling(path.getFileName.toString + "." + UUID.randomUUID().toString + ".tmp")
     try {
-      Files.writeString(temporary, value.noSpaces)
-      Using.resource(FileChannel.open(temporary, StandardOpenOption.WRITE))(_.force(true))
+      files.writeMetadata(temporary, value.noSpaces)
       try Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
       catch {
         case error: AtomicMoveNotSupportedException => throw CacheFailure(CacheFailure.Reason.UnsupportedFilesystem,

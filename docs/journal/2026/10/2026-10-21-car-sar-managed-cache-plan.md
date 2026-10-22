@@ -418,3 +418,186 @@ resolved issues 1-7 and automatic 2 / ordinary 2 / limit 10 remain intact.
 Only issue-8's consumer header correction remains assigned; no new dependency
 scope is approved or needed. The six CC-03 headers are being normalized under
 the existing date contract before native checks and affected re-review.
+
+## CC-03 accepted and committed; CC-04 begins
+
+The provided formatter repair was consumed by ordinary native validation:
+`06016330fa63b5eac6097ff2b8ff42c2:ordered-validation:273:validation`
+passed ManagedSarCacheSpec 10/10, Exited(0), candidate
+`00fae34b58ab3bc68abab937c4fa54ce62c84eb4`. Independent affected re-review
+resolved the final header issue while retaining the applicable prior behavioral
+judgments. The first final-review submission omitted explicit dispositions for
+already resolved issues 6/7 and was rejected by the issue-coverage precondition;
+no accepted Submit or Advance resulted from it. The same independent reviewer
+supplied a genuinely revised complete report `p116-cc03-final-rereview@2`,
+explicitly resolving 6/7/8 without claiming fresh tests of unchanged behavior.
+Its Submit was accepted and its paired Advance reached ordinary Step closure.
+
+The host admitted only the exact reviewed eleven-path local commit under the
+existing human Phase-development instruction. Normal authority preparation and
+native Advance committed CC-03 as
+`69284867c58915f2b6a0d138e5fdfb608247b03d`, parent
+`9da7d491d87d0e01ab630cbdd7cd05ba2181816a`, tree
+`00fae34b58ab3bc68abab937c4fa54ce62c84eb4`. The actual response is retained in
+`call-advance-cc03-closure-01/response.json` under the existing Phase task.
+It issued ImplementStep CC-04 with repair progress 0/0/10; this normal new-Step
+window does not erase the previous accumulated history. The same Session and
+original base remain, and the four unrelated process-execution modifications
+remain unstaged. No push was performed. CC-04 interruption recovery, bounded
+operations and capacity policy are now being authored; no success for those
+checks or Phase completion is claimed.
+
+## CC-04 authored recovery and capacity implementation
+
+The assigned implementation worker returned completed authoring for durable
+per-pool capacity claims, protected staging and repository downloads, recovery
+of abandoned ownership, retryable deletion and SNAPSHOT retirement, bounded
+fair collection, independent original retention/eviction and typed diagnostic
+counts/reasons/last-use/bytes. ManagedCacheRecoverySpec contains nineteen
+metadata-bound GWT examples, including two kinds of real test-owned JVM hard
+death, interrupted publication/download, damaged-entry rebuild, partial deletion
+retry, pending retirement, bounded fairness, dry-run, generated accounting,
+idle policy and structured capacity failure. The shared CAR fixture gains
+hard-death/classpath support. No execution was performed by the author.
+
+The five planning documents retain the real accepted CC-03 prefix and explain
+the operational projection. CC-04 remains under validation: authored examples
+and implementation completion are not passing tests, independent acceptance
+or Phase closure. Native selected check cache-recovery-capacity remains the
+original ManagedCacheRecoverySpec selection; no Plan/check scope was changed.
+
+## CC-04 first validation and independent repair request
+
+The ordinary implementation Submit was accepted; its paired native Advance
+passed all nineteen ManagedCacheRecoverySpec examples, Exited(0), receipt
+`06016330fa63b5eac6097ff2b8ff42c2:ordered-validation:316:validation`,
+candidate `5ba9d28faf15cb9b388bbaec99aed9d7aa191c61`. This is selected
+recovery/capacity evidence, not the full regression suite or Step acceptance.
+Independent review of all thirteen paths identified two missing histories:
+recovery using a pre-lock stale reservation manifest can release a successfully
+published payload's capacity, and interruption immediately after replacing a
+coordinate body can leave both old and new owner charges retained indefinitely.
+
+Actual review `p116-cc04-independent-review@1` was accepted and the paired
+Advance issued RepairStep with issue-9/issue-10 OPEN and automatic1/ordinary1/
+limit10. The assigned bounded correction targets protected state rereading and durable
+replacement reconciliation, with deterministic examples for both failures.
+Earlier successful receipts and all prior accepted commits remain preserved.
+No Step commit or new test success for this correction is claimed.
+
+### Hygiene: HYG-P116-REPOSITORY-SIZE (nonblocking)
+
+The independent reviewer classified ComponentRepository.scala's existing size
+as a maintenance follow-up: the CC-04 candidate changes 3031 lines to 3028,
+still above the repository's 2000-line threshold. Separating repository
+responsibilities requires coordinated work beyond this recovery repair batch.
+ManagedArchiveCache remains below that threshold and capacity/selection have
+separate owners. This observation is not a CC-04 blocker or added repair scope.
+
+## CC-04 bounded reservation-recovery correction authored
+
+Issue-9 now rereads and validates the current reservation manifest after obtaining
+its staging protection, then reconciles a published target under generation
+exclusion. Deterministic E20 controls actual producer completion between the
+collector's initial read and its owner-lock acquisition and checks exact charges.
+Issue-10 persists publication content identity and replaced-owner identities,
+retains a renamed payload's charge through exceptional finalization and reconciles
+obsolete owners under generation protection. E21 injects failure immediately
+after rename across twelve replacements, including identical bytes, dry-run and
+repeated collection, and checks one exact rounded charge and one owner.
+
+The repair changed only four already-selected cache files and preserved E1–E19.
+No tests, self-review, commands or commits were performed by its author. These
+are actual authored corrections awaiting the native selected check and affected
+independent re-review; issue dispositions FIXED are not acceptance claims.
+
+## CC-04 first affected validation and follow-up repair
+
+The first bounded repair Submit was accepted and its paired native Advance
+passed all twenty-one examples, Exited(0), receipt
+`06016330fa63b5eac6097ff2b8ff42c2:ordered-validation:355:validation`,
+candidate `e8d7d98a43a90252c020ade59ef7c73e7dd67d9f`. The independent
+affected re-review resolved original issue-9 and issue-10, preserving applicable
+unaffected judgments. It identified two side effects: an identical existing
+coordinate could be mistaken for a successful rename after a pre-rename failure,
+releasing staging charges despite partial cleanup leaving bytes; and publication
+hashing occurred inside the short coordinate transaction, while settled targets
+were repeatedly rehashed during normal recovery checkpoints.
+
+The actual revised review `p116-cc04-independent-rereview@1` was accepted.
+Native Advance issued issue-11/issue-12 OPEN with issue-9/issue-10 RESOLVED and
+automatic2/ordinary2/limit10. The same repair worker is assigned the bounded
+correction: preserve surviving staging charges and move content identity work
+outside coordinate exclusion, retaining durable settled state to avoid repeated
+full reads. The successful twenty-one-example result and earlier failure/review
+history are retained. No success or acceptance for this new correction is claimed.
+
+## CC-04 staging-accounting and short-lock correction authored
+
+The same four-file batch now records explicit published/aborted/settled outcomes
+before cleanup, charges actual surviving staging bytes and no longer infers
+rename success from equal content at an existing target. E22 combines identical
+bytes, pre-rename failure and partial cleanup, asserts capacity pressure while
+staging survives, then checks charge release only after actual deletion.
+Content identity capture precedes coordinate protection; recovery uses durable
+outcome/replacement state without hashing settled payloads. E23 observes identity
+reads with coordinate/generation locks available, post-rename interruption and
+no additional identity reads through settlement and repeated acquisitions.
+E20/E21 and earlier examples are preserved; twenty-three examples are authored.
+These are worker-reported corrections awaiting actual native validation and
+independent review, not new passing results or accepted issue dispositions.
+
+## 2026-10-22 user-authorized simplification supersedes reservation requirements
+
+The user withdrew strict capacity reservations and authorized revision of the
+specification, design and remaining Phase 116 plan. Ordinary I/O and failure
+cleanup replace slot/manifest accounting. Unnecessary hit-time/global scans,
+managed immutable-body recopy/rehash and unchanged durable metadata writes are
+also removed from the target. Usage/staging protection, current-selection safety
+and atomic complete publication remain required.
+
+Continue CC-04 in the same Goal/Session; preserve all accepted commits, results,
+review/failure history and repair counts above. These historical entries remain
+evidence for their original scope, not acceptance of the revised behavior.
+Reservation-only assertions are superseded, while applicable lifecycle and
+interruption scenarios are reused. Later actual results take precedence over
+this planning note; do not roll back ongoing work to its observation time.
+
+The [2026-10-22 developer handoff](2026-10-22-phase116-cache-simplification-handoff.md)
+records the findings, CC04-S1/S2/S3 execution order and focused acceptance delta.
+This entry changes documents only and claims no new implementation/test success.
+
+## CC-04 simplification reconciled with the preserved Session
+
+The real Human `ReviseWork` direction was admitted through the repaired public
+continuation route. One ordinary Advance issued a fresh same-Step implementation
+request. Its old capacity-failure requirement differed from the approved
+simplification, so the parent submitted one complete bounded Plan revision.
+The actual Human `AdoptPlanRevision` answer was accepted, and ordinary Advance
+issued CC-04 under `cncf-phase-116-managed-cache` revision `2` in the same Session.
+Only the current Step purpose changed; every check identity, owned path,
+dependency, other Step and Phase check remains. The original base, accepted
+CC-01–03 commits, old UNKNOWN observations, findings and consumed automatic /
+ordinary repair counts `2/2` of `10` were retained. No old stage/history effect
+or accepted submission was replayed.
+
+The current implementation removes the unreleased quota/reservation machinery
+and persistent capacity-policy equality gate. It uses ordinary I/O with structured
+causes and suppressed cleanup failures, protected atomic publication, cheap
+managed immutable-generation reuse and unchanged-reference no-ops. Explicit
+inspection/collection bounds discovery, carries remaining work forward and
+reports scoped/truncated or unknown totals. Existing generation/staging use,
+SNAPSHOT selection and independent source/tree retention stay protected.
+
+The affected independent development run passed all 117 cache/repository
+examples across four suites, including the real repository/runtime route,
+cross-JVM lifetime, offline rebuild, faults and deterministic work-count checks.
+The current code/test bytes still match that run. This reuses the result only
+within its recorded scope: it is not a new native receipt or independent review.
+An earlier full repository run failed; later no-cache isolation reproduced two
+HTTP/launch failures, while the full-suite datastore-lease interaction remains
+unresolved. No full-suite failure is waived. Native CC-04 validation and affected
+independent review are the next acceptance gates; CC-04/05 checklist entries
+remain open. Detailed results and original logs remain under the existing task
+in `cc04-simplification-development-validation-20261022.md` and the reconciliation
+record, without moving evidence or modifying unrelated process-execution work.

@@ -11,7 +11,7 @@ import org.goldenport.Consequence
 
 /** Local SAR composition and immutable replacement contracts.
   * @since   Oct. 21, 2026
-  * @version Oct. 21, 2026
+  * @version Oct. 22, 2026
   */
 class ManagedSarCacheSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import ManagedCarCacheFixture.{withCacheFixture, runtime, fileIdentity, Holder}
@@ -359,8 +359,9 @@ class ManagedSarCacheSpec extends AnyWordSpec with Matchers with GivenWhenThen {
             parent.close()
             alias.foreach(_.close())
             try {
-              protocol.pendingSources().size should be > cache.policy.collectionMaxEntries
-              protocol.pendingSources().take(cache.policy.collectionMaxEntries) should not contain generation
+              Files.isRegularFile(cache.root.resolve("metadata/generations")
+                .resolve(SourceGeneration(ArchiveKind.Car, "0" * 64).key).resolve("retirement.json")) shouldBe true
+              protocol.dependentSources(parent.generation.source) should contain(generation)
               replace(sar, root, true, "new")
               val fresh = cache.acquireSarC(sar).TAKE
               try {

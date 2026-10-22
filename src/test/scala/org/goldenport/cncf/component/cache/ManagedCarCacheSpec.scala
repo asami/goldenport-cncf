@@ -22,8 +22,8 @@ import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.TestComponentFactory
 
 /** Local archive, real repository/owner/ClassLoader and native cross-JVM locks.
-  * @since Oct. 21, 2026
- * @version Oct. 21, 2026
+  * @since   Oct. 21, 2026
+  * @version Oct. 22, 2026
   */
 class ManagedCarCacheSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import ManagedCarCacheFixture.*
@@ -383,7 +383,7 @@ private[cache] object ManagedCarCacheFixture {
     } catch { case error: Throwable => Subsystem.shutdownOwned(owner); throw error }
   }
 
-  private def _runtime_classpath(): String = {
+  def runtimeClasspath(): String = {
     def _file_(url: java.net.URL): Vector[String] =
       if (url.getProtocol == "file") Vector(Path.of(url.toURI).toAbsolutePath.normalize.toString) else Vector.empty
     val properties = Option(System.getProperty("java.class.path")).toVector
@@ -412,7 +412,7 @@ private[cache] object ManagedCarCacheFixture {
     */
   final class Holder(repository: Path, cache: Path, stderr: Path) extends AutoCloseable {
     private val _process = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin/java").toString,
-      "-Dtextus.test=true", "-cp", _runtime_classpath(),
+      "-Dtextus.test=true", "-cp", runtimeClasspath(),
       "org.goldenport.cncf.component.cache.ManagedCarCacheHolder", repository.toString, cache.toString)
       .redirectError(stderr.toFile).start()
     private val _reader = new BufferedReader(new InputStreamReader(_process.getInputStream, UTF_8))
@@ -431,6 +431,14 @@ private[cache] object ManagedCarCacheFixture {
       case error: Throwable => close(); throw error
     }
     def load(): String = { _writer.println("load"); _response("VALUE ") }
+    def hardDeath(): Unit = if (!_closed) {
+      _closed = true
+      try {
+        _process.destroyForcibly()
+        require(_process.waitFor(10, TimeUnit.SECONDS), "owned fixture JVM survived hard termination")
+        require(_process.exitValue() != 0, "fixture hard termination unexpectedly ran normal close")
+      } finally { _writer.close(); _reader.close(); _reads.shutdownNow() }
+    }
     def close(): Unit = if (!_closed) {
       _closed = true
       try {

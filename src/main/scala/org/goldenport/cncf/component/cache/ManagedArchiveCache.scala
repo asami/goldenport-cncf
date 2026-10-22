@@ -1,7 +1,7 @@
 package org.goldenport.cncf.component.cache
 
 import java.nio.channels.FileChannel
-import java.nio.file.{AtomicMoveNotSupportedException, Files, Path, StandardCopyOption, StandardOpenOption}
+import java.nio.file.{AtomicMoveNotSupportedException, Files, Path, StandardOpenOption}
 import java.nio.file.attribute.{BasicFileAttributes, FileTime}
 import java.security.MessageDigest
 import java.time.YearMonth
@@ -18,13 +18,26 @@ import org.goldenport.cncf.component.{CarExtracted, CarExtractor, SarExtracted, 
 /** Cache storage and usage protection for the existing repository/extractor route.
   * This owns neither repository resolution nor runtime shutdown.
   * @since   Oct. 21, 2026
-  * @version Oct. 21, 2026
+  * @version Oct. 22, 2026
   */
-final class ManagedArchiveCache(val policy: ManagedCachePolicy) {
+final class ManagedArchiveCache private[cache] (
+  val policy: ManagedCachePolicy,
+  files: ManagedCacheFiles
+) extends AutoCloseable {
+  def this(policy: ManagedCachePolicy) = this(policy, ManagedCacheFiles)
   Files.createDirectories(policy.root)
   val root: Path = policy.root.toRealPath()
 
-  private val _selection = new ManagedGenerationSelection(root, policy)
+  private val _selection = new ManagedGenerationSelection(root, policy, files)
+  private var _collection_cursor: Option[ManagedCacheInventory] = None
+  private var _collection_pending = Vector.empty[ManagedCacheInventory.Entry]
+
+  /** Only explicit collection owns a bounded traversal cursor. No runtime lease is owned here. */
+  def close(): Unit = synchronized {
+    _collection_cursor.foreach(_.close())
+    _collection_cursor = None
+    _collection_pending = Vector.empty
+  }
 
   private def _lock(key: String): Path = root.resolve("locks/generations").resolve(key + ".lock")
   private def _source(generation: SourceGeneration): Path =
@@ -34,15 +47,70 @@ final class ManagedArchiveCache(val policy: ManagedCachePolicy) {
       .resolve(generation.source.digest).resolve(generation.profile)
 
   def acquireSourceC(archive: Path, kind: ArchiveKind = ArchiveKind.Car): Consequence[SourceLease] =
+    _acquire_source(archive, kind)
+
+  private def _acquire_source(archive: Path, kind: ArchiveKind): Consequence[SourceLease] =
     Consequence {
-      val guard: AutoCloseable = _managed_input_pin(archive).getOrElse(new AutoCloseable { def close(): Unit = () })
-      _with_guard(guard) { _ => _capture_source(archive, kind) }
+      val started = System.nanoTime()
+      var attempts = 0
+      var result: Option[SourceLease] = None
+      while (result.isEmpty && attempts < policy.acquisitionMaxAttempts) {
+        attempts += 1
+        try {
+          val guard: AutoCloseable = _managed_input_pin(archive).getOrElse(new AutoCloseable { def close(): Unit = () })
+          result = Some(_with_guard(guard) { _ => _capture_source(archive, kind) })
+        } catch {
+          case failure: CacheFailure if failure.reason == CacheFailure.Reason.SourceChanged =>
+            if (attempts == policy.acquisitionMaxAttempts) throw failure
+            _retry_publication(started, archive.toString)
+        }
+      }
+      result.getOrElse(throw CacheFailure(CacheFailure.Reason.ContentionExceeded, "capture", archive.toString))
     }
+
+  /** Existing repository fetchers supply their ordinary stream here. The cache
+    * supplies ordinary staging and the short atomic coordinate switch.
+    */
+  private[cncf] def publishSourceC(target: Path, kind: ArchiveKind)(
+    write: Path => Unit
+  ): Consequence[Unit] = Consequence { publishSource(target, kind)(write) }
+
+  private[cncf] def publishSource(target: Path, kind: ArchiveKind)(
+    write: Path => Unit
+  ): Unit = {
+    val destination = target.toAbsolutePath.normalize
+    require(destination.startsWith(root.resolve(kind.directory)), "managed coordinate outside repository cache")
+    _io("publish-source", destination.toString) {
+      Using.resource(_stage("source-" + kind.directory)) { stage =>
+        val prepared = stage.payload.resolve("archive" + kind.suffix)
+        _io("download", destination.toString) { write(prepared) }
+        _force(prepared)
+        val coordinate = _selection.coordinate(destination, kind)
+        _selection.withCoordinate(coordinate) {
+          val key = "coordinate-" + coordinate
+          val pin = ManagedCacheLocks.tryAcquire(_lock(key), false).getOrElse(
+            throw CacheFailure(CacheFailure.Reason.ContentionExceeded, "publish-coordinate", coordinate))
+          try stage.publishFile(prepared, destination) finally pin.close()
+        }
+      }
+    }
+  }
 
   private def _managed_input_pin(archive: Path): Option[ManagedCacheLocks.Pin] = {
     val original = archive.toAbsolutePath.normalize
     val sources = root.resolve("sources")
-    if (!original.startsWith(sources)) None
+    val coordinatekind = ArchiveKind.values.find(kind => original.startsWith(root.resolve(kind.directory)) &&
+      original.getFileName.toString.endsWith(kind.suffix))
+    if (coordinatekind.nonEmpty) {
+      val coordinate = _selection.coordinate(original, coordinatekind.get)
+      val pin = ManagedCacheLocks.acquire(_lock("coordinate-" + coordinate), true, policy)
+      try {
+        val touched = root.resolve("metadata/coordinates").resolve(coordinate).resolve("last-used")
+        Files.createDirectories(touched.getParent)
+        Files.writeString(touched, "")
+        Some(pin)
+      } catch { case error: Throwable => pin.close(); throw error }
+    } else if (!original.startsWith(sources)) None
     else {
       val relative = sources.relativize(original)
       val kind = ArchiveKind.values.find(value => relative.getNameCount == 3 &&
@@ -61,21 +129,30 @@ final class ManagedArchiveCache(val policy: ManagedCachePolicy) {
     }
   }
 
-  private def _capture_source(archive: Path, kind: ArchiveKind): SourceLease =
-      _with_guard(_stage("source-" + kind.directory)) { stage =>
+  private def _capture_source(archive: Path, kind: ArchiveKind): SourceLease = {
+    val original = archive.toAbsolutePath.normalize
+    val base = root.resolve("sources").resolve(kind.directory)
+    if (original.startsWith(base) && base.relativize(original).getNameCount == 2 &&
+        original.getFileName.toString == "archive" + kind.suffix) {
+      val digest = base.relativize(original).getName(0).toString
+      if (digest.matches("[0-9a-f]{64}")) {
+        val generation = SourceGeneration(kind, digest)
+        return _source_lease(generation, _source(generation), None)
+      }
+    }
+    _with_guard(_stage("source-" + kind.directory)) { stage =>
         val original = archive.toAbsolutePath.normalize
         val before = Files.readAttributes(original, classOf[BasicFileAttributes])
         if (!before.isRegularFile) throw CacheFailure(CacheFailure.Reason.SourceChanged, "capture", original.toString)
         val digest = MessageDigest.getInstance("SHA-256")
         val captured = stage.payload.resolve("archive" + kind.suffix)
         var bytes = 0L
-        Using.resource(Files.newInputStream(original)) { input =>
-          Using.resource(Files.newOutputStream(captured)) { output =>
+        Using.resource(files.openInput(original)) { input =>
+          Using.resource(files.openOutput(captured)) { output =>
             val buffer = new Array[Byte](65536)
             var count = input.read(buffer)
             while (count >= 0) {
               if (count > 0) {
-                _entry_capacity("capture", original.toString, bytes, count.toLong, policy.sourceEntryMaxBytes)
                 digest.update(buffer, 0, count)
                 output.write(buffer, 0, count)
                 bytes += count
@@ -92,10 +169,11 @@ final class ManagedArchiveCache(val policy: ManagedCachePolicy) {
         val generation = SourceGeneration(kind, digest.digest().map(value => f"${value & 0xff}%02x").mkString)
         val destination = _source(generation)
         _write_json(stage.payload.resolve("entry.json"), _metadata(generation, "source-v1", bytes))
-        _source_lease(generation, destination, stage.payload)
+        _source_lease(generation, destination, Some(stage))
       }
+  }
 
-  private def _source_lease(generation: SourceGeneration, destination: Path, prepared: Path): SourceLease = {
+  private def _source_lease(generation: SourceGeneration, destination: Path, stage: Option[Stage]): SourceLease = {
     def _complete_(): Boolean = _valid(destination, generation, "source-v1") &&
       Files.isRegularFile(destination.resolve("archive" + generation.kind.suffix))
     var attempts = 0
@@ -107,6 +185,7 @@ final class ManagedArchiveCache(val policy: ManagedCachePolicy) {
       try {
         val body = destination.resolve("archive" + generation.kind.suffix)
         if (_complete_()) {
+          Files.setLastModifiedTime(destination.resolve("entry.json"), FileTime.fromMillis(System.currentTimeMillis()))
           retained = true
           return new SourceLease(generation, body, () => { pin.close(); _collect_retired(generation) })
         }
@@ -116,8 +195,10 @@ final class ManagedArchiveCache(val policy: ManagedCachePolicy) {
         case Some(writer) =>
           try {
             if (!_complete_()) {
-              _delete_tree(destination)
-              _publish(prepared, destination)
+              _remove_payload(destination)
+              if (!stage.exists(value => Files.isDirectory(value.payload))) throw CacheFailure(CacheFailure.Reason.SourceChanged,
+                "capture-retry", generation.key, detail = "collection won publication-to-usage transition")
+              stage.get.publish(destination)
             }
           } finally writer.close()
       }
@@ -154,25 +235,24 @@ final class ManagedArchiveCache(val policy: ManagedCachePolicy) {
             expected = Some(selection)
             new SourceLease(selection.source, _source(selection.source).resolve("archive" + kind.suffix),
               () => { pin.close(); _collect_retired(selection.source) })
-          case None => acquireSourceC(archive, kind).TAKE
+          case None => _acquire_source(archive, kind).TAKE
         }
         ManagedArchiveCache.withAcquisitionCleanup { cleanup =>
           cleanup.retain(source)
           // Also records unselected prepared work if preparation or switching fails.
-          _selection.markRetired(source.generation)
+          if (!expected.exists(_.source == source.generation)) _selection.markRetired(source.generation)
           val prepared = cleanup.retain(_acquire_extracted(source, resolve, extract))
-          _selection.markRetired(source.generation)
+          if (!expected.exists(_.source == source.generation)) _selection.markRetired(source.generation)
           val committed = _selection.commit(coordinate, expected, source.generation)
           if (!committed) {
             reselect = true
             prepared.close()
           }
           source.close()
-          expected.foreach { value =>
+          expected.filterNot(_.source == source.generation).foreach { value =>
             _collect_retired(value.source)
             _selection.dependentSources(value.source).foreach(_collect_retired)
           }
-          _selection.pendingSources().take(policy.collectionMaxEntries).foreach(_collect_retired)
           if (committed) {
             // Transfer only after every operation that can fail acquisition has ended.
             cleanup.transfer(prepared)
@@ -190,8 +270,10 @@ final class ManagedArchiveCache(val policy: ManagedCachePolicy) {
     source.checkOpen()
     val generation = ExtractionGeneration(source.generation)
     val destination = _extraction(generation)
-    def _complete_(): Boolean = _valid(destination, source.generation, generation.profile) &&
-      Files.isDirectory(destination.resolve("tree"))
+    def _complete_(): Option[A] =
+      if (_valid(destination, source.generation, generation.profile) && Files.isDirectory(destination.resolve("tree")))
+        resolve(destination.resolve("tree")).toOption
+      else None
     var attempts = 0
     val started = System.nanoTime()
     while (attempts < policy.acquisitionMaxAttempts) {
@@ -199,10 +281,10 @@ final class ManagedArchiveCache(val policy: ManagedCachePolicy) {
       val pin = ManagedCacheLocks.acquire(_lock(generation.key), shared = true, policy)
       var retained = false
       try {
-        if (_complete_()) {
-          // Structural and runtime admission remain at the existing extractor
-          // boundary on hits as well as misses; no directory-content rehash.
-          val extracted = resolve(destination.resolve("tree")).TAKE
+        val completed = _complete_()
+        if (completed.nonEmpty) {
+          // The existing extractor remains the sole admission boundary on hits.
+          val extracted = completed.get
           Files.setLastModifiedTime(destination.resolve("entry.json"), FileTime.fromMillis(System.currentTimeMillis()))
           retained = true
           return new ExtractionLease(generation, extracted, () => { pin.close(); _collect_retired(source.generation) })
@@ -214,20 +296,18 @@ final class ManagedArchiveCache(val policy: ManagedCachePolicy) {
         case None => _retry_publication(started, generation.key)
         case Some(writer) =>
           try {
-            if (!_complete_()) {
-              _delete_tree(destination)
-              val stage = _stage("extracted-" + source.generation.kind.directory)
-              try {
+            if (_complete_().isEmpty) {
+              _remove_payload(destination)
+              Using.resource(_stage("extracted-" + source.generation.kind.directory)) { stage =>
                 val tree = Files.createDirectory(stage.payload.resolve("tree"))
                 var bytes = 0L
                 extract(source.path, tree, count => {
-                  _entry_capacity("extract", generation.key, bytes, count, policy.extractedEntryMaxBytes)
                   bytes += count
                 }).TAKE
                 resolve(tree).TAKE
                 _write_json(stage.payload.resolve("entry.json"), _metadata(source.generation, generation.profile, bytes))
-                _publish(stage.payload, destination)
-              } finally stage.close()
+                stage.publish(destination)
+              }
             }
           } finally writer.close()
       }
@@ -240,7 +320,7 @@ final class ManagedArchiveCache(val policy: ManagedCachePolicy) {
     parent: SourceGeneration,
     register: AutoCloseable => Consequence[Unit]
   )(use: CarExtracted => Consequence[A]): Consequence[A] = {
-    val acquired = acquireSourceC(archive).flatMap { source => Consequence {
+    val acquired = _acquire_source(archive, ArchiveKind.Car).flatMap { source => Consequence {
       _with_guard(source) { owned =>
         val lease = _acquire_extracted(owned, CarExtractor.resolveDirectory,
           (input, tree, reserve) => CarExtractor.extractToC(input, tree, reserve))
@@ -301,69 +381,178 @@ final class ManagedArchiveCache(val policy: ManagedCachePolicy) {
     _selection.collectRetired(source, false, () => {
       val directory = _source(source)
       Files.deleteIfExists(directory.resolve("entry.json"))
-      _delete_tree(directory)
+      _remove_payload(directory)
     })
     _selection.collectRetired(source, true, () => {
       val directory = _extraction(ExtractionGeneration(source))
       Files.deleteIfExists(directory.resolve("entry.json"))
-      _delete_tree(directory)
+      _remove_payload(directory)
     })
   }
 
+  /** Physical totals cover only the returned bounded candidates. */
   def inspectC(): Consequence[CacheInspection] = Consequence {
-    CacheInspection(_bytes(root.resolve("sources")), _bytes(root.resolve("extracted")), _bytes(root.resolve("staging")))
+    val projection = _collect(true, policy.collectionMaxEntries)
+    val details = projection.operations ++ projection.entries.map { entry =>
+      CacheOperationEntry("extracted", entry.generation.key, entry.bytes, entry.disposition,
+        entry.reason.getOrElse("inspection"), entry.lastUsedMillis, entry.bytesKnown)
+    }
+    CacheInspection(details.filter(entry => entry.pool == "source" || entry.pool == "coordinate").map(_.bytes).sum,
+      details.filter(_.pool == "extracted").map(_.bytes).sum, details.filter(_.pool == "staging").map(_.bytes).sum,
+      details, projection.truncated)
   }
 
-  /** Ordinary reusable originals are retained independently of extracted trees. */
-  def collectC(dryRun: Boolean = false): Consequence[CacheCollectionResult] = Consequence {
-    if (!dryRun) _selection.pendingSources().take(policy.collectionMaxEntries).foreach(_collect_retired)
-    val candidates = _extraction_entries().sortBy { case (_, directory) =>
-      val metadata = directory.resolve("entry.json")
-      if (Files.isRegularFile(metadata)) Files.getLastModifiedTime(metadata).toMillis else Long.MinValue
-    }
+  /** Collection shares coordinate/payload exclusion with SNAPSHOT retirement.
+    * A rotating cursor prevents an active or retained prefix starving later work.
+    * Dry-run neither advances this cursor nor writes any cache metadata.
+    */
+  def collectC(dryRun: Boolean = false): Consequence[CacheCollectionResult] =
+    Consequence { _collect(dryRun, policy.collectionMaxEntries) }
+
+  private def _recorded_bytes(directory: Path): Long = _recorded_size(directory).getOrElse(0L)
+
+  private def _recorded_size(directory: Path): Option[Long] = {
+    val path = directory.resolve("entry.json")
+    try {
+      if (!Files.isRegularFile(path) || Files.size(path) > 65536L) None
+      else parse(Files.readString(path)).toOption.flatMap(_.hcursor.get[Long]("bytes").toOption).filter(_ >= 0L)
+    } catch { case NonFatal(_) => None }
+  }
+
+  private def _last_used(directory: Path): Option[Long] = {
+    val metadata = directory.resolve("entry.json")
+    if (Files.isRegularFile(metadata)) Some(Files.getLastModifiedTime(metadata).toMillis) else None
+  }
+
+  private def _collect(dryrun: Boolean, bound: Int): CacheCollectionResult = synchronized {
+    val scan = if (dryrun) new ManagedCacheInventory(root, files)
+      else _collection_cursor.getOrElse {
+        val value = new ManagedCacheInventory(root, files)
+        _collection_cursor = Some(value)
+        value
+      }
+    val batch = try {
+      if (!dryrun && _collection_pending.nonEmpty)
+        ManagedCacheInventory.Batch(_collection_pending, scan.hasMore, 0)
+      else scan.nextBatch(bound)
+    } finally if (dryrun) scan.close()
+    val candidates = batch.entries.sortBy(entry => if (entry.pool == "extracted") 0 else 1)
+    val sample = candidates.groupMapReduce(_.pool)(entry =>
+      if (entry.pool == "coordinate" && Files.isRegularFile(entry.directory)) Files.size(entry.directory)
+      else _recorded_bytes(entry.directory))(_ + _)
     val results = Vector.newBuilder[CacheCollectionEntry]
+    val operations = Vector.newBuilder[CacheOperationEntry]
     var considered = 0
-    var reclaimed = 0L
-    candidates.iterator.takeWhile(_ => considered < policy.collectionMaxEntries && reclaimed < policy.collectionMaxBytes)
-      .foreach { case (generation, directory) =>
+    var selectedbytes = 0L
+    candidates.iterator.takeWhile(_ => selectedbytes < policy.collectionMaxBytes)
+      .foreach { candidate =>
+        val pool = candidate.pool
+        val directory = candidate.directory
+        val source = candidate.source
+        val key = if (pool == "coordinate") {
+          val kind = ArchiveKind.values.find(value => directory.getFileName.toString.endsWith(value.suffix)).get
+          "coordinate-" + _selection.coordinate(directory, kind)
+        } else candidate.key
         considered += 1
-        ManagedCacheLocks.tryAcquire(_lock(generation.key), shared = false) match {
-          case None => results += CacheCollectionEntry(generation, 0L, CacheCollectionDisposition.InUse)
-          case Some(pin) =>
-            try {
-              val metadata = directory.resolve("entry.json")
-              if (Files.exists(directory)) {
-                val bytes = _bytes(directory)
-                val touched = if (Files.isRegularFile(metadata)) Files.getLastModifiedTime(metadata).toMillis else 0L
-                if (Files.isRegularFile(metadata) && System.currentTimeMillis() - touched < policy.idleMillis)
-                  results += CacheCollectionEntry(generation, bytes, CacheCollectionDisposition.Retained)
-                else if (dryRun)
-                  results += CacheCollectionEntry(generation, bytes, CacheCollectionDisposition.WouldReclaim)
-                else {
-                  // Removing completion first ensures any failed partial deletion
-                  // remains a non-hit for the next ordinary acquisition/collection.
-                  Files.deleteIfExists(metadata)
-                  _delete_tree(directory)
-                  reclaimed += bytes
-                  results += CacheCollectionEntry(generation, bytes, CacheCollectionDisposition.Reclaimed)
+        if (pool == "coordinate") {
+          var bytes = if (Files.isRegularFile(directory)) Files.size(directory) else 0L
+          var disposition = CacheCollectionDisposition.InUse
+          var reason = "coordinate capture or publication in use"
+          try {
+            val acquired = _selection.collectCoordinate(key.stripPrefix("coordinate-")) {
+              if (Files.isRegularFile(directory)) {
+                bytes = Files.size(directory)
+                val touched = root.resolve("metadata/coordinates").resolve(key.stripPrefix("coordinate-")).resolve("last-used")
+                val lastused = Files.getLastModifiedTime(if (Files.isRegularFile(touched)) touched else directory).toMillis
+                val idle = System.currentTimeMillis() - lastused >= policy.idleMillis
+                if (policy.evictReusableSources && idle) {
+                  reason = "explicit source eviction policy"
+                  if (dryrun) disposition = CacheCollectionDisposition.WouldReclaim
+                  else { _remove_payload(directory); disposition = CacheCollectionDisposition.Reclaimed }
+                  selectedbytes += bytes
+                } else {
+                  disposition = CacheCollectionDisposition.Retained
+                  reason = "offline coordinate retention"
                 }
               }
-            } catch {
-              case NonFatal(error) => results += CacheCollectionEntry(generation, 0L,
-                CacheCollectionDisposition.Failed, Some(error.toString))
-            } finally pin.close()
+            }
+            if (!acquired) disposition = CacheCollectionDisposition.InUse
+          } catch { case NonFatal(error) => disposition = CacheCollectionDisposition.Failed; reason = error.toString }
+          operations += CacheOperationEntry(pool, key, bytes, disposition, reason)
+        } else if (pool == "staging") {
+          val pin = ManagedCacheLocks.tryAcquire(root.resolve("locks/staging").resolve(key + ".lock"), false)
+          var bytes = 0L
+          var bytesknown = false
+          var disposition = CacheCollectionDisposition.InUse
+          var reason = "staging owner in use"
+          try if (pin.nonEmpty) {
+            bytes = _bytes(directory)
+            bytesknown = true
+            if (!dryrun) _delete_tree(directory)
+            disposition = if (dryrun) CacheCollectionDisposition.WouldReclaim else CacheCollectionDisposition.Reclaimed
+            reason = "abandoned staging"
+            selectedbytes += bytes
+          } catch { case NonFatal(error) => disposition = CacheCollectionDisposition.Failed; reason = error.toString }
+          finally pin.foreach(_.close())
+          operations += CacheOperationEntry(pool, key, bytes, disposition, reason, bytesKnown = bytesknown)
+        } else {
+          val generation = source.get
+          val extracted = pool == "extracted"
+          var bytes = _recorded_bytes(directory)
+          var bytesknown = _recorded_size(directory).nonEmpty
+          var touched: Option[Long] = _last_used(directory)
+          var disposition = CacheCollectionDisposition.InUse
+          var reason = "native usage or coordinate protection held"
+          try {
+            val acquired = _selection.collectProtected(generation, extracted, dryrun) { (current, pending) =>
+              bytes = if (_valid(directory, generation, if (extracted) generation.kind.profile else "source-v1"))
+                _recorded_bytes(directory) else _bytes(directory)
+              bytesknown = true
+              touched = _last_used(directory)
+              val retired = pending && !current
+              val invalid = !_valid(directory, generation, if (extracted) generation.kind.profile else "source-v1")
+              val idle = touched.forall(time => System.currentTimeMillis() - time >= policy.idleMillis)
+              val pressure = if (extracted) sample.getOrElse("extracted", 0L) >= policy.extractedMaxBytes
+                else sample.getOrElse("source", 0L) + sample.getOrElse("coordinate", 0L) >= policy.sourceMaxBytes
+              val eligible = retired || invalid || ((extracted || policy.evictReusableSources) && (idle || pressure))
+              if (eligible) {
+                reason = if (retired) "retired SNAPSHOT" else if (invalid) "incomplete or damaged publication"
+                  else if (pressure) "capacity pressure" else "idle reusable payload"
+                if (dryrun) disposition = CacheCollectionDisposition.WouldReclaim
+                else {
+                  Files.deleteIfExists(directory.resolve("entry.json"))
+                  _remove_payload(directory)
+                  disposition = CacheCollectionDisposition.Reclaimed
+                }
+                selectedbytes += bytes
+              } else {
+                disposition = CacheCollectionDisposition.Retained
+                reason = if (!extracted && !policy.evictReusableSources) "offline source retention" else "within idle policy"
+              }
+              eligible
+            }
+            if (!acquired) disposition = CacheCollectionDisposition.InUse
+          } catch {
+            case NonFatal(error) => disposition = CacheCollectionDisposition.Failed; reason = error.toString
+          }
+          if (extracted) results += CacheCollectionEntry(ExtractionGeneration(generation), bytes, disposition, Some(reason), touched, bytesknown)
+          else operations += CacheOperationEntry(pool, key, bytes, disposition, reason, touched, bytesknown)
         }
       }
-    CacheCollectionResult(results.result())
+    val truncated = batch.truncated || considered < candidates.size
+    if (!dryrun) {
+      _collection_pending = candidates.drop(considered)
+      if (!truncated) { scan.close(); _collection_cursor = None }
+    }
+    CacheCollectionResult(results.result(), operations.result(), policy.collectionMaxBytes,
+      truncated, batch.visited)
   }
 
-  private def _extraction_entries(): Vector[(ExtractionGeneration, Path)] = ArchiveKind.values.toVector.flatMap { kind =>
-    _directories(root.resolve("extracted").resolve(kind.directory)).filter(_.getFileName.toString.matches("[0-9a-f]{64}"))
-      .flatMap { digest =>
-        val entry = digest.resolve(kind.profile)
-        if (Files.isDirectory(entry)) Some(ExtractionGeneration(SourceGeneration(kind, digest.getFileName.toString)) -> entry)
-        else None
-      }
+  private def _remove_payload(path: Path): Unit = {
+    try _delete_tree(path)
+    catch {
+      case NonFatal(error) => throw _failure(CacheFailure.Reason.DeletionFailed, "delete", path.toString, error)
+    }
   }
 
   private def _metadata(source: SourceGeneration, profile: String, bytes: Long): Json = Json.obj(
@@ -384,12 +573,19 @@ final class ManagedArchiveCache(val policy: ManagedCachePolicy) {
         cursor.get[String]("kind").contains(source.kind.directory) &&
         cursor.get[String]("digest").contains(source.digest) &&
         cursor.get[String]("profile").contains(profile) &&
-        cursor.get[Boolean]("completed").contains(true) && cursor.get[Long]("bytes").exists(_ >= 0L)
+        cursor.get[Boolean]("completed").contains(true) && cursor.get[Long]("bytes").exists { bytes =>
+          bytes >= 0L && (profile != "source-v1" || {
+            val archive = directory.resolve("archive" + source.kind.suffix)
+            Files.isRegularFile(archive) && Files.size(archive) == bytes
+          })
+        }
     }
   }
 
   private final class Stage(val id: String, val directory: Path, val payload: Path,
     pin: ManagedCacheLocks.Pin) extends AutoCloseable {
+    def publish(destination: Path): Unit = _publish(payload, destination)
+    def publishFile(prepared: Path, destination: Path): Unit = _publish(prepared, destination)
     def close(): Unit = try _delete_tree(directory) finally pin.close()
   }
 
@@ -412,38 +608,39 @@ final class ManagedArchiveCache(val policy: ManagedCachePolicy) {
   }
 
   private def _publish(prepared: Path, destination: Path): Unit = {
-    Files.createDirectories(destination.getParent)
-    try Files.move(prepared, destination, StandardCopyOption.ATOMIC_MOVE)
+    try files.publish(prepared, destination)
     catch {
-      case error: AtomicMoveNotSupportedException => throw CacheFailure(CacheFailure.Reason.UnsupportedFilesystem,
-        "publish", destination.toString, detail = error.toString)
+      case error: AtomicMoveNotSupportedException => throw _failure(CacheFailure.Reason.UnsupportedFilesystem,
+        "publish", destination.toString, error)
+      case NonFatal(error) => throw _failure(CacheFailure.Reason.PublicationFailed,
+        "publish", destination.toString, error)
     }
   }
 
   private def _write_json(path: Path, value: Json): Unit = {
-    Files.writeString(path, value.noSpaces)
-    _force(path)
+    files.writeMetadata(path, value.noSpaces)
   }
 
   private def _force(path: Path): Unit =
     Using.resource(FileChannel.open(path, StandardOpenOption.WRITE))(_.force(true))
 
-  private def _directories(path: Path): Vector[Path] =
-    if (!Files.isDirectory(path)) Vector.empty
-    else Using.resource(Files.list(path))(_.iterator().asScala.filter(Files.isDirectory(_)).toVector)
-
   private def _bytes(path: Path): Long =
     if (!Files.exists(path)) 0L
     else Using.resource(Files.walk(path))(_.iterator().asScala.filter(Files.isRegularFile(_)).map(Files.size(_)).sum)
 
-  private def _delete_tree(path: Path): Unit = if (Files.exists(path)) {
-    val paths = Using.resource(Files.walk(path))(_.iterator().asScala.toVector.sortBy(_.getNameCount).reverse)
-    paths.foreach(Files.deleteIfExists(_))
+  private def _delete_tree(path: Path): Unit = files.deleteTree(path)
+
+  private def _failure(reason: CacheFailure.Reason, operation: String, entry: String, cause: Throwable): CacheFailure = {
+    val failure = CacheFailure(reason, operation, entry, detail = cause.toString)
+    failure.initCause(cause)
+    failure
   }
 
-  private def _entry_capacity(operation: String, entry: String, used: Long, count: Long, limit: Long): Unit =
-    if (count > limit - used)
-      throw CacheFailure(CacheFailure.Reason.CapacityExceeded, operation, entry, Some(count), Some(math.max(0L, limit - used)))
+  private def _io[A](operation: String, entry: String)(body: => A): A =
+    try body catch {
+      case failure: CacheFailure => throw failure
+      case NonFatal(error) => throw _failure(CacheFailure.Reason.IoFailure, operation, entry, error)
+    }
 
   private def _retry_publication(started: Long, key: String): Unit = {
     val remaining = policy.acquisitionMaxWaitMillis - (System.nanoTime() - started) / 1000000L

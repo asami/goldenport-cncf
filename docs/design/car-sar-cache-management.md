@@ -1,9 +1,14 @@
 # CAR/SAR Cache Lifecycle
 
-Status: accepted target design; CC-01 and CC-02 accepted and committed; CC-03 implementation underway.
+Status: accepted target design; CC-01 through CC-03 accepted and committed; CC-04 implementation underway.
 
 The [specification](../spec/car-sar-cache-management.md) owns observable behavior.
 This design separates repository selection, cache storage and runtime lifetime.
+
+The 2026-10-22 simplification revises the remaining CC-04 target. Earlier CC-01
+contract acceptance and CC-02/03 results remain recorded, but do not preserve
+the withdrawn reservation design as a requirement. This document describes the
+revised target; it does not claim that the current implementation satisfies it.
 
 ## Ownership and integration
 
@@ -114,12 +119,14 @@ protection. SIGKILL cannot run compensating code; correctness must not depend on
 a shutdown hook. Recovery should inspect owned candidate state, not hash every
 tree or scan every process on each access.
 
-Original archives and expansions have independent budgets and leases. Start with
+Original archives and expansions have independent collection targets and leases. Start with
 unused expansion reclamation and current/reusable original retention; retire
-unused superseded SNAPSHOT originals under C2.1. Include staged bytes in
-capacity decisions and return a structured capacity failure if all reclaimable
-space is exhausted. Expose disk usage and skipped-in-use counts through existing
-operation/diagnostic conventions, with no new AI approval loop.
+unused superseded SNAPSHOT originals under C2.1. Report staged bytes within the
+inspection scope. Ordinary writes determine disk-full failure; preserve the
+original I/O cause and attempt owned staging cleanup without replacing that cause.
+No strict quota reservation or free-space precheck is required. Expose scoped
+disk usage and skipped-in-use counts through existing diagnostic conventions,
+with no new AI approval loop.
 
 ## Delivery boundaries
 
@@ -137,10 +144,11 @@ requires its own declared extraction profile and resource-contract alignment.
 
 ## CC-01: concrete runtime integration contract
 
-This section records the integration boundary frozen at CC-01. That contract
-acceptance did not establish implemented behavior. CC-02 has since delivered
-and accepted the CAR route; SAR/SNAPSHOT, recovery and capacity retain their
-separate CC-03/CC-04 validation and acceptance obligations.
+This section records the integration boundary selected at CC-01 and amended on
+2026-10-22 to remove reservation and redundant hot-path work. That contract
+acceptance did not establish implemented behavior. CC-02 and CC-03 have since
+delivered and accepted the CAR route and SAR/SNAPSHOT generations. Recovery and
+capacity retain their separate CC-04 validation and acceptance obligations.
 
 ### Existing ownership and authoritative checks
 
@@ -180,9 +188,9 @@ runtime API here, not a new externally owned Component or repository resolver.
 | `ExtractionLease[A]` | `AutoCloseable` over a published typed `CarExtracted` / `SarExtracted`; exposes its path only while held. |
 | `ManagedArchiveCache.acquireSourceC` | Capture/resolve protected source bytes through the selected repository context; return `Consequence[SourceLease]`. |
 | `ManagedArchiveCache.acquireCarC` / `acquireSarC` | Reuse destination-supplied extractor logic and return the typed extraction lease. |
-| `ManagedCachePolicy.fromC` | Parse existing resolved configuration and optional explicit repository root; reject invalid/conflicting policy. |
-| `CacheInspection` / `CacheCollectionResult` | Typed original/extraction/staging totals, reserved bytes, candidate/reclaimed/in-use/failed entries and bounded per-entry reasons. |
-| `CacheFailure` | Closed reasons including `UnsupportedFilesystem`, `CapacityExceeded`, `ContentionExceeded`, `SourceChanged`, `PublicationFailed`, `DeletionFailed`, `PolicyConflict`, with operation/kind/generation/required/available details as applicable. Project into existing `Consequence` diagnostics. |
+| `ManagedCachePolicy.fromC` | Parse existing resolved configuration and optional explicit repository root; reject invalid values, not a difference from persisted old capacity settings. |
+| `CacheInspection` / `CacheCollectionResult` | Typed scoped original/extraction/staging totals, candidate/reclaimed/in-use/failed entries, truncation and bounded per-entry reasons; no reserved-byte accounting. |
+| `CacheFailure` | Existing structured I/O/publication/deletion and supported-filesystem/source/contention failures, preserving original causes and cleanup failures. Remove reservation-only capacity/policy-conflict outcomes; do not invent a parallel failure taxonomy. |
 
 Acquisition and inspection do not return a bare reusable path. Failed acquisition
 closes its partial leases in reverse order. Close is idempotent. Ordinary
@@ -201,13 +209,10 @@ extracted/sar/<digest>/sar-v1/          complete entry: tree/ and entry.json
 metadata/coordinates/<coordinate-key>/current.json
 metadata/generations/<generation-key>/references/<coordinate-key>
 metadata/generations/<generation-key>/retirement.json
-metadata/policy.json
-quota/<pool>/<slot>/                   bounded persistent reservation claims
 staging/YYYY/MM/<uuid>/                unpublished payload and staging metadata
 locks/coordinates/<coordinate-key>.lock
 locks/generations/<generation-key>.lock
 locks/staging/<uuid>.lock
-locks/quota/<pool>/<slot>.lock
 ```
 
 The digest is a content identifier, never an approval or authenticity token.
@@ -226,7 +231,8 @@ The source generation is independently published before extraction reads it.
 source generation and extraction profile. The pointer is authoritative for a
 managed coordinate. Existing coordinate archive files remain repository inputs,
 not mutable backing files handed to long-lived consumers. Capture them into
-independent immutable source files before use. Account for both a retained
+independent immutable source files when ingesting changed/unmanaged input. Reuse
+an already protected immutable source directly. Account for both a retained
 coordinate body and its independent captured copy; never hide duplicate bytes
 through a hard link to a caller-writable file. Caller archives are inputs only.
 
@@ -261,6 +267,12 @@ unselected candidate; a crash after replacement leaves enough old/new reference
 information to derive pending retirement. Recovery checks the pointer under its
 coordinate lock and never interprets a reference file alone as a live selection.
 
+Within the protected target metadata, an already satisfied reference or identical
+current selection is a no-op: do not rewrite/force identical JSON, create a new
+retirement record for an unchanged acquisition, or hash a payload solely to set
+a publication-presence field. Actual publication transitions and necessary repair
+of missing target metadata still retain their atomicity and protection.
+
 A collector first reads a candidate's reference set without a generation lock,
 then tries its coordinate locks in deterministic key order, followed by exclusive
 generation protection. Reread the reference set and pointers under those locks.
@@ -279,60 +291,64 @@ without an idle grace period. Mark/unpublish an entry before partial deletion;
 failure remains a non-hit pending candidate. A generation still current for
 another coordinate survives retirement of the first.
 
-### Policy keys, concrete defaults and peak space
+### Collection targets, bounded exploration and ordinary I/O
 
 These keys resolve through `ComponentCreate.configuration`; an explicit
-`StandardRepository.cacheRoot` takes precedence for that repository. Persist
-the capacity policy for a cache root and reject incompatible concurrent policy
-definitions instead of silently sharing reservations with different bounds.
+`StandardRepository.cacheRoot` takes precedence for that repository. These are
+collection settings, not a shared allocation contract. Do not persist a policy
+equality gate. Valid target changes do not require deleting healthy cache data.
 
 | Key | Default |
 | --- | --- |
 | `cncf.component.cache.root` | Existing `defaultStandardRepositoryDir()` |
-| `cncf.component.cache.extracted.max-bytes` | 8 GiB (8,589,934,592 bytes) |
-| `cncf.component.cache.source.max-bytes` | 16 GiB (17,179,869,184 bytes), including managed coordinate bodies |
-| `cncf.component.cache.staging.max-bytes` | 2 GiB (2,147,483,648 bytes), a subset limit on in-progress bytes |
-| `cncf.component.cache.source-entry.max-bytes` | 512 MiB (536,870,912 bytes) |
-| `cncf.component.cache.extracted-entry.max-bytes` | 2 GiB (2,147,483,648 bytes) |
+| `cncf.component.cache.extracted.max-bytes` | 8 GiB (8,589,934,592 bytes), soft reclamation target |
+| `cncf.component.cache.source.max-bytes` | 16 GiB (17,179,869,184 bytes), soft target including managed coordinate bodies; retention/use protection takes precedence |
 | `cncf.component.cache.extracted.idle-millis` | 86,400,000 (24 hours) |
 | `cncf.component.cache.source.evict-reusable` | `false`; current originals remain available offline |
-| `cncf.component.cache.collection.max-entries` | 128 per explicit invocation; automatic checkpoint at most 32 |
+| `cncf.component.cache.collection.max-entries` | At most 128 candidate discoveries/evaluations per explicit invocation; targeted automatic checkpoint at most 32; no full inventory first |
 | `cncf.component.cache.collection.max-bytes` | 268,435,456 (256 MiB) per invocation, unless a single already-selected entry is larger; report the actual overshoot |
 | `cncf.component.cache.acquisition.max-attempts` | 64, then structured contention failure; no unbounded spin |
 | `cncf.component.cache.acquisition.max-wait-millis` | 120,000 total; bounded per-entry waits happen outside coordinate locks |
-| `cncf.component.cache.reservation.quantum-bytes` | 1,048,576 (1 MiB); a smaller positive test policy is allowed for its isolated root |
 
-Budgets and single-entry limits are positive integral byte counts; idle duration
-may be zero. Reject overflow, negative values and internally incompatible limits.
+Collection targets are positive integral byte counts; idle duration may be zero.
+Reject overflow and invalid values. The former staging/entry capacity limits and
+reservation quantum are withdrawn from this cache contract; existing authoritative
+archive-safety limits remain at their own boundary, without duplication here.
 On lock contention, wait on the entry's ordinary local/native coordination
 outside the coordinate critical section, then reselect; do not consume retries
 in a tight loop. The attempt and elapsed-wait bounds both apply and produce
 `ContentionExceeded`, without weakening another holder's lease.
-Reservations round up to a quantum; reported physical payload bytes remain exact.
-Each source/extracted pool includes completed payloads plus allocations under
-construction. The staging limit additionally bounds their in-progress subset,
-so staging does not create an unaccounted extra allowance. Diagnostics separately
-show actual bytes and conservative rounded reservations. Filesystem metadata and
-other applications' disk use are not claimed to be bounded by these payload pools.
 
-Use bounded per-pool slot claims, acquired atomically and independently, to reserve
-capacity before writing each additional chunk. There is no root-wide lock.
-Claims survive process death and identify their protected entry/staging owner;
-only recovery holding that owner's exclusive protection may release abandoned
-claims. An incomplete claim stays protected while its claimant lives and is
-reconciled conservatively after exclusive acquisition. Publication transfers
-reservation ownership to the completed payload before releasing staging claims;
-it never temporarily drops the payload charge. Partial deletion keeps its charge
-until bytes are actually removed. A failure to reserve attempts bounded safe
-collection, then returns `CapacityExceeded`; it neither forces a holder out nor
-falls back to WorkArea. Retained originals can exhaust the source pool even if
-the extraction pool is empty; report that condition rather than silently evicting.
+Capture/extraction writes ordinary streams. No reservation slots, manifests,
+handles, capacity-only locks, per-chunk filesystem checks or hit-time capacity
+adoption are permitted. A write/rename error, including disk full, returns the
+original structured failure; attempt cleanup and attach any cleanup failure
+without masking it. Retain incomplete owned staging for later protected recovery
+when cleanup cannot finish. Never invalidate the previous current generation or
+publish partial output. A completed atomic rename is not undone merely because
+later bookkeeping/cleanup failed; retain its observed outcome for recovery.
+
+A protected immutable-generation hit uses its proven source identity, completion
+metadata and established admission route. Do not recopy/rehash its body, recount
+its tree or walk the cache. Mutable external input still needs stable ingestion;
+do not replace content identity with a pathname/mtime guess. Compute its digest
+while ingesting once and reuse it. Any data-dependent structure resolution remains
+at the existing authoritative boundary rather than a second cache validator.
+
+Bound candidate discovery before building a Vector or sorting. Use incremental
+iteration/continuation within the collection operation, or directly known retired
+targets, not a whole-cache scan followed by `take(N)`. No full inventory is required
+by ordinary hits. Defer excess exploration and report truncation; do not introduce
+a durable global quota/index protocol to achieve this. Stored completion sizes
+support cheap selection. If partial deletion makes a size uncertain, report that
+uncertainty or recount the selected target during explicit diagnosis/recovery.
+Soft targets do not guarantee free disk space or bound other processes' use.
 
 The logical diagnostic operations are `inspect`, `collect(dryRun = true)` and
 `collect(dryRun = false)` on the same cache owner. Projection through existing
 CNCF operational/diagnostic conventions belongs to CC-04. Dry-run obtains the
-same protection and rechecks but changes no payload, pointer or reservation.
-Acquisition checkpoints run bounded collection for pressure/idle/retirement;
+same protection and rechecks but changes no payload or pointer.
+Targeted checkpoints run bounded collection for known recovery/retirement;
 there is no AI polling task. Stable locks, journal/evidence, caller directories
 and old unleased flat temporary trees are always outside collection selection.
 
@@ -348,3 +364,38 @@ provider; they do not certify all network/distributed filesystems. Process death
 must release native usage protection without a callback. Caller-owned originals,
 noncooperating writers/deleters and manual `rm -rf` remain outside advisory-lock
 protection. Unsupported or unverified providers receive an explicit diagnostic.
+
+## CC-04 operational implementation under validation
+
+The existing cache owner supplies `inspectC()` and
+`collectC(dryRun = true | false)`. The revised `CacheInspection` separates scoped
+source, extracted and staged byte observations; bounded entry details report
+usage/retention/failure reasons, size uncertainty and truncation explicitly.
+When exploration is truncated, totals describe the returned projection, not an
+exact whole-cache total. No reservation totals or mandatory global inventory remain.
+Per-entry `bytesKnown` distinguishes measured/stored sizes from unavailable sizes
+for live staging or incomplete entries; an unknown size is not an assertion of
+zero bytes. `CacheInspection.bytesKnown` describes only its returned scope.
+`CacheCollectionResult` reports considered, reclaimed, in-use and failed counts,
+actual reclaimed bytes and any permitted single-entry byte-limit overshoot.
+These APIs do not add a resolver, permission authority or runtime resource owner.
+
+Staging ownership belongs to the actual build/publication lifetime and is separate
+from the withdrawn capacity accounting. Recover abandoned output only after
+acquiring its ownership protection. Collection keeps stable usage/update/staging
+lock files outside selected payloads.
+Dry-run evaluates the same eligibility/protection without changing payloads,
+current pointers. An operator must still select the intended
+root and configuration through the existing cache construction boundary.
+
+The revised CC-04 executable examples in `ManagedCacheRecoverySpec` and the
+affected CAR/SAR/repository scenarios have passed independent development
+validation. Repository-wide validation still has unresolved failures; the
+independent results do not establish native Step or Phase acceptance. Actual
+native results and independent review remain the closing boundary.
+
+Remove unreleased reservation-only APIs/configuration/tests without compatibility
+aliases. Preserve historical receipts and reusable failure scenarios. Existing old
+reservation files are not grounds to reject a healthy cache, but this revision
+does not authorize deleting live old-process records/locks or sweeping the cache.
+See the [CC-04 adoption handoff](../journal/2026/10/2026-10-22-phase116-cache-simplification-handoff.md).

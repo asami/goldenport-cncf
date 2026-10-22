@@ -32,7 +32,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Apr. 25, 2026
  *  version May. 25, 2026
  *  version Aug. 27, 2026
- * @version Oct. 21, 2026
+ * @version Oct. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -993,7 +993,10 @@ object ComponentRepository extends GlobalObservable {
             _satisfied_by_active_development_component(params, name)
           }.foreach { case (name, version) =>
             val resolved = _resolve_standard_component_artifact(cacheRoot, name, version, releaseonly = true)
-              .orElse(_fetch_standard_component_artifact(baseUrl, cacheRoot, name, version))
+              .orElse {
+                org.goldenport.cncf.component.cache.ManagedArchiveCache.fromC(params.configuration, Some(cacheRoot)).TAKE
+                _fetch_standard_component_artifact(baseUrl, cacheRoot, name, version)
+              }
             if (resolved.isEmpty) {
               val versiontext = version.getOrElse("latest")
               Consequence.resourceNotFound[Unit](
@@ -1890,24 +1893,15 @@ object ComponentRepository extends GlobalObservable {
     if (Files.isRegularFile(target)) {
       Some(Artifact(target, kind))
     } else {
-      Files.createDirectories(target.getParent)
-      val tmp = target.resolveSibling(s"${filename}.tmp")
       try {
         val url = _join_url(baseurl, name, version, filename)
-        _copy_remote(url, tmp)
-        try {
-          Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
-        } catch {
-          case _: AtomicMoveNotSupportedException =>
-            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING)
-        }
+        _managed_download(url, repositoryroot.getParent, target,
+          org.goldenport.cncf.component.cache.ArchiveKind.Sar)
         Some(Artifact(target, kind))
       } catch {
-        case NonFatal(_) =>
-          try Files.deleteIfExists(tmp) catch {
-            case NonFatal(_) => ()
-          }
-          None
+        case error: org.goldenport.cncf.component.cache.CacheFailure if _missing_remote_artifact(error) => None
+        case error: org.goldenport.cncf.component.cache.CacheFailure => throw error
+        case NonFatal(_) => None
       }
     }
   }
@@ -1925,25 +1919,15 @@ object ComponentRepository extends GlobalObservable {
       val relative = coordinate.value().get().carRepositoryRelativePath()
       val target = repositoryroot.resolve(relative)
       _canonical_component_artifact(target, componentid, release).orElse {
-        val filename = target.getFileName.toString
-        Files.createDirectories(target.getParent)
-        val tmp = target.resolveSibling(s"${filename}.tmp")
         try {
           val parts = relative.toString.replace(File.separatorChar, '/').split('/').toSeq
-          _copy_remote(_join_url(baseurl, parts*), tmp)
-          try {
-            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
-          } catch {
-            case _: AtomicMoveNotSupportedException =>
-              Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING)
-          }
+          _managed_download(_join_url(baseurl, parts*), repositoryroot.getParent, target,
+            org.goldenport.cncf.component.cache.ArchiveKind.Car)
           _canonical_component_artifact(target, componentid, release)
         } catch {
-          case NonFatal(_) =>
-            try Files.deleteIfExists(tmp) catch {
-              case NonFatal(_) => ()
-            }
-            None
+          case error: org.goldenport.cncf.component.cache.CacheFailure if _missing_remote_artifact(error) => None
+          case error: org.goldenport.cncf.component.cache.CacheFailure => throw error
+          case NonFatal(_) => None
         }
       }
     }
@@ -1979,16 +1963,35 @@ object ComponentRepository extends GlobalObservable {
       case NonFatal(_) => None
     }
 
-  private def _copy_remote(
+  private def _missing_remote_artifact(error: org.goldenport.cncf.component.cache.CacheFailure): Boolean =
+    error.reason == org.goldenport.cncf.component.cache.CacheFailure.Reason.IoFailure &&
+      error.operation == "download" && error.getCause.isInstanceOf[java.io.FileNotFoundException] &&
+      error.getSuppressed.isEmpty && error.getCause.getSuppressed.isEmpty
+
+  private def _managed_download(
     url: String,
-    target: Path
+    cacheroot: Path,
+    target: Path,
+    kind: org.goldenport.cncf.component.cache.ArchiveKind
   ): Unit = {
-    val uri = URI.create(url)
-    val connection = uri.toURL.openConnection()
-    connection.setConnectTimeout(_remote_connect_timeout_ms)
-    connection.setReadTimeout(_remote_read_timeout_ms)
-    Using.resource(connection.getInputStream) { in =>
-      Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING)
+    val cache = new org.goldenport.cncf.component.cache.ManagedArchiveCache(
+      org.goldenport.cncf.component.cache.ManagedCachePolicy.atRoot(cacheroot))
+    cache.publishSource(target, kind) { prepared =>
+      val connection = URI.create(url).toURL.openConnection()
+      connection.setConnectTimeout(_remote_connect_timeout_ms)
+      connection.setReadTimeout(_remote_read_timeout_ms)
+      Using.resource(connection.getInputStream) { input =>
+        Using.resource(Files.newOutputStream(prepared)) { output =>
+          val buffer = new Array[Byte](65536)
+          var count = input.read(buffer)
+          while (count >= 0) {
+            if (count > 0) {
+              output.write(buffer, 0, count)
+            }
+            count = input.read(buffer)
+          }
+        }
+      }
     }
   }
 

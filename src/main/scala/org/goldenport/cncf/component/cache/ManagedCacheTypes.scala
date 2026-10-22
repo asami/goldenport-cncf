@@ -7,8 +7,8 @@ import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.cncf.component.repository.ComponentRepository
 
 /** Managed payload identity is independent of a mutable repository filename.
-  * @since Oct. 21, 2026
- * @version Oct. 21, 2026
+  * @since   Oct. 21, 2026
+  * @version Oct. 22, 2026
   */
 enum ArchiveKind(val directory: String, val suffix: String, val profile: String) {
   case Car extends ArchiveKind("car", ".car", "car-v1")
@@ -57,20 +57,16 @@ final case class CacheFailure(
   reason: CacheFailure.Reason,
   operation: String,
   entry: String,
-  requiredBytes: Option[Long] = None,
-  availableBytes: Option[Long] = None,
   detail: String = ""
 ) extends RuntimeException(
   s"managed cache reason=$reason operation=$operation entry=$entry" +
-    requiredBytes.fold("")(value => s" requiredBytes=$value") +
-    availableBytes.fold("")(value => s" availableBytes=$value") +
     (if (detail.isEmpty) "" else s" detail=$detail")
 )
 
 object CacheFailure {
   enum Reason {
-    case UnsupportedFilesystem, CapacityExceeded, ContentionExceeded, SourceChanged
-    case PublicationFailed, DeletionFailed, PolicyConflict
+    case UnsupportedFilesystem, ContentionExceeded, SourceChanged, IoFailure
+    case PublicationFailed, DeletionFailed, InvalidConfiguration
   }
 }
 
@@ -78,20 +74,23 @@ final case class ManagedCachePolicy(
   root: Path,
   extractedMaxBytes: Long = 8589934592L,
   sourceMaxBytes: Long = 17179869184L,
-  stagingMaxBytes: Long = 2147483648L,
-  sourceEntryMaxBytes: Long = 536870912L,
-  extractedEntryMaxBytes: Long = 2147483648L,
   idleMillis: Long = 86400000L,
   evictReusableSources: Boolean = false,
   collectionMaxEntries: Int = 128,
   collectionMaxBytes: Long = 268435456L,
   acquisitionMaxAttempts: Int = 64,
-  acquisitionMaxWaitMillis: Long = 120000L,
-  reservationQuantumBytes: Long = 1048576L
-)
+  acquisitionMaxWaitMillis: Long = 120000L
+) {
+  require(Vector(extractedMaxBytes, sourceMaxBytes, collectionMaxBytes, acquisitionMaxWaitMillis).forall(_ > 0L),
+    "positive managed cache collection targets and wait bounds required")
+  require(idleMillis >= 0L && collectionMaxEntries > 0 && acquisitionMaxAttempts > 0, "invalid managed cache bounds")
+}
 
 object ManagedCachePolicy {
   private val _prefix = "cncf.component.cache."
+
+  /** Descriptor-only access uses the selected root, without persisted policy binding. */
+  private[cncf] def atRoot(root: Path): ManagedCachePolicy = ManagedCachePolicy(root)
 
   def fromC(
     configuration: ResolvedConfiguration,
@@ -99,7 +98,7 @@ object ManagedCachePolicy {
   ): Consequence[ManagedCachePolicy] = Consequence {
     val values = configuration.configuration.values
     def _invalid_(key: String): Nothing = throw CacheFailure(
-      CacheFailure.Reason.PolicyConflict, "configure", key, detail = "invalid managed cache configuration")
+      CacheFailure.Reason.InvalidConfiguration, "configure", key, detail = "invalid managed cache configuration")
     def _number_(key: String, default: Long, zero: Boolean = false): Long = {
       val result = values.get(_prefix + key) match {
         case None => default
@@ -128,21 +127,13 @@ object ManagedCachePolicy {
       repositoryRoot.getOrElse(configuredroot).toAbsolutePath.normalize,
       _number_("extracted.max-bytes", 8589934592L),
       _number_("source.max-bytes", 17179869184L),
-      _number_("staging.max-bytes", 2147483648L),
-      _number_("source-entry.max-bytes", 536870912L),
-      _number_("extracted-entry.max-bytes", 2147483648L),
       _number_("extracted.idle-millis", 86400000L, zero = true),
       eviction,
       _integer_("collection.max-entries", 128),
       _number_("collection.max-bytes", 268435456L),
       _integer_("acquisition.max-attempts", 64),
-      _number_("acquisition.max-wait-millis", 120000L),
-      _number_("reservation.quantum-bytes", 1048576L)
+      _number_("acquisition.max-wait-millis", 120000L)
     )
-    if (policy.sourceEntryMaxBytes > policy.sourceMaxBytes ||
-        policy.extractedEntryMaxBytes > policy.extractedMaxBytes ||
-        policy.reservationQuantumBytes > math.min(policy.sourceMaxBytes, policy.extractedMaxBytes))
-      _invalid_("capacity")
     policy
   }
 }
@@ -155,12 +146,42 @@ final case class CacheCollectionEntry(
   generation: ExtractionGeneration,
   bytes: Long,
   disposition: CacheCollectionDisposition,
-  reason: Option[String] = None
+  reason: Option[String] = None,
+  lastUsedMillis: Option[Long] = None,
+  bytesKnown: Boolean = true
 )
 
-final case class CacheCollectionResult(entries: Vector[CacheCollectionEntry] = Vector.empty) {
-  def reclaimedBytes: Long = entries.filter(_.disposition == CacheCollectionDisposition.Reclaimed).map(_.bytes).sum
-  def reclaimedCount: Int = entries.count(_.disposition == CacheCollectionDisposition.Reclaimed)
+final case class CacheOperationEntry(
+  pool: String,
+  entry: String,
+  bytes: Long,
+  disposition: CacheCollectionDisposition,
+  reason: String,
+  lastUsedMillis: Option[Long] = None,
+  bytesKnown: Boolean = true
+)
+
+final case class CacheCollectionResult(
+  entries: Vector[CacheCollectionEntry] = Vector.empty,
+  operations: Vector[CacheOperationEntry] = Vector.empty,
+  byteLimit: Long = 0L,
+  truncated: Boolean = false,
+  visitedPaths: Int = 0
+) {
+  def reclaimedBytes: Long = entries.filter(_.disposition == CacheCollectionDisposition.Reclaimed).map(_.bytes).sum +
+    operations.filter(_.disposition == CacheCollectionDisposition.Reclaimed).map(_.bytes).sum
+  def reclaimedCount: Int = entries.count(_.disposition == CacheCollectionDisposition.Reclaimed) +
+    operations.count(_.disposition == CacheCollectionDisposition.Reclaimed)
+  def consideredCount: Int = entries.size + operations.size
+  def inUseCount: Int = entries.count(_.disposition == CacheCollectionDisposition.InUse) +
+    operations.count(_.disposition == CacheCollectionDisposition.InUse)
+  def failedCount: Int = entries.count(_.disposition == CacheCollectionDisposition.Failed) +
+    operations.count(_.disposition == CacheCollectionDisposition.Failed)
+  def selectedBytes: Long = entries.filter(entry => Set(CacheCollectionDisposition.Reclaimed,
+    CacheCollectionDisposition.WouldReclaim).contains(entry.disposition)).map(_.bytes).sum +
+    operations.filter(entry => Set(CacheCollectionDisposition.Reclaimed,
+      CacheCollectionDisposition.WouldReclaim).contains(entry.disposition)).map(_.bytes).sum
+  def byteLimitOvershoot: Long = if (byteLimit <= 0L) 0L else math.max(0L, selectedBytes - byteLimit)
 }
 
 object CacheCollectionResult {
@@ -168,4 +189,12 @@ object CacheCollectionResult {
   def apply(): CacheCollectionResult = empty
 }
 
-final case class CacheInspection(sourceBytes: Long, extractedBytes: Long, stagingBytes: Long)
+final case class CacheInspection(
+  sourceBytes: Long,
+  extractedBytes: Long,
+  stagingBytes: Long,
+  entries: Vector[CacheOperationEntry] = Vector.empty,
+  truncated: Boolean = false
+) {
+  def bytesKnown: Boolean = entries.forall(_.bytesKnown)
+}

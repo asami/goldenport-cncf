@@ -1,6 +1,10 @@
 # CAR/SAR Cache Management
 
-Status: accepted target specification; CC-01 and CC-02 accepted and committed; CC-03 implementation underway.
+Status: accepted target specification; CC-01 through CC-03 accepted and committed; CC-04 implementation underway.
+
+Revision 2026-10-22: capacity reservations are withdrawn. The revised C2/C5
+contract is the target for remaining CC-04 work, not a claim of implementation
+acceptance. Earlier commits and validation evidence remain historical facts.
 
 ## Scope and authority
 
@@ -48,6 +52,14 @@ Use a content digest computed during controlled source ingestion, reusing truste
 ingestion metadata for immutable sources. This digest identifies cache content;
 it is not a workflow approval hash, an authenticity assertion or a requirement
 to rehash every expanded directory on each access.
+
+For a protected, cache-managed immutable generation, reuse its established
+identity and completed payload without recopying or rehashing it. External or
+changed mutable inputs still pass through controlled ingestion; a pathname or
+timestamp alone must not establish content identity. A no-change acquisition
+does not rewrite identical reference/retirement records or force them to disk.
+Recovery uses actual publication state; do not compute a separate full-content
+hash whose only consumer checks that a field exists.
 
 Build in uniquely owned staging on the destination filesystem. Only a complete,
 successfully extracted generation may be atomically published as reusable.
@@ -134,7 +146,7 @@ development directories remain caller-owned and are never collected as cache.
 
 Provide a CNCF-managed inspection/collection operation with a dry-run projection.
 Report source versus extracted bytes, last use, candidate/reclaimed/skipped entries
-and failure reasons. Collection uses configured byte budgets and last-use/idle
+and failure reasons. Collection uses configured soft byte targets and last-use/idle
 policy, preferring unused extracted results before removing reusable originals.
 Keep current/reusable originals for offline re-extraction by default; ordinary
 source eviction is a separate explicit policy. Superseded SNAPSHOT originals
@@ -148,12 +160,31 @@ force-release leases. Deletion failure remains visible and retryable. Incomplete
 staging is reclaimable only after its owner protection is acquired; neither its
 date folder nor a missing PID is sufficient. Never sweep an entire month blindly.
 
-Run bounded collection at configured acquisition/capacity checkpoints and through
-the explicit operation, not through AI polling. Account for peak staging space
-as well as completed bytes. If safe collection cannot provide required capacity,
-report a structured capacity failure and leave active generations intact. Do not
-fall back to unbounded temporary extraction. Freeze concrete budget defaults and
-configuration keys during CC-01 before implementation acceptance.
+Capacity targets guide reclamation; they are not strict shared quotas, disk-space
+reservations or write-admission gates. Do not create reservation files, slot
+claims, reservation handles, capacity locks or a persistent policy-equality gate.
+Normal stream reads/writes and cache hits do not scan reservations, total cache
+size or expanded trees. Changing a collection target must not make an existing
+cache unusable merely because its old policy differs.
+
+Use ordinary file I/O. Disk-full and other write/publication failures return
+structured I/O failures preserving the cause; cleanup failure must not hide the
+primary failure. Clean owned incomplete outputs where possible, otherwise retain
+recoverable staging. Preserve existing current/active generations and publish
+only complete results. Preflight free-space checks are not required and cannot
+replace this behavior. No fallback to another unbounded temporary area is added.
+Existing authoritative archive-safety checks remain at their established boundary;
+do not invent cache-specific per-entry quotas as a replacement reservation system.
+
+Explicit collection and targeted retirement/recovery perform bounded exploration
+as well as bounded reclamation. An automatic checkpoint must not enumerate/sort
+the entire cache before taking its first N candidates. A cache hit uses only
+its target's necessary metadata and protection; it does not trigger global
+inventory or recovery. Defer remaining exploration with explicit truncation.
+Report scoped/measured totals as such, never as exact whole-cache totals. Prefer
+stored completion size for selection; any necessary physical recount belongs to
+the selected diagnostic/recovery operation, not every acquisition. No AI polling
+or new quota ledger is required to manage collection.
 
 ## C6 Existing guarantees and adoption
 
@@ -170,7 +201,7 @@ cleanup and evidence remain valid for their original scope.
 The main acceptance is two runtimes sharing one CAR expansion, continued lazy
 access after one closes, rejection of collection while the other holds it, and
 successful collection after its final release. Exercise the same behavior across
-two JVMs, then SAR composition, interrupted staging and capacity pressure.
+two JVMs, then SAR composition, interrupted staging and injected write failures.
 Use local fixtures; Docker and external services are not required.
 
 Design: [cache lifecycle](../design/car-sar-cache-management.md).
@@ -183,9 +214,10 @@ fixes the existing API attachment points, typed source/extraction leases, intern
 immutable source mapping, current/reference/retirement publication protocol,
 nonblocking lock order, inspection/collection results, capacity keys/defaults
 and supported filesystem outcomes. It preserves C1–C6 and the public repository
-coordinate layout. Capacity includes construction and retained coordinate-body
-copies; staging is not an extra unbounded allowance. Default reusable originals
-remain retained, and source exhaustion is reported independently.
+coordinate layout. The 2026-10-22 revision supersedes its former strict capacity
+reservation/peak-space contract. Report retained coordinate bodies and staged
+bytes within the diagnostic scope; do not promise a filesystem-wide hard bound.
+Default reusable originals remain retained.
 
 This contract was accepted for CC-02 onward through CC-01's ordinary compile,
 independent review and Step commit. That acceptance establishes no implemented
