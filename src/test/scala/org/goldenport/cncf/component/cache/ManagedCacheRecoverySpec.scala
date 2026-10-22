@@ -1,9 +1,10 @@
 package org.goldenport.cncf.component.cache
 
-import java.io.{BufferedReader, FilterOutputStream, InputStreamReader, OutputStream}
+import java.io.{BufferedReader, FilterOutputStream, InputStreamReader, OutputStream, PrintWriter}
 import java.nio.file.{Files, Path}
 import java.util.UUID
-import java.util.concurrent.{Callable, Executors, TimeUnit}
+import java.util.concurrent.{Callable, CountDownLatch, Executors, TimeUnit}
+import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.{ZipEntry, ZipOutputStream}
 import scala.jdk.CollectionConverters.*
 import scala.util.Using
@@ -11,6 +12,10 @@ import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalacheck.{Gen, Prop, Test}
+import org.goldenport.Consequence
+import org.goldenport.cncf.component.{AssemblyApiClassLoader, AssemblyApiMetadata, ComponentDescriptorLoader}
+import org.goldenport.cncf.component.repository.{CanonicalArchiveFixtureComponent, ComponentRepository}
+import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
 
 /** Ordinary I/O, cheap reuse and explicitly bounded managed collection.
   * Quota-only examples are superseded; prior native receipts retain their old scope.
@@ -22,6 +27,199 @@ class ManagedCacheRecoverySpec extends AnyWordSpec with Matchers with GivenWhenT
   import ManagedCacheRecoveryFixture.*
 
   "Managed cache recovery and operations" should {
+    "eager repository metadata source protection" which {
+      Vector(ArchiveKind.Car -> "A", ArchiveKind.Sar -> "B").foreach { case (kind, suffix) =>
+        Vector(false -> "1", true -> "2").foreach { case (generation, location) =>
+          Vector("success" -> "1", "failure" -> "2", "throw" -> "3").foreach { case (outcome, completion) =>
+            val example = s"E17$suffix$location$completion"
+            s"$example protect ${kind.directory} ${if (generation) "generation" else "coordinate"} metadata until $outcome completes" must
+              afterWord(s"in spec:car-sar-cache-management, example:$example, rules:C3,C5,C6, phase:116") {
+              "keep the actual eager reader usable and release its protection on every completion" in withCacheFixture { root =>
+                Given(s"Spec: docs/spec/car-sar-cache-management.md; Rules: C3,C5,C6; Example: $example; a managed ${kind.directory} and an eager reader paused before ZIP open")
+                val cache = new ManagedArchiveCache(ManagedCachePolicy(root.resolve("cache"), idleMillis = 0L, evictReusableSources = true))
+                val coordinate = cache.root.resolve(kind.directory).resolve("metadata" + kind.suffix)
+                Files.createDirectories(coordinate.getParent)
+                metadataArchive(coordinate, kind, root)
+                val selected = if (generation) {
+                  val source = cache.acquireSourceC(coordinate, kind).TAKE
+                  try source.path finally source.close()
+                } else coordinate
+                val original = Files.readAllBytes(selected).toVector
+                val entered = new CountDownLatch(1)
+                val release = new CountDownLatch(1)
+                val loaded = new AtomicReference[AssemblyApiMetadata]()
+                val executor = Executors.newSingleThreadExecutor()
+                val expected = Consequence.resourceInvalid[AssemblyApiMetadata]("metadata callback failure")
+                try {
+                  When("collection and coordinate publication encounter the paused metadata reader")
+                  val reader = executor.submit(new Callable[Consequence[AssemblyApiMetadata]] {
+                    def call(): Consequence[AssemblyApiMetadata] = ComponentRepository.withArchiveSourceReadC(selected, Some(cache.root)) { path =>
+                      entered.countDown()
+                      require(release.await(30L, TimeUnit.SECONDS), "metadata reader release timed out")
+                      readMetadata(path, kind).flatMap { metadata =>
+                        loaded.set(metadata)
+                        outcome match {
+                          case "failure" => expected
+                          case "throw" => throw new IllegalStateException("metadata callback exception")
+                          case _ => Consequence.success(metadata)
+                        }
+                      }
+                    }
+                  })
+                  entered.await(30L, TimeUnit.SECONDS) shouldBe true
+                  val active = cache.collectC().TAKE
+                  Then("the selected source remains in use and its original bytes survive")
+                  active.operations.exists(entry => entry.pool == (if (generation) "source" else "coordinate") &&
+                    entry.disposition == CacheCollectionDisposition.InUse) shouldBe true
+                  Files.readAllBytes(selected).toVector shouldBe original
+                  if (!generation) {
+                    val refused = cache.publishSourceC(coordinate, kind)(path => { Files.writeString(path, "replacement"); () })
+                    refused.isSuccess shouldBe false
+                    refused.toString should include("publish-coordinate")
+                    Files.readAllBytes(selected).toVector shouldBe original
+                  }
+                  When("the callback opens the real ZIP and completes")
+                  release.countDown()
+                  val result = reader.get(30L, TimeUnit.SECONDS)
+                  Then("actual metadata is eager and the pin is released for success, failure or exception")
+                  withClue(s"metadata reader result: $result; ") {
+                    loaded.get() should not be null
+                    loaded.get().artifacts should not be empty
+                  }
+                  loaded.get().artifacts.head.contract.apiClass shouldBe classOf[CanonicalArchiveFixtureComponent].getName
+                  loaded.get().artifacts.head.classes(classOf[CanonicalArchiveFixtureComponent].getName).nonEmpty shouldBe true
+                  outcome match {
+                    case "failure" => result shouldBe expected
+                    case "throw" => result.isSuccess shouldBe false; result.toString should include("metadata callback exception")
+                    case _ => result.TAKE.artifacts shouldBe loaded.get().artifacts
+                  }
+                  if (!generation) {
+                    cache.publishSourceC(coordinate, kind)(path => { Files.write(path, original.toArray); () }).isSuccess shouldBe true
+                  }
+                  val reclaimed = Vector.fill(4)(cache.collectC().TAKE)
+                  reclaimed.flatMap(_.operations).exists(_.disposition == CacheCollectionDisposition.Reclaimed) shouldBe true
+                  Files.exists(selected) shouldBe false
+                  loaded.get().artifacts.head.classes(classOf[CanonicalArchiveFixtureComponent].getName).nonEmpty shouldBe true
+                } finally {
+                  release.countDown()
+                  executor.shutdownNow()
+                  executor.awaitTermination(10L, TimeUnit.SECONDS)
+                  cache.close()
+                }
+              }
+            }
+          }
+        }
+      }
+
+      Vector(ArchiveKind.Car -> "E18A", ArchiveKind.Sar -> "E18B").foreach { case (kind, example) =>
+        s"$example protect a metadata read in another JVM through release and termination" must
+          afterWord(s"in spec:car-sar-cache-management, example:$example, rules:C3,C5,C6, phase:116") {
+          "exclude collection while the actual repository reader owns its source pin" in withCacheFixture { root =>
+            Given(s"Spec: docs/spec/car-sar-cache-management.md; Rules: C3,C5,C6; Example: $example; a test-owned metadata-reader JVM and a separate collecting JVM")
+            val cache = new ManagedArchiveCache(ManagedCachePolicy(root.resolve("cache"), idleMillis = 0L, evictReusableSources = true))
+            val coordinate = cache.root.resolve(kind.directory).resolve("metadata" + kind.suffix)
+            Files.createDirectories(coordinate.getParent)
+            metadataArchive(coordinate, kind, root)
+            val child = new MetadataProcess(cache.root, coordinate, kind, root.resolve("metadata-reader.log"))
+            try {
+              When("the parent collects while the other JVM is paused before ZIP open")
+              child.ready()
+              val active = cache.collectC().TAKE
+              Then("cross-process shared ownership keeps the coordinate readable")
+              active.operations.exists(entry => entry.pool == "coordinate" && entry.disposition == CacheCollectionDisposition.InUse) shouldBe true
+              When("the child reads the archive and releases its callback")
+              child.readAndRelease() shouldBe classOf[CanonicalArchiveFixtureComponent].getName
+              Then("the reader terminates normally and collection can reclaim")
+              cache.collectC().TAKE.operations.exists(entry => entry.pool == "coordinate" && entry.disposition == CacheCollectionDisposition.Reclaimed) shouldBe true
+              Files.exists(coordinate) shouldBe false
+            } finally { child.close(); cache.close() }
+          }
+        }
+      }
+    }
+
+    "E19 eager metadata protection through directory aliases" which {
+      Vector(ArchiveKind.Car -> "A", ArchiveKind.Sar -> "B").foreach { case (kind, suffix) =>
+        Vector(false -> "1", true -> "2").foreach { case (generation, location) =>
+          Vector("alias-root-alias-path" -> "1", "real-root-alias-path" -> "2",
+            "alias-root-real-path" -> "3", "initialized-alias-path" -> "4").foreach { case (route, variant) =>
+            val example = s"E19$suffix$location$variant"
+            s"$example protect ${kind.directory} ${if (generation) "generation" else "coordinate"} metadata through $route" must
+              afterWord(s"in spec:car-sar-cache-management, example:$example, rules:C3,C5,C6, phase:116") {
+              "preserve original reader provenance while collection uses the real root" in withCacheFixture { root =>
+                Given(s"Spec: docs/spec/car-sar-cache-management.md; Rules: C3,C5,C6; Example: $example; a local cache directory alias and an actual eager reader using $route")
+                val cache = new ManagedArchiveCache(ManagedCachePolicy(root.resolve("cache"), idleMillis = 0L, evictReusableSources = true))
+                try {
+                  Files.createDirectories(cache.root.resolve("locks/generations"))
+                  val alias = Files.createSymbolicLink(root.resolve("cache-alias"), cache.root)
+                  val coordinate = cache.root.resolve(kind.directory).resolve("metadata" + kind.suffix)
+                  Files.createDirectories(coordinate.getParent)
+                  metadataArchive(coordinate, kind, root)
+                  val actual = if (generation) {
+                    val source = cache.acquireSourceC(coordinate, kind).TAKE
+                    try source.path finally source.close()
+                  } else coordinate
+                  val selected = if (route == "alias-root-real-path") actual else alias.resolve(cache.root.relativize(actual))
+                  val selectedroot = route match {
+                    case "real-root-alias-path" => Some(cache.root)
+                    case "initialized-alias-path" => None
+                    case _ => Some(alias)
+                  }
+                  val original = Files.readAllBytes(actual).toVector
+                  val entered = new CountDownLatch(1)
+                  val release = new CountDownLatch(1)
+                  val observed = new AtomicReference[Path]()
+                  val provenance = new AtomicReference[Path]()
+                  val executor = Executors.newSingleThreadExecutor()
+                  try {
+                    When("the alias-selected reader pauses after protection and a collector uses the real root")
+                    val reader = executor.submit(new Callable[Consequence[AssemblyApiMetadata]] {
+                      def call(): Consequence[AssemblyApiMetadata] = ComponentRepository.withArchiveSourceReadC(selected, selectedroot) { path =>
+                        observed.set(path)
+                        entered.countDown()
+                        require(release.await(30L, TimeUnit.SECONDS), "alias metadata reader release timed out")
+                        val descriptor = if (kind == ArchiveKind.Car) GenericSubsystemDescriptor.loadComponentArchive(path)
+                          else GenericSubsystemDescriptor.load(path)
+                        descriptor.flatMap { value =>
+                          provenance.set(value.path)
+                          readMetadata(path, kind)
+                        }
+                      }
+                    })
+                    entered.await(30L, TimeUnit.SECONDS) shouldBe true
+                    val active = cache.collectC().TAKE
+                    Then("the selected coordinate or generation is in use and the callback retains its original argument")
+                    observed.get() shouldBe selected
+                    active.operations.exists(entry => entry.pool == (if (generation) "source" else "coordinate") &&
+                      entry.disposition == CacheCollectionDisposition.InUse) shouldBe true
+                    Files.readAllBytes(actual).toVector shouldBe original
+                    When("the callback reads the actual metadata ZIP and releases its protection")
+                    release.countDown()
+                    val metadata = reader.get(30L, TimeUnit.SECONDS).TAKE
+                    Then("eager metadata and descriptor provenance preserve the selected path")
+                    provenance.get() shouldBe selected
+                    metadata.artifacts.head.contract.apiClass shouldBe classOf[CanonicalArchiveFixtureComponent].getName
+                    metadata.artifacts.head.classes(classOf[CanonicalArchiveFixtureComponent].getName).nonEmpty shouldBe true
+                    When("ordinary collection resumes against the same real root")
+                    val reclaimed = Vector.fill(4)(cache.collectC().TAKE)
+                    Then("released source bytes are reclaimed while eager class bytes remain usable")
+                    reclaimed.flatMap(_.operations).exists(_.disposition == CacheCollectionDisposition.Reclaimed) shouldBe true
+                    Files.exists(actual) shouldBe false
+                    metadata.artifacts.head.classes(classOf[CanonicalArchiveFixtureComponent].getName).nonEmpty shouldBe true
+                  } finally {
+                    release.countDown()
+                    executor.shutdownNow()
+                    executor.awaitTermination(10L, TimeUnit.SECONDS)
+                  }
+                } finally cache.close()
+              }
+            }
+          }
+        }
+      }
+    }
+
     "actual native protection" which {
       "E1 preserve a live JVM after another holder dies, then collect after the final death" must afterWord("in spec:car-sar-cache-management, example:E1, rules:C3,C5, phase:116") {
         "preserve a live JVM after another holder dies, then collect after the final death" in withCacheFixture { root =>
@@ -434,6 +632,80 @@ class ManagedCacheRecoverySpec extends AnyWordSpec with Matchers with GivenWhenT
 }
 
 private[cache] object ManagedCacheRecoveryFixture {
+  def metadataArchive(target: Path, kind: ArchiveKind, assets: Path): Path = {
+    if (kind == ArchiveKind.Sar) {
+      val car = Files.createTempFile(assets, "metadata-child-", ".car")
+      metadataArchive(car, ArchiveKind.Car, assets)
+      Using.resource(new ZipOutputStream(Files.newOutputStream(target))) { zip =>
+        zip.putNextEntry(new ZipEntry("subsystem-descriptor.json"))
+        zip.write("""{"name":"metadata","version":"1.0.0","subsystem":"metadata","components":[{"namespace":"org.goldenport.fixture","id":"CanonicalArchiveFixture","version":"0.1.0"}]}""".getBytes(java.nio.charset.StandardCharsets.UTF_8))
+        zip.closeEntry()
+        zip.putNextEntry(new ZipEntry("component/metadata.car"))
+        Files.copy(car, zip)
+        zip.closeEntry()
+      }
+    } else {
+      val jar = Files.createTempFile(assets, "metadata-api-", ".jar")
+      val classname = classOf[CanonicalArchiveFixtureComponent].getName
+      val entry = classname.replace('.', '/') + ".class"
+      Using.resource(new ZipOutputStream(Files.newOutputStream(jar))) { zip =>
+        zip.putNextEntry(new ZipEntry(entry))
+        Using.resource(classOf[CanonicalArchiveFixtureComponent].getClassLoader.getResourceAsStream(entry))(_.transferTo(zip))
+        zip.closeEntry()
+      }
+      val descriptor = Files.createTempFile(assets, "metadata-component-", ".json")
+      Files.writeString(descriptor, """{"schemaVersion":3,"component":{"namespace":"org.goldenport.fixture","id":"CanonicalArchiveFixture","version":"0.1.0"},"subsystem":"metadata"}""")
+      val api = Files.createTempFile(assets, "metadata-api-", ".json")
+      Files.writeString(api, s"""{"schemaVersion":"cncf.component-api.v1","component":{"name":"org.goldenport.fixture.CanonicalArchiveFixture","version":"0.1.0"},"provided":[{"apiClass":"$classname","packages":["org.goldenport.cncf.component.repository"],"abiHash":"sha256:metadata","artifactPath":"spi/metadata-api.jar"}],"required":[]}""")
+      org.goldenport.cncf.component.testutil.CarArchiveFixture.write(target, Vector(
+        "component-descriptor.json" -> descriptor, "component-api-descriptor.json" -> api,
+        "spi/metadata-api.jar" -> jar, "component/main.jar" -> jar))
+    }
+    target
+  }
+
+  def readMetadata(path: Path, kind: ArchiveKind): Consequence[AssemblyApiMetadata] =
+    if (kind == ArchiveKind.Car)
+      ComponentDescriptorLoader.loadArchive(path).flatMap { _ =>
+        GenericSubsystemDescriptor.loadComponentArchive(path).flatMap(_ => AssemblyApiClassLoader.loadCar(path))
+      }
+    else GenericSubsystemDescriptor.load(path).flatMap(_ => AssemblyApiClassLoader.loadSar(path))
+
+  final class MetadataProcess(root: Path, archive: Path, kind: ArchiveKind, stderr: Path) extends AutoCloseable {
+    private val _process = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin/java").toString,
+      "-cp", ManagedCarCacheFixture.runtimeClasspath(), "org.goldenport.cncf.component.cache.ManagedCacheMetadataHolder",
+      root.toString, archive.toString, kind.directory).redirectError(stderr.toFile).start()
+    private val _reader = new BufferedReader(new InputStreamReader(_process.getInputStream, java.nio.charset.StandardCharsets.UTF_8))
+    private val _writer = new PrintWriter(_process.getOutputStream, true)
+    private val _reads = Executors.newSingleThreadExecutor()
+    private var _closed = false
+
+    private def _line(prefix: String): String = try _reads.submit(new Callable[String] {
+      def call(): String = {
+        var line = _reader.readLine()
+        while (line != null && !line.startsWith(prefix)) line = _reader.readLine()
+        require(line != null, "metadata child ended before " + prefix + "; diagnostics: " + stderr)
+        line.substring(prefix.length)
+      }
+    }).get(45L, TimeUnit.SECONDS) catch { case error: Throwable => close(); throw error }
+
+    def ready(): Unit = { _line("READY "); () }
+    def readAndRelease(): String = {
+      _writer.println("READ")
+      val result = _line("READ ")
+      require(_process.waitFor(10L, TimeUnit.SECONDS), "metadata child did not terminate after release")
+      require(_process.exitValue() == 0, "metadata child failed; diagnostics: " + stderr)
+      result
+    }
+    def close(): Unit = if (!_closed) {
+      _closed = true
+      try {
+        if (_process.isAlive) _process.destroyForcibly()
+        require(_process.waitFor(10L, TimeUnit.SECONDS), "owned metadata JVM did not terminate")
+      } finally { _writer.close(); _reader.close(); _reads.shutdownNow() }
+    }
+  }
+
   def regularFiles(root: Path): Vector[Path] = if (!Files.exists(root)) Vector.empty else
     Using.resource(Files.walk(root))(_.iterator().asScala.filter(Files.isRegularFile(_)).toVector)
 
@@ -521,5 +793,19 @@ object ManagedCacheStageHolder {
       System.in.read()
       ()
     } finally cache.close()
+  }
+}
+
+object ManagedCacheMetadataHolder {
+  def main(args: Array[String]): Unit = {
+    val kind = ArchiveKind.values.find(_.directory == args(2)).get
+    val result = ComponentRepository.withArchiveSourceReadC(Path.of(args(1)), Some(Path.of(args(0)))) { path =>
+      Console.out.println("READY " + path)
+      Console.out.flush()
+      require(new BufferedReader(new InputStreamReader(System.in)).readLine() == "READ", "metadata read command missing")
+      ManagedCacheRecoveryFixture.readMetadata(path, kind)
+    }.TAKE
+    Console.out.println("READ " + result.artifacts.head.contract.apiClass)
+    Console.out.flush()
   }
 }

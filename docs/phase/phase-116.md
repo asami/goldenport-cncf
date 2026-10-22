@@ -1,6 +1,6 @@
 # Phase 116 — CAR/SAR Managed Archive and Extraction Cache
 
-Status: IN_PROGRESS — CC-01 through CC-04 accepted and committed; CC-05 integrated acceptance underway
+Status: IN_PROGRESS — CC-01 through CC-06 accepted and committed; CC-07 ordinary source validation/review passed, native CC-07 issued; checks and acceptance pending
 Created: 2026-10-21
 Owner: CNCF Component Repository / runtime resource lifecycle
 Checklist: [Phase 116 checklist](phase-116-checklist.md)
@@ -30,8 +30,8 @@ ClassLoader/resource lifetime and existing repository/admission semantics.
 5. **CC-05 Integrated acceptance:** repository/runtime regressions, representative
    consumer launch/close/relaunch and operational handoff.
 
-Detailed acceptance and progress live in the checklist; CC-01 through CC-04 are
-closed, while CC-05 and final Phase validation/review remain open. The original
+Detailed acceptance and progress live in the checklist; CC-01 through CC-06 are
+accepted and committed. CC-07 and final Phase review/closure remain open. The original
 planning record is preserved; Phase execution now proceeds through the existing
 sm-workflow host at this repository's native `main` checkout.
 
@@ -131,6 +131,60 @@ native owners. An earlier full run failed and its isolated HTTP/launch failures
 and datastore interaction remain unresolved; no passing full result or final
 Phase acceptance is claimed by implementation completion.
 
+## 2026-10-23 accepted prefix and CC-07 source preparation
+
+The accepted native prefix is CC-01 `0f3a4338`, CC-02 `9da7d491`, CC-03
+`69284867`, CC-04 `a8676706`, CC-05
+`365250dc6057933b7fdf8f007864516ff0605f7e`, and CC-06
+`d7e4ce8255a57343270d5f9de88309bee5d1ddd1` (D7). Earlier dated entries retain
+their original observation scope. The original repository-full receipt651
+records 876 suites, 6427 passed, 0 failed, 4 canceled, 1 ignored and 46 pending.
+It is actual retained evidence for that run, not evidence for later source edits.
+WorkArea116/116 continues to cover only its original ownership/cleanup repair.
+
+The final independent integrated review source654
+`p116-integrated-independent-review@1` found P1
+`P116-INTEGRATED-SOURCE-READERS`: eager assembly metadata, descriptors, defaults
+and canonical-selection probes could open managed coordinate ZIPs without the
+shared source protection required by C3. Explicit source eviction could remove
+the selected body before ZIP open. The repair uses the existing coordinate or
+source-generation pin around one synchronous selected-archive callback, including
+paired descriptor/default reads. Repository selection/admission and original-path
+provenance remain authoritative; eager API class bytes need no escaping lease.
+
+Actual Human `01a165a5-d1af-7182-afb3-6f2c7e30e567` adopted Plan4's exact
+seven-path CC-07 scope and its Submit was accepted. The following Advance stopped
+409 while reconstructing historical CC-06 repair. No native CC-07 work was
+issued. Under the earlier explicit direction to progress product development
+independently of Workflow recovery, these seven paths are ordinary source
+preparation only. They add the read boundary and authored local CAR/SAR
+coordinate/generation, callback-failure, cross-JVM, publication-contention,
+custom/default-root and caller-ownership regressions. No passing result is claimed
+for the prepared source. Native CC-07 issuance, checks, independent review,
+commit and final Phase review/closure remain pending. Existing Session history,
+accepted results, findings and repair counters are preserved; no native Entry or
+issued-work context is manufactured.
+
+### Ordinary development validation and review — 2026-10-23
+
+The final prepared source passed `ManagedCacheRecoverySpec` and
+`ComponentRepositoryCarSpec`: two suites, 134 passed, zero failed, aborted,
+canceled, ignored or pending; compilation and SBT/wrapper exits succeeded.
+Invocation `p116-cc07-ordinary-20261023-focused03` terminated with
+`serialization=sbt-native`. The parent admitted its original result, log and
+summary. The first run's seven invalid SAR-fixture failures and the intermediate
+115-passed result remain recorded rather than replaced.
+
+Independent review01 narrowed the original finding to
+`CB-P116-CC07-ROOT-PIN-IDENTITY`: lexical directory aliases could miss the
+collector's real-root pin. The correction reconciles only guard/membership
+identity, preserving the original callback argument and descriptor provenance.
+E19 adds sixteen deterministic CAR/SAR coordinate/generation alias histories;
+E75D–F cover custom, initialized and default alias roots. Fresh independent
+review02 passed and closed both source findings for ordinary source assurance.
+Existing cleanup/cross-JVM/caller-ownership judgments remain applicable.
+Formal native CC-07 work, acceptance, commit and final Phase gates remain open.
+
 ## Completion boundary
 
 All CC obligations require actual evidence. Multiple runtimes/JVMs must safely
@@ -162,3 +216,13 @@ independent. Closed phases are not reopened.
 - [Planning and developer handoff](../journal/2026/10/2026-10-21-car-sar-managed-cache-plan.md)
 - [2026-10-22 simplification handoff](../journal/2026/10/2026-10-22-phase116-cache-simplification-handoff.md)
 - [Existing WorkArea incident and repair](../journal/2026/10/2026-10-21-workarea-disk-exhaustion-cleanup.md)
+
+### Native CC-07 issuance — 2026-10-23
+
+Qualified installed runtime `d93f67fc-d100-4ba4-a8bc-30e5d4303199` resumed
+the same Session through one ordinary Advance, exit0. Actual
+`ordered-implementation:658` issued CC-07 under Plan4 with CC-01–06 intact,
+original base unchanged and automatic0/ordinary0/limit10. The exact seven
+prepared files are now integrated into the owning checkout; no new executable
+changes were added after the ordinary134-pass/review02 candidate. Native
+checks, independent acceptance, Step commit and final Phase gates remain open.

@@ -21,6 +21,7 @@ import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.config.{ComponentParameterProvenance, RuntimeConfig}
 import org.goldenport.cncf.component.{AssemblyApiClassLoader, CarExtractor, Component, ComponentCreate, ComponentDependencyManifest, ComponentDependencyPool, ComponentDescriptor, ComponentDescriptorLoader, ComponentFactory, ComponentId, ComponentInit, ComponentInstanceId, ComponentLocalFirstClassLoader, ComponentOrigin, CoursierComponentDependencyResolver, RepositoryParameterProbeComponent, RepositoryParameterProbeFactory}
 import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
+import org.goldenport.cncf.component.cache.{ManagedArchiveCache, ManagedCachePolicy}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.spi.SpiResolver
 import org.goldenport.cncf.spi.ai.runner.{AiGenerateRequest, AiRunnerSocket}
@@ -91,6 +92,130 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         super.afterEach()
       }
     }
+
+  "Repository eager metadata ownership" should {
+    Vector("custom" -> "E75A", "initialized" -> "E75B", "default" -> "E75C",
+      "custom-alias" -> "E75D", "initialized-alias" -> "E75E", "default-alias" -> "E75F").foreach { case (location, example) =>
+      s"$example retain actual CAR and SAR metadata through standard, static, defaults and canonical selection at a $location root" must
+        afterWord(s"in spec:car-sar-cache-management, example:$example, rules:C3,C6, phase:116") {
+        "use the selected cache root throughout repository metadata preparation" in _with_temp_dir { root =>
+          Given(s"Spec: docs/spec/car-sar-cache-management.md; Rules: C3,C6; Example: $example; canonical local CAR/SAR fixtures at a $location managed root")
+          val oldhome = System.getProperty("user.home")
+          try {
+            if (location.startsWith("default")) {
+              val home = if (location == "default-alias")
+                Files.createSymbolicLink(root.resolve("home-alias"), Files.createDirectories(root.resolve("actual-home")))
+              else root
+              System.setProperty("user.home", home.toString)
+            }
+            val cacheroot = if (location.startsWith("default")) ComponentRepository.defaultStandardRepositoryDir()
+              else if (location.endsWith("-alias"))
+                Files.createSymbolicLink(root.resolve("selected-cache-alias"), Files.createDirectories(root.resolve("selected-cache")))
+              else root.resolve("selected-cache")
+            val componentid = ComponentId("org.goldenport.fixture.CanonicalArchiveFixture")
+            val release = "0.1.0"
+            val coordinate = ComponentReleaseCoordinate.require(componentid.sharedIdentity, release)
+            val car = cacheroot.resolve("car").resolve(coordinate.carRepositoryRelativePath())
+            val content = root.resolve("car-content")
+            _create_metadata_car(car, content, componentid.name, release)
+            val sar = cacheroot.resolve("sar/metadata/1.0.0/metadata-1.0.0.sar")
+            Files.createDirectories(sar.getParent)
+            val descriptor = root.resolve("subsystem-descriptor.json")
+            Files.writeString(descriptor,
+              """{"name":"metadata","subsystem":"metadata","version":"1.0.0","components":[{"namespace":"org.goldenport.fixture","id":"CanonicalArchiveFixture","version":"0.1.0"}]}""")
+            _create_zip(sar, Seq("subsystem-descriptor.json" -> descriptor, "component/metadata.car" -> car))
+            val actualroot = cacheroot.toRealPath()
+            if (location.startsWith("initialized")) Files.createDirectories(actualroot.resolve("locks/generations"))
+            val standard = ComponentRepository.StandardRepository.Specification(
+              ComponentRepository.StandardRepositoryKind.Car, root.resolve("unused-remote").toUri.toString, cacheroot)
+            val subsystem = TestComponentFactory.emptySubsystem("eager-metadata-" + location)
+            val params = _cache_params(subsystem, ComponentOrigin.Repository("standard-car"),
+              Vector(_canonical_component_descriptor(componentid, release)))
+            When("legacy static readers and standard canonical selection prepare descriptors, defaults and eager APIs")
+            if (!location.startsWith("custom")) {
+              ComponentRepository.ComponentFileRepository.Specification(car).resolveStaticComponentDescriptors
+                .flatMap(_.requireCanonicalIdentityC.toOption) shouldBe Vector(componentid -> release)
+              ComponentRepository.resolveComponentSubsystemDefaultsFromComponentDirC(car.getParent, componentid.name, Some(release))
+                .TAKE.map(_.path) shouldBe Some(car)
+            }
+            val metadata = standard.build(params).prepareAssemblyApi().TAKE
+            val canonical = standard.resolveComponentArchivePath(componentid.name, Some(release))
+            val selected = standard.resolveStaticComponentDescriptor(componentid.name)
+            val defaults = standard.resolveComponentSubsystemDefaultsC(componentid.name, Some(release)).TAKE
+            val sarstandard = ComponentRepository.StandardRepository.Specification(
+              ComponentRepository.StandardRepositoryKind.Sar, root.resolve("unused-remote").toUri.toString, cacheroot)
+            val sardescriptor = sarstandard.resolveSubsystemDescriptor("metadata")
+            val sarrepository = new ComponentRepository.ComponentDirRepository(sar.getParent,
+              params.withManagedCacheRoot(cacheroot), ComponentRepository.resolvePackagePrefixes())
+            val sarmetadata = sarrepository.prepareAssemblyApi().TAKE
+            Then("the actual metadata and descriptor provenance retain their canonical identities and eager class bytes")
+            canonical shouldBe Some(car)
+            selected.flatMap(_.requireCanonicalIdentityC.toOption) shouldBe Some(componentid -> release)
+            defaults.map(_.path) shouldBe Some(car)
+            defaults.toVector.flatMap(_.componentBindings).flatMap(_.componentId) should contain(componentid)
+            sardescriptor.map(_.path) shouldBe Some(sar)
+            sardescriptor.map(_.subsystemName) shouldBe Some("metadata")
+            metadata.artifacts.map(_.contract.apiClass) shouldBe Vector(classOf[CanonicalArchiveFixtureComponent].getName)
+            metadata.artifacts.head.classes(classOf[CanonicalArchiveFixtureComponent].getName).nonEmpty shouldBe true
+            sarmetadata.artifacts.map(_.contract.apiClass) shouldBe metadata.artifacts.map(_.contract.apiClass)
+            ComponentRepository.resolveStaticComponentDescriptorsFromComponentDir(car.getParent)
+              .flatMap(_.requireCanonicalIdentityC.toOption) shouldBe Vector(componentid -> release)
+            ComponentRepository.resolveComponentDescriptorFromComponentDir(cacheroot, componentid.name)
+              .flatMap(_.requireCanonicalIdentityC.toOption) shouldBe Some(componentid -> release)
+            ComponentRepository.resolveComponentArchivePathFromComponentDir(car.getParent, componentid.name, Some(release)) shouldBe Some(car)
+            ComponentRepository.resolveSubsystemDescriptorFromComponentDir(sar.getParent, "metadata").map(_.path) shouldBe Some(sar)
+            Files.isDirectory(cacheroot.resolve("locks/generations")) shouldBe true
+            When("explicit collection follows completed metadata reads")
+            val cache = new ManagedArchiveCache(ManagedCachePolicy(actualroot, idleMillis = 0L, evictReusableSources = true))
+            try {
+              val collected = Vector.fill(4)(cache.collectC().TAKE)
+              Then("metadata owns no escaping backing lease and eager bytes remain available after reclamation")
+              collected.map(_.inUseCount).sum shouldBe 0
+              Files.exists(car) shouldBe false
+              Files.exists(sar) shouldBe false
+              metadata.artifacts.head.classes(classOf[CanonicalArchiveFixtureComponent].getName).nonEmpty shouldBe true
+            } finally cache.close()
+          } finally {
+            if (oldhome == null) System.clearProperty("user.home") else System.setProperty("user.home", oldhome)
+          }
+        }
+      }
+    }
+
+    "E76 leave standalone CAR, SAR and directory inputs caller-owned without creating managed files" must
+      afterWord("in spec:car-sar-cache-management, example:E76, rules:C1,C3,C6, phase:116") {
+      "read actual metadata without creating cache ownership under an uninitialized caller fixture" in _with_temp_dir { root =>
+        Given("Spec: docs/spec/car-sar-cache-management.md; Rules: C1,C3,C6; Example: E76; standalone archives below folders named car and sar and an extracted CAR directory")
+        val componentid = ComponentId("org.goldenport.fixture.CanonicalArchiveFixture")
+        val car = root.resolve("caller/car/fixture.car")
+        val content = root.resolve("caller/directory.car")
+        _create_metadata_car(car, content, componentid.name, "0.1.0")
+        val sar = root.resolve("caller/sar/fixture.sar")
+        Files.createDirectories(sar.getParent)
+        val descriptor = root.resolve("subsystem-descriptor.json")
+        Files.writeString(descriptor, """{"subsystem":"metadata","version":"1.0.0","components":[]}""")
+        _create_zip(sar, Seq("subsystem-descriptor.json" -> descriptor, "component/fixture.car" -> car))
+        val before = _metadata_snapshot(root)
+        val subsystem = TestComponentFactory.emptySubsystem("caller-metadata")
+        val params = _cache_params(subsystem, ComponentOrigin.Repository("component-dir"))
+        When("file, directory and static repository metadata readers consume the caller's inputs")
+        val filemetadata = ComponentRepository.ComponentFileRepository.Specification(car).build(params).prepareAssemblyApi().TAKE
+        val sarmetadata = new ComponentRepository.ComponentDirRepository(sar.getParent, params,
+          ComponentRepository.resolvePackagePrefixes()).prepareAssemblyApi().TAKE
+        val directorymetadata = ComponentRepository.withArchiveSourceReadC(content)(AssemblyApiClassLoader.loadDirectory).TAKE
+        val defaults = ComponentRepository.ComponentFileRepository.Specification(car)
+          .resolveComponentSubsystemDefaultsC(componentid.name, Some("0.1.0")).TAKE
+        val static = ComponentRepository.resolveStaticComponentDescriptorsFromComponentDir(content.getParent)
+        Then("metadata remains readable, provenance is original and no caller bytes or directories change")
+        filemetadata.artifacts.map(_.contract.apiClass) shouldBe Vector(classOf[CanonicalArchiveFixtureComponent].getName)
+        sarmetadata.artifacts.map(_.contract.apiClass) shouldBe filemetadata.artifacts.map(_.contract.apiClass)
+        directorymetadata.artifacts.map(_.contract.apiClass) shouldBe filemetadata.artifacts.map(_.contract.apiClass)
+        defaults.map(_.path) shouldBe Some(car)
+        static.flatMap(_.requireCanonicalIdentityC.toOption) should contain(componentid -> "0.1.0")
+        _metadata_snapshot(root) shouldBe before
+      }
+    }
+  }
 
   "Repository extraction ownership" should {
     "retain CAR and SAR backing until loaders close, then permit their owning cleanup policy" in {
@@ -3116,6 +3241,18 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       }
     }
     }
+  }
+
+  private def _metadata_snapshot(root: Path): Map[String, Option[Vector[Byte]]] =
+    Using.resource(Files.walk(root))(_.iterator().asScala.map(path =>
+      root.relativize(path).toString -> Option.when(Files.isRegularFile(path))(Files.readAllBytes(path).toVector)).toMap)
+
+  private def _create_metadata_car(target: Path, content: Path, componentid: String, release: String): Unit = {
+    val jar = _create_class_component_jar(content.resolve("spi/metadata-api.jar"), Seq(classOf[CanonicalArchiveFixtureComponent]))
+    val api = content.resolve("component-api-descriptor.json")
+    Files.writeString(api,
+      s"""{"schemaVersion":"cncf.component-api.v1","component":{"name":"$componentid","version":"$release"},"provided":[{"apiClass":"${classOf[CanonicalArchiveFixtureComponent].getName}","packages":["org.goldenport.cncf.component.repository"],"abiHash":"sha256:metadata","artifactPath":"spi/metadata-api.jar"}],"required":[]}""")
+    _create_canonical_component_car(target, content, componentid, release, jar)
   }
 
   private def _create_car(

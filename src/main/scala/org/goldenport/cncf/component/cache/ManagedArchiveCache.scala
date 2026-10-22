@@ -49,6 +49,35 @@ final class ManagedArchiveCache private[cache] (
   def acquireSourceC(archive: Path, kind: ArchiveKind = ArchiveKind.Car): Consequence[SourceLease] =
     _acquire_source(archive, kind)
 
+  /** Eager metadata readers borrow the original path only for this callback.
+    * No captured source, extraction or callback-owned result is retained here.
+    */
+  private[cncf] def withSourceReadC[A](archive: Path)(use: Path => Consequence[A]): Consequence[A] =
+    Consequence.run {
+      val pin = _managed_input_pin(archive.toRealPath())
+      var result: Option[Consequence[A]] = None
+      var primary: Option[Throwable] = None
+      try result = Some(use(archive))
+      catch { case error: Throwable => primary = Some(error); throw error }
+      finally {
+        try pin.foreach(_.close())
+        catch {
+          case cleanup: Throwable => primary match {
+            case Some(error) => if (error ne cleanup) error.addSuppressed(cleanup)
+            case None => result match {
+              case Some(failure @ Consequence.Failure(conclusion)) =>
+                val error = conclusion.getException.getOrElse(new org.goldenport.ConsequenceException(failure))
+                if (error ne cleanup) error.addSuppressed(cleanup)
+                result = Some(Consequence.Failure(conclusion.copy(observation = conclusion.observation.copy(
+                  cause = conclusion.observation.cause.withException(Some(error))))))
+              case _ => throw cleanup
+            }
+          }
+        }
+      }
+      result.get
+    }
+
   private def _acquire_source(archive: Path, kind: ArchiveKind): Consequence[SourceLease] =
     Consequence {
       val started = System.nanoTime()
