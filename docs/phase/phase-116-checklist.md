@@ -1,6 +1,6 @@
 # Phase 116 Checklist
 
-Status: IN_PROGRESS — CC-01 through CC-03 accepted and committed; CC-04 implementation underway
+Status: IN_PROGRESS — CC-01 through CC-04 accepted and committed; CC-05 integrated acceptance underway
 Acceptance entries close only after their actual checks and independent
 acceptance. CC-01 passed contract-compile and independent review and was committed
 by the native Workflow as `0f3a433809e2f9ee6b575d114d1fcb7ba8c7b5cc`.
@@ -9,12 +9,14 @@ public same-Session closure recovery, and was committed as
 `9da7d491d87d0e01ab630cbdd7cd05ba2181816a`. Its evidence covers CAR only;
 CC-03 subsequently passed its native ten-example SAR/SNAPSHOT check, affected
 independent review and ordinary closure, and was committed as
-`69284867c58915f2b6a0d138e5fdfb608247b03d`. Recovery/capacity acceptance
-remains open.
+`69284867c58915f2b6a0d138e5fdfb608247b03d`. CC-04 passed its revised native
+16-example recovery check and independent re-review and was committed through
+public closure recovery as `a8676706c1062a5e09da6c87ae4371747cd8bba8`.
+CC-05 and final repository validation/review remain open.
 
 2026-10-22 adoption: checked CC-01–03 entries retain their historical acceptance.
 Their reservation/peak-space decisions are superseded by the revised specification;
-the unchecked CC-04 obligations below establish the new target. Existing results,
+the revised CC-04 obligations below were subsequently accepted under Plan 2. Existing results,
 Session history and repair counts are not reset or relabeled as new acceptance.
 
 ## CC-01 Contract binding
@@ -46,19 +48,19 @@ Session history and repair counts are not reset or relabeled as new acceptance.
 
 ## CC-04 Recovery and operations
 
-- [ ] Interruption during download/extraction/publication exposes no partial hit; abandoned staging can be recovered after exclusive acquisition.
-- [ ] Terminating a test-owned holder process releases native protection without relying on cleanup callbacks; another live holder stays protected.
-- [ ] Inspection/dry-run/collection distinguish original, expanded, staged, retained-in-use and failed bytes/entries with reasons.
-- [ ] CC04-S1: ordinary capture/extract/publish has no reservation slots/manifests, capacity-only locks/handles, per-read reservation checks or persisted policy-equality gate.
-- [ ] CC04-S1: injected write/disk-full/publication errors retain their cause, clean owned incomplete output where possible, keep recoverable leftovers on cleanup failure and preserve existing current/active generations; no temp fallback.
-- [ ] CC04-S2: a completed managed-generation hit has no reservation adoption, full-tree size recount, whole-cache inventory, body recopy/rehash or unchanged reference/retirement durable write; external mutable inputs still receive controlled ingestion.
-- [ ] CC04-S2: publication recovery does not hash full content merely to record a presence flag; use actual publication state.
-- [ ] CC04-S3: configured soft targets guide collection; a target change permits healthy-cache reuse and does not assert a strict disk quota.
-- [ ] CC04-S3: candidate exploration is bounded before full materialization/sorting; an unrelated large cache does not increase hit-path work, and truncated diagnostics identify their scope.
-- [ ] CC04-S3: bounded collection skips in-use entries and preserves current-reference checks; no AI polling or global serialization is required.
-- [ ] Partial deletion failure is visible and retryable; a damaged entry is never reused; stable lock files survive ordinary collection.
-- [ ] Interrupted SNAPSHOT retirement/final-release collection is recovered from pending or derivable state without losing current selection or requiring an AI approval loop.
-- [ ] Original-retention default and explicit source-eviction policy are independently demonstrated; old flat temporary trees and evidence are untouched.
+- [x] Interruption during download/extraction/publication exposes no partial hit; abandoned staging can be recovered after exclusive acquisition.
+- [x] Terminating a test-owned holder process releases native protection without relying on cleanup callbacks; another live holder stays protected.
+- [x] Inspection/dry-run/collection distinguish original, expanded, staged, retained-in-use and failed bytes/entries with reasons.
+- [x] CC04-S1: ordinary capture/extract/publish has no reservation slots/manifests, capacity-only locks/handles, per-read reservation checks or persisted policy-equality gate.
+- [x] CC04-S1: injected write/disk-full/publication errors retain their cause, clean owned incomplete output where possible, keep recoverable leftovers on cleanup failure and preserve existing current/active generations; no temp fallback.
+- [x] CC04-S2: a completed managed-generation hit has no reservation adoption, full-tree size recount, whole-cache inventory, body recopy/rehash or unchanged reference/retirement durable write; external mutable inputs still receive controlled ingestion.
+- [x] CC04-S2: publication recovery does not hash full content merely to record a presence flag; use actual publication state.
+- [x] CC04-S3: configured soft targets guide collection; a target change permits healthy-cache reuse and does not assert a strict disk quota.
+- [x] CC04-S3: candidate exploration is bounded before full materialization/sorting; an unrelated large cache does not increase hit-path work, and truncated diagnostics identify their scope.
+- [x] CC04-S3: bounded collection skips in-use entries and preserves current-reference checks; no AI polling or global serialization is required.
+- [x] Partial deletion failure is visible and retryable; a damaged entry is never reused; stable lock files survive ordinary collection.
+- [x] Interrupted SNAPSHOT retirement/final-release collection is recovered from pending or derivable state without losing current selection or requiring an AI approval loop.
+- [x] Original-retention default and explicit source-eviction policy are independently demonstrated; old flat temporary trees and evidence are untouched.
 
 ## CC-05 Integrated acceptance and handoff
 

@@ -1,10 +1,11 @@
 # CAR/SAR Cache Management
 
-Status: accepted target specification; CC-01 through CC-03 accepted and committed; CC-04 implementation underway.
+Status: accepted specification; CC-01 through CC-04 accepted and committed; CC-05 integrated acceptance underway.
 
 Revision 2026-10-22: capacity reservations are withdrawn. The revised C2/C5
-contract is the target for remaining CC-04 work, not a claim of implementation
-acceptance. Earlier commits and validation evidence remain historical facts.
+contract was accepted in CC-04 commit `a8676706c1062a5e09da6c87ae4371747cd8bba8`
+after native validation and independent review. CC-05 and final repository-wide
+acceptance remain open. Earlier commits and validation evidence retain their scope.
 
 ## Scope and authority
 

@@ -330,6 +330,48 @@ class ManagedCarCacheSpec extends AnyWordSpec with Matchers with GivenWhenThen {
       }
     }
     }
+
+    "E11 relaunch a repository runtime from its retained expansion before offline reconstruction" must afterWord("in spec:car-sar-cache-management, example:E11, rules:C1,C2,C3,C5,C6, phase:116") {
+      "relaunch a repository runtime from its retained expansion before offline reconstruction" in withCacheFixture { root =>
+        Given("Spec: docs/spec/car-sar-cache-management.md; Rules: C1,C2,C3,C5,C6; Example: E11; a local CAR component loaded through ComponentRepository into a real Subsystem resource owner")
+        val repository = Files.createDirectory(root.resolve("repository"))
+        archive(repository.resolve("fixture.car"), root)
+        val cache = new ManagedArchiveCache(ManagedCachePolicy(root.resolve("cache"), idleMillis = 0L))
+        try {
+          val first = runtime(repository, cache.root)
+          val tree = first.tree
+          val identity = fileIdentity(tree)
+          try {
+            first.lazyResource("managed-cache/lazy.txt") shouldBe "lazy payload"
+            Files.writeString(tree.resolve("reuse-marker"), "completed first runtime")
+          } finally first.close()
+          When("a fresh runtime resolves the component after the first runtime has closed")
+          val second = runtime(repository, cache.root)
+          try {
+            Then("the real repository route reuses the same completed tree and preserves lazy access")
+            second.tree shouldBe tree
+            fileIdentity(second.tree) shouldBe identity
+            Files.readString(second.tree.resolve("reuse-marker")) shouldBe "completed first runtime"
+            second.lazyResource("managed-cache/lazy.txt") shouldBe "lazy payload"
+            cache.collectC().TAKE.inUseCount should be > 0
+          } finally second.close()
+          When("the relaunched owner has closed and managed collection reclaims its expansion")
+          cache.collectC().TAKE.reclaimedCount shouldBe 1
+          Then("the expansion is gone but its managed source and repository body remain")
+          Files.exists(tree) shouldBe false
+          cache.inspectC().TAKE.sourceBytes should be > 0L
+          Files.isRegularFile(repository.resolve("fixture.car")) shouldBe true
+          When("a third runtime discovers the retained local CAR without a network resolver")
+          val third = runtime(repository, cache.root)
+          try {
+            Then("offline reconstruction restores resources without reviving files from the previous expansion")
+            third.tree shouldBe tree
+            third.lazyResource("managed-cache/lazy.txt") shouldBe "lazy payload"
+            Files.exists(third.tree.resolve("reuse-marker")) shouldBe false
+          } finally third.close()
+        } finally cache.close()
+      }
+    }
   }
 }
 

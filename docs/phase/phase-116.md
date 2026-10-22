@@ -1,6 +1,6 @@
 # Phase 116 — CAR/SAR Managed Archive and Extraction Cache
 
-Status: IN_PROGRESS — CC-01 through CC-03 accepted and committed; CC-04 implementation underway
+Status: IN_PROGRESS — CC-01 through CC-04 accepted and committed; CC-05 integrated acceptance underway
 Created: 2026-10-21
 Owner: CNCF Component Repository / runtime resource lifecycle
 Checklist: [Phase 116 checklist](phase-116-checklist.md)
@@ -30,9 +30,8 @@ ClassLoader/resource lifetime and existing repository/admission semantics.
 5. **CC-05 Integrated acceptance:** repository/runtime regressions, representative
    consumer launch/close/relaunch and operational handoff.
 
-Detailed acceptance and progress live in the checklist; CC-01 through CC-03 are
-closed, while CC-04 and CC-05 remain open pending their actual owning
-validation and review. The original
+Detailed acceptance and progress live in the checklist; CC-01 through CC-04 are
+closed, while CC-05 and final Phase validation/review remain open. The original
 planning record is preserved; Phase execution now proceeds through the existing
 sm-workflow host at this repository's native `main` checkout.
 
@@ -112,6 +111,25 @@ was accepted. Ordinary native closure committed the eleven reviewed files as
 original base, accepted prefix and accumulated history. CC-04 is now issued for
 recovery and capacity operations. Those obligations remain unvalidated until
 its selected native check and independent review succeed.
+
+## CC-04 acceptance and CC-05 continuation
+
+The same Session adopted Plan revision 2 through the actual Human channel.
+Native recovery validation `ordered-validation:477` passed all sixteen revised
+examples; affected independent review resolved issues 9–13. Public closure
+recovery retained the first failed commit and corrected the host physical
+selection to the fourteen reviewed files. Its separately authorized new attempt
+created commit `a8676706c1062a5e09da6c87ae4371747cd8bba8` with reviewed tree
+`e66256f1c1a6d96140349d1ec852e772d3945805`. Ordinary Advance issued
+`ImplementStep / CC-05`; the accepted prefix and consumed CC-04 repair count 3/10
+remain historical facts. CC-05 starts its own ordinary repair window.
+
+CC-05 adds a real repository/Subsystem close/relaunch/reuse/collection/offline
+reconstruction example and the operational handoff in the lifecycle design.
+The selected seven-suite lifecycle check and repository-full check retain their
+native owners. An earlier full run failed and its isolated HTTP/launch failures
+and datastore interaction remain unresolved; no passing full result or final
+Phase acceptance is claimed by implementation completion.
 
 ## Completion boundary
 

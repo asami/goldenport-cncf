@@ -1,14 +1,16 @@
 # CAR/SAR Cache Lifecycle
 
-Status: accepted target design; CC-01 through CC-03 accepted and committed; CC-04 implementation underway.
+Status: accepted design; CC-01 through CC-04 accepted and committed; CC-05 integrated acceptance underway.
 
 The [specification](../spec/car-sar-cache-management.md) owns observable behavior.
 This design separates repository selection, cache storage and runtime lifetime.
 
 The 2026-10-22 simplification revises the remaining CC-04 target. Earlier CC-01
 contract acceptance and CC-02/03 results remain recorded, but do not preserve
-the withdrawn reservation design as a requirement. This document describes the
-revised target; it does not claim that the current implementation satisfies it.
+the withdrawn reservation design as a requirement. The revised CC-04 target has
+now passed its native check and independent review and was committed as
+`a8676706c1062a5e09da6c87ae4371747cd8bba8`. Integrated and full-repository
+acceptance remain CC-05/Phase duties.
 
 ## Ownership and integration
 
@@ -365,7 +367,7 @@ must release native usage protection without a callback. Caller-owned originals,
 noncooperating writers/deleters and manual `rm -rf` remain outside advisory-lock
 protection. Unsupported or unverified providers receive an explicit diagnostic.
 
-## CC-04 operational implementation under validation
+## Operational handoff after CC-04 acceptance
 
 The existing cache owner supplies `inspectC()` and
 `collectC(dryRun = true | false)`. The revised `CacheInspection` separates scoped
@@ -388,11 +390,24 @@ Dry-run evaluates the same eligibility/protection without changing payloads,
 current pointers. An operator must still select the intended
 root and configuration through the existing cache construction boundary.
 
-The revised CC-04 executable examples in `ManagedCacheRecoverySpec` and the
-affected CAR/SAR/repository scenarios have passed independent development
-validation. Repository-wide validation still has unresolved failures; the
-independent results do not establish native Step or Phase acceptance. Actual
-native results and independent review remain the closing boundary.
+For an operation on the already selected cache owner, use `inspectC()` to read
+the bounded projection, `collectC(dryRun = true)` to preview eligibility and
+`collectC()` to apply collection. Handle each returned `Consequence` and inspect
+failed/in-use entries, `bytesKnown`, `visitedPaths` and `truncated` before drawing
+capacity conclusions. Reuse and finally close that owner so its retained bounded
+inventory cursor is released. Repeated explicitly requested collection can
+continue deferred discovery; no background AI polling or shell deletion is needed.
+The source/extracted targets and idle duration above guide collection only.
+Keep source eviction disabled when offline reconstruction is required. A target
+change does not reserve disk space or reject healthy cache reuse.
+
+Native CC-04 receipt `ordered-validation:477` passed all sixteen revised recovery
+examples, and affected independent review resolved its remaining issue-13.
+The earlier 117-example development result remains supporting scoped evidence.
+CC-04 was accepted and committed after a separately authorized public closure
+recovery corrected the host's stale physical commit selection; the failed first
+attempt remains recorded. Repository-wide validation still has unresolved
+failures. Neither this operational handoff nor CC-04 closes the Phase.
 
 Remove unreleased reservation-only APIs/configuration/tests without compatibility
 aliases. Preserve historical receipts and reusable failure scenarios. Existing old

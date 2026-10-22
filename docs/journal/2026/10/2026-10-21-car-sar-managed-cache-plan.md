@@ -601,3 +601,43 @@ independent review are the next acceptance gates; CC-04/05 checklist entries
 remain open. Detailed results and original logs remain under the existing task
 in `cc04-simplification-development-validation-20261022.md` and the reconciliation
 record, without moving evidence or modifying unrelated process-execution work.
+
+## CC-04 formal acceptance and CC-05 integrated implementation
+
+Actual native validation `ordered-validation:477` passed 16/16 recovery examples
+for candidate `e66256f1c1a6d96140349d1ec852e772d3945805`. Independent affected
+review `p116-cc04-simplification-independent-rereview@1` resolved issues 9–13,
+including visible E1–E16 / afterWord / Given specification traceability. The test
+assertions and Given/When/Then output were preserved. Old quota-specific results
+remain historical; the revised ordinary-I/O contract is the accepted boundary.
+
+The first native commit failed, Exited(1): the host selected the old thirteen
+paths, including never-committed `ManagedCacheCapacity.scala`. The host corrected
+only the CC-04 check/diff/commit physical selections to the fourteen reviewed
+paths, including Inventory and the SAR spec. The original failure is retained.
+The actual user authorized one new attempt for source482/frontier485; public
+`recoverGoalPhaseClosure` accepted that direction with independently observed
+old-execution termination. A separate ordinary Advance rechecked the exact live
+selection and committed CC-04 as `a8676706c1062a5e09da6c87ae4371747cd8bba8`,
+then issued CC-05 at source490 in the same Session. No successful validation or
+review was replayed. The original base, accepted prefix, old UNKNOWN records and
+CC-04 consumed repairs3/10 remain; the next Step's window starts normally at0/10.
+
+CC-05 adds `ManagedCarCacheSpec` E11 for actual ComponentRepository discovery
+and Subsystem ownership: first runtime closes, a fresh runtime reuses the same
+completed tree and lazy resources, active collection skips it, final close allows
+collection, then a third runtime reconstructs offline without the previous tree's
+marker. This is a local fixture through production repository/ClassLoader/resource
+owners, not an external Textus deployment claim. The operational handoff now
+names the actual inspectC/collectC API, soft configuration targets, bounded/scoped
+diagnostics and explicit owner close, retaining advisory-lock and old-tree limits.
+
+The new E11 and seven-suite native integration check await validation and
+independent review. Existing independent development evidence is117/117; the
+earlier full run is5463tests/5391passed/72failed with4canceled/1ignored/37pending,
+not a green full run. Later no-cache isolation reproduced HTTP status400-versus409
+and launch missing-command-versus-invalid-configuration failures (37/35/2);
+the full-suite datastore lease/configuration interaction remains unresolved.
+Those results are retained without arithmetic claims about a later full run.
+WorkArea116/116 remains only its original ownership/cleanup evidence. Final native
+repository-full validation, integrated review and Phase closure remain required.
