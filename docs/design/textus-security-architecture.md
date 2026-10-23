@@ -303,3 +303,63 @@ work. Follow-up should cover at least:
 - security checks assigned to CAR lint versus CBD Review versus deployment;
 - dependency/SBOM and release/distribution assurance where justified;
 - backup, recovery and destructive-operation authorization.
+
+## Function-tier Authentication Handle Boundary
+
+Function-first Application-tier execution preserves the existing rule that
+authenticated subject information becomes authoritative only through CNCF
+security resolution. A generated Cloud Function does not construct an
+authoritative `SecurityContext` or `ExecutionContext` from caller-supplied
+claims.
+
+The normal human-subject flow is:
+
+```text
+external OAuth/OIDC credential
+  -> Application Function cheap pre-admission
+  -> centralized User Management / identity resolution
+  -> opaque AuthHandle
+  -> Application Function orchestration
+  -> Domain Function API + AuthHandle
+  -> Domain ingress AuthHandle resolution
+  -> SecurityContext / ExecutionContext
+  -> Capability / Guard
+  -> Operation
+```
+
+`AuthHandle` is an opaque, bounded-lifetime reference to authenticated security
+state owned by the centralized identity/user-management authority. It is not a
+UserId, OAuth token, role/capability list, or serialized ExecutionContext.
+Application Function logic MUST NOT derive additional authority by interpreting
+or editing an AuthHandle.
+
+The Application Function may cache the mapping from admitted external
+credential evidence to AuthHandle for a bounded period. Such caching is a
+load/DDoS protection optimization and MUST NOT turn stale Function-local state
+into authorization authority. Credential and AuthHandle cache policy must
+respect expiry/revocation semantics.
+
+A Function may orchestrate multiple Domain Components using the same valid
+AuthHandle. Each target Domain ingress independently admits/resolves the handle
+and constructs the local ExecutionContext required for its Operation.
+Authentication/User identity is therefore system-wide while authorization
+remains Domain-local through Capability/Guard policy.
+
+Domain-side AuthHandle resolution may use a bounded trusted cache. A cache miss
+or stale entry is resolved through the authoritative identity/user-management
+path. The Function tier does not receive User-database credentials merely to
+construct ExecutionContext.
+
+Function ingress is also an availability boundary. Cheap transport/schema
+checks, obvious credential rejection, provider edge/WAF/rate controls, and
+bounded AuthHandle caching should occur before expensive User resolution or
+Domain work. Function autoscaling MUST NOT imply unbounded concurrency against
+User Management or Domain tiers; deployment admission/backpressure protects
+those bounded downstream resources.
+
+The Domain Function API is an adapter boundary. It accepts the Operation
+request, AuthHandle, Function/service identity and required observability
+context, resolves the authoritative ExecutionContext, and then invokes the
+ordinary CNCF Operation path. Domain business Operations do not gain
+Function-specific authentication parameters.
+
