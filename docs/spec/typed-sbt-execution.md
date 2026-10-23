@@ -1,5 +1,64 @@
 # Typed SBT Execution
 
+## SBT test output policy
+
+### TEST-OUTPUT-01 — Defaults and ordinary properties
+
+Typed `Test` and `TestOnly` (including exact scenarios) use these independent
+ordinary CNCF resolved properties, expressed in bytes:
+
+| Property | Default |
+| --- | ---: |
+| `cncf.sbt.test.stdout.maximum-bytes` | 67108864 (64 MiB) |
+| `cncf.sbt.test.stderr.maximum-bytes` | 8388608 (8 MiB) |
+
+For example, a selected project host configuration may contain:
+
+```json
+{
+  "cncf.sbt.test.stdout.maximum-bytes": 67108864,
+  "cncf.sbt.test.stderr.maximum-bytes": 8388608
+}
+```
+
+Only an absent property selects its default. Present values must be numeric,
+positive, integral byte counts within the signed Long range. Text, null,
+Booleans, fractional, zero, negative and overflowing values are structured
+configuration errors before driver invocation, without reflecting supplied
+values in diagnostics. Resolution uses the current UnitOfWork's ordinary
+`ResolvedParameters`, including its existing inheritance/provenance rules;
+there is no direct JVM-system-property or ambient-environment fallback.
+
+### TEST-OUTPUT-02 — Explicit host ceilings and operation isolation
+
+For each stream, the effective limit is the minimum of its selected property
+(or default) and the already admitted host program's explicit stream ceiling.
+A property cannot enlarge runtime grants or host authority. To permit the
+defaults, a host's Test/TestOnly `sbtPrograms[].limits` must declare
+`stdoutBytes >= 67108864` and `stderrBytes >= 8388608`; an intentionally smaller
+explicit host ceiling remains authoritative. The strict host wire contract and
+finite required process-limit fields do not change.
+
+Only the two effective capture ceilings are narrowed. Test selection, arguments,
+workspace, capabilities, environment, deadlines, other limits and fixed empty
+request stay intact. Compile, Git and generic Process execution do not consume
+these test properties, including malformed test-only properties. No automatic
+retry or execution follows configuration changes.
+
+### TEST-OUTPUT-03 — Complete bounded evidence
+
+Given/When/Then and ordinary test output remain visible. Each stream remains
+finite; its existing output-limit termination, truncation and captured-prefix
+facts are retained when exceeded. A truncated/incomplete result never becomes
+test success. Original failed or unknown Workflow attempts remain unchanged;
+their existing public continuation and independent Human rules still apply.
+
+Executable evidence: `SbtTestOutputParametersSpec` E1–E4 and
+`SbtExecutionDslSpec` E-OUTPUT1–E-OUTPUT3 exercise defaults, independent inherited
+properties, invalid numeric boundaries, host tightening, actual current-context
+admission, pre-driver failure and Compile isolation. Existing local-driver output
+limit and SBT outcome specifications retain the termination/capture contract.
+
 Status: normative normal-command producer, host and typed consumer connection contract
 
 ## Component intent

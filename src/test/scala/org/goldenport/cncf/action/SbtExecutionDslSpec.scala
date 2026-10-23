@@ -25,7 +25,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 21, 2026
+ * @version Oct. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -854,6 +854,78 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
     }
   }
 
+
+  "E-OUTPUT1 Current SBT test capture defaults" must afterWord(
+    "in spec:typed-sbt-execution, example:E-OUTPUT1, rules:TEST-OUTPUT-01,TEST-OUTPUT-02, phase:116") {
+    "apply both defaults through the actual Test and TestOnly interpreter" in {
+      Given("docs/spec/typed-sbt-execution.md TEST-OUTPUT-01/02 E-OUTPUT1: host ceilings above both defaults")
+      val limits = _limits.copy(stdoutBytes = Some(134217728L), stderrBytes = Some(16777216L))
+      val fixture = _fixture(_selection_process(Vector("org.example.SelectedSpec")), limits = limits)
+      val uow = new UnitOfWork(fixture.context)
+      try {
+        When("the current UnitOfWork interprets both typed test operations")
+        val results = Vector(SbtOperation.Test, SbtOperation.TestOnly).map(operation =>
+          new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.SbtExec(fixture.target, operation)))
+        Then("both drivers receive 64 MiB stdout and 8 MiB stderr without other limit changes")
+        results.foreach(_.isSuccess shouldBe true)
+        fixture.profile.driver.executions.map(_.effectiveLimits) shouldBe Vector.fill(2)(
+          limits.copy(stdoutBytes = Some(67108864L), stderrBytes = Some(8388608L)))
+        fixture.profile.driver.executions.foreach(_.request.requestedLimits shouldBe ProcessExecutionLimits.empty)
+      } finally { uow.dispose(); _close(fixture.root) }
+    }
+  }
+
+  "E-OUTPUT2 Current-context properties and host ceilings" must afterWord(
+    "in spec:typed-sbt-execution, example:E-OUTPUT2, rules:TEST-OUTPUT-01,TEST-OUTPUT-02, phase:116") {
+    "apply properties independently without enlarging the explicit host ceiling" in {
+      Given("docs/spec/typed-sbt-execution.md TEST-OUTPUT-01/02 E-OUTPUT2: current properties below stdout and above stderr authority")
+      val fixture = _fixture(_selection_process(Vector("org.example.SelectedSpec")))
+      val parameters = ResolvedParameters.fromResolvedConfiguration(ResolvedConfiguration(
+        Configuration(Map(SbtTestOutputParameters.stdoutKey -> ConfigurationValue.NumberValue(BigDecimal(32768)),
+          SbtTestOutputParameters.stderrKey -> ConfigurationValue.NumberValue(BigDecimal(1048576)))), ConfigurationTrace.empty))
+      fixture.context.runtime.setResolvedParameters(parameters)
+      val uow = new UnitOfWork(fixture.context)
+      try {
+        When("the actual Test and exact TestOnly scenario run under that current configuration")
+        val target = fixture.target.copy(scenario = Some(SbtScenarioSelection("org.example.SelectedSpec", "selected case")))
+        val results = Vector(
+          new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.SbtExec(fixture.target, SbtOperation.Test)),
+          new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.SbtExec(target, SbtOperation.TestOnly)))
+        Then("both executions retain the host stderr cap and select the requested smaller stdout cap")
+        results.foreach(_.isSuccess shouldBe true)
+        fixture.profile.driver.executions.map(_.effectiveLimits) shouldBe Vector.fill(2)(
+          _limits.copy(stdoutBytes = Some(32768L)))
+        fixture.profile.driver.executions.last.effectiveArguments.last should include("selected case")
+      } finally { uow.dispose(); _close(fixture.root) }
+    }
+  }
+
+  "E-OUTPUT3 Invalid test property admission" must afterWord(
+    "in spec:typed-sbt-execution, example:E-OUTPUT3, rules:TEST-OUTPUT-01,TEST-OUTPUT-02, phase:116") {
+    "reject invalid Test properties before dispatch while Compile remains usable" in {
+      Given("docs/spec/typed-sbt-execution.md TEST-OUTPUT-01/02 E-OUTPUT3: an invalid present numeric test setting")
+      val fixture = _fixture(_result(ProcessExecutionTermination.Exited(0)))
+      fixture.context.runtime.setResolvedParameters(ResolvedParameters.fromResolvedConfiguration(
+        ResolvedConfiguration(Configuration(Map(SbtTestOutputParameters.stderrKey ->
+          ConfigurationValue.NumberValue(BigDecimal(0)))), ConfigurationTrace.empty)))
+      val uow = new UnitOfWork(fixture.context)
+      try {
+        When("the owning interpreter admits Test and TestOnly")
+        val denied = Vector(SbtOperation.Test, SbtOperation.TestOnly).map(operation =>
+          new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.SbtExec(fixture.target, operation)))
+        Then("both fail before the driver and expose the key rather than a synthetic process receipt")
+        denied.foreach(_.isFaillure shouldBe true)
+        denied.foreach(_.toString should include(SbtTestOutputParameters.stderrKey))
+        fixture.profile.driver.executions shouldBe empty
+        When("Compile is interpreted under the same current configuration")
+        val compile = new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.SbtExec(fixture.target, SbtOperation.Compile))
+        Then("the test-only configuration does not alter Compile's admitted limits")
+        compile.isSuccess shouldBe true
+        fixture.profile.driver.executions.map(_.effectiveLimits) shouldBe Vector(_limits)
+      } finally { uow.dispose(); _close(fixture.root) }
+    }
+  }
+
   private def _runtime_parameters(
     manifest: Option[Path],
     bindings: Vector[(WorkspaceId, ConfigurationValue)]
@@ -893,7 +965,8 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
     driverinstalled: Boolean = true,
     testclasses: Vector[String] = Vector("org.example.SelectedSpec"),
     driver: Option[ProcessExecutionDriver] = None,
-    workspaceid: WorkspaceId = _workspace_id
+    workspaceid: WorkspaceId = _workspace_id,
+    limits: ProcessExecutionLimits = _limits
   ): Fixture = {
     val base = Files.createDirectories(Paths.get("target", "sbt-execution-dsl-spec").toAbsolutePath)
     val root = Files.createTempDirectory(base, "case-")
@@ -906,7 +979,7 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
       SbtOperation.TestOnly -> _test_only_capability
     ).map { case (operation, capability) =>
       SbtProgramDefinition.createC(binding, operation, capability, capability.print,
-        _sbt_path, _limits, Map("TEXTUS_BUILD_PROFILE" -> "test"),
+        _sbt_path, limits, Map("TEXTUS_BUILD_PROFILE" -> "test"),
         if (operation == SbtOperation.TestOnly) testclasses else Vector.empty).toOption.get
     }
     val policy = ProcessExecutionPolicy.createC(definitions).toOption.get

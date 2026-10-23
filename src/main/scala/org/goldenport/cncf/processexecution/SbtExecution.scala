@@ -10,7 +10,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 21, 2026
+ * @version Oct. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection] = None)
@@ -186,7 +186,8 @@ private[cncf] object SbtExecutionAdmission {
               }
           }
       }
-    } yield bound
+      limits <- SbtTestOutputParameters.applyC(context.resolvedParameters, operation, bound.effectiveLimits)
+    } yield bound.copy(effectiveLimits = limits)
 
   /** Tagged executions have no WorkArea projections or caller-provided process input. */
   def validateRequestC(request: ProcessExecutionRequest): Consequence[Unit] =
