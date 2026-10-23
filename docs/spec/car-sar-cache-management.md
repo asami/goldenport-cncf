@@ -1,11 +1,13 @@
 # CAR/SAR Cache Management
 
-Status: accepted specification; CC-01 through CC-04 accepted and committed; CC-05 integrated acceptance underway.
+Status: accepted specification; CC-01 through CC-07 accepted and committed; Phase 116 CLOSED on 2026-10-23.
 
 Revision 2026-10-22: capacity reservations are withdrawn. The revised C2/C5
 contract was accepted in CC-04 commit `a8676706c1062a5e09da6c87ae4371747cd8bba8`
-after native validation and independent review. CC-05 and final repository-wide
-acceptance remain open. Earlier commits and validation evidence retain their scope.
+after native validation and independent review. Final repository-wide validation,
+integrated review and native Phase completion are now accepted; see
+[Phase 116 acceptance](../phase/phase-116.md#final-phase-acceptance--2026-10-23).
+Earlier commits and validation evidence retain their actual scope.
 
 ## Scope and authority
 

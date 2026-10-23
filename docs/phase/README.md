@@ -15,11 +15,14 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- [Phase 116](phase-116.md) / [checklist](phase-116-checklist.md) is PLANNED:
+- [Phase 116](phase-116.md) / [checklist](phase-116-checklist.md) is CLOSED
+  on 2026-10-23:
   CAR/SAR original archives and reusable expansions under `~/.cncf/cache`,
-  runtime/JVM usage protection and bounded unused-cache collection. Establish
-  the shared CAR lifetime/collection route first, then SAR and recovery policy.
-  This preserves the WorkArea repair and all ongoing work; no Phase is started.
+  runtime/JVM usage protection and bounded unused-cache collection. All seven
+  Steps, required repository-full validation, final integrated review and native
+  Session completion are accepted. The [final acceptance](phase-116.md#final-phase-acceptance--2026-10-23)
+  separates Phase completion from Workflow sync deferral and retains prior
+  WorkArea evidence, failure history and nonblocking maintenance. No successor starts.
 
 - [Phase 115](phase-115.md) / [checklist](phase-115-checklist.md) is CLOSED
   on 2026-10-18 under `phase115-final-closure-20261018-01@1`, taking effect through

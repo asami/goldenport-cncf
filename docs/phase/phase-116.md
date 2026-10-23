@@ -1,6 +1,6 @@
 # Phase 116 — CAR/SAR Managed Archive and Extraction Cache
 
-Status: IN_PROGRESS — CC-01 through CC-06 accepted and committed; CC-07 ordinary source validation/review passed, native CC-07 issued; checks and acceptance pending
+Status: CLOSED on 2026-10-23 — CC-01 through CC-07 committed, repository-full and final integrated review accepted; native Session completed
 Created: 2026-10-21
 Owner: CNCF Component Repository / runtime resource lifecycle
 Checklist: [Phase 116 checklist](phase-116-checklist.md)
@@ -29,11 +29,16 @@ ClassLoader/resource lifetime and existing repository/admission semantics.
    I/O-failure cleanup, bounded collection and independent archive retention.
 5. **CC-05 Integrated acceptance:** repository/runtime regressions, representative
    consumer launch/close/relaunch and operational handoff.
+6. **CC-06 Full-test repair:** isolate test-owned runtime resources and restore
+   owned shutdown, local-first discovery and XML-safe malformed-input diagnostics.
+7. **CC-07 Source readers:** retain existing managed source protection throughout
+   CAR/SAR metadata reads, including cross-JVM collection and root-alias cases.
 
-Detailed acceptance and progress live in the checklist; CC-01 through CC-06 are
-accepted and committed. CC-07 and final Phase review/closure remain open. The original
-planning record is preserved; Phase execution now proceeds through the existing
-sm-workflow host at this repository's native `main` checkout.
+All seven Steps are accepted and committed. Required repository-full validation,
+final integrated review and native Phase completion are accepted; see
+[final acceptance](#final-phase-acceptance--2026-10-23) and the checklist.
+The dated execution sections below preserve earlier frontiers and failed
+attempts; their historical pending statements do not describe the current status.
 
 The 2026-10-22 user direction separates product development from continuation
 repair: implement and independently validate the approved simplification now,
@@ -226,3 +231,46 @@ original base unchanged and automatic0/ordinary0/limit10. The exact seven
 prepared files are now integrated into the owning checkout; no new executable
 changes were added after the ordinary134-pass/review02 candidate. Native
 checks, independent acceptance, Step commit and final Phase gates remain open.
+
+## Final Phase acceptance — 2026-10-23
+
+The existing Session `06016330fa63b5eac6097ff2b8ff42c2` completed through its
+normal public operations. Its source702 completion-policy target received the
+actual Human choice `AdoptLocalCompletion`; adoption returned
+`accepted=true / local-completion-adopted`. The following ordinary Advance
+returned `Terminal / completed`. No accepted Step, check, review or commit was
+replayed, and no Session storage was edited.
+
+The completion retains Plan4 `cncf-phase-116-managed-cache`, original base
+`2232026fadb0e2b387089da0e1fbc02a3a18266f`, all seven accepted Step commits and
+reviewed candidate `3c3d8ed8f67cd8e8d0a91578d77917552fa7f299` /
+tree `cb272b953f58cb222103da6e53425e244b7ee817`. CC-07's native checks,
+independent review and commit are accepted. Required repository-full receipt697
+completed 876 suites with 6,466 tests passed, zero failures or aborted suites,
+four canceled, one ignored and 46 pending. The latter cases are not claimed as
+executed coverage. Final integrated review
+`p116-final-integrated-independent-review@1` was accepted with no blocking
+findings and every required review issue resolved.
+
+This accepts C1–C6, including connected CAR sharing/lazy loading, same-JVM and
+separate-JVM usage protection, SAR composition, SNAPSHOT generation retirement,
+offline re-extraction, ordinary I/O, bounded recovery/collection and protected
+metadata reads. Local fixtures establish these boundaries; no external Textus
+deployment is claimed. WorkArea's earlier 116/116 remains evidence only for its
+original ownership and cleanup scope.
+
+The completion independently reports synchronization `deferred`:
+"No current independently granted Phase closure authority; synchronization was
+not attempted." No RepositorySync child was started. Separately reviewed ordinary
+work advanced `main` to `bbb324086fd43d59c612ca16ddc6906008646fd1` and was
+synchronized with GitHub before this completion; that descendant does not replace
+the historical reviewed candidate. The final documentation update and its
+ordinary Git synchronization are distinct from native Phase acceptance.
+
+Original failed attempts, accepted results, repair counts and histories remain
+preserved. Existing nonblocking cache/configuration maintenance remains in the
+[canonical journal](../journal/2026/10/2026-10-21-car-sar-managed-cache-plan.md)
+and [configuration follow-ups](../journal/2026/10/2026-10-23-hygiene-follow-up.md).
+The sm-workflow owner's later synchronization features remain with that owner;
+they are not unfinished cache acceptance. No successor Phase, old temporary-tree
+sweep or evidence cleanup is started by this closure.

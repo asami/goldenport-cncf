@@ -1,6 +1,6 @@
 # CAR/SAR Cache Lifecycle
 
-Status: accepted design; CC-01 through CC-04 accepted and committed; CC-05 integrated acceptance underway.
+Status: accepted design; CC-01 through CC-07 accepted and committed; Phase 116 CLOSED on 2026-10-23.
 
 The [specification](../spec/car-sar-cache-management.md) owns observable behavior.
 This design separates repository selection, cache storage and runtime lifetime.
@@ -9,8 +9,9 @@ The 2026-10-22 simplification revises the remaining CC-04 target. Earlier CC-01
 contract acceptance and CC-02/03 results remain recorded, but do not preserve
 the withdrawn reservation design as a requirement. The revised CC-04 target has
 now passed its native check and independent review and was committed as
-`a8676706c1062a5e09da6c87ae4371747cd8bba8`. Integrated and full-repository
-acceptance remain CC-05/Phase duties.
+`a8676706c1062a5e09da6c87ae4371747cd8bba8`. The later CC-05 through CC-07,
+full-repository validation, integrated review and native Phase completion are
+accepted; see [Phase 116 acceptance](../phase/phase-116.md#final-phase-acceptance--2026-10-23).
 
 ## Ownership and integration
 

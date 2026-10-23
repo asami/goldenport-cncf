@@ -1,6 +1,6 @@
 # Phase 116 Checklist
 
-Status: IN_PROGRESS — CC-01 through CC-06 accepted and committed; CC-07 ordinary source validation/review passed, native CC-07 issued; checks and acceptance pending
+Status: CLOSED on 2026-10-23 — CC-01 through CC-07 committed, repository-full and final integrated review accepted; native Session completed
 Acceptance entries close only after their actual checks and independent
 acceptance. CC-01 passed contract-compile and independent review and was committed
 by the native Workflow as `0f3a433809e2f9ee6b575d114d1fcb7ba8c7b5cc`.
@@ -15,9 +15,11 @@ public closure recovery as `a8676706c1062a5e09da6c87ae4371747cd8bba8`.
 CC-05 was accepted and committed as `365250dc6057933b7fdf8f007864516ff0605f7e`;
 CC-06 was accepted and committed as `d7e4ce8255a57343270d5f9de88309bee5d1ddd1`
 (D7). The original repository-full receipt651 records 876 suites / 6427 passed /
-0 failed / 4 canceled / 1 ignored / 46 pending. Final review found the remaining
-source-reader defect; CC-07 and Phase closure remain open. Old dated evidence
-and repair counters retain their original scope, including WorkArea116/116.
+0 failed / 4 canceled / 1 ignored / 46 pending. At that historical frontier,
+the earlier integrated review found the source-reader defect and CC-07/Phase
+closure were still open. The final acceptance below supersedes that pending
+status. Old dated evidence and repair counters retain their original scope,
+including WorkArea116/116.
 
 2026-10-22 adoption: checked CC-01–03 entries retain their historical acceptance.
 Their reservation/peak-space decisions are superseded by the revised specification;
@@ -73,9 +75,9 @@ Session history and repair counts are not reset or relabeled as new acceptance.
 - [x] Deterministic I/O/work-count checks cover cheap hits and bounded discovery without timing thresholds or source-text tests; applicable prior evidence is reused and superseded quota examples are identified explicitly.
 - [x] Existing WorkArea, extraction, repository, admission and runtime-shutdown regressions pass for affected behavior; inherited evidence remains recorded.
 - [x] A representative actual CNCF consumer launches, closes and relaunches with reuse, then closes before managed collection; the accepted local repository/Subsystem fixture introduces no consumer-specific cache path and makes no external Textus deployment claim.
-- [ ] Repository-required final validation and integrated lifecycle/semantic review are recorded; focused results are reused without claiming untested guarantees.
+- [x] Repository-required final validation and integrated lifecycle/semantic review are recorded; focused results are reused without claiming untested guarantees.
 - [x] Operational handoff documents inspection, collection, capacity configuration, advisory-lock limits and treatment of old unleased temporary trees.
-- [ ] Phase closure records actual results and remaining explicitly relocated work without rewriting existing Goal/session/history/repair counts.
+- [x] Phase closure records actual results and remaining explicitly relocated work without rewriting existing Goal/session/history/repair counts.
 
 ## CC-06 accepted full-test repair and CC-07 source readers — 2026-10-23
 
@@ -85,5 +87,13 @@ Session history and repair counts are not reset or relabeled as new acceptance.
 - [x] Complete and verify ordinary seven-path source preparation: existing shared coordinate/generation pin around selected managed archive metadata reads, including directory aliases, preserving repository admission and original-path provenance.
 - [x] Run parent-selected development validation and independent protected-boundary review: focused03 passed two suites / 134 tests with successful compilation and terminal exit0; fresh review02 closed the source-reader/root-identity findings for ordinary assurance. Earlier invalid-SAR-fixture failures and intermediate115-pass evidence remain recorded. This does not close a native Step gate.
 - [x] Obtain actual native CC-07 work issuance through the preserved Session (`ordered-implementation:658`, Plan4).
-- [ ] Complete native CC-07 checks, independent review and commit through that Session.
-- [ ] Complete final native Phase review and closure, retaining all checks, history, findings and repair counters without fabricated Entries or issued-work contexts.
+- [x] Complete native CC-07 checks, independent review and commit through that Session.
+- [x] Complete final native Phase review and closure, retaining all checks, history, findings and repair counters without fabricated Entries or issued-work contexts.
+
+## Final acceptance — 2026-10-23
+
+- CC-07 is committed as `3c3d8ed8f67cd8e8d0a91578d77917552fa7f299` after native checks and independent review.
+- Required repository-full receipt697 and final integrated review `p116-final-integrated-independent-review@1` are accepted; all required review issues are resolved.
+- Actual Human `AdoptLocalCompletion` for source702 was accepted by the public adoption operation. The following ordinary Advance returned `Terminal / completed` in the same Session, preserving Plan4, the original base, all seven commits and the reviewed candidate.
+- Workflow synchronization is separately `deferred` because no current closure effect authority was granted; it was not attempted. Ordinary repository synchronization and the final documentation projection are separate from native Phase acceptance.
+- See [Phase acceptance](phase-116.md#final-phase-acceptance--2026-10-23) for the validation scope, retained history and nonblocking follow-ups.

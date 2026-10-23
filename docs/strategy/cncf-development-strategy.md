@@ -5554,7 +5554,7 @@ execution and committed-tree verification; its actual outcome belongs to the
 native commit receipt. This closure starts no successor or remote
 publication and leaves the other Phase histories unchanged.
 
-## Phase 116 — Managed CAR/SAR Cache (planned 2026-10-21)
+## Phase 116 — Managed CAR/SAR Cache (closed 2026-10-23)
 
 [Phase 116](../phase/phase-116.md) and its
 [checklist](../phase/phase-116-checklist.md) establish reusable archive extraction
@@ -5579,6 +5579,14 @@ Reuse existing repository selection, admission and resource authorization. The
 WorkArea incident repair and evidence remain the baseline, not proof that cache
 reuse is implemented. Preserve active work and histories; do not automatically
 sweep old unleased temporary directories. Phase 112 documentation projection is
-related but is not a prerequisite. This plan starts no Phase or consumer change.
+related but is not a prerequisite.
 The [handoff journal](../journal/2026/10/2026-10-21-car-sar-managed-cache-plan.md)
-records the decision and implementation order.
+records the decision, implementation order and same-Session completion.
+
+All seven Steps are accepted and committed. Required repository-full validation
+and final integrated review are accepted, and the existing native Session
+returned `Terminal / completed` after actual Human adoption of local completion.
+[Final acceptance](../phase/phase-116.md#final-phase-acceptance--2026-10-23)
+preserves the reviewed candidate, history and repair counts. Workflow repository
+synchronization is independently deferred and does not reopen the Phase; ordinary
+GitHub synchronization remains a separate operation. No successor Phase starts.

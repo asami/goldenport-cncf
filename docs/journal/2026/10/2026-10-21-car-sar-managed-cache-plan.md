@@ -1,7 +1,7 @@
 # CAR/SAR Managed Cache — Decision and Development Handoff
 
 Date: 2026-10-21
-Status: original planning record preserved; see 2026-10-23 accepted-prefix and ordinary CC-07 preparation update below.
+Status: original planning record preserved; Phase 116 CLOSED on 2026-10-23; see same-Session formal completion below.
 
 ## Context and confirmed baseline
 
@@ -755,3 +755,29 @@ The separately approved8-file resource-read prerequisite was also integrated
 from its unchanged86-pass/reviewed/published candidate and stays outside the
 seven-path CC-07 commit. All19 prior dirty inputs are retained. Native CC-07
 checks, independent acceptance, commit and final Phase gates remain pending.
+
+### Same-Session formal completion — 2026-10-23
+
+CC-01 through CC-07, the required repository-full validation and final integrated
+review are accepted. The actual Human selected `AdoptLocalCompletion` for the
+public source702 completion-policy target. The public adoption and following
+ordinary Advance completed the original Session; the returned outcome is
+`Terminal / completed`. [Final Phase acceptance](../../../phase/phase-116.md#final-phase-acceptance--2026-10-23)
+and the checklist now record the current completed boundary. Earlier pending,
+failed and recovery entries above remain historical records.
+
+Completion preserves Plan4, the original base, all seven Step commits, the
+reviewed candidate, applicable validation/review results, failure history and
+repair counts. Separately accepted ordinary commits and the pre-existing
+WorkArea evidence keep their own scope. This closes the cache Phase without
+restarting its work or relabeling an old result.
+
+The design correction separates accepted development from optional repository
+synchronization. Native synchronization is `deferred` because no current closure
+effect authority was granted; it was not attempted. Ordinary GitHub sync had
+already completed separately, and final document reconciliation follows the
+ordinary reviewed commit/sync route. Existing nonblocking Hygiene retains its
+canonical records; later sm-workflow synchronization features remain with that
+owner. No cache sweep, evidence move, unrelated rollback or successor work is
+part of this completion. Actual call inputs, outputs and Human provenance remain
+in the existing private caller task rather than being copied into this journal.
