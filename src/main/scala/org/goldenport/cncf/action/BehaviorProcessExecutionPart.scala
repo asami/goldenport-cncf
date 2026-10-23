@@ -139,6 +139,7 @@ import org.goldenport.cncf.processexecution.{
   ProcessExecutionAdmission,
   ProcessExecutionRequest,
   ProcessExecutionResult,
+  HostSourceRead, HostSourceTarget, HostSourcePayload, HostSourceReadResult,
   ResolvedProcessExecution,
   SbtExecutionAttempt,
   SbtExecutionResult,
@@ -148,10 +149,25 @@ import org.goldenport.cncf.processexecution.{
 
 /*
  * @since   Sep. 28, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.Core.Holder =>
+
+  protected final def host_source_read(
+    target: HostSourceTarget,
+    payload: HostSourcePayload
+  ): ExecUowM[HostSourceReadResult] =
+    exec_from(HostSourceRead.resolveC(execution_context.cncfCore.scope, target, payload)).flatMap { execution =>
+      process_exec(execution).flatMap(result => exec_from(HostSourceRead.decodeC(result)))
+    }
+
+  protected final def host_source_read_c(
+    target: HostSourceTarget,
+    payload: HostSourcePayload
+  )(using uow: UnitOfWork): Consequence[HostSourceReadResult] =
+    HostSourceRead.resolveC(execution_context.cncfCore.scope, target, payload)
+      .flatMap(execution => process_exec_c(execution)).flatMap(HostSourceRead.decodeC)
 
   protected final def git_branch(target: GitTarget): ExecUowM[GitExecutionResult[String]] =
     _git_exec(target, GitOperation.Branch)
