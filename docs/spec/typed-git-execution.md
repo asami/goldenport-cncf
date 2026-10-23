@@ -128,6 +128,42 @@ Succeeded, Failed(exitCode), Incomplete(termination), InvalidOutput(reason)
 and ConflictObservationRequired. `valueC` succeeds only for Succeeded with a
 value; all other outcomes fail structurally while retaining the raw receipt.
 
+GIT-DIAG-01: `valueC` failures retain the `argumentPolicyViolation` key `git`,
+policy `git.execution.result` and expected `complete successful typed Git value`.
+Their actual diagnostic is bounded, deterministic metadata: the operation kind's
+wire name, a closed outcome tag with numeric exit code where present, the actual
+process termination (including the output-limit stream or termination-unconfirmed),
+and each stream's observed byte count, retained content byte size and truncation
+flag. A Succeeded outcome without a value remains a failure. Captured stdout or
+stderr text, parser reasons, program identity, argv, environment, workspace and
+paths never enter this diagnostic. Raw results and selected paths remain unchanged;
+truncation and byte-count evidence alongside TerminationUnconfirmed never settle
+that uncertainty or reclassify it as confirmed output-limit termination or an
+unexecuted operation.
+
+CAND-BUDGET-01: the common `GitDiffParameters` policy resolves the canonical
+ordinary CNCF parameter `cncf.git.diff.maximum-bytes`. Absence selects 1048576
+bytes (one MiB); an explicit value must be an integral `NumberValue` from 1
+through 1048576 inclusive. Null, text, fractional, nonpositive and above-maximum
+values fail configuration resolution without coercion, aliases, CLI flags or
+system-property fallback. Its public `key`, `defaultBytes`, `maximumBytes` and
+`resolveC(ExecutionContext)` / `resolveC(ResolvedParameters)` API provide the same
+selected byte ceiling to consumers. `PendingDiff` admission tightens only the
+effective stdout limit to the smaller of its independently admitted explicit
+host limit and that selected ceiling; it never widens host authority. Invalid
+configuration fails before driver launch. Other operations and limits retain
+their existing admission behavior, and typed execution remains inside the
+owning UoW with the existing request lowering and driver lifecycle.
+The existing ordinary driver enforces that effective limit while capturing the
+process output. A successfully exited `PendingDiff` requires complete stdout and
+stderr: neither may be truncated, and each observed byte count must equal its
+retained content byte size. Incomplete captures yield `InvalidOutput` with a
+fixed payload-free reason and no typed value, retaining the actual raw result.
+Non-Exited results keep their existing `Incomplete` termination, including
+uncertainty. Consumers use the successful complete typed diff without repeating
+its byte-limit check; workflow-specific policy and ownership checks remain
+consumer responsibilities.
+
 Non-Exited terminals are Incomplete. Nonzero exits are Failed except exact
 optional-ref/merge-base exit one with empty stdout, which succeeds with None,
 and PendingMerge exit one, which requires conflict observation and has no

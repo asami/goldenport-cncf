@@ -8,7 +8,7 @@ import org.goldenport.cncf.workspace.*
 /** Immutable host configuration. Parsing does not install a driver or grant caller authority. */
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] final case class WorkspaceRuntimeDeclaration(identity: WorkspaceId, root: Path)
@@ -128,6 +128,11 @@ private[cncf] object RuntimeProcessExecutionPlan {
       declarations.count(_.operation == GitOperationKind.CheckSelectedIndex) <= 64 &&
       declarations.count(_.operation == GitOperationKind.SelectedIndexChanges) <= 64
     }) Consequence.unit else Consequence.configurationInvalid("Git selection declarations exceed the per-workspace bounds")
+    _ <- if (gitdeclarations.filter(x => x.operation match {
+      case GitOperationKind.CommitSelected | GitOperationKind.CheckSelectedIndex | GitOperationKind.SelectedIndexChanges => true
+      case _ => false
+    }).groupBy(x => x.target -> x.selectionId).values.forall(_.map(_.selectedPaths).distinct.size == 1))
+      Consequence.unit else Consequence.configurationInvalid("Git selection declarations require identical ordered selected paths for each workspace and selection ID")
     workspace <- WorkspaceExecutionAdmission.createC(workspacedeclarations.map(x => x.identity -> x.root), workspacegrants)
     sbttagged <- sbtdeclarations.foldLeft(Consequence.success(Vector.empty[ProcessProgramDefinition])) { (prior, declaration) => for {
       values <- prior

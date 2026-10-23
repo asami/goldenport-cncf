@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -73,6 +73,46 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
     _.add("schema", Json.fromString("cncf.runtime-process-execution.v4"))
       .add("registeredSbtHost", Json.obj("requestFile" -> Json.fromString(root.resolve("request.json").toString),
         "responseFile" -> Json.fromString(root.resolve("response.json").toString))))
+
+  "E9 Host-source V3 registration" must afterWord("in spec:host-source-read, example:E9, rules:R3,R6, phase:6.4") {
+    "round-trip a sole empty argument template while preserving all existing generic, Git, SBT and component grants" in {
+      Given("docs/spec/host-source-read.md R3 R6 E9, an existing V3 plan with independent Git and SBT authority")
+      val wire = _v3_root(_directory())
+      val original = _take(_decode(wire))
+      val identity = HostSourceReadSpecSupport.capability.print
+      val program = wire.hcursor.downField("programs").downArray.focus.get.mapObject(
+        _.add("capability", Json.fromString(identity)).add("identity", Json.fromString(identity))
+          .add("executable", Json.fromString("/runtime/bin/native-goal-terminal-source.py"))
+          .add("fixedArguments", Json.arr(Json.fromString("--codex-executable"), Json.fromString("/runtime/bin/codex")))
+          .add("argumentTemplates", Json.arr(Json.arr()))
+          .add("limits", wire.hcursor.downField("programs").downArray.downField("limits").focus.get
+            .mapObject(_.add("stdinBytes", Json.fromLong(65536)))))
+      val programs = wire.hcursor.get[Vector[Json]]("programs").toOption.get :+ program
+      val grants = wire.hcursor.get[Vector[Json]]("grants").toOption.get.map { grant =>
+        val capabilities = grant.hcursor.get[Vector[String]]("capabilities").toOption.get :+ identity
+        grant.mapObject(_.add("capabilities", Json.fromValues(capabilities.map(Json.fromString))))
+      }
+      val selected = wire.mapObject(_.add("programs", Json.fromValues(programs)).add("grants", Json.fromValues(grants)))
+      When("the host installs the additive registration and round-trips the unchanged V3 schema")
+      val first = _take(_decode(selected))
+      val encoded = _take(RuntimeProcessExecutionPlanCodec.encode(first)).asInstanceOf[ConfigurationValue.StringValue]
+      val restored = _take(RuntimeProcessExecutionPlanCodec.decode(encoded))
+      val definition = restored.programs.find(_.capability == HostSourceReadSpecSupport.capability).get
+      Then("the exact empty vector template survives and all previous declarations and grants remain present")
+      parse(encoded.value).toOption.get shouldBe selected
+      restored.schemaVersion shouldBe RuntimeProcessExecutionPlanCodec.SCHEMA_V3
+      restored.gitDeclarations shouldBe original.gitDeclarations
+      restored.sbtDeclarations shouldBe original.sbtDeclarations
+      restored.workspaceDeclarations shouldBe original.workspaceDeclarations
+      restored.workspaceGrants shouldBe original.workspaceGrants
+      original.grants.foreach { case (owner, grants) => restored.grants(owner).take(grants.size) shouldBe grants }
+      restored.programs.map(_.capability) shouldBe original.programs.map(_.capability) :+ HostSourceReadSpecSupport.capability
+      definition.argumentPolicy.admission shouldBe ProcessArgumentAdmission.Template
+      definition.argumentPolicy.permittedArgumentTemplates shouldBe Set(ProcessArgumentTemplate(Vector.empty))
+      definition.argumentPolicy.validateC(Vector.empty, definition.maximumLimits).isSuccess shouldBe true
+      definition.argumentPolicy.validateC(Vector("extra"), definition.maximumLimits).isFaillure shouldBe true
+    }
+  }
 
   "Runtime process host wire contract" should {
     "reject retired V4 even when its underlying V3 authority is valid" in {
@@ -283,6 +323,68 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
         val entry = entries.find(_.hcursor.get[String]("operation").toOption.contains(declaration.operation.wireName)).get
         entry.asObject.get.contains("selectedPaths") shouldBe kinds.contains(declaration.operation)
         entry.asObject.get.size shouldBe (if (kinds.contains(declaration.operation)) 16 else 15)
+      }
+    }
+
+    "E1 Selected Git declarations with a shared selection ID" should afterWord(
+      "in spec:runtime-git-selection-binding, example:E1, rules:R1, phase:CC-02") {
+      "reject different paths or vector order between the selected commit and read declarations" in {
+        Given("R1: three V3 declarations share a workspace, selection ID and ordered two-path selection")
+        val kinds = Vector(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges)
+        val paths = Vector("selected.txt", "other.txt")
+        val wire = kinds.foldLeft(_v3_root(_directory()))((root, kind) => _changed_git(root, kind,
+          _.mapObject(_.add("selectedPaths", Json.fromValues(paths.map(Json.fromString))))))
+        val crossed = kinds.flatMap(kind => Vector(Vector("different.txt", "other.txt"), paths.reverse).map(selection =>
+          _changed_git(wire, kind, _.mapObject(_.add("selectedPaths", Json.fromValues(selection.map(Json.fromString)))))))
+        When("the public runtime-plan decoder receives each crossed declaration and the consistent plan")
+        val rejected = crossed.map(_decode)
+        val accepted = _decode(wire)
+        Then("every crossed path or order fails configuration admission while the identical ordered selection is admitted")
+        rejected.foreach { result =>
+          result.isFaillure shouldBe true
+          result.toString should include("Invalid runtime process declaration")
+        }
+        accepted.isSuccess shouldBe true
+        accepted.toOption.get.gitDeclarations.filter(x => kinds.contains(x.operation))
+          .foreach(_.selectedPaths.map(_.value) shouldBe paths)
+      }
+    }
+
+    "E2 Partial selected Git authority" should afterWord(
+      "in spec:runtime-git-selection-binding, example:E2, rules:R2, phase:CC-02") {
+      "admit every consistent subset including read-only selections without a selected commit grant" in {
+        Given("R2: selected declarations may be partial and independent selection IDs may bind different vectors")
+        val wire = _v3_root(_directory())
+        val kinds = Vector(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges)
+        val subsets = kinds.toSet.subsets().filter(_.nonEmpty).toVector
+        val entries = wire.hcursor.get[Vector[Json]]("gitPrograms").toOption.get
+        val partial = subsets.map { subset =>
+          val selected = entries.filter(entry => subset.exists(kind => entry.hcursor.get[String]("operation").toOption.contains(kind.wireName)))
+          val programs = wire.mapObject(_.add("gitPrograms", Json.fromValues(selected)))
+          val grants = _changed_entry(programs, "grants", _.mapObject(_.add("capabilities",
+            Json.fromValues(selected.map(_.hcursor.downField("capability").focus.get)))))
+          if (subset.contains(GitOperationKind.CommitSelected)) grants
+          else _changed_entry(grants, "workspaceGrants", _.mapObject(_.add("access", Json.fromString("read-only"))))
+        }
+        val independent = _changed_git(wire, GitOperationKind.CommitSelected, _.mapObject(
+          _.add("selectionId", Json.fromString("another-choice"))
+            .add("selectedPaths", Json.arr(Json.fromString("different.txt")))))
+        When("the public runtime-plan decoder receives all partial selections and the independently named selection")
+        val decoded = partial.map(_decode)
+        val separate = _decode(independent)
+        Then("consistent subsets remain usable under their declared authority and distinct IDs do not share a path constraint")
+        decoded.foreach(_.isSuccess shouldBe true)
+        decoded.zip(subsets).foreach { case (result, subset) =>
+          val plan = result.toOption.get
+          plan.gitDeclarations.map(_.operation).toSet shouldBe subset
+          plan.gitDeclarations.foreach(_.selectedPaths.map(_.value) shouldBe Vector("selected.txt"))
+          if (!subset.contains(GitOperationKind.CommitSelected)) {
+            plan.workspaceGrants.map(_.permission) shouldBe Vector(WorkspacePermission.ReadOnly)
+            plan.grants.values.flatten.map(_.capability).toSet shouldBe
+              subset.map(GitExecutionSpecSupport.capability)
+          }
+        }
+        separate.isSuccess shouldBe true
       }
     }
 
