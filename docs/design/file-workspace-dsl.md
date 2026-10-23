@@ -56,9 +56,11 @@ under B. Missing services/global config fail structurally; ambient
 Read permission implies no Build/Git/remote/HTTP/process permission.
 
 The existing runtime resource byte policy defaults to 1 MiB (1,048,576 bytes),
-allows 1..16 MiB (16,777,216 bytes), and retains its four aliases:
+allows 1..268,435,456 bytes (256 MiB), and retains its four aliases:
 `textus.resource.read.max-bytes`, `textus.runtime.resource.read.max-bytes`,
 `cncf.resource.read.max-bytes`, `cncf.runtime.resource.read.max-bytes`.
+A larger selected limit permits more input; it is not a peak-memory bound.
+Immutable byte, text and JSON values may require more memory than the input size.
 There is no app-selected cap or new write config. Shared
 `ResourceReadAcquisition.readC` owns the `READ`/`NOFOLLOW_LINKS` stream, reads
 at most cap plus one and closes on every terminal path. Decoding is strict

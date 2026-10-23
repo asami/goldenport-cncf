@@ -144,12 +144,15 @@ The actual current scope's `GlobalRuntimeContext.config.resourceReadLimits`
 supplies the finite byte cap. Missing global limits fail as service unavailable;
 there is no ambient global lookup or per-call maximum. The same existing
 resource policy defaults to **1,048,576 bytes (1 MiB)** and admits **1 through
-16,777,216 bytes (16 MiB)** inclusive through these aliases:
+268,435,456 bytes (256 MiB)** inclusive through these aliases:
 
 - `textus.resource.read.max-bytes`;
 - `textus.runtime.resource.read.max-bytes`;
 - `cncf.resource.read.max-bytes`;
 - `cncf.runtime.resource.read.max-bytes`.
+
+A larger selected limit permits more input; it is not a peak-memory bound.
+Immutable byte, text and JSON values may require more memory than the input size.
 
 Read opens with `READ` and `NOFOLLOW_LINKS`, acquires at most cap plus one
 bytes through the shared owned-stream helper, closes the stream on success,

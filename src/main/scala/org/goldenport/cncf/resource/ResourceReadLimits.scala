@@ -8,22 +8,22 @@ import org.goldenport.Consequence
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResourceReadLimits(maximumBytes: Int = 1048576) {
-  require(maximumBytes >= 1 && maximumBytes <= 16777216,
-    "resource read maximumBytes must be between 1 and 16777216")
+  require(maximumBytes >= 1 && maximumBytes <= 268435456,
+    "resource read maximumBytes must be between 1 and 268435456")
 }
 
 object ResourceReadLimits {
   val default: ResourceReadLimits = ResourceReadLimits()
 
   def createC(maximumBytes: Int): Consequence[ResourceReadLimits] =
-    if (maximumBytes >= 1 && maximumBytes <= 16777216)
+    if (maximumBytes >= 1 && maximumBytes <= 268435456)
       Consequence.success(ResourceReadLimits(maximumBytes))
     else
-      Consequence.argumentInvalid("maximumBytes", "an integer between 1 and 16777216", maximumBytes)
+      Consequence.argumentInvalid("maximumBytes", "an integer between 1 and 268435456", maximumBytes)
 }
 
 /** Acquisition owns and closes its stream, including when the finite read fails. */

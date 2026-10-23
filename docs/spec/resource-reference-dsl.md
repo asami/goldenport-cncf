@@ -62,7 +62,7 @@ val text = read_resource_text(reference)
 ```
 
 The default maximum is **1,048,576 bytes (1 MiB)**. The admitted range is
-**1 through 16,777,216 bytes (16 MiB)**, inclusive. There is no unlimited or
+**1 through 268,435,456 bytes (256 MiB)**, inclusive. There is no unlimited or
 zero sentinel. Invalid direct construction fails before provider use;
 `ResourceReadLimits.createC` provides structured construction validation.
 Runtime configuration accepts an exact positive integer in that range through:
@@ -71,6 +71,9 @@ Runtime configuration accepts an exact positive integer in that range through:
 - `textus.runtime.resource.read.max-bytes`;
 - `cncf.resource.read.max-bytes`; and
 - `cncf.runtime.resource.read.max-bytes`.
+
+A larger selected limit permits more input; it is not a peak-memory bound.
+Immutable byte, text and JSON values may require more memory than the input size.
 
 Malformed, zero, negative, excessive and overflowing values refuse runtime
 construction. `RuntimeConfig.Settings`, storage assembly and the normal

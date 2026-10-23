@@ -21,13 +21,13 @@ import org.goldenport.cncf.workspace.WorkspaceId
 
 /*
  * @since   Jan. 18, 2026
- * version Jan. 30, 2026
- * version Feb.  1, 2026
- * version Mar. 28, 2026
- * version Apr. 30, 2026
- * version Jun. 19, 2026
- * version Jul. 30, 2026
- * @version Oct. 21, 2026
+ *  version Jan. 30, 2026
+ *  version Feb.  1, 2026
+ *  version Mar. 28, 2026
+ *  version Apr. 30, 2026
+ *  version Jun. 19, 2026
+ *  version Jul. 30, 2026
+ * @version Oct. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -895,9 +895,9 @@ object RuntimeConfig {
   private def _resource_read_limits(configuration: ResolvedConfiguration): ResourceReadLimits =
     _get_string(configuration, RESOURCE_READ_MAX_BYTES_KEY).fold(ResourceReadLimits.default) { value =>
       val parsed = if (value.matches("[0-9]+")) scala.util.Try(value.toInt).toOption else None
-      parsed.filter(number => number >= 1 && number <= 16777216)
+      parsed.filter(number => number >= 1 && number <= 268435456)
         .map(ResourceReadLimits(_)).getOrElse {
-          throw new IllegalArgumentException("textus.resource.read.max-bytes must be an integer between 1 and 16777216")
+          throw new IllegalArgumentException("textus.resource.read.max-bytes must be an integer between 1 and 268435456")
         }
     }
 
