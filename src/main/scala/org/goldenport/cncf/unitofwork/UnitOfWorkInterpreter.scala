@@ -61,8 +61,7 @@ import org.simplemodeling.model.directive.Update
  *  version May. 11, 2026
  *  version Aug.  1, 2026
  *  version Sep. 19, 2026
- *  version Oct. 20, 2026
- * @version Oct. 21, 2026
+ * @version Oct. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -300,6 +299,12 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
             !request.connectionId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}"))
           Consequence.argumentInvalid("OAuth connection request is invalid")
         else _component_option match {
+          case Some(runtime: org.goldenport.cncf.filestore.GoogleDriveConnectionRuntime)
+              if request.isDriveAuthorization && runtime.googleDriveServiceAccount.isDefined =>
+            val account = runtime.googleDriveServiceAccount.get
+            if (account.connectionId != request.connectionId)
+              Consequence.resourceNotFound("Google Drive service account connection is not configured")
+            else account.authorizationC(uow).asInstanceOf[Consequence[A]]
           case Some(runtime: OAuthConnectionRuntime) => runtime.oauthConnection match {
             case Some(connection) if connection.configuration.connectionId == request.connectionId =>
               request.executeC(connection, uow)

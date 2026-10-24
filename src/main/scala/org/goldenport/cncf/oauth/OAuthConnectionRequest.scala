@@ -5,11 +5,12 @@ import org.goldenport.cncf.unitofwork.UnitOfWork
 
 /*
  * @since   Oct. 21, 2026
- * @version Oct. 21, 2026
+ * @version Oct. 24, 2026
  */
 /** Closed, inert framework intent; only the canonical native interpreter executes it. */
 private[cncf] sealed trait OAuthConnectionRequest[A] {
   def connectionId: String
+  private[cncf] def isDriveAuthorization: Boolean = false
   private[cncf] def executeC(connection: OAuthConnection, uow: UnitOfWork): Consequence[A]
   override final def toString: String = "OAuthConnectionRequest(<redacted>)"
 }
@@ -50,6 +51,7 @@ private[cncf] object OAuthConnectionRequest {
   }
 
   private final class DriveAuthorization(val connectionId: String) extends OAuthConnectionRequest[Map[String, String]] {
+    override private[cncf] def isDriveAuthorization: Boolean = true
     private[cncf] def executeC(connection: OAuthConnection, uow: UnitOfWork): Consequence[Map[String, String]] =
       connection.authorizationC(uow, OAuthConnectionProviderKind.GoogleDrive)
   }
