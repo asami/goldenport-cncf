@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SbtTestSelectionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -27,12 +27,13 @@ final class SbtTestSelectionSpec extends AnyWordSpec with Matchers with GivenWhe
       When("trusted runtime policy validates the closed operation and exact vector")
       val accepted = valid.map(SbtTestSelectionPolicy.validateC(SbtOperation.TestOnly, _))
       val rejected = invalid.map(SbtTestSelectionPolicy.validateC(SbtOperation.TestOnly, _))
-      Then("only bounded exact selections are admitted and Compile/Test retain empty selections")
+      Then("only bounded exact selections are admitted and Compile/Test/FixCheck retain empty selections")
       accepted.foreach(_.isSuccess shouldBe true)
       rejected.foreach(_.isFaillure shouldBe true)
-      Vector(SbtOperation.Compile, SbtOperation.Test).foreach { operation =>
+      Vector(SbtOperation.Compile, SbtOperation.Test, SbtOperation.FixCheck).foreach { operation =>
         SbtTestSelectionPolicy.validateC(operation, Vector.empty).isSuccess shouldBe true
         SbtTestSelectionPolicy.validateC(operation, _classes).isFaillure shouldBe true
+        SbtTestSelectionPolicy.validateC(operation, null).isFaillure shouldBe true
       }
     }
 
@@ -48,6 +49,18 @@ final class SbtTestSelectionSpec extends AnyWordSpec with Matchers with GivenWhe
       val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(64), property)
       Then("every generated fragment is denied instead of becoming an SBT expression")
       checked.passed shouldBe true
+    }
+  }
+
+  "Fixed check selection policy" should {
+    "allow only an absent scenario for FixCheck" in {
+      Given("the fixed check operation and absent, exact or malformed scenario selections")
+      val selections = Vector(None, Some(SbtScenarioSelection(_classes.head, "selected case")), Some(null), null)
+      When("the existing scenario policy validates each FixCheck intent")
+      val results = selections.map(SbtScenarioSelection.validateOptionC(_, SbtOperation.FixCheck))
+      Then("only the absent selector is admitted without adding a scenario rendering path")
+      results.head.isSuccess shouldBe true
+      results.tail.foreach(_.isFaillure shouldBe true)
     }
   }
 
@@ -209,11 +222,11 @@ final class SbtTestSelectionSpec extends AnyWordSpec with Matchers with GivenWhe
     "preserve three-argument callers while requiring a verified TestOnly selection for zero exit" in {
       Given("one complete raw zero-exit process result and the existing three-argument result constructor")
       val raw = _process(_report(_classes, 7L, false))
-      When("Compile, Test and TestOnly outcomes interpret the same unmodified process result")
+      When("Compile, Test, TestOnly and FixCheck outcomes interpret the same unmodified process result")
       val results = SbtOperation.values.toVector.map(SbtExecutionResult(_target, _, raw))
-      Then("Compile and Test retain success while TestOnly without a supplied selection is unverified")
+      Then("Compile, Test and FixCheck retain success while TestOnly without a supplied selection is unverified")
       results.map(_.outcome) shouldBe Vector(SbtExecutionOutcome.Succeeded, SbtExecutionOutcome.Succeeded,
-        SbtExecutionOutcome.UnverifiedTests(SbtTestSelectionFailure.MissingSelection))
+        SbtExecutionOutcome.UnverifiedTests(SbtTestSelectionFailure.MissingSelection), SbtExecutionOutcome.Succeeded)
       results.foreach(_.processResult shouldBe raw)
       results.foreach(_.testSelection shouldBe None)
     }

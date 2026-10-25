@@ -12,7 +12,7 @@ import org.goldenport.configuration.{ConfigurationValue, ConfigurationValueCodec
 /** Host wire contract: complete literal/lower-hex vectors only, never arbitrary shell text. */
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValueCodec[RuntimeProcessExecutionPlan] {
@@ -103,6 +103,7 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
           case SbtOperation.Compile => "compile"
           case SbtOperation.Test => "test"
           case SbtOperation.TestOnly => "test-only"
+          case SbtOperation.FixCheck => "fix-check"
         }), "capability" -> Json.fromString(x.capability.print), "identity" -> Json.fromString(x.identity),
         "sbtExecutable" -> Json.fromString(x.sbtExecutable.toString), "limits" -> _limits_json(x.limits),
         "environment" -> Json.obj(x.environment.toVector.map { case (k, v) => k -> Json.fromString(v) }*))
@@ -145,6 +146,7 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
       case "compile" => Right(SbtOperation.Compile)
       case "test" => Right(SbtOperation.Test)
       case "test-only" => Right(SbtOperation.TestOnly)
+      case "fix-check" => Right(SbtOperation.FixCheck)
       case _ => Left("Invalid typed build operation")
     }
     capabilitytext <- _string(obj, "capability")

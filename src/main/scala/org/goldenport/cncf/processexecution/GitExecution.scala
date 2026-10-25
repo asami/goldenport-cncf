@@ -10,7 +10,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 22, 2026
+ * @version Oct. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GitTarget(workspaceId: WorkspaceId)
@@ -446,6 +446,10 @@ private[cncf] object GitProgramDefinition {
     prefix.map(Literal.apply) ++ command
   }
 
+  private[processexecution] def physicalCommitArguments(metadata: GitProgramMetadata,
+    paths: Vector[GitPath]): Vector[String] =
+    _slots(metadata.copy(selectedPaths = paths)).collect { case ProcessArgumentSlot.Literal(text) => text }
+
   private[cncf] def typedArgumentsC(operation: GitOperation[?], metadata: GitProgramMetadata): Consequence[Vector[String]] = {
     def _oid_(value: GitObjectId): Consequence[String] =
       if (value == null) invalidC else GitObjectId.parseC(value.value).map(_.value)
@@ -565,6 +569,19 @@ private[cncf] object GitOutputParser {
     value <- GitIndexCheck.parseText(exitCode, out, err)
   } yield value
 
+  def parsePaths(capture: ProcessExecutionCapture): Either[String, Vector[GitPath]] = for {
+    _ <- Either.cond(!capture.truncated && capture.byteCount == capture.content.size.toLong,
+      (), "Incomplete Git filename capture")
+    text <- utf8(capture.content).toRight("Invalid UTF-8 Git filenames")
+    paths <- _paths(text)
+  } yield paths
+
+  private def _paths(text: String): Either[String, Vector[GitPath]] = for {
+    fields <- _nul_fields(text)
+    paths <- _sequence(fields.map(_path))
+    _ <- Either.cond(paths.distinct.size == paths.size, (), "Duplicate changed Git filename")
+  } yield paths
+
   private def _oid(text: String): Either[String, GitObjectId] = GitObjectId.parseC(text).toOption.toRight("Invalid Git object ID")
   private def _path(text: String): Either[String, GitPath] = GitPath.parseC(text).toOption.toRight("Invalid Git filename")
   private def _line(text: String): Either[String, String] =
@@ -622,11 +639,7 @@ private[cncf] object GitOutputParser {
       tree <- _oid(lines(1))
       parents <- if (lines(2).isEmpty) Right(Vector.empty) else _sequence(lines(2).split(" ", -1).toVector.map(_oid))
     } yield GitCommitMetadata(commit, tree, parents)
-    case GitOperationKind.PendingPaths => for {
-      fields <- _nul_fields(text)
-      paths <- _sequence(fields.map(_path))
-      _ <- Either.cond(paths.distinct.size == paths.size, (), "Duplicate changed Git filename")
-    } yield paths
+    case GitOperationKind.PendingPaths => _paths(text)
     case GitOperationKind.PendingDiff => Right(GitDiff(text, text.linesIterator.exists(x => x.startsWith("Binary files ") || x == "GIT binary patch")))
     case GitOperationKind.BlobContent => Left("Unexpected blob decoder")
     case _ => Right(())

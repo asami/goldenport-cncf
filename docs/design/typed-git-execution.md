@@ -14,7 +14,7 @@ protected git_* wrapper
   -> one inherited WorkspaceExecutionAdmission and current binding
   -> independent component per-operation Process capability
   -> closed Git program definition for the identical binding
-  -> shared managed direct normal Git process at canonical checkout cwd
+  -> shared managed direct normal Git execution at canonical checkout cwd
   -> CNCF typed decoding inside the same GitExec interpreter callback
   -> primary workflow durable intent, result and judgment
 ```
@@ -39,6 +39,28 @@ the shared WorkspaceBinding, closed kind, optional selection ID and trusted
 host branch/remote/endpoint/identity/path/message values. OID template slots
 are the only dynamic command slots. A branch argument on Push is checked
 against the fixed remote branch; selected paths/messages never enter from CAR.
+
+CommitSelected declarations carry logical allowed scopes. After the ordinary
+current-context admission, the owning GitExec callback derives physical paths
+using fixed literal cached name-only/no-renames NUL diff against HEAD within
+those scopes. CNCF parses complete bounded captures into distinct GitPaths,
+rejects empty or more than 256 paths and checks every path against the original
+scope boundary. It retains staged deletions and both in-scope rename endpoints
+without filesystem existence filtering. Unchanged and missing future declared
+paths never become mandatory physical pathspecs.
+
+A second fixed literal diff --quiet observes worktree changes on exactly those
+physical paths. Only complete empty exit-zero captures admit the final
+commit --only. Staged-plus-unstaged selected content therefore stops before
+index mutation. Closed internal constructors copy the original definition's
+executable, binding, environment and capability and preserve effective limits;
+the already admitted request is copied without another Request constructor.
+Every probe and commit uses the interpreter's existing process-calltree and
+managed-execution callback within the same GitExec. Other operations retain
+their single execution. No application-visible operation or general rebinding
+API is added. The actual commit result exposes only its physical paths on
+success or failure; preparation retains actual typed failure and probe receipt
+without inventing a commit exit or settling uncertain termination.
 
 Only the exact private resolveGitC site creates a ProcessExecutionRequest for
 closed typed Git lowering. The owning-human permission covers that purpose

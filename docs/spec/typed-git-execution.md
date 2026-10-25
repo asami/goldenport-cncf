@@ -86,7 +86,7 @@ remote branch.
 | `PendingPaths(parent: GitObjectId)` | `Vector[GitPath]` | `diff --cached --no-ext-diff --no-textconv --no-renames --name-only -z PARENT --` |
 | `StageSelected(selectionId: GitSelectionId)` | `Unit` | `--literal-pathspecs add -- FIXED_SELECTED_PATH` |
 | `StageSelectedAll(selectionId: GitSelectionId)` | `Unit` | `--literal-pathspecs add --all -- FIXED_SELECTED_PATH` |
-| `CommitSelected(selectionId: GitSelectionId)` | `Unit` | `IDENTITY --literal-pathspecs commit --only --no-verify --no-gpg-sign -m FIXED_SELECTED_MESSAGE -- FIXED_SELECTED_PATHS` |
+| `CommitSelected(selectionId: GitSelectionId)` | `Unit` | fixed preparation below, then `IDENTITY --literal-pathspecs commit --only --no-verify --no-gpg-sign -m FIXED_SELECTED_MESSAGE -- PHYSICAL_SELECTED_PATHS` |
 | `CheckSelectedIndex(selectionId: GitSelectionId, parent: GitObjectId)` | `GitIndexCheck` | `--literal-pathspecs diff --cached --no-ext-diff --no-textconv --check PARENT -- FIXED_SELECTED_PATHS` |
 | `SelectedIndexChanges(selectionId: GitSelectionId, parent: GitObjectId)` | `Vector[GitTreeChange]` | `--literal-pathspecs diff --cached --no-ext-diff --no-textconv --raw --no-abbrev --no-renames -z PARENT -- FIXED_SELECTED_PATHS` |
 | `TreeChanges(before: GitObjectId, after: GitObjectId)` | `Vector[GitTreeChange]` | `diff-tree --no-commit-id --no-ext-diff --no-textconv --raw --no-abbrev --no-renames -r -z BEFORE AFTER --` |
@@ -97,10 +97,35 @@ shared fixed prefix is
 There is no -C argument: cwd is the admitted canonical workspace directory.
 IDENTITY expands to host-only `-c user.name=NAME -c user.email=EMAIL -c user.useConfigOnly=true`.
 The fixed checkpoint message is exactly `sm-workflow full-state checkpoint`.
-Selected paths and messages come solely from the fixed runtime declaration.
+Selected scopes and messages come solely from the fixed runtime declaration.
 FIXED_SELECTED_PATHS expands to the exact ordered host vector of literal
-GitPath arguments. Only canonical OIDs occupy dynamic slots; executable, cwd,
-environment, limits, paths and message remain host-fixed. Existing process
+GitPath arguments for selected observations. CommitSelected interprets that
+vector as logical allowed scopes, which may include unchanged files,
+directories and missing future files. After current workspace/component/
+capability admission, CNCF runs the fixed normal Git preparation
+`--literal-pathspecs diff --cached --no-ext-diff --no-textconv --no-renames --name-only -z HEAD -- FIXED_SELECTED_PATHS`.
+Complete UTF-8 NUL records must identify one through 256 distinct GitPaths,
+each equal to an allowed scope or within its slash-delimited directory.
+Deletion paths and both in-scope rename endpoints remain eligible; filesystem
+existence does not filter them. Empty, malformed, duplicate, out-of-scope,
+oversized, incomplete or failed observations stop before commit dispatch.
+
+CNCF then executes
+`--literal-pathspecs diff --quiet --no-ext-diff --no-textconv -- PHYSICAL_SELECTED_PATHS`.
+Only a complete exit-zero receipt with empty captures permits the commit.
+Thus selected staged content that differs from the worktree is refused before
+`commit --only` can stage it. The final commit uses exactly the observed
+physical paths and the original fixed identity/message, disabled hooks and
+no-GPG policy. Unrelated staged and unstaged paths retain their state, even
+when a rename has an endpoint outside the admitted scopes. There is no
+empty-commit or all-files fallback. Every subprocess uses the inherited
+executable, identical workspace binding, environment, capability, effective
+finite limits, process calltree and UoW lifecycle. Only closed internal
+definitions and copies of the already admitted request are used; there is no
+additional request constructor or application-selectable argv interface.
+
+Only canonical OIDs occupy application-supplied dynamic slots; executable, cwd,
+environment, limits, allowed scopes and message remain host-fixed. Existing process
 argument limits still apply. No arbitrary suffix or pathspec interpretation
 is admitted.
 
@@ -128,6 +153,15 @@ Succeeded, Failed(exitCode), Incomplete(termination), InvalidOutput(reason)
 and ConflictObservationRequired. `valueC` succeeds only for Succeeded with a
 value; all other outcomes fail structurally while retaining the raw receipt.
 
+For a dispatched CommitSelected, selectedPaths contains its exact physical
+file paths on both success and failure. Before physical selection is validated,
+preparation failures carry an empty selection; later worktree-check failures
+carry the validated physical selection. Preparation retains the actual probe
+receipt, including its real nonzero exit or termination uncertainty, and never
+manufactures an exit-one commit receipt. A complete empty probe is InvalidOutput
+with its actual exit-zero receipt and no successful commit value. Selected
+observations continue to expose their original declared scope metadata.
+
 GIT-DIAG-01: `valueC` failures retain the `argumentPolicyViolation` key `git`,
 policy `git.execution.result` and expected `complete successful typed Git value`.
 Their actual diagnostic is bounded, deterministic metadata: the operation kind's
@@ -144,7 +178,8 @@ unexecuted operation.
 CAND-BUDGET-01: the common `GitDiffParameters` policy resolves the canonical
 ordinary CNCF parameter `cncf.git.diff.maximum-bytes`. Absence selects 1048576
 bytes (one MiB); an explicit value must be an integral `NumberValue` from 1
-through 1048576 inclusive. Null, text, fractional, nonpositive and above-maximum
+through 16777216 inclusive (an explicit sixteen MiB ceiling). Null, text,
+fractional, nonpositive and above-maximum
 values fail configuration resolution without coercion, aliases, CLI flags or
 system-property fallback. Its public `key`, `defaultBytes`, `maximumBytes` and
 `resolveC(ExecutionContext)` / `resolveC(ResolvedParameters)` API provide the same

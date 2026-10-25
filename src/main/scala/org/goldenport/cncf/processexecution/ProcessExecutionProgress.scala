@@ -6,7 +6,7 @@ import org.goldenport.cncf.workspace.WorkspaceId
 
 /*
  * @since   Oct. 20, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ProcessExecutionProgressState {
@@ -49,6 +49,7 @@ object ProcessExecutionProgress {
         case SbtOperation.Compile => "compile"
         case SbtOperation.Test => "test"
         case SbtOperation.TestOnly => "test-only"
+        case SbtOperation.FixCheck => "fix-check"
       }),
       "workspaceId" -> Json.fromString(event.workspaceId.print),
       "programIdentity" -> Json.fromString(event.programIdentity),

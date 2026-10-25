@@ -683,6 +683,7 @@ lazy val root = project
     Test / parallelExecution := false,
     Test / classLoaderLayeringStrategy := ClassLoaderLayeringStrategy.Flat,
     Test / javaOptions += "-Dtextus.test=true",
+    Test / javaOptions ++= sys.props.get("cncf.spec.sbt-launcher").map(value => s"-Dcncf.spec.sbt-launcher=$value").toSeq,
     Test / testOnly / javaOptions += "-Dtextus.test=true",
     (Test / test / testOptions) += Tests.Setup(() => System.setProperty("textus.test", "true")),
     (Test / test / testOptions) += Tests.Argument(

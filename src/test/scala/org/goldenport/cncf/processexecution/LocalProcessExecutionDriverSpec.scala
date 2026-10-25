@@ -24,7 +24,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *
  * @since   Jul. 17, 2026
  *  version Jul. 30, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class LocalProcessExecutionDriverSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -291,7 +291,7 @@ wait
     }
 
     "observe sequential admitted SBT exits without changing results or disclosing command data" in {
-      Given("one runtime driver, admitted Compile and Test operations with differing effective budgets, and a metadata observer")
+      Given("one runtime driver, admitted Compile, Test and FixCheck operations with differing budgets, and a metadata observer")
       val root = _sbt_root()
       val cleanup = new ProcessExecutionWorkArea(root)
       val events = new ConcurrentLinkedQueue[ProcessExecutionProgressEvent]()
@@ -303,9 +303,11 @@ wait
         _sbt_execution(root, SbtOperation.Compile, executable = Paths.get("/usr/bin/true"),
           limits = _limits(launchtimeout = 3100L, executiontimeout = 7200L, terminationgrace = 120L)),
         _sbt_execution(root, SbtOperation.Test, executable = Paths.get("/usr/bin/false"),
-          limits = _limits(launchtimeout = 4300L, executiontimeout = 9100L, terminationgrace = 240L)))
+          limits = _limits(launchtimeout = 4300L, executiontimeout = 9100L, terminationgrace = 240L)),
+        _sbt_execution(root, SbtOperation.FixCheck, executable = Paths.get("/usr/bin/true")),
+        _sbt_execution(root, SbtOperation.FixCheck, executable = Paths.get("/usr/bin/false")))
       try {
-        When("the local driver starts and awaits both real processes consecutively, including repeated awaits")
+        When("the local driver starts and awaits all real processes consecutively, including repeated awaits")
         val results = executions.map { execution =>
           val handle = driver.startC(execution).toOption.get
           handle.awaitC.toOption.get -> handle.awaitC.toOption.get
@@ -314,8 +316,16 @@ wait
         val lines = observed.map(ProcessExecutionProgress.jsonLine)
         Then("each operation reports launch, observed start, wait and actual exit once with unchanged zero and nonzero results")
         results.foreach { case (first, repeated) => repeated shouldBe first }
-        results.map(_._1.termination) shouldBe Vector(ProcessExecutionTermination.Exited(0), ProcessExecutionTermination.Exited(1))
-        observed.grouped(4).zip(executions).foreach { case (group, execution) =>
+        results.map(_._1.termination) shouldBe Vector(ProcessExecutionTermination.Exited(0), ProcessExecutionTermination.Exited(1),
+          ProcessExecutionTermination.Exited(0), ProcessExecutionTermination.Exited(1))
+        val checks = executions.drop(2).zip(results.drop(2)).map { case (execution, (result, _)) =>
+          SbtExecutionAdmission.decode(SbtTarget(execution.definition._sbt_metadata.get.binding.workspaceId),
+            SbtOperation.FixCheck, execution, result)
+        }
+        checks.map(_.outcome) shouldBe Vector(SbtExecutionOutcome.Succeeded, SbtExecutionOutcome.Failed(1))
+        checks.map(_.processResult) shouldBe results.drop(2).map(_._1)
+        checks.foreach(_.testSelection shouldBe None)
+        observed.grouped(4).zip(executions.zip(results)).foreach { case (group, (execution, (result, _))) =>
           group.map(_.state) shouldBe Vector(ProcessExecutionProgressState.Launching,
             ProcessExecutionProgressState.Started, ProcessExecutionProgressState.Waiting, ProcessExecutionProgressState.Terminal)
           group.map(_.operation).distinct shouldBe Vector(execution.definition._sbt_metadata.get.operation)
@@ -327,6 +337,12 @@ wait
           group.head.terminationGraceMillis shouldBe execution.effectiveLimits.terminationGraceMillis
           val launching = io.circe.parser.parse(ProcessExecutionProgress.jsonLine(group.head)
             .stripPrefix("[cncf-sbt-event] ")).toOption.get
+          launching.hcursor.get[String]("operation").toOption shouldBe Some(execution.definition._sbt_metadata.get.operation match {
+            case SbtOperation.Compile => "compile"
+            case SbtOperation.Test => "test"
+            case SbtOperation.TestOnly => "test-only"
+            case SbtOperation.FixCheck => "fix-check"
+          })
           launching.hcursor.get[Long]("launchTimeoutMillis").toOption shouldBe execution.effectiveLimits.launchTimeoutMillis
           launching.hcursor.get[Long]("executionTimeoutMillis").toOption shouldBe execution.effectiveLimits.executionTimeoutMillis
           launching.hcursor.get[Long]("terminationGraceMillis").toOption shouldBe execution.effectiveLimits.terminationGraceMillis
@@ -339,11 +355,14 @@ wait
             json.asObject.get.keys.toSet.intersect(Set("launchTimeoutMillis", "executionTimeoutMillis", "terminationGraceMillis")) shouldBe empty
           }
           group.tail.flatMap(_.pid).distinct should have size 1
-          group.last.exitCode shouldBe Some(if (group.head.operation == SbtOperation.Compile) 0 else 1)
-          group.last.termination shouldBe Some(results(if (group.head.operation == SbtOperation.Compile) 0 else 1)._1.termination)
+          group.last.exitCode shouldBe (result.termination match {
+            case ProcessExecutionTermination.Exited(code) => Some(code)
+            case _ => None
+          })
+          group.last.termination shouldBe Some(result.termination)
           group.dropRight(1).foreach(_.termination shouldBe None)
         }
-        observed should have size 8
+        observed should have size 16
         lines.foreach { line =>
           line should startWith ("[cncf-sbt-event] {")
           line should not include "TEXTUS_BUILD_PROFILE"
@@ -692,14 +711,14 @@ wait
       } finally { driver.close(); fixture.close() }
     }
 
-    "send fixed Compile and Test vectors with the admitted checkout cwd through both start variants" in {
+    "send fixed Compile, Test and FixCheck vectors with the admitted checkout cwd through both start variants" in {
       Given("tagged build definitions and a controlled launcher that records attempts without starting SBT")
       val root = _sbt_root()
       val cleanup = new ProcessExecutionWorkArea(root)
       val workarea = new ProcessExecutionWorkArea(Files.createDirectory(root.resolve("workarea")))
       val calls = new ConcurrentLinkedQueue[(Vector[String], Path, Map[String, String])]()
       val driver = new LocalProcessExecutionDriver("controlled-build", _sbt_launcher(calls))
-      val executions = Vector(SbtOperation.Compile, SbtOperation.Test).map(_sbt_execution(root, _))
+      val executions = Vector(SbtOperation.Compile, SbtOperation.Test, SbtOperation.FixCheck).map(_sbt_execution(root, _))
       try {
         When("each semantic operation uses the direct and UnitOfWork WorkArea driver overloads")
         val results = executions.flatMap { execution =>
@@ -707,10 +726,10 @@ wait
         }
 
         Then("the controlled launcher receives only the fixed vector, fixed environment and actual checkout")
-        results.map(_.toOption.map(_.termination)) shouldBe Vector.fill(4)(Some(ProcessExecutionTermination.LaunchFailed))
+        results.map(_.toOption.map(_.termination)) shouldBe Vector.fill(6)(Some(ProcessExecutionTermination.LaunchFailed))
         val recorded = calls.iterator().asScala.toVector
-        recorded.map(_._2) shouldBe Vector.fill(4)(root.resolve("checkout").toRealPath())
-        recorded.map(_._1.last) shouldBe Vector("compile", "compile", "test", "test")
+        recorded.map(_._2) shouldBe Vector.fill(6)(root.resolve("checkout").toRealPath())
+        recorded.map(_._1.last) shouldBe Vector("compile", "compile", "test", "test", "fixCheck", "fixCheck")
         recorded.foreach { case (command, _, environment) =>
           command shouldBe Vector(Paths.get("/usr/bin/true").toRealPath().toString, "--batch",
             "-Dsbt.server.autostart=false", "-Dsbt.supershell=false", "-Dsbt.color=false",
@@ -784,10 +803,11 @@ wait
     }
 
     "reject every mixed WorkArea input and request override for a tagged build before launch" in {
-      Given("one admitted Test intent and forged requests carrying argv, cwd, stdin, files, trees or outputs")
+      Given("admitted Test and FixCheck intents and forged requests carrying argv, cwd, stdin, files, trees or outputs")
       val root = _sbt_root()
       val cleanup = new ProcessExecutionWorkArea(root)
       val execution = _sbt_execution(root, SbtOperation.Test)
+      val executions = Vector(execution, _sbt_execution(root, SbtOperation.FixCheck))
       val workarea = new ProcessExecutionWorkArea(Files.createDirectory(root.resolve("workarea")))
       val path = WorkAreaRelativePath.parseC("input.txt").toOption.get
       val name = ProcessArtifactName.parseC("input").toOption.get
@@ -812,13 +832,16 @@ wait
       val driver = new LocalProcessExecutionDriver("mixed-build", _sbt_launcher(calls))
       try {
         When("program policy and both local driver overloads receive the unsupported mixed inputs")
-        val policyresults = requests.map(execution.definition.validateRequestC(_, execution.effectiveLimits))
-        val driverresults = requests.flatMap { request =>
+        val emptyresults = executions.map(execution => execution.definition.validateRequestC(execution.request, execution.effectiveLimits))
+        val policyresults = executions.flatMap(execution => requests.map(execution.definition.validateRequestC(_, execution.effectiveLimits)))
+        val driverresults = executions.flatMap { execution => requests.flatMap { request =>
           val changed = execution.copy(request = request)
           Vector(driver.startC(changed), driver.startC(changed, workarea))
         }
+        }
 
         Then("every mixed request is denied without a launcher call or checkout projection")
+        emptyresults.foreach(_.isSuccess shouldBe true)
         policyresults.foreach(_.isFaillure shouldBe true)
         driverresults.foreach(_.isFaillure shouldBe true)
         calls shouldBe empty

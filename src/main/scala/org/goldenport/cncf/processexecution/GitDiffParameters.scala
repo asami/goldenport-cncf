@@ -7,13 +7,13 @@ import org.goldenport.cncf.context.ExecutionContext
 
 /** Common bounded diff policy resolved from ordinary CNCF parameters.
  * @since   Oct. 22, 2026
- * @version Oct. 22, 2026
+ * @version Oct. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 object GitDiffParameters {
   val key: String = "cncf.git.diff.maximum-bytes"
   val defaultBytes: Long = 1048576L
-  val maximumBytes: Long = 1048576L
+  val maximumBytes: Long = 16777216L
 
   def resolveC(context: ExecutionContext): Consequence[Long] =
     if (context == null) _invalid_c else resolveC(context.resolvedParameters)

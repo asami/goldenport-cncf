@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 23, 2026
+ * @version Oct. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -228,21 +228,42 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
       }
     }
 
-    "retain exact seven-field Compile and Test declarations and reject even empty selection fields" in {
-      Given("existing V2 and V3 Compile/Test host declarations without TestOnly fields")
+    "round-trip exact seven-field Compile, Test and FixCheck declarations and reject selectors or argv" in {
+      Given("V2 and V3 Compile/Test/FixCheck host declarations without TestOnly fields")
       val wires = Vector(_v2_root(_directory()), _v3_root(_directory())).flatMap(root =>
-        Vector("compile", "test").map(operation => _changed_entry(root, "sbtPrograms",
+        Vector("compile", "test", "fix-check").map(operation => _changed_entry(root, "sbtPrograms",
           _.mapObject(_.add("operation", Json.fromString(operation))))))
-      When("the decoder accepts existing shapes and receives an added empty or null testClasses field")
+      val extras = Vector("testClasses" -> Json.arr(), "testClasses" -> Json.Null,
+        "testClasses" -> Json.arr(Json.fromString("org.example.SelectedSpec")),
+        "scenario" -> Json.Null, "arguments" -> Json.arr(), "extraArgv" -> Json.arr(Json.fromString("test")))
+      When("each strict host plan round-trips and the decoder receives forbidden selector or argv fields")
       val accepted = wires.map(wire => _take(RuntimeProcessExecutionPlanCodec.encode(_take(_decode(wire)))))
-      val rejected = wires.flatMap(wire => Vector(Json.arr(), Json.Null).map(classes =>
-        _decode(_changed_entry(wire, "sbtPrograms", _.mapObject(_.add("testClasses", classes))))))
-      Then("existing declarations remain seven fields and conditional selection fields fail closed")
-      accepted.foreach { encoded =>
+      val restored = accepted.map(encoded => _take(RuntimeProcessExecutionPlanCodec.decode(encoded)))
+      val rejected = wires.flatMap(wire => extras.map { case (name, value) =>
+        _decode(_changed_entry(wire, "sbtPrograms", _.mapObject(_.add(name, value)))) })
+      Then("all finite operation tokens retain their seven-field shape and extra fields fail closed")
+      restored.map(_.sbtDeclarations.head.operation) shouldBe Vector.fill(2)(
+        Vector(SbtOperation.Compile, SbtOperation.Test, SbtOperation.FixCheck)).flatten
+      accepted.zip(wires).foreach { case (encoded, original) =>
+        parse(encoded.asInstanceOf[ConfigurationValue.StringValue].value).toOption.get shouldBe original
         val entry = parse(encoded.asInstanceOf[ConfigurationValue.StringValue].value).toOption.get
           .hcursor.downField("sbtPrograms").downArray.focus.get.asObject.get
         entry.size shouldBe 7
         entry.contains("testClasses") shouldBe false
+      }
+      restored.foreach { plan =>
+        val declaration = plan.sbtDeclarations.head
+        val binding = _take(plan.workspaceAdmissionOption.get.bindingC(declaration.target))
+        val tagged = _take(SbtProgramDefinition.createC(binding, declaration.operation, declaration.capability,
+          declaration.identity, declaration.sbtExecutable, declaration.limits, declaration.environment))
+        tagged._sbt_metadata.get.testClasses shouldBe empty
+        tagged._sbt_metadata.get.scenario shouldBe None
+        tagged.fixedArguments.last shouldBe (declaration.operation match {
+          case SbtOperation.Compile => "compile"
+          case SbtOperation.Test => "test"
+          case SbtOperation.FixCheck => "fixCheck"
+          case SbtOperation.TestOnly => fail("Seven-field declaration cannot be TestOnly")
+        })
       }
       rejected.foreach(_.isFaillure shouldBe true)
     }

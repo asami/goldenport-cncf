@@ -10,13 +10,13 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 22, 2026
+ * @version Oct. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection] = None)
 
 enum SbtOperation {
-  case Compile, Test, TestOnly
+  case Compile, Test, TestOnly, FixCheck
 }
 
 /** Admission failure carries no process receipt; admitted failures never imply safe replay. */
@@ -90,6 +90,7 @@ private[cncf] object SbtProgramDefinition {
           case SbtOperation.Compile => "compile"
           case SbtOperation.Test => "test"
           case SbtOperation.TestOnly => "testOnly " + testClasses.mkString(" ")
+          case SbtOperation.FixCheck => "fixCheck"
         }
       )
       definition <- ProcessProgramDefinition.fromSbtRuntimeC(
@@ -119,7 +120,7 @@ private[cncf] object SbtProgramDefinition {
     )
 
   private def _invalid_operation_c: Consequence[Unit] =
-    Consequence.argumentPolicyViolation("operation", "sbt.execution.operation", "Compile, Test or TestOnly", "unknown")
+    Consequence.argumentPolicyViolation("operation", "sbt.execution.operation", "Compile, Test, TestOnly or FixCheck", "unknown")
 }
 
 private[cncf] object SbtExecutionAdmission {
@@ -186,8 +187,9 @@ private[cncf] object SbtExecutionAdmission {
               }
           }
       }
-      limits <- SbtTestOutputParameters.applyC(context.resolvedParameters, operation, bound.effectiveLimits)
-    } yield bound.copy(effectiveLimits = limits)
+      jvm <- SbtJvmParameters.applyC(context.resolvedParameters, bound)
+      limits <- SbtTestOutputParameters.applyC(context.resolvedParameters, operation, jvm.effectiveLimits)
+    } yield jvm.copy(effectiveLimits = limits)
 
   /** Tagged executions have no WorkArea projections or caller-provided process input. */
   def validateRequestC(request: ProcessExecutionRequest): Consequence[Unit] =
@@ -197,6 +199,6 @@ private[cncf] object SbtExecutionAdmission {
       Consequence.unit
     else
       Consequence.argumentPolicyViolation(
-        "sbt", "sbt.execution.fixed-intent", "runtime-owned Compile/Test/TestOnly without request overrides", "unapproved"
+        "sbt", "sbt.execution.fixed-intent", "runtime-owned Compile/Test/TestOnly/FixCheck without request overrides", "unapproved"
       )
 }
