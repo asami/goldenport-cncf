@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -192,9 +192,15 @@ final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
       } finally { driver.close(); fixture.close() }
     }
 
-    "dispatch all thirty-three wrappers as one typed current-context execution with the exact result type" in {
+    "dispatch thirty-three semantic GitExec occurrences through thirty-five processes with the exact typed results" in {
       Given("the actual owning component with independent workspace and thirty-three operation grants")
       val fixture = create()
+      val receipts = operations.flatMap { operation =>
+        if (operation.kind == GitOperationKind.CommitSelected) Vector(result("selected.txt\u0000"), result(), result())
+        else Vector(result(sample(operation.kind, fixture.checkout)))
+      }
+      val driver = new GitSelectedCommitSpecDriver(receipts)
+      val configured = fixture.copy(context = contextFor(fixture.root, Some(fixture.workspace), Some(fixture.admission), driver))
       val path = GitPath.parseC("selected.txt").toOption.get
       val expected: Vector[Any] = Vector("main", fixture.checkout.toRealPath().toString, GitRemoteTip(branchName, objectId),
         objectId, objectId, Vector(GitStatusEntry(' ', 'M', path, None)), false, Vector.empty, Some(objectId),
@@ -205,14 +211,20 @@ final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
         Vector(GitTreeChange("000000", "100644", None, Some(objectId), "A", path)))
       try {
         When("the owning interpreter runs every protected typed wrapper")
-        val results = operations.map(op => GitExecutionSpecSupport.execute(fixture, op).toOption.get)
-        Then("each intent yields its typed value and exactly one admitted shared-process execution")
+        val results = operations.map(op => GitExecutionSpecSupport.execute(configured, op).toOption.get)
+        Then("each semantic intent yields its typed value and selected commit retains both probes before its physical commit")
         results.map(_.operation) shouldBe operations
         results.map(_.target).distinct shouldBe Vector(fixture.target)
         results.map(_.outcome) shouldBe Vector.fill(33)(GitExecutionOutcome.Succeeded)
         results.map(_.value.get) shouldBe expected
-        fixture.profile.driver.executions.map(_.definition) shouldBe fixture.definitions
-        fixture.profile.driver.executions should have size 33
+        results.find(_.operation.kind == GitOperationKind.CommitSelected).get.selectedPaths shouldBe Vector(path)
+        val expectedkinds = operations.flatMap { operation =>
+          if (operation.kind == GitOperationKind.CommitSelected) Vector.fill(3)(operation.kind) else Vector(operation.kind)
+        }
+        driver.executions.map(_.definition.capability) shouldBe expectedkinds.map(capability)
+        driver.executions.map(_.request.capability) shouldBe expectedkinds.map(capability)
+        driver.executions.map(_.definition.safeProgramIdentity) shouldBe expectedkinds.map(kind => "git-" + kind.wireName)
+        driver.executions should have size 35
       } finally fixture.close()
     }
 

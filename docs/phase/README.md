@@ -1,5 +1,12 @@
 # docs/phase — Engineering Work Management
 
+Git execution correction adopted 2026-10-26:
+[GIT-C1–4](git-execution-route-correction.md) continues the existing repository
+route repair with optional executable configuration and default PATH Git, then
+normal authentication/diagnostics and sm-workflow consumer handoff. Preserve the
+active synchronization Session and all existing work/evidence. This is a bounded
+P110-04-related correction, not Phase 110 completion or reopened Phase 116 work.
+
 ## Purpose
 
 `docs/phase` is a **dedicated directory for engineering work management**.

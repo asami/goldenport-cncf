@@ -1,5 +1,16 @@
 # Typed Git Execution
 
+## Adopted execution correction — 2026-10-26
+
+[Git execution defaults and diagnostics](git-execution-defaults-and-diagnostics.md)
+supersedes the executable-setup, per-operation registration, blanket environment
+restrictions and failure-diagnostic requirements below, including those in the
+repository-family delivery. CNCF still owns typed operations and authorization;
+ordinary use resolves PATH Git when no executable override is supplied. These
+are adopted requirements, not a claim of installed implementation or validation.
+Preserve the in-progress repository route repair and its evidence under the
+[correction plan](../phase/git-execution-route-correction.md).
+
 Status: normative specification for the intermediate CNCF Git producer.
 
 ## Intent and authority
@@ -334,6 +345,96 @@ Workspace permission alone creates no process grant. Per workspace, at most
 64 CheckSelectedIndex and 64 SelectedIndexChanges declarations
 are admitted, using the existing conflict-path/goal-path/goal-step bounds.
 A selection token carries no application-specific prefix or new family field.
+
+## Host V5 repository authority
+
+### R1 — Explicit closed repository family
+
+`cncf.runtime-process-execution.v5` has exactly the V3 root fields plus the
+mandatory `gitRepositories` array. V4 remains unsupported. Each repository
+entry admits exactly `target`, `capability`, `identity`, `gitExecutable`,
+`localBranch`, `remote`, `remoteBranch`, `endpoint`, `commitIdentity`, `limits`
+and `environment`. All except `gitExecutable` are required. `commitIdentity` is a nonnull
+`{name,email}` object validated by the existing Git identity rules. There is
+no operation list, caller argv, selection scope or message field.
+
+The repository family deliberately contains these 28 current kinds:
+Branch, Root, RemoteTip, Head, Tree, Status, Shallow, Replacements, MergeHead,
+TrackingTip, Relation, MergeBase, StageFullState, IndexTree, UnmergedIndex,
+Fetch, FastForward, PendingMerge, CommitPending, Push, CreateCheckpoint,
+InstallCheckpoint, CommitMetadata, BlobContent, CheckPendingIndex, PendingDiff,
+PendingPaths and TreeChanges. This is a closed contract, not enumeration-based
+authority discovery. A future kind requires an explicit family contract update.
+
+### R2 — Same-owner independent authority
+
+A public family capability grants those 28 operations only to the actual
+Component named by that process grant. Each family grant also requires that
+same Component's Manage permission on the target workspace, including when
+only read operations are requested. Workspace existence, installed Git or a
+different owner's grants cannot supply process authority. An ungranted family
+may be declared but cannot execute. Undeclared targets remain denied.
+
+### R3 — Existing typed route and binding
+
+The host expands each family into existing private Git declarations with
+capability and safe identity `BASE-KIND_WIRE_NAME`. Identity is supplied only
+for kinds whose existing contract requires it. Selection, path and message
+fields remain absent. Every definition is validated through
+`GitProgramDefinition.createC`, shares the one admitted WorkspaceBinding and
+uses the existing typed argument renderer, policy, admission, driver and UoW
+lifecycle. CNCF owns executable, endpoint, branch, environment and limits;
+applications continue to submit typed Git intent only.
+
+### R4 — Selected and legacy contracts remain explicit
+
+The five selected kinds require their existing explicit `gitPrograms`
+declarations and independent grants. A family never authorizes them. Their
+selection counts, ordered logical scopes, fixed messages and derived physical
+path rules remain unchanged. A family may coexist with explicit selected
+declarations, but any explicit nonselected declaration on the family target
+is rejected. V1/V2/V3 retain their exact schemas, encoding and grant behavior;
+an operation absent from V3 remains denied without fallback.
+
+### R5 — Strict public wire and internal namespace
+
+Only one family is allowed per target. Capability and identity bases must each
+match `[a-z][a-z0-9-]{0,31}`, keeping generated names within 64 characters.
+Public family bases and generated names must be unique within their capability
+and identity namespaces, including generic, SBT and explicit Git declarations.
+Public grants may name only declared public capabilities; granting an internal
+derived capability is invalid. Internal per-kind grants are expanded only for
+the owner who received the public family grant. Encoding retains the original
+public family entries and grants; it never emits expanded operation lists or
+generated grants. Missing required fields, null fields, duplicate and unknown
+fields are rejected.
+
+### R6 — Ordinary Git discovery and truthful overrides
+
+`gitExecutable` may be omitted. When supplied it must be an absolute string;
+null and malformed overrides are invalid. The existing Git definition validator
+requires the explicit path to resolve to a regular executable file. An invalid
+override fails without searching PATH.
+
+When omitted, host assembly searches for ordinary `git` in the ordered PATH
+from the declaration's environment, or the host environment when no PATH was
+configured. Every PATH directory must be absolute and nonempty; relative and
+empty entries are rejected without searching the current working directory.
+The first regular executable `git` is resolved to its real path. Missing Git
+produces a configuration failure identifying git/PATH unavailability. There is
+no shell or hardcoded executable fallback. An inherited PATH is copied to the
+generated Git environment so host selection and child execution use the same
+PATH. The public declaration retains its original environment and optional
+override; encoding an omitted executable continues to omit the field.
+
+### Examples and executable evidence
+
+| Example | Rules | Executable specification |
+| --- | --- | --- |
+| E1 One repository family covers its exact closed scope and real local Root/RemoteTip/Fetch, full-state staging, index, checkpoint, install and push | R1,R2,R3 | [GitRepositoryExecutionSpec](../../src/test/scala/org/goldenport/cncf/processexecution/GitRepositoryExecutionSpec.scala) |
+| E2 Actual-component authority, Manage, undeclared targets and independent selected grants | R2,R3,R4 | [GitRepositoryExecutionSpec](../../src/test/scala/org/goldenport/cncf/processexecution/GitRepositoryExecutionSpec.scala) |
+| E3 Public V5 round trip, strict schema, namespace, default executable and legacy denial | R1,R2,R4,R5,R6 | [RuntimeProcessExecutionPlanCodecSpec](../../src/test/scala/org/goldenport/cncf/processexecution/RuntimeProcessExecutionPlanCodecSpec.scala) |
+| E4 Ordinary PATH default, explicit override and truthful executable failure | R3,R5,R6 | [GitRepositoryExecutionSpec](../../src/test/scala/org/goldenport/cncf/processexecution/GitRepositoryExecutionSpec.scala) |
 
 ## Lifecycle and qualification boundary
 

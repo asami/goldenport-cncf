@@ -1,5 +1,12 @@
 # Phase 110: CNCF Safety Sandbox
 
+Execution-route correction adopted 2026-10-26:
+[GIT-C1–4](git-execution-route-correction.md) refines the existing P110-04 Git
+producer. Typed operation authority remains distinct from executable selection:
+no explicit executable means ordinary PATH Git, and users need no per-operation
+program registration. Deliver the current route repair before broader recovery
+work; reuse its evidence without claiming completion of this entire Phase.
+
 status=planned
 planned_at=2026-10-15
 depends_on=[Phase 36, Phase 107]

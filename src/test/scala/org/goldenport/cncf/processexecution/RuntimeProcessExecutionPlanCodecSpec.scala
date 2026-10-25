@@ -11,10 +11,11 @@ import org.goldenport.configuration.ConfigurationValue
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.scalacheck.{Gen, Prop, Test}
 
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 24, 2026
+ * @version Oct. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -73,6 +74,174 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
     _.add("schema", Json.fromString("cncf.runtime-process-execution.v4"))
       .add("registeredSbtHost", Json.obj("requestFile" -> Json.fromString(root.resolve("request.json").toString),
         "responseFile" -> Json.fromString(root.resolve("response.json").toString))))
+
+  private def _v5_root(root: Path): Json = {
+    val wire = _v3_root(root)
+    val git = wire.hcursor.get[Vector[Json]]("gitPrograms").toOption.get
+    val selected = git.filter(x => GitOperationKind.values.find(_.wireName == x.hcursor.get[String]("operation").toOption.get).get.selected)
+    val source = git.find(_.hcursor.get[String]("operation").toOption.contains("commit-selected")).get
+    val fields = Set("target", "gitExecutable", "localBranch", "remote", "remoteBranch", "endpoint", "commitIdentity", "limits", "environment")
+    val repository = Json.fromJsonObject(source.asObject.get.filter { case (name, _) => fields.contains(name) }
+      .add("capability", Json.fromString("repository")).add("identity", Json.fromString("repository")))
+    val removed = git.filterNot(selected.contains).map(_.hcursor.get[String]("capability").toOption.get).toSet
+    val grants = wire.hcursor.get[Vector[Json]]("grants").toOption.get.map { grant =>
+      grant.mapObject(_.add("capabilities", _json_strings(grant.hcursor.get[Vector[String]]("capabilities").toOption.get
+        .filterNot(removed.contains) :+ "repository")))
+    }
+    wire.mapObject(_.add("schema", Json.fromString(RuntimeProcessExecutionPlanCodec.SCHEMA_V5))
+      .add("gitPrograms", Json.fromValues(selected)).add("gitRepositories", Json.arr(repository)).add("grants", Json.fromValues(grants)))
+  }
+
+  private def _json_strings(values: Vector[String]): Json = Json.fromValues(values.map(Json.fromString))
+  private def _repository_name(wire: Json, capability: String, identity: String): Json = {
+    val changed = _changed_entry(wire, "gitRepositories", _.mapObject(_.add("capability", Json.fromString(capability))
+      .add("identity", Json.fromString(identity))))
+    _changed_entry(changed, "grants", grant => grant.mapObject(_.add("capabilities",
+      _json_strings(grant.hcursor.get[Vector[String]]("capabilities").toOption.get.map(x => if (x == "repository") capability else x)))))
+  }
+
+  "E3 Repository Git V5 codec" must afterWord(
+    "in spec:typed-git-execution, example:E3, rules:R1,R2,R4,R5,R6, phase:GIT-ROUTE-20261026-01") {
+    "round-trip one public repository entry alongside unchanged generic, SBT and selected declarations" in {
+      Given("R1 R4 R5: a V5 host with one repository family, independent selected scopes and generic and SBT programs")
+      val wire = _v5_root(_directory())
+      When("the host decodes and encodes the public configuration")
+      val plan = _take(_decode(wire))
+      val encoded = _take(RuntimeProcessExecutionPlanCodec.encode(plan)).asInstanceOf[ConfigurationValue.StringValue]
+      val restored = _take(RuntimeProcessExecutionPlanCodec.decode(encoded))
+      Then("derived operations and grants remain internal and only one repository declaration is serialized")
+      parse(encoded.value).toOption.get shouldBe wire
+      plan.gitRepositoryDeclarations should have size 1
+      plan.gitDeclarations.map(_.operation).toSet shouldBe GitOperationKind.values.filter(_.selected).toSet
+      plan.grants(_owner).map(_.capability.print) should contain("repository")
+      plan.grants(_owner).map(_.capability.print).exists(_.startsWith("repository-")) shouldBe false
+      restored.gitRepositoryDeclarations shouldBe plan.gitRepositoryDeclarations
+      restored.grants shouldBe plan.grants
+      _root.asObject.get.contains("gitRepositories") shouldBe false
+      _v2_root(_directory()).asObject.get.contains("gitRepositories") shouldBe false
+      _v3_root(_directory()).asObject.get.contains("gitRepositories") shouldBe false
+    }
+
+    "reject every missing or null family field, unknown scope fields and duplicate JSON keys" in {
+      Given("R5: ten required repository fields, optional executable override and strict V5 root")
+      val wire = _v5_root(_directory())
+      val repository = wire.hcursor.downField("gitRepositories").downArray.focus.get
+      val names = repository.asObject.get.keys.toVector.filterNot(_ == "gitExecutable")
+      val invalid = names.flatMap(name => Vector(
+        _changed_entry(wire, "gitRepositories", _.mapObject(_.remove(name))),
+        _changed_entry(wire, "gitRepositories", _.mapObject(_.add(name, Json.Null))))) ++
+        Vector("operation", "arguments", "selectionId", "selectedPath", "selectedPaths", "commitMessage").map(name =>
+          _changed_entry(wire, "gitRepositories", _.mapObject(_.add(name, Json.Null)))) ++ Vector(
+          wire.mapObject(_.remove("gitRepositories")), wire.mapObject(_.add("gitRepositories", Json.Null)),
+          wire.mapObject(_.add("unknown", Json.Null)),
+          _changed_entry(wire, "gitRepositories", _.mapObject(_.add("gitExecutable", Json.Null))),
+          _changed_entry(wire, "gitRepositories", _.mapObject(_.add("gitExecutable", Json.fromInt(1)))),
+          _changed_entry(wire, "gitRepositories", _.mapObject(_.add("commitIdentity", Json.obj(
+            "name" -> Json.fromString("Fixture"), "email" -> Json.fromString("fixture@example.invalid"), "extra" -> Json.Null)))))
+      val duplicate = ConfigurationValue.StringValue(wire.noSpaces.replace("\"gitRepositories\":", "\"gitRepositories\":[],\"gitRepositories\":"))
+      val duplicatefield = ConfigurationValue.StringValue(wire.noSpaces.replace("\"identity\":\"repository\"",
+        "\"identity\":\"repository\",\"identity\":\"repository\""))
+      When("the strict decoder receives incomplete, extended or ambiguous authority objects")
+      val results = invalid.map(_decode) ++ Vector(duplicate, duplicatefield).map(RuntimeProcessExecutionPlanCodec.decode)
+      Then("none produces a usable host plan")
+      results.foreach(_.isFaillure shouldBe true)
+    }
+
+    "preserve omission of the default executable while rejecting unavailable Git and invalid explicit overrides" in {
+      Given("R6: V5 with no executable override and a valid configured PATH")
+      val root = _directory()
+      val explicit = _v5_root(root)
+      val wire = _changed_entry(explicit, "gitRepositories", _.mapObject(_.remove("gitExecutable")))
+      val missing = _changed_entry(wire, "gitRepositories", _.mapObject(_.add("environment",
+        Json.obj("PATH" -> Json.fromString(root.toString)))))
+      val invalid = _changed_entry(explicit, "gitRepositories", _.mapObject(_.add("gitExecutable",
+        Json.fromString(root.resolve("missing-git").toString))))
+      When("the public default plan round-trips and unavailable host choices are decoded")
+      val plan = _take(_decode(wire))
+      val encoded = _take(RuntimeProcessExecutionPlanCodec.encode(plan)).asInstanceOf[ConfigurationValue.StringValue]
+      val failures = Vector(missing, invalid).map(_decode)
+      Then("the resolved internal executable never becomes a mandatory serialized override")
+      plan.gitRepositoryDeclarations.head.gitExecutable shouldBe None
+      parse(encoded.value).toOption.get shouldBe wire
+      failures.foreach(_.isFaillure shouldBe true)
+      failures.head.toString should include("git")
+      failures.head.toString should include("PATH")
+    }
+
+    "reject duplicate targets, namespace collisions, nonselected overlap and forged internal grants" in {
+      Given("R2 R4 R5: a repository family with explicit selected declarations")
+      val root = _directory()
+      val wire = _v5_root(root)
+      val repository = wire.hcursor.downField("gitRepositories").downArray.focus.get
+      val explicit = _v3_root(root).hcursor.get[Vector[Json]]("gitPrograms").toOption.get
+        .find(_.hcursor.get[String]("operation").toOption.contains("root")).get
+      val overlap = wire.mapObject(_.add("gitPrograms", Json.fromValues(
+        wire.hcursor.get[Vector[Json]]("gitPrograms").toOption.get :+ explicit)))
+      val spoof = _changed_entry(wire, "grants", grant => grant.mapObject(_.add("capabilities",
+        _json_strings(grant.hcursor.get[Vector[String]]("capabilities").toOption.get :+ "repository-root"))))
+      val invalid = Vector(overlap, spoof,
+        wire.mapObject(_.add("gitRepositories", Json.arr(repository, repository))),
+        _repository_name(wire, "selected-token", "repository"),
+        _repository_name(wire, "repository", "selected-token"),
+        _repository_name(wire, "v3-test", "repository"),
+        _repository_name(wire, "repository", "v3-test"),
+        _changed_entry(wire, "gitPrograms", _.mapObject(_.add("capability", Json.fromString("repository-root")))),
+        _changed_entry(wire, "gitPrograms", _.mapObject(_.add("identity", Json.fromString("repository-root")))),
+        _changed_entry(wire, "gitPrograms", _.mapObject(_.add("identity", Json.fromString("repository")))))
+      When("the host attempts to install ambiguous public or internal authorities")
+      val results = invalid.map(_decode)
+      Then("family expansion cannot hide collisions or accept public grants to generated capabilities")
+      results.foreach(_.isFaillure shouldBe true)
+    }
+
+    "bound safe family names and retain strict executable, identity, environment and limit validation" in {
+      Given("R5: safe family bases of at most 32 characters and existing closed Git host validators")
+      val wire = _v5_root(_directory())
+      val names = Gen.choose(1, 32).map(n => "r" * n)
+      When("generated safe names and malformed host declarations are interpreted")
+      val generated = Test.check(Test.Parameters.default.withMinSuccessfulTests(32), Prop.forAll(names) { name =>
+        _decode(_repository_name(wire, name, name)).isSuccess
+      })
+      val invalid = Vector("r" * 33, "Upper", "has_space", "").flatMap(name => Vector(
+        _repository_name(wire, name, "repository"), _repository_name(wire, "repository", name))) ++ Vector(
+        _changed_entry(wire, "gitRepositories", _.mapObject(_.add("gitExecutable", Json.fromString("git")))),
+        _changed_entry(wire, "gitRepositories", _.mapObject(_.add("endpoint", Json.fromString("-unsafe")))),
+        _changed_entry(wire, "gitRepositories", _.mapObject(_.add("commitIdentity", Json.obj(
+          "name" -> Json.fromString(""), "email" -> Json.fromString("fixture@example.invalid"))))),
+        _changed_entry(wire, "gitRepositories", _.mapObject(_.add("environment", Json.obj("HOME" -> Json.fromString("/tmp"))))),
+        _changed_entry(wire, "gitRepositories", entry => entry.mapObject(_.add("limits",
+          entry.hcursor.downField("limits").focus.get.mapObject(_.add("stdoutBytes", Json.fromLong(0)))))))
+      val results = invalid.map(_decode)
+      Then("valid bounds cover the full family while malformed declarations remain denied")
+      generated.passed shouldBe true
+      results.foreach(_.isFaillure shouldBe true)
+    }
+
+    "retain V3 denial when RemoteTip is absent and reject V5-only fields under every legacy schema" in {
+      Given("R4: a valid V3 host lacking RemoteTip and the additive V5 repository field")
+      val fixture = GitExecutionSpecSupport.create()
+      try {
+        val wire = _v3_root(fixture.checkout)
+        val legacy = wire.mapObject(_.add("gitPrograms", Json.fromValues(wire.hcursor.get[Vector[Json]]("gitPrograms").toOption.get
+          .filterNot(_.hcursor.get[String]("operation").toOption.contains("remote-tip")))))
+        val selected = _changed_entry(legacy, "grants", grant => grant.mapObject(_.add("capabilities",
+          _json_strings(grant.hcursor.get[Vector[String]]("capabilities").toOption.get.filterNot(_ == "git-remote-tip")))))
+        val plan = _take(_decode(selected))
+        val context = GitExecutionSpecSupport.contextFor(fixture.root, plan.workspaceAdmissionOption, Some(plan.admission),
+          fixture.profile.driver, _owner)
+        val legacyfields = Vector(_root, _v2_root(_directory()), wire).map(_.mapObject(_.add("gitRepositories", Json.arr())))
+        val retired = _v5_root(fixture.checkout).mapObject(_.add("schema", Json.fromString("cncf.runtime-process-execution.v4")))
+        When("ordinary typed interpretation requests the undeclared operation and old schemas receive new fields")
+        val denied = GitExecutionSpecSupport.execute(fixture.copy(context = context), GitOperation.RemoteTip)
+        val results = (legacyfields :+ retired).map(_decode)
+        Then("legacy plans neither infer repository authority nor accept a new schema field")
+        denied.isFaillure shouldBe true
+        fixture.profile.driver.executions shouldBe empty
+        plan.gitRepositoryDeclarations shouldBe empty
+        results.foreach(_.isFaillure shouldBe true)
+      } finally fixture.close()
+    }
+  }
 
   "E9 Host-source V3 registration" must afterWord("in spec:host-source-read, example:E9, rules:R3,R6, phase:6.4") {
     "round-trip a sole empty argument template while preserving all existing generic, Git, SBT and component grants" in {

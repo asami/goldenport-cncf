@@ -1,11 +1,23 @@
 # Typed Git Execution
 
+## Execution responsibility refinement — 2026-10-26
+
+CNCF owns typed operation/argument construction independently of optional
+executable configuration. Resolve an explicit executable or ordinary PATH Git;
+do not require users to register each operation. Existing current-UoW admission
+owns permission, while the process driver owns lifecycle and diagnostic capture.
+Normal Git configuration/authentication remains usable through that runtime
+boundary. sm-workflow owns effect reconciliation and synchronization decisions.
+The [defaults and diagnostics contract](../spec/git-execution-defaults-and-diagnostics.md)
+supersedes the fixed-environment/per-operation-setup assumptions below. Derived
+internal definitions are an implementation detail, not mandatory user setup.
+
 Status: normative design for the intermediate CNCF Git producer.
 
 ## One semantic intent and one lifecycle
 
 The [typed Git specification](../spec/typed-git-execution.md) owns the exact
-thirty-operation/parameter/result table and strict wire/parser contracts.
+thirty-three-operation/parameter/result table and strict wire/parser contracts.
 
 ```text
 protected git_* wrapper
@@ -92,6 +104,52 @@ The fixed per-workspace selection counts preserve old conflict/goal bounds.
 V3 preserves literal Git filenames and root LF; V1/V2 parsing stays strict as
 before. Serialization encodes semantic declarations separately and reconstructs
 one shared SBT/Git binding on decode.
+
+## V5 repository family assembly
+
+The host may deliberately grant a repository family in the additive V5 schema.
+The [R1–R6 contract](../spec/typed-git-execution.md#host-v5-repository-authority)
+fixes its public fields, closed 28-kind operation scope and authority rules.
+This removes per-operation host configuration for ordinary repository sync
+while keeping operations, arguments and interpretation CNCF-owned.
+
+The common semantic creator validates the public namespaces and family target
+uniqueness before policy installation. It rejects explicit nonselected declarations on a
+family target, generated/public name collisions and grants to generated names.
+Each granted family requires the actual grantee's independent Manage workspace
+grant. Only that owner's process grants expand into internal per-kind grants.
+An installed executable or workspace does not imply a family grant.
+
+Expansion produces ordinary GitRuntimeDeclarations with derived capability and
+identity names and no selection, path or message. Required commit identity is
+copied only to identity-bearing operations. The fixed list deliberately names
+the current 28 nonselected kinds; future enum growth cannot expand authority.
+All generated definitions pass through GitProgramDefinition.createC and share
+the existing workspace admission, binding, ProcessExecutionPolicy and typed
+GitExec interpreter. There is no second resolver or execution path.
+
+The plan retains public repository declarations and public grants separately
+from effective internal policy/grants so encode/decode stays one repository
+entry rather than materializing an operation list. Existing V1/V2/V3 creators,
+wire fields and deny behavior remain strict, and retired V4 remains rejected.
+The five selected operations still need explicit independent declarations and
+grants, preserving their logical/physical scopes, messages and count bounds.
+
+The executable override is optional on the V5 public family. An omitted
+override resolves ordinary `git` from the declaration's PATH, otherwise the
+host PATH, in ordered absolute nonempty directories at this host assembly
+boundary. The resolved real executable and effective PATH enter only generated
+definitions. No configured PATH means inherited PATH is explicitly installed
+for child execution. An explicit override uses existing executable validation
+without fallback; missing Git or unsafe PATH yields an honest configuration
+failure. The public optional state remains unchanged for serialization.
+
+GitRepositoryExecutionSpec E1/E2/E4 covers the exact family and real temporary
+checkout/bare-remote route through the current UoW, plus authority denial.
+RuntimeProcessExecutionPlanCodecSpec E3 covers public round trips, malformed
+authority, generated-grant spoofing, safe name bounds and legacy absence.
+These producer specifications do not establish installed application acceptance
+or authorize rewriting a saved Session or its history.
 
 ## Managed execution and uncertainty
 

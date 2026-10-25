@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /** Owning-runtime SPI specs. These are not workflow semantic acceptance or a product SBT bridge. */
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 22, 2026
+ * @version Oct. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeProcessExecutionInitializationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -168,7 +168,7 @@ final class CncfRuntimeProcessExecutionInitializationSpec extends AnyWordSpec wi
         (runtimebinding.get eq inheritedbinding.get) shouldBe true
         _take(runtimebinding.get.workingDirectoryC) shouldBe cwd.toRealPath()
         admitted.isDefined shouldBe true
-        admitted.get.effectiveArguments shouldBe Vector("--batch", "-Dsbt.server.autostart=false",
+        admitted.get.effectiveArguments shouldBe Vector("-J-Xmx4294967296", "--batch", "-Dsbt.server.autostart=false",
           "-Dsbt.supershell=false", "-Dsbt.color=false", "test")
         denied shouldBe Vector(true, true)
         subsystem.globalRuntimeContext.processExecutionDriverOption.get shouldBe a[LocalProcessExecutionDriver]
