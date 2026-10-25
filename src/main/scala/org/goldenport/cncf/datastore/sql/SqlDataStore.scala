@@ -9,6 +9,7 @@ import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.record.{Field, Record}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.event.{EventHistoryCorrelation, ManagedEventHistory}
 import org.goldenport.cncf.datastore.{
   DataStore,
   DataStoreSpace,
@@ -86,7 +87,7 @@ import org.simplemodeling.model.directive.Update
  *  version May. 26, 2026
  *  version Jul. 26, 2026
  *  version Sep. 29, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -98,9 +99,12 @@ class SqlDataStore(
     with SearchableDataStore
     with EntityVersionedMutationDataStore
     with EntityCreateDataStore
-    with EntityConditionalUpdateDataStore {
+    with EntityConditionalUpdateDataStore
+    with ManagedEventHistory.Provider {
   import DataStore.*
   private val _record_codec = new SqlDataStoreRecordCodec(config, dialect eq PostgreSqlDialectDriver)
+  private val _event_history_columns = Vector("id", "event_json", EventHistoryCorrelation.namespaceField,
+    EventHistoryCorrelation.keyField, EventHistoryCorrelation.nameField, EventHistoryCorrelation.sequenceField)
   @volatile private var _managed_resource: Option[ManagedSqlDataStoreResource] = None
   @volatile private var _managed_borrow_resource: Option[ManagedSqlDataStoreResource] = None
   @volatile private var _managed_borrow_admission: Option[() => Consequence[Unit]] = None
@@ -954,6 +958,70 @@ class SqlDataStore(
           }
         }
     }
+
+  /** Existing dispatch-owned SQLite only. Schema inspection is read-only; this
+    * path never invokes ordinary search or its schema-creation helpers.
+    */
+  override private[cncf] def readCommittedEventHistoryC(
+    collection: CollectionId,
+    query: ManagedEventHistory.Query
+  ): Consequence[Vector[Record]] =
+    if (!(dialect eq SqliteDialectDriver) || _managed_borrow_resource.isEmpty ||
+        _managed_borrow_admission.isEmpty)
+      Consequence.configurationInvalid("Event history requires a borrowed managed SQLite resource")
+    else if (collection == null || !collection.isInstanceOf[CollectionId.EntityStore])
+      Consequence.configurationInvalid("Event history requires its declared entity collection")
+    else ManagedEventHistory.directiveC(query).flatMap { directive =>
+      _with_connection { connection =>
+        _event_history_schema_c(connection, collection).flatMap { _ =>
+          _read_event_history_c(connection, collection, directive, query.limit + 1)
+        }
+      }
+    }
+
+  private def _event_history_schema_c(connection: Connection, collection: CollectionId): Consequence[Unit] =
+    _create_query(connection, dialect.tableColumnsSql(_table_name(collection)), Vector.empty) { rows =>
+      val columns = Vector.newBuilder[(String, String)]
+      while (rows.next()) columns += ((rows.getString("name"), rows.getString("type")))
+      columns.result()
+    }.flatMap { columns =>
+      val schema = columns.toMap
+      val numeric = schema.get(_column_name(EventHistoryCorrelation.sequenceField))
+        .exists(value => value != null && value.toUpperCase(java.util.Locale.ROOT).contains("INT"))
+      if (_event_history_columns.forall(name => schema.contains(_column_name(name))) && numeric)
+        Consequence.unit
+      else Consequence.dataStoreUnavailable("Event history projection schema is unavailable or nonnumeric")
+    }
+
+  private def _read_event_history_c(connection: Connection, collection: CollectionId,
+    directive: QueryDirective, maximum: Int): Consequence[Vector[Record]] =
+    Consequence {
+      val sql = _search_sql(collection, directive)
+      val statement = _prepare_statement(connection, sql.sql)
+      try {
+        _bind(statement, sql.params)
+        val rows = statement.executeQuery()
+        try {
+          val records = Vector.newBuilder[Record]
+          var count = 0
+          var status: Consequence[Unit] = Consequence.unit
+          while (status.isSuccess && rows.next()) {
+            if (count >= maximum)
+              status = Consequence.stateConflict("Event history provider exceeded its source bound")
+            else status = Consequence {
+              Record(_event_history_columns.flatMap { name =>
+                Option(rows.getObject(_column_name(name))).map(value => Field(name, Field.Value.Single(value)))
+              })
+            }.map { record =>
+              records += record
+              count += 1
+              ()
+            }
+          }
+          status.map(_ => records.result())
+        } finally rows.close()
+      } finally statement.close()
+    }.flatMap(identity)
 
   override def count(
     collection: CollectionId,

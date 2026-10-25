@@ -11,7 +11,7 @@ import org.goldenport.record.Record
 /*
  * @since   Sep. 29, 2026
  *  version Sep. 30, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 25, 2026
  */
 /** Pure bounded event encoding, not EventStore append or sequence authority. */
 object EventRecordJsonV1 {
@@ -111,8 +111,11 @@ object EventRecordJsonV1 {
         Consequence.configurationInvalid("Event Create requires an explicit collection and persistent transactional facts")
       else {
         val encoded = encode(value)
-        decodeC(encoded).map(_ => EntityVersionedSideEffect.Create(collection,
-          DataStore.StringEntryId(value.id.value), Record.dataAuto("event_json" -> (_storage_prefix + encoded))))
+        decodeC(encoded).flatMap(_ => EventHistoryCorrelation.projectC(value).map { projection =>
+          val canonical = Record.dataAuto("event_json" -> (_storage_prefix + encoded))
+          EntityVersionedSideEffect.Create(collection, DataStore.StringEntryId(value.id.value),
+            Record(canonical.fields ++ projection.fields))
+        })
       }
     }
 
