@@ -1,6 +1,7 @@
 package org.simplemodeling.cncfclient
 
 import java.nio.file.{Files, Path}
+import java.time.Instant
 import cats.data.NonEmptyVector
 import cats.syntax.all.*
 import io.circe.Json
@@ -9,6 +10,7 @@ import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMo
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.datastore.{ComponentRecordStorage, ComponentRecordStorageDeclaration, DataStore}
+import org.goldenport.cncf.datastore.sql.SqlDataStore
 import org.goldenport.cncf.event.*
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.testutil.RuntimeBindingAdmissionFixture
@@ -33,7 +35,7 @@ import org.simplemodeling.model.datatype.EntityCollectionId
 /**
  * Outside private[cncf]: actual managed Service/CLI dispatch, not a provider stub.
  * @since   Oct.  2, 2026
- * @version Oct.  9, 2026
+ * @version Oct. 25, 2026
  */
 final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private given context: ExecutionContext = ExecutionContext.create()
@@ -67,7 +69,32 @@ final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers w
     Some(ProgressionReference("planned")), active.correlation, CausationReference(reference.identity), None, None, None)
   private val expected = take(active.appendC(active.revision, nextEntry))
   private val policy = take(EventPersistencePolicy.createC("public-mechanical-v1", Vector(
-    EventPersistencePolicy.Rule(EventTypeId("transient"), EventPersistencePolicy.Mode.Transient))))
+    EventPersistencePolicy.Rule(EventTypeId("transient"), EventPersistencePolicy.Mode.Transient),
+    EventPersistencePolicy.Rule(EventTypeId("terminal-fact"), EventPersistencePolicy.Mode.Persist))))
+  private val _terminal_entry = nextEntry.copy(lifecycle = Lifecycle.Completed, currentProgression = None)
+  private val _terminal_event = {
+    val instant = Instant.parse("2026-10-25T00:00:00Z")
+    EventRecord(EventId("test", "mechanical", Some(instant), Some("terminal")), "terminal-fact", "terminal-fact",
+      Map("checkpoint" -> reference.identity), Map.empty, instant, true, EventRecord.Status.Stored, EventLane.Transactional)
+  }
+  private def _provision_terminal_event_schema(path: Path): Unit = {
+    val store = SqlDataStore.sqlite(path.toString)
+    try {
+      val effect = take(EventRecordJsonV2.createSideEffectC(collection("events"), _terminal_event.copy(sequence = 1L)))
+      take(store.create(effect.collection, effect.entryId, effect.record))
+      take(store.delete(effect.collection, effect.entryId))
+      take(store.load(effect.collection, effect.entryId)) shouldBe None
+    } finally take(store.closeC())
+  }
+  private def _terminal_events(path: Path): Vector[EventRecord] = {
+    val store = SqlDataStore.sqlite(path.toString)
+    try {
+      take(store.load(collection("events"), DataStore.StringEntryId(_terminal_event.id.value))).map { row =>
+        val encoded = row.getString("event_json").getOrElse(fail("Retained terminal event lacks canonical event_json"))
+        take(EventRecordJsonV2.decodeStorageC(encoded))
+      }.toVector
+    } finally take(store.closeC())
+  }
   private def host(path: Path, recordGrant: Boolean = true, grantOwner: ComponentId = owner,
     workflowOwner: ComponentId = owner) = {
     val declaration = take(EventStorePersistenceDeclaration.createC("events", collection("cursor"),
@@ -98,6 +125,8 @@ final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers w
     var suppliedCurrent = active
     var suppliedExpectedRevision = active.revision
     var suppliedConfiguration = configuration
+    var suppliedEntry = nextEntry
+    var suppliedRecords = Vector.empty[EventRecord]
     var task: FixtureCall => Consequence[Unit] = _ => Consequence.unit
     private val codec = new WorkflowResultJsonV1.PayloadCodec[String] {
       val typeIdentity = "planning.v1"
@@ -124,9 +153,9 @@ final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers w
           val program = stages.foldLeft(ConsequenceT.pure[[X] =>> org.goldenport.cncf.Program[UnitOfWorkOp, X], Unit](())) {
             (prior, stage) => prior.flatMap(_ => stage)
           }
-          val intent = Intent(suppliedConfiguration, reference, suppliedCurrent, suppliedExpectedRevision, nextEntry,
+          val intent = Intent(suppliedConfiguration, reference, suppliedCurrent, suppliedExpectedRevision, suppliedEntry,
             TypedValue(codec.typeIdentity, "all-known planning"))
-          mechanical.executeC(intent, program).map { result => completed = Some(result); OperationResponse.Scalar("ADVANCED") }
+          mechanical.executeC(intent, program, suppliedRecords).map { result => completed = Some(result); OperationResponse.Scalar("ADVANCED") }
         }
       }
       val recover = simple("recover") { call =>
@@ -197,6 +226,89 @@ final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers w
   private def rows(factory: Factory) = factory.observed.map(_.flatMap(_.getString("payload")))
 
   "Public managed mechanical Workflow progress" should {
+    "atomically commit finite Completed history checkpoint documents and a real event then physically reopen them" in {
+      Given("docs/spec/workflow-completion-applicability.md: actual public Service binding with native SQLite and a persistent terminal fact")
+      val path = Files.createTempDirectory("public-mechanical-terminal-").resolve("host.sqlite")
+      // Given an empty canonical events schema: native observation requires its
+      // physical table before managed execution; no event or cursor is retained.
+      _provision_terminal_event_schema(path)
+      val completed = take(active.appendC(active.revision, _terminal_entry))
+      val first = host(path)
+      try {
+        val wired = factory(first)
+        seed(first, wired)
+        wired.suppliedEntry = _terminal_entry
+        wired.suppliedRecords = Vector(_terminal_event)
+        When("the public Service executes the managed terminal UnitOfWork with real document and event writes")
+        take(invoke(first, "advance")) shouldBe OperationResponse.Scalar("ADVANCED")
+        take(invoke(first, "inspect"))
+        val events = _terminal_events(path)
+        Then("the matching terminal receipt instance two whole documents and one actual event are durable together")
+        wired.completed.get.receipt.next shouldBe completed
+        take(wired.instances.loadC(initial.identity)) shouldBe Some(completed)
+        rows(wired) shouldBe Vector(Some("proposal"), Some("ownership"))
+        events.map(_.id) shouldBe Vector(_terminal_event.id)
+        events.head.payload shouldBe _terminal_event.payload
+        events.head.sequence should be > 0L
+      } finally take(first.shutdownC())
+      When("a physically new host consumes the actual saved terminal checkpoint and facts")
+      val reopened = host(path)
+      try {
+        val wired = factory(reopened)
+        take(invoke(reopened, "recover"))
+        take(invoke(reopened, "inspect"))
+        val events = _terminal_events(path)
+        Then("the retained Completed projection payload event and documents agree without any new execution")
+        wired.retained.get.receipt.next shouldBe completed
+        wired.retained.get.current shouldBe completed
+        wired.retained.get.receipt.payload.value shouldBe "all-known planning"
+        rows(wired) shouldBe Vector(Some("proposal"), Some("ownership"))
+        events.map(_.id) shouldBe Vector(_terminal_event.id)
+        events.head.payload shouldBe _terminal_event.payload
+        wired.completed shouldBe None
+        take(wired.instances.loadC(initial.identity)) shouldBe Some(completed)
+      } finally take(reopened.shutdownC())
+    }
+
+    "refuse a terminal document collision without publishing its event checkpoint or Completed instance" in {
+      Given("docs/spec/workflow-completion-applicability.md: an Active native source and an occupied document in the actual managed host")
+      val path = Files.createTempDirectory("public-terminal-atomic-refusal-").resolve("host.sqlite")
+      // Given the same empty canonical event schema, refusal must reach the
+      // actual document-collision transaction rather than a missing table.
+      _provision_terminal_event_schema(path)
+      val first = host(path)
+      try {
+        val wired = factory(first)
+        seed(first, wired)
+        wired.suppliedEntry = _terminal_entry
+        wired.suppliedRecords = Vector(_terminal_event)
+        wired.task = call => call.writeC(documents, "ownership", Record.dataAuto("payload" -> "existing"), false)
+        take(invoke(first, "probe"))
+        When("terminal execution attempts the real colliding document event and native transition transaction")
+        val rejected = invoke(first, "advance")
+        take(invoke(first, "recover"))
+        take(invoke(first, "inspect"))
+        Then("the transaction refuses with the original Active row no checkpoint no event and no first document")
+        rejected.isSuccess shouldBe false
+        wired.retained shouldBe None
+        take(wired.instances.loadC(initial.identity)) shouldBe Some(active)
+        rows(wired) shouldBe Vector(None, Some("existing"))
+        _terminal_events(path) shouldBe empty
+      } finally take(first.shutdownC())
+      When("a physical host reopen reads the refused transaction")
+      val reopened = host(path)
+      try {
+        val wired = factory(reopened)
+        take(invoke(reopened, "recover"))
+        take(invoke(reopened, "inspect"))
+        Then("no partial terminal event receipt or document becomes visible after reopen")
+        wired.retained shouldBe None
+        take(wired.instances.loadC(initial.identity)) shouldBe Some(active)
+        rows(wired) shouldBe Vector(None, Some("existing"))
+        _terminal_events(path) shouldBe empty
+      } finally take(reopened.shutdownC())
+    }
+
     "refuse composition without the owning Workflow declaration before accessing a provider" in {
       Given("a real host whose captured Workflow grant belongs to another component")
       val first = host(Files.createTempDirectory("public-mechanical-undeclared-").resolve("host.sqlite"),

@@ -22,7 +22,7 @@ import org.scalacheck.{Gen, Prop, Test}
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 21, 2026
+ * @version Oct. 25, 2026
  */
 final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private given ExecutionContext = ExecutionContext.create()
@@ -59,6 +59,28 @@ final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers w
   private val _catalog = _take(WorkflowInstanceRecordJsonV1.catalogC(Vector(_definition)))
   private val _intent = Intent(_config, Reference("checkpoint", "1"), _active, _active.revision, _entry,
     TypedValue(_codec.typeIdentity, "known planning"))
+  private val _terminal_entry = _entry.copy(lifecycle = Lifecycle.Completed, currentProgression = None)
+  private def _invalid_intents: Vector[Intent[String]] = {
+    val suspension = Some(SuspensionBoundary(ContinuationIdentity("work"), InstanceRevision(2L),
+      ContextSnapshotReference("context"), CompletionReference("completion"),
+      EvidenceReference("evidence"), CorrelationReference("resume")))
+    val completed = _take(_active.appendC(_active.revision, _terminal_entry))
+    val suspended = _take(_active.appendC(_active.revision, _entry.copy(suspension = suspension)))
+    Vector(_intent.copy(current = _initial, expectedRevision = initialRevision),
+      _intent.copy(current = completed, expectedRevision = completed.revision,
+        entry = _entry.copy(sequence = HistorySequence(3L), revision = InstanceRevision(3L))),
+      _intent.copy(current = suspended, expectedRevision = suspended.revision,
+        entry = _entry.copy(sequence = HistorySequence(3L), revision = InstanceRevision(3L))),
+      _intent.copy(expectedRevision = InstanceRevision(0L)),
+      _intent.copy(entry = _entry.copy(sequence = HistorySequence(3L))),
+      _intent.copy(entry = _entry.copy(revision = InstanceRevision(3L))),
+      _intent.copy(entry = _entry.copy(lifecycle = Lifecycle.NotStarted)),
+      _intent.copy(entry = _terminal_entry.copy(currentProgression = Some(ProgressionReference("illegal")))),
+      _intent.copy(entry = _terminal_entry.copy(suspension = suspension)),
+      _intent.copy(entry = _entry.copy(correlation = CorrelationReference("foreign"))),
+      _intent.copy(current = _active.copy(history = Vector(_active.history.head.copy(causation = null)))),
+      _intent.copy(entry = _entry.copy(suspension = suspension)))
+  }
   private val _capacity_metadata = afterWord("in spec:workflow-mechanical-receipt-capacity, example:E2, rules:R1,R3,R4, phase:capacity-repair")
   private val _sqlite_capacity_metadata = afterWord("in spec:workflow-mechanical-receipt-capacity, example:E3, rules:R3,R4,R5, phase:capacity-repair")
 
@@ -255,21 +277,79 @@ final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers w
         }
     }
 
-    "refuse initial, terminal, suspended, stale and noncontiguous transitions" in {
+    "refuse initial or Completed sources and invalid lifecycle suspension CAS correlation or adjacency" in {
       Given("an ordinary mechanical intent with invalid lifecycle, revision or history variants")
-      val variants = Vector(_intent.copy(current = _initial, expectedRevision = initialRevision),
-        _intent.copy(expectedRevision = InstanceRevision(0L)),
-        _intent.copy(entry = _entry.copy(sequence = HistorySequence(3L))),
-        _intent.copy(entry = _entry.copy(lifecycle = Lifecycle.Completed, currentProgression = None)),
-        _intent.copy(entry = _entry.copy(correlation = CorrelationReference("foreign"))),
-        _intent.copy(current = _active.copy(history = Vector(_active.history.head.copy(causation = null)))),
-        _intent.copy(entry = _entry.copy(suspension = Some(SuspensionBoundary(ContinuationIdentity("work"),
-          InstanceRevision(2L), ContextSnapshotReference("context"), CompletionReference("completion"),
-          EvidenceReference("evidence"), CorrelationReference("resume"))))))
-      When("the host admits only ordinary active unsuspended one-append progress")
+      val variants = _invalid_intents
+      When("the host admits only an Active or finite Completed unsuspended successor from Active")
       val admitted = variants.map(value => admitC(_component, _operation, value))
       Then("every invalid variant refuses without an admitted mechanical receipt")
       admitted.foreach(_.isSuccess shouldBe false)
+    }
+
+    "commit a finite Completed successor and physically reopen its actual native receipt and instance" in {
+      Given("docs/spec/workflow-completion-applicability.md: isolated SQLite with an Active unsuspended native source")
+      val instances = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "terminalmechanical", "instances"))
+      val checkpoints = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "terminalmechanical", "checkpoints"))
+      val owner = _take(DataStoreComponentOwner.create(_component.name))
+      val path = Files.createTempDirectory("terminal-mechanical-").resolve("workflow.sqlite")
+      val intent = _intent.copy(entry = _terminal_entry)
+      val expected = _take(admitC(_component, _operation, intent))
+      val first = SqlDataStore.sqlite(path.toString)
+      try {
+        val roots = _take(WorkflowInstanceDataStorePersistence.bindC(first, _config, Vector(_definition), instances))
+        _take(roots.create(_config, _initial))
+        _take(roots.append(_config, _initial.identity, initialRevision, _active.history.head))
+        val adapter = _take(WorkflowMechanicalTransitionDataStorePersistence.bindC(first, _config, _component,
+          _operation, Vector(_definition), instances, checkpoints, _codec, owner))
+        val instanceid = DataStore.StringEntryId(_initial.identity.value)
+        val checkpointid = DataStore.StringEntryId(_take(keyC(intent.reference)))
+        val before = _take(first.load(instances, instanceid))
+        // Native preparation consumes the loaded current, not a copied caller
+        // history. That malformed-copy case belongs only to pure admitC above.
+        val invalid = _invalid_intents.filterNot(_.current.history.exists(_.causation == null))
+        When("each illegal lifecycle CAS correlation and adjacency variant attempts native preparation")
+        invalid.foreach { variant =>
+          val rejected = adapter.prepareC(variant)
+          Then("no rejected write changes the native instance or creates a checkpoint")
+          rejected.isSuccess shouldBe false
+          _take(first.load(instances, instanceid)) shouldBe before
+          _take(first.load(checkpoints, checkpointid)) shouldBe None
+        }
+        When("the actual managed receipt and finite terminal instance commit together")
+        val committed = _take(_take(adapter.prepareC(intent)).commitC())
+        Then("the exact expected adjacent Completed entry and unchanged payload are retained")
+        committed shouldBe expected
+        committed.next.lifecycle shouldBe Lifecycle.Completed
+        committed.next.currentProgression shouldBe None
+        committed.next.suspension shouldBe None
+      } finally _take(first.closeC())
+      When("an independently opened physical provider consumes the saved state")
+      val reopened = SqlDataStore.sqlite(path.toString)
+      try {
+        val adapter = _take(WorkflowMechanicalTransitionDataStorePersistence.bindC(reopened, _config, _component,
+          _operation, Vector(_definition), instances, checkpoints, _codec, owner))
+        val retained = _take(adapter.loadRetainedC(intent.reference)).get
+        Then("actual receipt and current Completed projection agree without another append")
+        retained._1 shouldBe expected
+        retained._2 shouldBe expected.next
+        retained._2.history shouldBe _active.history :+ _terminal_entry
+        adapter.prepareC(intent).isSuccess shouldBe false
+        Given("the actually retained Completed source and a new adjacent Active proposal")
+        val instanceid = DataStore.StringEntryId(_initial.identity.value)
+        val checkpointid = DataStore.StringEntryId(_take(keyC(intent.reference)))
+        val beforeinstance = _take(reopened.load(instances, instanceid))
+        val beforecheckpoint = _take(reopened.load(checkpoints, checkpointid))
+        val next = intent.copy(current = retained._2, expectedRevision = retained._2.revision,
+          entry = _entry.copy(sequence = HistorySequence(3L), revision = InstanceRevision(3L)),
+          reference = Reference("after-terminal", "1"))
+        When("the native adapter prepares another mechanical append from that Completed source")
+        val refused = adapter.prepareC(next)
+        Then("terminal source refusal leaves both saved native rows unchanged and creates no new checkpoint")
+        refused.isSuccess shouldBe false
+        _take(reopened.load(instances, instanceid)) shouldBe beforeinstance
+        _take(reopened.load(checkpoints, checkpointid)) shouldBe beforecheckpoint
+        _take(reopened.load(checkpoints, DataStore.StringEntryId(_take(keyC(next.reference))))) shouldBe None
+      } finally _take(reopened.closeC())
     }
 
     "consume all-depth receipt annotations while refusing malformed consumed fields and oversized data" in {

@@ -398,6 +398,35 @@ Mechanical caller-owned intents still use public append admission. Inert receipt
 and instance annotations are allowed; required fields, native physical consumed
 fields, owner/reference/type and schema interpretation remain necessary.
 
+### Finite mechanical terminal successor — P65-FINAL126-TERMINAL-01
+
+The shared mechanical admission guard accepts an unsuspended Active successor,
+or an unsuspended Completed successor with empty progression. Its source must
+remain Active and unsuspended. Completed is a finite terminal successor; it
+does not permit another mechanical append from Completed, an initial source,
+another lifecycle, terminal progression, or suspension. Both caller-owned and
+already-loaded native admission use this same guard, retaining canonical
+component/operation/reference, typed payload, exact correlation, expected
+revision and native adjacent sequence/revision/lifecycle checks.
+
+The terminal instance, receipt, selected events and staged document Creates
+retain the existing managed atomic persistence boundary. Receipt format,
+capacity policy, old histories and host storage authority do not change.
+Git success alone does not establish a saved completion receipt or lifecycle.
+
+Executable cases are in both distinct suites:
+
+- `org.goldenport.cncf.workflow.WorkflowMechanicalTransitionSpec`: native SQLite
+  terminal commit, physical close/reopen, Active control and rejection of invalid
+  lifecycle/source/suspension/CAS/correlation/adjacency without changed rows.
+- `org.simplemodeling.cncfclient.WorkflowMechanicalTransitionSpec`: public
+  component/Service managed UoW, real terminal event and whole-document writes,
+  matching checkpoint/instance on physical reopen, and atomic collision refusal.
+
+These added cases specify the finite contract. Their execution and independent
+review are required evidence, not a PASS claim in this document. Historical
+validation statements retain their original scope and artifact conditions.
+
 V1/V2 event readers consume actual parsed facts rather than canonical byte copies.
 Their closed consumed field sets, explicit format choice, issued identities,
 typed numbers, stored lane/status and bounded payload/envelope domains remain.
