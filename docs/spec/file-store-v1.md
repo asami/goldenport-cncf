@@ -38,6 +38,27 @@ before lazy driver acquisition; binary PUT is an External occurrence, including
 equal repeated operations. HTTP operation displays redact paths, headers and
 bodies, including sensitive resumable-session URIs.
 
+## Optional scoped child reads (R1)
+
+`FileStoreChildren extends FileStore` is an optional capability with
+`listChildren(parent: FileStoreRef, limit: Int, pageToken: Option[String] = None)`
+returning `ExecUowM[FileStoreChildPage]`. `FileStoreChildPage` contains
+`items: Vector[FileStoreMetadata]` and `nextPageToken: Option[String]`; its
+display redacts both items and continuation data. The base four operations and
+existing implementations remain unchanged. Providers may retain opaque S3
+prefix/key grouping semantics; this does not require physical folders or supply
+an S3 implementation.
+
+One call reads one bounded page under the selected parent, without a hidden
+parent stat, recursion, automatic pagination or full-store scan. Continuation
+tokens are opaque provider data, never paths, URLs or authority. Callers own
+pagination and aggregate budgets and must use the continuation observation,
+not item count, to determine completion; an empty page may have a continuation.
+Names remain display labels and distinct child identities may share a label.
+The owning Operation still establishes source/entity authorization; neither
+child metadata nor a token grants it. Token rejection does not authorize an
+automatic restart.
+
 ## Content lifetime and write outcomes
 
 A Bag is materialized under the library contract. Its caller owns backing
@@ -83,7 +104,7 @@ Material state.
 
 The existing managed BlobStore and BlobModel retain synchronous Consequence /
 BinaryBag, Entity, digest and accessURL semantics. They are not migrated to Free
-interpretation. This capability adds no list/delete/rename/move/copy/accessURL,
+interpretation. The base capability adds no list/delete/rename/move/copy/accessURL,
 automatic digest, domain registry, or third provider registry. An optional thin
 read-only FileSystemView may present this capability later; it is not implemented.
 No actual S3 adapter is supplied or implied by S3-shaped references.
@@ -96,6 +117,7 @@ adapters or cloud evidence.
 ## Executable specifications
 
 - [FileStoreSpec](../../src/test/scala/org/goldenport/cncf/filestore/FileStoreSpec.scala)
+- [GoogleDriveChildrenSpec](../../src/test/scala/org/goldenport/cncf/filestore/GoogleDriveChildrenSpec.scala)
 - [HttpPutBagSpec](../../src/test/scala/org/goldenport/cncf/http/HttpPutBagSpec.scala)
 - [HttpResponseBodyModeSpec](../../src/test/scala/org/goldenport/cncf/http/HttpResponseBodyModeSpec.scala)
 - [HTTP admission](../../src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkHttpAdmissionSpec.scala)

@@ -1,6 +1,6 @@
 package org.goldenport.cncf.filestore
 
-import java.net.{URI, URLDecoder}
+import java.net.{URI, URLDecoder, URLEncoder}
 import java.nio.charset.StandardCharsets
 import scala.util.control.NonFatal
 import cats.free.Free
@@ -15,7 +15,7 @@ import org.goldenport.protocol.Property
 
 /*
  * @since   Oct. 20, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 25, 2026
  */
 /** Create-only Drive storage over admitted native HTTP programs.
   * Callers establish owning entity/source authorization before using this store.
@@ -23,10 +23,19 @@ import org.goldenport.protocol.Property
 final class GoogleDriveFileStore private (
   val name: String,
   private val _credentials: GoogleDriveCredentials
-) extends FileStore {
+) extends FileStoreChildren {
   import GoogleDriveFileStore.*
 
   override def toString: String = s"GoogleDriveFileStore($name)"
+
+  def listChildren(parent: FileStoreRef, limit: Int, pageToken: Option[String] = None): ExecUowM[FileStoreChildPage] = for {
+    _ <- _pure(_reference(parent))
+    _ <- _pure(_listing_input(limit, pageToken))
+    auth <- _credentials._authorization
+    response <- _lift(UnitOfWorkOp.HttpGet(_children_url(parent, limit, pageToken),
+      auth + ("Accept" -> "application/json"), _metadata_properties))
+    page <- _pure(if (response.code == 200) _children(response, parent, limit) else _status(response.code, false))
+  } yield page
 
   def stat(reference: FileStoreRef): ExecUowM[FileStoreMetadata] = for {
     _ <- _pure(_reference(reference))
@@ -84,23 +93,44 @@ final class GoogleDriveFileStore private (
   private def _metadata(response: HttpResponse, writing: Boolean): Consequence[FileStoreMetadata] = {
     val parsed = try {
       if (!response.mime.value.equalsIgnoreCase("application/json")) None
-      else response.getString.flatMap(text => parser.parse(text).toOption).flatMap(_.asObject).flatMap { fields =>
-        for {
-          id <- fields("id").flatMap(_.asString).filter(_valid_id)
-          label <- fields("name").flatMap(_.asString).filter(_valid_label)
-          mime <- fields("mimeType").flatMap(_.asString).filter(_valid_mime)
-          _ <- Option.when(fields("trashed").flatMap(_.asBoolean).contains(false))(())
-          parents <- _parents(fields)
-          size <- _optional_decimal(fields, "size").flatMap {
-            case None => Some(None)
-            case Some(value) => value.toLongOption.filter(_ >= 0).map(Some(_))
-          }
-          version <- _optional_decimal(fields, "version")
-        } yield FileStoreMetadata(FileStoreRef(name, id), label, MimeType(mime), size,
-          parents.map(FileStoreRef(name, _)), if (mime == _folder_mime) FileStoreKind.Collection else FileStoreKind.File, version)
-      }
+      else response.getString.flatMap(text => parser.parse(text).toOption).flatMap(_.asObject).flatMap(_metadata_json)
     } catch { case NonFatal(_) => None }
     parsed.fold(_invalid_metadata(writing))(Consequence.success)
+  }
+
+  private def _metadata_json(fields: JsonObject): Option[FileStoreMetadata] = for {
+    id <- fields("id").flatMap(_.asString).filter(_valid_id)
+    label <- fields("name").flatMap(_.asString).filter(_valid_label)
+    mime <- fields("mimeType").flatMap(_.asString).filter(_valid_mime)
+    _ <- Option.when(fields("trashed").flatMap(_.asBoolean).contains(false))(())
+    parents <- _parents(fields)
+    size <- _optional_decimal(fields, "size").flatMap {
+      case None => Some(None)
+      case Some(value) => value.toLongOption.filter(_ >= 0).map(Some(_))
+    }
+    version <- _optional_decimal(fields, "version")
+  } yield FileStoreMetadata(FileStoreRef(name, id), label, MimeType(mime), size,
+    parents.map(FileStoreRef(name, _)), if (mime == _folder_mime) FileStoreKind.Collection else FileStoreKind.File, version)
+
+  private def _children(response: HttpResponse, parent: FileStoreRef, limit: Int): Consequence[FileStoreChildPage] = {
+    val parsed = try {
+      if (!response.mime.value.equalsIgnoreCase("application/json")) None
+      else for {
+        fields <- response.getString.flatMap(text => parser.parse(text).toOption).flatMap(_.asObject)
+        files <- fields("files").flatMap(_.asArray).filter(_.size <= limit)
+        _ <- Option.when(fields("incompleteSearch").forall(_.asBoolean.contains(false)))(())
+        token <- fields("nextPageToken") match {
+          case None => Some(None)
+          case Some(value) => value.asString.filter(_valid_token).map(Some(_))
+        }
+        items = files.flatMap(_.asObject.flatMap(_metadata_json))
+        _ <- Option.when(items.size == files.size && items.forall(value =>
+          value.reference != parent && value.parents.contains(parent)) &&
+          items.map(_.reference).distinct.size == items.size)(())
+      } yield FileStoreChildPage(items, token)
+    } catch { case NonFatal(_) => None }
+    parsed.fold[Consequence[FileStoreChildPage]](
+      Consequence.resourceInvalid("Google Drive child listing is invalid"))(Consequence.success)
   }
 
   private def _confirmed_metadata(response: HttpResponse, parent: FileStoreRef, label: String,
@@ -139,6 +169,21 @@ object GoogleDriveFileStore {
     Option(value).exists(text => text.nonEmpty && !text.exists(c => Character.isISOControl(c)))
 
   private def _valid_name(value: String): Boolean = _valid_label(value) && value.length <= 1024
+
+  private def _valid_token(value: String): Boolean = _valid_label(value) && value.length <= 2048
+
+  private def _listing_input(limit: Int, token: Option[String]): Consequence[Unit] =
+    if (limit >= 1 && limit <= 100 && Option(token).exists(_.forall(_valid_token))) Consequence.success(())
+    else Consequence.argumentInvalid("Invalid Google Drive child listing input")
+
+  private def _children_url(parent: FileStoreRef, limit: Int, token: Option[String]): String = {
+    val query = Vector("q" -> s"'${parent.key}' in parents and trashed = false",
+      "supportsAllDrives" -> "true", "includeItemsFromAllDrives" -> "true", "pageSize" -> limit.toString,
+      "fields" -> s"nextPageToken,incompleteSearch,files($_fields)") ++ token.map("pageToken" -> _).toVector
+    _files + "?" + query.map { case (key, value) =>
+      key + "=" + URLEncoder.encode(value, StandardCharsets.UTF_8)
+    }.mkString("&")
+  }
 
   private def _valid_mime(value: String): Boolean =
     Option(value).exists(_.matches("[!#$%&'*+.^_`|~0-9A-Za-z-]+/[!#$%&'*+.^_`|~0-9A-Za-z-]+"))

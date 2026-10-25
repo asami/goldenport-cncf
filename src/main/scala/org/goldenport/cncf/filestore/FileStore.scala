@@ -6,7 +6,7 @@ import org.goldenport.datatype.MimeType
 
 /*
  * @since   Oct. 20, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 25, 2026
  */
 
 /** Configured store identity and provider-opaque physical key, never authority.
@@ -62,8 +62,9 @@ final case class FileStoreContent(mediaType: MimeType, content: Bag)
   * automatically retry/replay, delete as rollback, or claim nothing was written.
   * Callers must keep incomplete package attempts out of accepted Material state.
   *
-  * No list/delete/rename/move/copy/accessURL, automatic digest, domain registry
-  * or managed BlobStore migration is implied. An optional thin read-only
+  * Scoped child reads belong to the optional FileStoreChildren capability.
+  * No mandatory list/delete/rename/move/copy/accessURL, automatic digest, domain
+  * registry or managed BlobStore migration is implied. An optional thin read-only
   * FileSystemView is a separate presentation capability, not this SPI.
   */
 trait FileStore {

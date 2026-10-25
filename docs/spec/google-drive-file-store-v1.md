@@ -128,6 +128,62 @@ response mode. Metadata retains its 65536-byte request ceiling, refresh its
 16384-byte ceiling, and the runtime may tighten either. This Property grants no
 HTTP host or owning entity/source authority and adds no hidden stat or retry.
 
+## Optional scoped child reads
+
+### Query and input contract (R1)
+
+`GoogleDriveFileStore` also implements the optional `FileStoreChildren`
+capability. `listChildren(parent, limit, pageToken)` validates the existing
+provider reference contract, an inclusive limit of 1 through 100, and a nonnull
+Option whose supplied token is nonnull, nonempty, at most 2048 UTF16 code units
+and contains no ISO control characters. Invalid limit/token input returns the
+fixed `argumentInvalid("Invalid Google Drive child listing input")` before
+credentials, refresh or HTTP; invalid references retain their existing fixed
+failure. Tokens are opaque data, including spaces, Unicode and URI/query
+delimiters, rather than URLs or paths.
+
+Each page obtains managed authorization once and emits exactly one native
+`HttpGet` to `https://www.googleapis.com/drive/v3/files`. Every query value is
+UTF8 form-percent-encoded with `java.net.URLEncoder`. Decoded values are exactly:
+
+| Parameter | Value |
+| --- | --- |
+| `q` | `'PARENT' in parents and trashed = false`, with the validated parent key |
+| `supportsAllDrives` | `true` |
+| `includeItemsFromAllDrives` | `true` |
+| `pageSize` | the requested limit |
+| `fields` | `nextPageToken,incompleteSearch,files(id,name,mimeType,size,parents,trashed,version)` |
+| `pageToken` | supplied opaque token, omitted when absent |
+
+The GET uses the same Bearer authorization, JSON Accept, native host admission
+and ordinary `http.max-response-bytes=65536` ceiling as stat, subject to runtime
+tightening. It performs no hidden parent stat, recursion, allDrives corpus,
+automatic pagination, direct network access or retry. The selected parent is
+the only query scope. This follows the official
+[Drive files.list reference](https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list)
+for the endpoint, continuation, incomplete-search observation and shared-drive
+flags; that current official reference was consulted by the parent task.
+
+### Page and failure contract (R2)
+
+A 200 response must be an application/json object with a `files` array of at
+most the requested limit. Every member must satisfy the existing typed
+metadata contract, differ from the parent itself and contain the exact selected
+parent reference. Child references must be unique within the page; duplicate
+display labels with distinct references remain accepted. `nextPageToken` may be
+absent or a string satisfying the same opaque token constraints. `incompleteSearch`
+may be missing or Boolean false; true and all other types are rejected.
+
+Malformed listings return only the fixed
+`resourceInvalid("Google Drive child listing is invalid")`, without token,
+ID or provider-body echo. Non-200 responses retain the existing read `_status`
+categories and fixed diagnostics; native admission/transport failures propagate
+unchanged. No automatic retry or restart follows token rejection. Empty pages
+with continuation are valid, and callers infer completion only from absence of
+continuation, never from item count. Caller pagination/aggregate budgets and
+source/entity authority remain separate from this read capability. No S3
+implementation or physical-folder constraint is added.
+
 ## Create-only writes and resource ownership
 
 Creation labels are nonempty, at most 1024 UTF16 code units, with no ISO control
@@ -226,6 +282,7 @@ unchanged.
 
 - [GoogleDriveCredentialsSpec](../../src/test/scala/org/goldenport/cncf/filestore/GoogleDriveCredentialsSpec.scala)
 - [GoogleDriveFileStoreSpec](../../src/test/scala/org/goldenport/cncf/filestore/GoogleDriveFileStoreSpec.scala)
+- [GoogleDriveChildrenSpec](../../src/test/scala/org/goldenport/cncf/filestore/GoogleDriveChildrenSpec.scala)
 - [FileStoreSpec](../../src/test/scala/org/goldenport/cncf/filestore/FileStoreSpec.scala)
 - [Native binary PUT](../../src/test/scala/org/goldenport/cncf/http/HttpPutBagSpec.scala)
 - [Native response bytes](../../src/test/scala/org/goldenport/cncf/http/HttpResponseBodyModeSpec.scala)
