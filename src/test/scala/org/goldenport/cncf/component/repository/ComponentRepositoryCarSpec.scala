@@ -7,20 +7,21 @@ import java.util.jar.JarFile
 import java.util.zip.{ZipEntry, ZipOutputStream}
 
 import scala.jdk.CollectionConverters._
-import scala.util.Using
+import scala.util.{Try, Using}
 
 import org.scalatest.GivenWhenThen
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
-import org.scalatest.BeforeAndAfterAll
+import org.scalatest.BeforeAndAfterEach
 
 import org.goldenport.{Consequence, ConsequenceException}
 import org.goldenport.cncf.CncfVersion
-import org.goldenport.cncf.context.GlobalContext
+import org.goldenport.cncf.context.{GlobalContext, GlobalRuntimeContext}
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.config.{ComponentParameterProvenance, RuntimeConfig}
 import org.goldenport.cncf.component.{AssemblyApiClassLoader, CarExtractor, Component, ComponentCreate, ComponentDependencyManifest, ComponentDependencyPool, ComponentDescriptor, ComponentDescriptorLoader, ComponentFactory, ComponentId, ComponentInit, ComponentInstanceId, ComponentLocalFirstClassLoader, ComponentOrigin, CoursierComponentDependencyResolver, RepositoryParameterProbeComponent, RepositoryParameterProbeFactory}
 import org.goldenport.cncf.component.identity.ComponentReleaseCoordinate
+import org.goldenport.cncf.component.cache.{ManagedArchiveCache, ManagedCachePolicy}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.spi.SpiResolver
 import org.goldenport.cncf.spi.ai.runner.{AiGenerateRequest, AiRunnerSocket}
@@ -38,10 +39,15 @@ import org.goldenport.configuration.ConfigurationTrace
  *  version May. 25, 2026
  *  version Jul. 31, 2026
  *  version Aug. 27, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 22, 2026
  * @author  ASAMI, Tomoharu
  */
-class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
+class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterEach with GivenWhenThen {
+  override protected def withFixture(test: NoArgTest): org.scalatest.Outcome = {
+    val previous = GlobalRuntimeContext.current
+    try super.withFixture(test)
+    finally GlobalRuntimeContext.current = previous
+  }
   private val _e1 = afterWord("in spec:component-repository-car, example:E1, rules:CID05C-R9, phase:56, slice:CID-05C")
   private val _e2 = afterWord("in spec:component-repository-car, example:E2, rules:CID05C-R9, phase:56, slice:CID-05C")
   private val _e3 = afterWord("in spec:component-repository-car, example:E3, rules:CID05C-R9, phase:56, slice:CID-05C")
@@ -49,9 +55,261 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
   private val _e5 = afterWord("in spec:component-repository-car, example:E5, rules:CID05C-R9, phase:56, slice:CID-05C")
   private def _metadata(exampleid: String) =
     afterWord(s"in spec:component-repository-car, example:$exampleid, rules:CID05C-R9, phase:56, slice:CID-05C")
-  override def beforeAll(): Unit = {
+  private var _fixture_workarea: Option[WorkAreaSpace] = None
+  private var _previous_global_context: Option[GlobalContext] = None
+  private var _fixture_cache_root: Option[Path] = None
+  private var _fixture_owners: Vector[Subsystem] = Vector.empty
+
+  private def _cache_params(subsystem: Subsystem, origin: ComponentOrigin,
+    descriptors: Vector[ComponentDescriptor] = Vector.empty): ComponentCreate = {
+    if (!_fixture_owners.exists(_ eq subsystem)) _fixture_owners :+= subsystem
+    org.goldenport.cncf.component.ComponentCreate(subsystem, origin, descriptors).withManagedCacheRoot(_fixture_cache_root.get)
+  }
+
+  override def beforeEach(): Unit = {
+    super.beforeEach()
+    val parent = Files.createDirectories(Path.of("target/component-repository-car-spec/cache").toAbsolutePath.normalize)
+    _fixture_cache_root = Some(Files.createTempDirectory(parent, "case-"))
+    _previous_global_context = Try(GlobalContext.globalContext).toOption
     val workarea = WorkAreaSpace.create(RuntimeConfig.default)
+    _fixture_workarea = Some(workarea)
     GlobalContext.set(GlobalContext(workarea))
+  }
+
+  override def afterEach(): Unit =
+    try {
+      _fixture_owners.foreach(Subsystem.shutdownOwned)
+      _fixture_workarea.foreach(_.close())
+    } finally {
+      _fixture_owners = Vector.empty
+      _fixture_cache_root.foreach(_delete_recursively)
+      _fixture_cache_root = None
+      _fixture_workarea = None
+      try {
+        _previous_global_context.foreach(GlobalContext.set)
+      } finally {
+        _previous_global_context = None
+        super.afterEach()
+      }
+    }
+
+  "Repository eager metadata ownership" should {
+    Vector("custom" -> "E75A", "initialized" -> "E75B", "default" -> "E75C",
+      "custom-alias" -> "E75D", "initialized-alias" -> "E75E", "default-alias" -> "E75F").foreach { case (location, example) =>
+      s"$example retain actual CAR and SAR metadata through standard, static, defaults and canonical selection at a $location root" must
+        afterWord(s"in spec:car-sar-cache-management, example:$example, rules:C3,C6, phase:116") {
+        "use the selected cache root throughout repository metadata preparation" in _with_temp_dir { root =>
+          Given(s"Spec: docs/spec/car-sar-cache-management.md; Rules: C3,C6; Example: $example; canonical local CAR/SAR fixtures at a $location managed root")
+          val oldhome = System.getProperty("user.home")
+          try {
+            if (location.startsWith("default")) {
+              val home = if (location == "default-alias")
+                Files.createSymbolicLink(root.resolve("home-alias"), Files.createDirectories(root.resolve("actual-home")))
+              else root
+              System.setProperty("user.home", home.toString)
+            }
+            val cacheroot = if (location.startsWith("default")) ComponentRepository.defaultStandardRepositoryDir()
+              else if (location.endsWith("-alias"))
+                Files.createSymbolicLink(root.resolve("selected-cache-alias"), Files.createDirectories(root.resolve("selected-cache")))
+              else root.resolve("selected-cache")
+            val componentid = ComponentId("org.goldenport.fixture.CanonicalArchiveFixture")
+            val release = "0.1.0"
+            val coordinate = ComponentReleaseCoordinate.require(componentid.sharedIdentity, release)
+            val car = cacheroot.resolve("car").resolve(coordinate.carRepositoryRelativePath())
+            val content = root.resolve("car-content")
+            _create_metadata_car(car, content, componentid.name, release)
+            val sar = cacheroot.resolve("sar/metadata/1.0.0/metadata-1.0.0.sar")
+            Files.createDirectories(sar.getParent)
+            val descriptor = root.resolve("subsystem-descriptor.json")
+            Files.writeString(descriptor,
+              """{"name":"metadata","subsystem":"metadata","version":"1.0.0","components":[{"namespace":"org.goldenport.fixture","id":"CanonicalArchiveFixture","version":"0.1.0"}]}""")
+            _create_zip(sar, Seq("subsystem-descriptor.json" -> descriptor, "component/metadata.car" -> car))
+            val actualroot = cacheroot.toRealPath()
+            if (location.startsWith("initialized")) Files.createDirectories(actualroot.resolve("locks/generations"))
+            val standard = ComponentRepository.StandardRepository.Specification(
+              ComponentRepository.StandardRepositoryKind.Car, root.resolve("unused-remote").toUri.toString, cacheroot)
+            val subsystem = TestComponentFactory.emptySubsystem("eager-metadata-" + location)
+            val params = _cache_params(subsystem, ComponentOrigin.Repository("standard-car"),
+              Vector(_canonical_component_descriptor(componentid, release)))
+            When("legacy static readers and standard canonical selection prepare descriptors, defaults and eager APIs")
+            if (!location.startsWith("custom")) {
+              ComponentRepository.ComponentFileRepository.Specification(car).resolveStaticComponentDescriptors
+                .flatMap(_.requireCanonicalIdentityC.toOption) shouldBe Vector(componentid -> release)
+              ComponentRepository.resolveComponentSubsystemDefaultsFromComponentDirC(car.getParent, componentid.name, Some(release))
+                .TAKE.map(_.path) shouldBe Some(car)
+            }
+            val metadata = standard.build(params).prepareAssemblyApi().TAKE
+            val canonical = standard.resolveComponentArchivePath(componentid.name, Some(release))
+            val selected = standard.resolveStaticComponentDescriptor(componentid.name)
+            val defaults = standard.resolveComponentSubsystemDefaultsC(componentid.name, Some(release)).TAKE
+            val sarstandard = ComponentRepository.StandardRepository.Specification(
+              ComponentRepository.StandardRepositoryKind.Sar, root.resolve("unused-remote").toUri.toString, cacheroot)
+            val sardescriptor = sarstandard.resolveSubsystemDescriptor("metadata")
+            val sarrepository = new ComponentRepository.ComponentDirRepository(sar.getParent,
+              params.withManagedCacheRoot(cacheroot), ComponentRepository.resolvePackagePrefixes())
+            val sarmetadata = sarrepository.prepareAssemblyApi().TAKE
+            Then("the actual metadata and descriptor provenance retain their canonical identities and eager class bytes")
+            canonical shouldBe Some(car)
+            selected.flatMap(_.requireCanonicalIdentityC.toOption) shouldBe Some(componentid -> release)
+            defaults.map(_.path) shouldBe Some(car)
+            defaults.toVector.flatMap(_.componentBindings).flatMap(_.componentId) should contain(componentid)
+            sardescriptor.map(_.path) shouldBe Some(sar)
+            sardescriptor.map(_.subsystemName) shouldBe Some("metadata")
+            metadata.artifacts.map(_.contract.apiClass) shouldBe Vector(classOf[CanonicalArchiveFixtureComponent].getName)
+            metadata.artifacts.head.classes(classOf[CanonicalArchiveFixtureComponent].getName).nonEmpty shouldBe true
+            sarmetadata.artifacts.map(_.contract.apiClass) shouldBe metadata.artifacts.map(_.contract.apiClass)
+            ComponentRepository.resolveStaticComponentDescriptorsFromComponentDir(car.getParent)
+              .flatMap(_.requireCanonicalIdentityC.toOption) shouldBe Vector(componentid -> release)
+            ComponentRepository.resolveComponentDescriptorFromComponentDir(cacheroot, componentid.name)
+              .flatMap(_.requireCanonicalIdentityC.toOption) shouldBe Some(componentid -> release)
+            ComponentRepository.resolveComponentArchivePathFromComponentDir(car.getParent, componentid.name, Some(release)) shouldBe Some(car)
+            ComponentRepository.resolveSubsystemDescriptorFromComponentDir(sar.getParent, "metadata").map(_.path) shouldBe Some(sar)
+            Files.isDirectory(cacheroot.resolve("locks/generations")) shouldBe true
+            When("explicit collection follows completed metadata reads")
+            val cache = new ManagedArchiveCache(ManagedCachePolicy(actualroot, idleMillis = 0L, evictReusableSources = true))
+            try {
+              val collected = Vector.fill(4)(cache.collectC().TAKE)
+              Then("metadata owns no escaping backing lease and eager bytes remain available after reclamation")
+              collected.map(_.inUseCount).sum shouldBe 0
+              Files.exists(car) shouldBe false
+              Files.exists(sar) shouldBe false
+              metadata.artifacts.head.classes(classOf[CanonicalArchiveFixtureComponent].getName).nonEmpty shouldBe true
+            } finally cache.close()
+          } finally {
+            if (oldhome == null) System.clearProperty("user.home") else System.setProperty("user.home", oldhome)
+          }
+        }
+      }
+    }
+
+    "E76 leave standalone CAR, SAR and directory inputs caller-owned without creating managed files" must
+      afterWord("in spec:car-sar-cache-management, example:E76, rules:C1,C3,C6, phase:116") {
+      "read actual metadata without creating cache ownership under an uninitialized caller fixture" in _with_temp_dir { root =>
+        Given("Spec: docs/spec/car-sar-cache-management.md; Rules: C1,C3,C6; Example: E76; standalone archives below folders named car and sar and an extracted CAR directory")
+        val componentid = ComponentId("org.goldenport.fixture.CanonicalArchiveFixture")
+        val car = root.resolve("caller/car/fixture.car")
+        val content = root.resolve("caller/directory.car")
+        _create_metadata_car(car, content, componentid.name, "0.1.0")
+        val sar = root.resolve("caller/sar/fixture.sar")
+        Files.createDirectories(sar.getParent)
+        val descriptor = root.resolve("subsystem-descriptor.json")
+        Files.writeString(descriptor, """{"subsystem":"metadata","version":"1.0.0","components":[]}""")
+        _create_zip(sar, Seq("subsystem-descriptor.json" -> descriptor, "component/fixture.car" -> car))
+        val before = _metadata_snapshot(root)
+        val subsystem = TestComponentFactory.emptySubsystem("caller-metadata")
+        val params = _cache_params(subsystem, ComponentOrigin.Repository("component-dir"))
+        When("file, directory and static repository metadata readers consume the caller's inputs")
+        val filemetadata = ComponentRepository.ComponentFileRepository.Specification(car).build(params).prepareAssemblyApi().TAKE
+        val sarmetadata = new ComponentRepository.ComponentDirRepository(sar.getParent, params,
+          ComponentRepository.resolvePackagePrefixes()).prepareAssemblyApi().TAKE
+        val directorymetadata = ComponentRepository.withArchiveSourceReadC(content)(AssemblyApiClassLoader.loadDirectory).TAKE
+        val defaults = ComponentRepository.ComponentFileRepository.Specification(car)
+          .resolveComponentSubsystemDefaultsC(componentid.name, Some("0.1.0")).TAKE
+        val static = ComponentRepository.resolveStaticComponentDescriptorsFromComponentDir(content.getParent)
+        Then("metadata remains readable, provenance is original and no caller bytes or directories change")
+        filemetadata.artifacts.map(_.contract.apiClass) shouldBe Vector(classOf[CanonicalArchiveFixtureComponent].getName)
+        sarmetadata.artifacts.map(_.contract.apiClass) shouldBe filemetadata.artifacts.map(_.contract.apiClass)
+        directorymetadata.artifacts.map(_.contract.apiClass) shouldBe filemetadata.artifacts.map(_.contract.apiClass)
+        defaults.map(_.path) shouldBe Some(car)
+        static.flatMap(_.requireCanonicalIdentityC.toOption) should contain(componentid -> "0.1.0")
+        _metadata_snapshot(root) shouldBe before
+      }
+    }
+  }
+
+  "Repository extraction ownership" should {
+    "retain CAR and SAR backing until loaders close, then permit their owning cleanup policy" in {
+      Vector("car", "sar-car", "sar-directory").foreach { mode =>
+        _with_temp_dir { root =>
+          Given(s"a $mode repository artifact with a component JAR containing unread resources")
+          val repositorydir = Files.createDirectory(root.resolve("repository"))
+          val subsystem = TestComponentFactory.emptySubsystem(s"retained-$mode")
+          subsystem.systemNode.ownRuntimeResourceC(WorkAreaSpace.create(RuntimeConfig.default)).TAKE
+          val other = TestComponentFactory.emptySubsystem(s"other-$mode")
+          val otherarea = WorkAreaSpace.create(RuntimeConfig.default)
+          other.systemNode.ownRuntimeResourceC(otherarea).TAKE
+          GlobalContext.set(GlobalContext(otherarea))
+          val origin = ComponentOrigin.Repository("component-dir")
+          val componentid = "org.goldenport.fixture.CanonicalArchiveFixture"
+          val content = root.resolve("content")
+          val componentjar = _create_class_component_jar(
+            root.resolve("assets").resolve("fixture.jar"),
+            Seq(classOf[CanonicalArchiveFixtureFactory], classOf[CanonicalArchiveFixtureComponent]),
+            Seq("workarea-retention/lazy.txt" -> "lazy payload", "workarea-retention/after-close.txt" -> "closed")
+          )
+          val packedcar = root.resolve("fixture.car")
+          _create_canonical_component_car(packedcar, content, componentid, "0.1.0", componentjar)
+          val artifact = if (mode == "car") {
+            Files.copy(packedcar, repositorydir.resolve("fixture.car"))
+          } else {
+            val descriptor = Files.writeString(
+              root.resolve("subsystem-descriptor.json"),
+              """{"name":"retained-subsystem","version":"1.0.0","subsystem":"retained","components":[{"namespace":"org.goldenport.fixture","id":"CanonicalArchiveFixture","version":"0.1.0"}]}"""
+            )
+            val embedded = if (mode == "sar-car") {
+              Vector("component/fixture.car" -> packedcar)
+            } else {
+              Using.resource(Files.walk(content)) { stream =>
+                stream.iterator().asScala.filter(Files.isRegularFile(_)).toVector.map { path =>
+                  s"component/expanded/${content.relativize(path).toString.replace('\\', '/')}" -> path
+                }
+              }
+            }
+            val sar = repositorydir.resolve("fixture.sar")
+            _create_zip(sar, Vector("subsystem-descriptor.json" -> descriptor) ++ embedded)
+            sar
+          }
+          val repository = new ComponentRepository.ComponentDirRepository(
+            repositorydir, _cache_params(subsystem, origin), ComponentRepository.resolvePackagePrefixes()
+          )
+          try {
+            When("repository discovery for the first owner runs after another owner replaced GlobalContext, then that other owner shuts down")
+            val components = repository.discover()
+            Subsystem.shutdownOwned(other)
+            val loaders = subsystem.componentClassLoaderSnapshot
+            val jars = loaders.flatMap(_.getURLs.toVector).filter(_.getProtocol == "file")
+              .map(url => Path.of(url.toURI)).filter(_.getFileName.toString == "main.jar")
+
+            Then("the first owner's retained JARs still exist and their resources can be loaded lazily")
+            components.map(_.componentId.name) should contain(componentid)
+            loaders should not be empty
+            jars should not be empty
+            jars.foreach(path => Files.isRegularFile(path) shouldBe true)
+            val resource = loaders.iterator.flatMap(loader => Option(loader.getResourceAsStream("workarea-retention/lazy.txt"))).next()
+            Using.resource(resource) { stream =>
+              new String(stream.readAllBytes(), StandardCharsets.UTF_8) shouldBe "lazy payload"
+            }
+            val extractedroots = jars.map(_.getParent.getParent)
+            val embeddedarchives = components.flatMap(_.artifactMetadata).flatMap(_.archivePath)
+              .map(Path.of(_)).filter(_ != artifact)
+            var loadersclosedbeforeremoval = false
+            subsystem.systemNode.ownRuntimeResourceC(new AutoCloseable {
+              def close(): Unit = {
+                loadersclosedbeforeremoval = jars.forall(path => Files.exists(path)) &&
+                  loaders.forall(_.findResource("workarea-retention/after-close.txt") == null)
+              }
+            }).TAKE
+
+            When("the owning subsystem and SystemNode shut down")
+            Subsystem.shutdownOwned(subsystem)
+
+            Then("loaders close before backing is released and source artifacts remain")
+            loadersclosedbeforeremoval shouldBe true
+            subsystem.componentClassLoaderSnapshot shouldBe empty
+            extractedroots.foreach(path => Files.exists(path) shouldBe true)
+            val cache = new org.goldenport.cncf.component.cache.ManagedArchiveCache(
+              org.goldenport.cncf.component.cache.ManagedCachePolicy(_fixture_cache_root.get, idleMillis = 0))
+            cache.collectC().TAKE.reclaimedCount shouldBe (if (mode == "sar-car") 2 else 1)
+            extractedroots.foreach(path => Files.exists(path) shouldBe false)
+            embeddedarchives.foreach(path => Files.exists(path) shouldBe false)
+            Files.isRegularFile(artifact) shouldBe true
+          } finally {
+            Subsystem.shutdownOwned(subsystem)
+            Subsystem.shutdownOwned(other)
+          }
+        }
+      }
+    }
   }
 
   "ComponentDirRepository" should {
@@ -262,7 +520,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           "https://example.invalid/repository/car",
           cache
         ).build(
-          ComponentCreate(
+          _cache_params(
             subsystem,
             origin,
             Vector(_canonical_component_descriptor(componentid, release))
@@ -932,14 +1190,18 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           modeHint = Some(org.goldenport.cncf.cli.RunMode.Command)
         ).TAKE
 
-        Then("every boundary retains one inferred development component identity")
-        inferred shouldBe Vector("org.goldenport.fixture.DevDirSample")
-        descriptor.map(_.subsystemName) shouldBe Some("devdirsample")
-        descriptor.toVector.flatMap(_.componentBindings.map(_.componentName)) shouldBe Vector("org.goldenport.fixture.DevDirSample")
-        initialized.components.map(_.name) should contain ("org.goldenport.fixture.DevDirSample")
-        initialized.components.count(_.name == "org.goldenport.fixture.DevDirSample") shouldBe 1
-        initialized.components.find(_.name == "org.goldenport.fixture.DevDirSample").map(_.getClass.getName) shouldBe
-          Some(classOf[devdirsample.DevDirSamplePrimaryComponent].getName)
+        try {
+          Then("every boundary retains one inferred development component identity")
+          inferred shouldBe Vector("org.goldenport.fixture.DevDirSample")
+          descriptor.map(_.subsystemName) shouldBe Some("devdirsample")
+          descriptor.toVector.flatMap(_.componentBindings.map(_.componentName)) shouldBe Vector("org.goldenport.fixture.DevDirSample")
+          initialized.components.map(_.name) should contain ("org.goldenport.fixture.DevDirSample")
+          initialized.components.count(_.name == "org.goldenport.fixture.DevDirSample") shouldBe 1
+          initialized.components.find(_.name == "org.goldenport.fixture.DevDirSample").map(_.getClass.getName) shouldBe
+            Some(classOf[devdirsample.DevDirSamplePrimaryComponent].getName)
+        } finally {
+          Subsystem.shutdownOwned(initialized)
+        }
       }
       }
     }
@@ -1177,7 +1439,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
               "component-descriptor.json" -> descriptor
             )
           )
-          val repository = new ComponentRepository.ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
+          val repository = new ComponentRepository.ComponentDirRepository(componentdir, _cache_params(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
 
           When("the component directory repository discovers the CAR")
           val components = repository.discover()
@@ -1227,12 +1489,12 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           When("ComponentDirRepository extracts, loads, discovers, and materializes each layout")
           val packed = new ComponentRepository.ComponentDirRepository(
             packedroot,
-            ComponentCreate(subsystem, origin),
+            _cache_params(subsystem, origin),
             ComponentRepository.resolvePackagePrefixes()
           ).discover()
           val cardir = new ComponentRepository.ComponentDirRepository(
             expanded,
-            ComponentCreate(subsystem, origin),
+            _cache_params(subsystem, origin),
             ComponentRepository.resolvePackagePrefixes()
           ).discover()
 
@@ -1274,7 +1536,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           ComponentId("org.goldenport.fixture.MissingComponent"),
           "0.1.0"
         )
-        val params = ComponentCreate(subsystem, origin, Vector(requested))
+        val params = _cache_params(subsystem, origin, Vector(requested))
         val repository = new ComponentRepository.ComponentDirRepository(
           componentdir,
           params,
@@ -1403,7 +1665,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           )
           new ComponentRepository.ComponentDirRepository(
             componentdir,
-            ComponentCreate(subsystem, origin),
+            _cache_params(subsystem, origin),
             ComponentRepository.resolvePackagePrefixes()
           )
         }
@@ -1463,7 +1725,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         )
 
         When("the component directory repository discovers the CAR")
-        val repository = new ComponentRepository.ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
+        val repository = new ComponentRepository.ComponentDirRepository(componentdir, _cache_params(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
         val components = repository.discover()
 
         Then("the plain factory creates the primary component")
@@ -1584,7 +1846,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           schemaVersion = Some(3),
           componentId = Some(org.goldenport.cncf.testutil.TestComponentFactory.componentId(componentid))
         )
-        val params = ComponentCreate(
+        val params = _cache_params(
           subsystem,
           ComponentOrigin.Repository("phase-47"),
           Vector(requested)
@@ -1658,7 +1920,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           )
         )
 
-        val repository = new ComponentRepository.ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
+        val repository = new ComponentRepository.ComponentDirRepository(componentdir, _cache_params(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
         val providercomponents = repository.discover().toVector
         val consumer = new Component() with AiRunnerSocket
         val consumerid = TestComponentFactory.componentId("component_repository_car_ai_runner_consumer")
@@ -1730,7 +1992,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           )
         )
 
-        val repository = new ComponentRepository.ComponentFileRepository(appcar, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
+        val repository = new ComponentRepository.ComponentFileRepository(appcar, _cache_params(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
         When("the application CAR is discovered as a component file")
         val components = repository.discover()
         val componentnames = components.flatMap(_.artifactMetadata).flatMap(_.component).toSet
@@ -1819,11 +2081,15 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           modeHint = Some(org.goldenport.cncf.cli.RunMode.Command)
         ).TAKE
 
-        Then("the declared provider component is activated from the search repository")
-        initialized.descriptor.toVector.flatMap(_.componentBindings.map(_.componentName)) should contain ("org.goldenport.fixture.PlainAiRunnerProvider")
-        initialized.components.map { component =>
-          component.displayName
-        } should contain ("plain-ai-runner-provider")
+        try {
+          Then("the declared provider component is activated from the search repository")
+          initialized.descriptor.toVector.flatMap(_.componentBindings.map(_.componentName)) should contain ("org.goldenport.fixture.PlainAiRunnerProvider")
+          initialized.components.map { component =>
+            component.displayName
+          } should contain ("plain-ai-runner-provider")
+        } finally {
+          Subsystem.shutdownOwned(initialized)
+        }
       }
       }
     }
@@ -1922,7 +2188,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
             """{"name":"invalid-structure","version":"0.1.0","component":"spec"}"""
           )
           _create_car(carpath, Seq("component/lib/dummy.jar" -> dummyjar, "component-descriptor.json" -> descriptor))
-          val repository = new ComponentRepository.ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
+          val repository = new ComponentRepository.ComponentDirRepository(componentdir, _cache_params(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
           When("the repository discovers the invalid CAR")
           val components = repository.discover()
 
@@ -1958,7 +2224,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
             "component-descriptor.json" -> descriptor
           )
         )
-        val repository = new ComponentRepository.ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
+        val repository = new ComponentRepository.ComponentDirRepository(componentdir, _cache_params(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
         When("the repository discovers the invalid CAR")
         val components = repository.discover()
 
@@ -2004,7 +2270,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
             "component/base.car" -> embeddedcar
           )
         )
-        val repository = new ComponentRepository.ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
+        val repository = new ComponentRepository.ComponentDirRepository(componentdir, _cache_params(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
         When("the repository discovers the SAR")
         val components = repository.discover()
 
@@ -2052,7 +2318,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           ComponentRepository.standardComponentRepositoryUrl(),
           repositoryroot
         ).build(
-          ComponentCreate(
+          _cache_params(
             subsystem,
             origin,
             Vector(_canonical_component_descriptor(componentid, release))
@@ -2112,7 +2378,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           remote.toUri.toString.stripSuffix("/"),
           cache
         ).build(
-          ComponentCreate(
+          _cache_params(
             subsystem,
             origin,
             Vector(
@@ -2152,7 +2418,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           root.resolve("remote").toUri.toString.stripSuffix("/"),
           root.resolve("cache")
         ).build(
-          ComponentCreate(
+          _cache_params(
             subsystem,
             origin,
             Vector(_canonical_component_descriptor(componentid, release))
@@ -2316,7 +2582,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         val dependencydescriptors =
           ComponentRepository.descriptorsForSpecification(dependencies, Vector(dev), descriptors, claims)
         val repository = dependencies.build(
-          ComponentCreate(
+          _cache_params(
             subsystem,
             ComponentOrigin.Repository("component-dir"),
             dependencydescriptors
@@ -2393,7 +2659,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           _create_car(artifact, Seq("component-descriptor.json" -> descriptor))
           val repository = new ComponentRepository.ComponentDirRepository(
             repositoryroot,
-            ComponentCreate(subsystem, origin, Vector(_canonical_component_descriptor(componentid, release))),
+            _cache_params(subsystem, origin, Vector(_canonical_component_descriptor(componentid, release))),
             ComponentRepository.resolvePackagePrefixes()
           )
 
@@ -2418,7 +2684,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           val release = "0.1.0-SNAPSHOT"
           val repository = new ComponentRepository.ComponentDirRepository(
             repositoryroot,
-            ComponentCreate(
+            _cache_params(
               subsystem,
               origin,
               Vector(ComponentDescriptor(
@@ -2510,7 +2776,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
             "subsystem-descriptor.json" -> sardescriptor
           )
         )
-        val repository = new ComponentRepository.ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
+        val repository = new ComponentRepository.ComponentDirRepository(componentdir, _cache_params(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
         When("the repository discovers the invalid SAR")
         val components = repository.discover()
 
@@ -2543,7 +2809,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         ))
         val repository = new ComponentRepository.ComponentDirRepository(
           componentdir,
-          ComponentCreate(TestComponentFactory.emptySubsystem("bound-foreign"), ComponentOrigin.Repository("component-dir"), Vector(_canonical_component_descriptor(boundid, release))),
+          _cache_params(TestComponentFactory.emptySubsystem("bound-foreign"), ComponentOrigin.Repository("component-dir"), Vector(_canonical_component_descriptor(boundid, release))),
           ComponentRepository.resolvePackagePrefixes()
         )
 
@@ -2579,7 +2845,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         ))
         val repository = new ComponentRepository.ComponentDirRepository(
           componentdir,
-          ComponentCreate(TestComponentFactory.emptySubsystem("bound-wrong-release"), ComponentOrigin.Repository("component-dir"), Vector(_canonical_component_descriptor(boundid, release))),
+          _cache_params(TestComponentFactory.emptySubsystem("bound-wrong-release"), ComponentOrigin.Repository("component-dir"), Vector(_canonical_component_descriptor(boundid, release))),
           ComponentRepository.resolvePackagePrefixes()
         )
 
@@ -2765,7 +3031,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           """{"schemaVersion":"cncf.component-api.v1","component":{"name":"sample","version":"0.1.0-SNAPSHOT"},"provided":[{"apiClass":"example.api.SampleApi","packages":["example.api"],"abiHash":"sha256:sample","artifactPath":"spi/sample-api.jar"}],"required":[]}"""
         )
         val subsystem = TestComponentFactory.emptySubsystem("dev-api-spec")
-        val params = ComponentCreate(subsystem, ComponentOrigin.Repository("component-dev-dir"))
+        val params = _cache_params(subsystem, ComponentOrigin.Repository("component-dev-dir"))
         val repository = ComponentRepository.ComponentDevDirRepository.Specification(root).build(params)
 
         When("the development assembly API is prepared")
@@ -2793,7 +3059,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           """{"schemaVersion":"cncf.component-api.v1","component":{"name":"sample","version":"0.1.0-SNAPSHOT"},"provided":[{"apiClass":"example.api.SampleApi","packages":["example.api"],"abiHash":"sha256:sample","artifactPath":"spi/missing-api.jar"}],"required":[]}"""
         )
         val subsystem = TestComponentFactory.emptySubsystem("dev-api-spec")
-        val params = ComponentCreate(subsystem, ComponentOrigin.Repository("component-dev-dir"))
+        val params = _cache_params(subsystem, ComponentOrigin.Repository("component-dev-dir"))
         val repository = ComponentRepository.ComponentDevDirRepository.Specification(root).build(params)
 
         When("the development assembly API is prepared")
@@ -2823,7 +3089,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
           """{"schemaVersion":"cncf.component-api.v1","component":{"name":"consumer","version":"1.0.0"},"provided":[],"required":[{"apiClass":"example.api.MissingApi","required":true}]}"""
         )
         val subsystem = TestComponentFactory.emptySubsystem("dev-api-validation-spec")
-        val params = ComponentCreate(subsystem, ComponentOrigin.Repository("component-dev-dir"))
+        val params = _cache_params(subsystem, ComponentOrigin.Repository("component-dev-dir"))
         val repository = ComponentRepository.ComponentDevDirRepository.Specification(root).build(params)
         val metadata = repository.prepareAssemblyApi().toOption
           .getOrElse(fail("assembly API metadata was not prepared"))
@@ -2857,7 +3123,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         _write_runtime_classpath(root, classdir, "sample", "0.1.0-SNAPSHOT", "sample")
         val subsystem = TestComponentFactory.emptySubsystem("development-admission-consequence")
         val repository = ComponentRepository.ComponentDevDirRepository.Specification(root).build(
-          ComponentCreate(subsystem, ComponentOrigin.Repository("component-dev-dir"))
+          _cache_params(subsystem, ComponentOrigin.Repository("component-dev-dir"))
         )
         Files.delete(ComponentRepository.ComponentDevDirRepository.runtimeManifestFile(root))
         val expected = ComponentRepository.ComponentDevDirRepository.validate(root)
@@ -2975,6 +3241,18 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       }
     }
     }
+  }
+
+  private def _metadata_snapshot(root: Path): Map[String, Option[Vector[Byte]]] =
+    Using.resource(Files.walk(root))(_.iterator().asScala.map(path =>
+      root.relativize(path).toString -> Option.when(Files.isRegularFile(path))(Files.readAllBytes(path).toVector)).toMap)
+
+  private def _create_metadata_car(target: Path, content: Path, componentid: String, release: String): Unit = {
+    val jar = _create_class_component_jar(content.resolve("spi/metadata-api.jar"), Seq(classOf[CanonicalArchiveFixtureComponent]))
+    val api = content.resolve("component-api-descriptor.json")
+    Files.writeString(api,
+      s"""{"schemaVersion":"cncf.component-api.v1","component":{"name":"$componentid","version":"$release"},"provided":[{"apiClass":"${classOf[CanonicalArchiveFixtureComponent].getName}","packages":["org.goldenport.cncf.component.repository"],"abiHash":"sha256:metadata","artifactPath":"spi/metadata-api.jar"}],"required":[]}""")
+    _create_canonical_component_car(target, content, componentid, release, jar)
   }
 
   private def _create_car(
@@ -3168,7 +3446,8 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
 
   private def _create_class_component_jar(
     target: Path,
-    classes: Seq[Class[?]]
+    classes: Seq[Class[?]],
+    resources: Seq[(String, String)] = Seq.empty
   ): Path = {
     Option(target.getParent).foreach(Files.createDirectories(_))
     Using.resource(new ZipOutputStream(Files.newOutputStream(target))) { zos =>
@@ -3180,6 +3459,11 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         Using.resource(resource.openStream()) { in =>
           in.transferTo(zos)
         }
+        zos.closeEntry()
+      }
+      resources.foreach { case (name, value) =>
+        zos.putNextEntry(new ZipEntry(name))
+        zos.write(value.getBytes(StandardCharsets.UTF_8))
         zos.closeEntry()
       }
     }

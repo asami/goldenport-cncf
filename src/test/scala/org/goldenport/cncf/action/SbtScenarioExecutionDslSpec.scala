@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /** Actual-context admission of exact scenario intent through the existing interpreter.
  * @since   Oct. 18, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SbtScenarioExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -79,7 +79,7 @@ final class SbtScenarioExecutionDslSpec extends AnyWordSpec with Matchers with G
         result.processResult shouldBe contextb.result
         result.testSelection shouldBe Some(SbtTestSelectionResult.Verified(Vector(_class_name), 1, 1L))
         val execution = contextb.profile.driver.executions.head
-        execution.effectiveArguments shouldBe Vector("--batch", "-Dsbt.server.autostart=false",
+        execution.effectiveArguments shouldBe Vector("-J-Xmx4294967296", "--batch", "-Dsbt.server.autostart=false",
           "-Dsbt.supershell=false", "-Dsbt.color=false", "testOnly org.example.ParameterSpec -- -t \"parameter case 1\"")
         execution.request.arguments shouldBe empty
         execution.request.workingDirectory shouldBe None
@@ -196,7 +196,7 @@ final class SbtScenarioExecutionDslSpec extends AnyWordSpec with Matchers with G
         result.processResult shouldBe contextb.result
         contextb.profile.driver.executions should have size 1
         val execution = contextb.profile.driver.executions.head
-        val arguments = Vector("--batch", "-Dsbt.server.autostart=false", "-Dsbt.supershell=false", "-Dsbt.color=false",
+        val arguments = Vector("-J-Xmx4294967296", "--batch", "-Dsbt.server.autostart=false", "-Dsbt.supershell=false", "-Dsbt.color=false",
           "testOnly org.example.ParameterSpec -- -t \"parameter case 1\" " +
             "\"-Dcncf.validation.input.count=-2\" \"-Dcncf.validation.input.enabled=false\" " +
             "\"-Dcncf.validation.input.label=日本語 ' $() literal case\"")

@@ -4,11 +4,13 @@ import java.security.SecureRandom
 import java.util.UUID
 import org.goldenport.Consequence
 import org.goldenport.cncf.config.SystemNodeShutdownConfiguration
+import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.datastore.sql.{ManagedSqlDataStoreResource, SqlDataStoreIdentity, SystemNodeSqlDataStoreRegistry}
 
 /*
  * @since   Aug.  2, 2026
- * @version Oct.  7, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SystemNode private (
@@ -52,6 +54,19 @@ final class SystemNode private (
           _runtime_resources = _runtime_resources :+ resource
       }
     }
+
+  /** Use the assembly-owned area, or own one here for a bare embedding. */
+  private[cncf] def workAreaSpaceC: Consequence[WorkAreaSpace] = Consequence {
+    synchronized {
+      if (_state != State.Running)
+        throw new IllegalStateException("SystemNode is not accepting runtime resources")
+      _runtime_resources.collectFirst { case area: WorkAreaSpace => area }.getOrElse {
+        val area = WorkAreaSpace.create(RuntimeConfig.default)
+        _runtime_resources = _runtime_resources :+ area
+        area
+      }
+    }
+  }
 
   def shutdownC(onTimeout: () => Unit = () => ()): Consequence[Unit] = {
     val owner = synchronized {

@@ -1,15 +1,115 @@
 # Typed SBT Execution
 
+## SBT-JVM-01 — Runtime-owned maximum heap
+
+Every typed Compile, Test, TestOnly and FixCheck admission resolves
+`cncf.sbt.jvm.maximum-heap-mib` from the current UoW's ordinary configuration.
+The absent default is 4096 MiB. An explicit value is an integral numeric MiB
+count of at least 4096, representable as bytes in a Long. For example:
+
+```json
+{ "cncf.sbt.jvm.maximum-heap-mib": 8192 }
+```
+
+This is a maximum-heap baseline, not initial allocation, a memory reservation,
+an execution grant or a promise that OOM cannot occur. Effective Xmx is the
+largest of that baseline and explicit heap requirements from the admitted
+workspace's `.jvmopts`, `.sbtopts`, selected shared sbtopts and the program's
+explicit JAVA_OPTS/SBT_OPTS/JAVA_TOOL_OPTIONS/JDK_JAVA_OPTIONS. Xms requirements
+are also considered so the selected maximum cannot be below an explicit initial
+heap. Shared sbtopts follows SBT_ETC_FILE, XDG_CONFIG_HOME/HOME and /etc selection.
+No ambient caller environment is imported. Plain numeric Xmx/Xms with optional
+K/M/G units and sbtopts `--mem`/`-mem` MiB values are recognized; no shell code or
+variable expansion is evaluated. Other JVM options remain the launcher's concern.
+
+The runtime prefixes one `-J-Xmx<bytes>` argument and normalizes existing Xmx
+tokens in the explicitly bound JVM option variables, because some SBT launchers
+append those after command-line arguments. It retains every other option and
+does not write config files, add per-check JAVA_OPTS, change the SBT executable,
+or install a wrapper. Missing optional files mean no setting; actual read or
+numeric resolution failures are configuration failures before dispatch.
+
+The admitted command/selection, capability, workspace, effective limits and
+empty request remain unchanged. Only runtime-derived JVM arguments/environment
+are adjusted. Reading current config on each new admission allows a later
+ordinary invocation to adopt a project change without replacing Session,
+history, counters or prior results. Configuration change does not itself retry
+an execution or turn prior failure into success. Generic ProcessExec and Git
+do not consume this property. `SbtJvmParametersSpec` and the existing SBT DSL
+specifications reserve these semantics.
+
+## SBT test output policy
+
+### TEST-OUTPUT-01 — Defaults and ordinary properties
+
+Typed `Test` and `TestOnly` (including exact scenarios) use these independent
+ordinary CNCF resolved properties, expressed in bytes:
+
+| Property | Default |
+| --- | ---: |
+| `cncf.sbt.test.stdout.maximum-bytes` | 67108864 (64 MiB) |
+| `cncf.sbt.test.stderr.maximum-bytes` | 8388608 (8 MiB) |
+
+For example, a selected project host configuration may contain:
+
+```json
+{
+  "cncf.sbt.test.stdout.maximum-bytes": 67108864,
+  "cncf.sbt.test.stderr.maximum-bytes": 8388608
+}
+```
+
+Only an absent property selects its default. Present values must be numeric,
+positive, integral byte counts within the signed Long range. Text, null,
+Booleans, fractional, zero, negative and overflowing values are structured
+configuration errors before driver invocation, without reflecting supplied
+values in diagnostics. Resolution uses the current UnitOfWork's ordinary
+`ResolvedParameters`, including its existing inheritance/provenance rules;
+there is no direct JVM-system-property or ambient-environment fallback.
+
+### TEST-OUTPUT-02 — Explicit host ceilings and operation isolation
+
+For each stream, the effective limit is the minimum of its selected property
+(or default) and the already admitted host program's explicit stream ceiling.
+A property cannot enlarge runtime grants or host authority. To permit the
+defaults, a host's Test/TestOnly `sbtPrograms[].limits` must declare
+`stdoutBytes >= 67108864` and `stderrBytes >= 8388608`; an intentionally smaller
+explicit host ceiling remains authoritative. The strict host wire contract and
+finite required process-limit fields do not change.
+
+Only the two effective capture ceilings are narrowed. Test selection, arguments,
+workspace, capabilities, environment, deadlines, other limits and fixed empty
+request stay intact. Compile, FixCheck, Git and generic Process execution do not consume
+these test properties, including malformed test-only properties. No automatic
+retry or execution follows configuration changes.
+
+### TEST-OUTPUT-03 — Complete bounded evidence
+
+Given/When/Then and ordinary test output remain visible. Each stream remains
+finite; its existing output-limit termination, truncation and captured-prefix
+facts are retained when exceeded. A truncated/incomplete result never becomes
+test success. Original failed or unknown Workflow attempts remain unchanged;
+their existing public continuation and independent Human rules still apply.
+
+Executable evidence: `SbtTestOutputParametersSpec` E1–E4 and
+`SbtExecutionDslSpec` E-OUTPUT1–E-OUTPUT3 exercise defaults, independent inherited
+properties, invalid numeric boundaries, host tightening, actual current-context
+admission, pre-driver failure and Compile/FixCheck isolation. Existing local-driver output
+limit and SBT outcome specifications retain the termination/capture contract.
+
 Status: normative normal-command producer, host and typed consumer connection contract
 
 ## Component intent
 
-Behavior exposes protected `sbt_compile(target)`, `sbt_test(target)` and
-`sbt_test_only(target)`, each
+Behavior exposes protected `sbt_compile(target)`, `sbt_test(target)`,
+`sbt_test_only(target)` and `sbt_fix_check(target)`, each
 returning `ExecUowM[SbtExecutionResult]`. `SbtTarget(workspaceId, scenario = None)`
 contains a `WorkspaceId` and an optional public
 `SbtScenarioSelection(suiteClassName, testName)`; `SbtOperation` contains only
-`Compile`, `Test` and `TestOnly`. There is no
+`Compile`, `Test`, `TestOnly` and `FixCheck`. The corresponding protected
+`sbt_compile_attempt(target)`, `sbt_test_attempt(target)`,
+`sbt_test_only_attempt(target)` and `sbt_fix_check_attempt(target)` return
+`ExecUowM[SbtExecutionAttempt]`. There is no
 task expression, extra argv, main, executable, host cwd,
 launcher, environment or capability selector in this component API.
 
@@ -20,11 +120,13 @@ callers. Scenario `validateC` reuses the host class grammar below and requires
 an exact nonempty already-trimmed control-free test name of at most 512
 characters. Double quote, backslash and semicolon are explicitly unsupported
 literal rendering. There is no trimming, escaping or fuzzy fallback. Null
-options, selections or fields fail structurally; Compile/Test reject every
+options, selections or fields fail structurally; Compile/Test/FixCheck reject every
 scenario. TestOnly with `None` preserves existing class-only behavior.
 
 These methods only construct immutable `UnitOfWorkOp.SbtExec(target, operation)`
-intent. Construction performs no context lookup, service or permission check,
+intent. Attempt methods construct the corresponding immutable
+`UnitOfWorkOp.SbtExecAttempt(target, operation)` through the existing attempt
+wrapper. Construction performs no context lookup, service or permission check,
 workspace resolution, request creation or launch. It can be recorded without
 runtime services using typed stub outcomes. Each SbtExec is one External UoW
 occurrence describing Build; it is not lowered into a second ProcessExec
@@ -50,7 +152,7 @@ preserves earlier argument positions. There is no component grant installer
 or separate SBT root registry. Later File/Git tools must share these bindings.
 
 Actual `Component.Context` ancestry supplies identity. A generic Component
-scope kind or owner display label cannot impersonate it. Compile/Test/TestOnly require
+scope kind or owner display label cannot impersonate it. Compile/Test/TestOnly/FixCheck require
 workspace `Manage` because builds may write to the checkout; `ReadOnly`
 cannot authorize a build. A matching, independently installed actual component
 process capability grant is also required. Workspace permission grants no
@@ -67,7 +169,7 @@ preflight does not claim race-proof filesystem containment.
 Internal `SbtProgramDefinition.createC` receives the admitted binding,
 operation, capability, safe identity, normal `sbtExecutable`, finite
 `ProcessExecutionLimits`, fixed environment and a final defaulted
-`testClasses: Vector[String] = Vector.empty`. Compile and Test reject nonempty
+`testClasses: Vector[String] = Vector.empty`. Compile, Test and FixCheck reject nonempty
 classes. TestOnly requires 1..16 distinct exact fully qualified ASCII names,
 each 1..256 characters, matching
 `[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+`. Distinct packages cannot
@@ -81,8 +183,26 @@ The runtime renders this fixed vector with one literal final command:
 
 ```text
 <trusted normal sbt executable> --batch -Dsbt.server.autostart=false
-     -Dsbt.supershell=false -Dsbt.color=false compile|test
+     -Dsbt.supershell=false -Dsbt.color=false compile|test|fixCheck
 ```
+
+The finite task and wire mapping is:
+
+| Operation | Wire token | Final task argument |
+| --- | --- | --- |
+| Compile | `compile` | `compile` |
+| Test | `test` | `test` |
+| TestOnly | `test-only` | `testOnly <host-admitted classes>` |
+| FixCheck | `fix-check` | `fixCheck` |
+
+FixCheck selects exactly one fixed, runtime-owned `fixCheck` task argument with
+the same four flags and admission rules. It accepts no class, scenario or
+request override. The project's `fixCheck` task is responsible for invoking
+Scalafix in check-only mode. CNCF executes this selected task; it cannot audit
+arbitrary build-task internals or guarantee that arbitrary project code is
+read-only. The consumer owns lint implementation, a nonempty syntactic rule
+profile and separate durable check-result storage. No test-suite or test-count
+evidence is synthesized from a check result.
 
 TestOnly retains those same four flags and uses one final argv item containing
 literal `testOnly ` followed by the trusted names joined with one space.
@@ -114,15 +234,22 @@ exact root fields `schema`, `programs`, `grants`, `workspaces`, `workspaceGrants
 and `sbtPrograms`. Generic `programs` and `grants` retain their V1 wire shapes.
 Workspace declarations contain exactly `identity` and `root`; workspace grants
 contain `componentId`, `workspaceId` and `access` (`read-only` or `manage`).
-Each Compile/Test SBT declaration contains exactly `target`, `operation` (`compile` or `test`),
+Each Compile/Test/FixCheck SBT declaration contains exactly `target`, `operation`
+(`compile`, `test` or `fix-check`),
 `capability`, `identity`, `sbtExecutable`, `limits` and `environment`.
 `javaExecutable` and `launcher` are unknown fields, never aliases.
 V2 and V3 add the closed operation token `test-only`, which requires exactly
 the same seven fields plus a `testClasses` string array. Missing, null, empty
-or invalid TestOnly classes fail; Compile/Test reject `testClasses` even when
+or invalid TestOnly classes fail; Compile/Test/FixCheck reject `testClasses` even when
 empty. Encoding writes that field only for TestOnly. V3 retains its existing
 `gitPrograms` root field and all existing Git restrictions. Validated vectors
 pass unchanged through declarations, factory and private metadata.
+
+`fix-check` is an explicit new member of the closed operation set in the same
+V2/V3 schemas; no schema version changes or old-token reinterpretation apply.
+FixCheck rejects `scenario`, extra argv and all other unknown host fields
+under the existing exact seven-field shape. Encoding emits neither selectors
+nor extra task fields for it.
 
 All eleven existing process limit fields are required finite positive integers;
 the fixed environment retains the existing strict validation. Duplicate JSON
@@ -182,7 +309,9 @@ ordinary generic capability behavior, remain unchanged.
 The owning human expressly approved this CNCF internal Compile/Test request
 lowering and its selected regression specs, and subsequently approved the exact
 same existing empty-arguments `ProcessExecutionPolicy.resolveSbtC` request site
-for TestOnly and its corresponding specs. No new request site is introduced.
+for TestOnly and its corresponding specs. The accepted
+`P65-Q3-typed-sbt-fix-check@1` scope adds FixCheck through that same existing
+empty request site. No new request site is introduced.
 This chat approval is separate
 from runtime grants and platform execution permission. It does not approve
 sm-workflow direct Request/ProcessExec use, the six legacy sites, arbitrary
@@ -201,12 +330,21 @@ termination limits, Job cancellation, descendant cleanup and closure apply.
 `SbtExecutionResult` retains `target`, `operation` and the actual bounded
 `processResult`, plus a fourth defaulted
 `testSelection: Option[SbtTestSelectionResult] = None`; existing three-argument
-source calls remain valid. Compile/Test `outcome` is `Succeeded` for `Exited(0)`,
+source calls remain valid. Compile/Test/FixCheck `outcome` is `Succeeded` for `Exited(0)`,
 `Failed(exitCode)` for nonzero exit, and `Incomplete(termination)` for launch
 failure, timeout, cancellation, output limit or artifact limit. Captures,
 truncation, byte/artifact counts, elapsed duration and safe identity are
 preserved. Typed result conversion occurs within interpretation. Admission
 failures remain structured `Consequence` failures.
+
+For FixCheck, `Succeeded` means the selected build check actually exited zero;
+nonzero is `Failed(exitCode)`, `NotStarted` is `NotExecuted`, and every other
+termination remains `Incomplete(termination)`. Its `testSelection` stays absent
+even when stdout resembles a test report. No test success is inferred.
+The attempt API retains `Observed` for an actual result,
+`AdmissionRejected(target, operation, conclusion)` for pre-execution admission
+failure, and `Uncertain(target, operation, conclusion)` for transport or driver
+uncertainty. It adds no replay, retry or fallback.
 
 For TestOnly `Exited(0)`, success additionally requires
 `Verified(testClasses, completedSuites, testsRun)`. An absent selection yields
@@ -261,6 +399,15 @@ database-rollbackable and arbitrary build code gains no new hard OS sandbox.
 `LocalProcessExecutionDriverSpec` author these behaviors. Typed unit scenarios
 use deterministic profiles or controlled launchers and never launch SBT;
 existing controlled local-probe coverage remains applicable.
+FixCheck coverage in `SbtExecutionDslSpec`, `RuntimeProcessExecutionPlanCodecSpec`,
+`LocalProcessExecutionDriverSpec`, `SbtTestSelectionSpec`,
+`UnitOfWorkProgramPlanningSpec` and `ExternalEffectUsageSpec` specifies inert
+normal/attempt recording, current independent authority, installed binding,
+fixed argv and closed wire shapes, selector/override denial, Build effects and
+actual controlled zero/nonzero results with absent test selection. Lifecycle
+events spell this operation `fix-check`; existing termination and capture facts
+remain authoritative. These specifications do not establish consumer delivery
+or mutate an existing consumer Session, history, repair count or validation result.
 `UnitOfWorkProgramPlanningSpec` and `UnitOfWorkProgramRecordingSpec` specify
 single typed External occurrences, order, repeated intents, typed outcomes,
 selected branches and failure propagation without real admission or execution.

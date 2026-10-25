@@ -139,6 +139,7 @@ import org.goldenport.cncf.processexecution.{
   ProcessExecutionAdmission,
   ProcessExecutionRequest,
   ProcessExecutionResult,
+  HostSourceRead, HostSourceTarget, HostSourcePayload, HostSourceReadResult,
   ResolvedProcessExecution,
   SbtExecutionAttempt,
   SbtExecutionResult,
@@ -148,10 +149,25 @@ import org.goldenport.cncf.processexecution.{
 
 /*
  * @since   Sep. 28, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.Core.Holder =>
+
+  protected final def host_source_read(
+    target: HostSourceTarget,
+    payload: HostSourcePayload
+  ): ExecUowM[HostSourceReadResult] =
+    exec_from(HostSourceRead.resolveC(execution_context.cncfCore.scope, target, payload)).flatMap { execution =>
+      process_exec(execution).flatMap(result => exec_from(HostSourceRead.decodeC(result)))
+    }
+
+  protected final def host_source_read_c(
+    target: HostSourceTarget,
+    payload: HostSourcePayload
+  )(using uow: UnitOfWork): Consequence[HostSourceReadResult] =
+    HostSourceRead.resolveC(execution_context.cncfCore.scope, target, payload)
+      .flatMap(execution => process_exec_c(execution)).flatMap(HostSourceRead.decodeC)
 
   protected final def git_branch(target: GitTarget): ExecUowM[GitExecutionResult[String]] =
     _git_exec(target, GitOperation.Branch)
@@ -265,6 +281,9 @@ trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.
   protected final def sbt_test_only(target: SbtTarget): ExecUowM[SbtExecutionResult] =
     _sbt_exec(target, SbtOperation.TestOnly)
 
+  protected final def sbt_fix_check(target: SbtTarget): ExecUowM[SbtExecutionResult] =
+    _sbt_exec(target, SbtOperation.FixCheck)
+
   private def _sbt_exec(target: SbtTarget, operation: SbtOperation): ExecUowM[SbtExecutionResult] =
     ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.SbtExec(target, operation)))
 
@@ -276,6 +295,9 @@ trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.
 
   protected final def sbt_test_only_attempt(target: SbtTarget): ExecUowM[SbtExecutionAttempt] =
     _sbt_exec_attempt(target, SbtOperation.TestOnly)
+
+  protected final def sbt_fix_check_attempt(target: SbtTarget): ExecUowM[SbtExecutionAttempt] =
+    _sbt_exec_attempt(target, SbtOperation.FixCheck)
 
   private def _sbt_exec_attempt(target: SbtTarget, operation: SbtOperation): ExecUowM[SbtExecutionAttempt] =
     ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.SbtExecAttempt(target, operation)))

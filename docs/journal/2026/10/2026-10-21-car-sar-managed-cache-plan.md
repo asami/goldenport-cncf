@@ -1,0 +1,783 @@
+# CAR/SAR Managed Cache — Decision and Development Handoff
+
+Date: 2026-10-21
+Status: original planning record preserved; Phase 116 CLOSED on 2026-10-23; see same-Session formal completion below.
+
+## Context and confirmed baseline
+
+Following the [disk exhaustion incident](2026-10-21-workarea-disk-exhaustion-cleanup.md),
+the user proposed treating archive expansions as reusable caches, protecting
+active use and collecting unused entries. The user selected `~/.cncf/cache` and
+asked to separate archive bodies from extracted results in the specification
+and development plan.
+
+At inspection, ComponentRepository.defaultStandardRepositoryDir points at
+`~/.cncf/cache`; standard archive fetching uses its `car/` and `sar/` children.
+CarExtractor/SarExtractor still expand into WorkArea directories. The current
+repair adds retained ownership so lazy runtime ClassLoaders can keep extracted
+files alive. ComponentResourceLifecycleStore has in-memory ownership state,
+which does not itself provide cross-JVM filesystem exclusion.
+
+The previous repair and its 116/116 focused verification remain evidence for
+WorkArea ownership/cleanup. They do not demonstrate the new shared cache. The
+private incident evidence remains under
+`~/backup/journal/2026/10/cncf-workarea-disk-recovery-20261021/`; no evidence is
+moved into a cache or replaced by a new empty ledger.
+
+## Adopted decisions
+
+- Preserve existing `cache/car` and `cache/sar` repository placement. Add separate
+  `extracted/car`, `extracted/sar`, dated staging and stable entry-lock storage.
+  The earlier conceptual `repository/` example does not require relocating the
+  current downloaded archive cache.
+- Source bytes plus extraction format/profile identify immutable generations;
+  coordinates alone cannot identify changed local SNAPSHOT contents. Compute
+  content identity at ingestion, not repeated full-tree scans or workflow hash gates.
+- Acquire typed leases before exposing paths. Reuse the current runtime owner;
+  close ClassLoaders before releasing backing leases. Completed entries survive
+  ordinary close and can be shared by multiple runtimes and JVMs.
+- Coordinate use/build/collection per entry. JVM-local reference counts complement
+  native cross-process protection. Lock files stay outside removed payloads and
+  are not unlinked by ordinary collection. Advisory locks cannot prevent manual deletion.
+- Prefer collection of unused expansions and retain source archives for offline
+  reconstruction. Make source eviction a separate policy. Account for staging,
+  skip active entries and report insufficient reclaimable space explicitly.
+- Ordinary execution WorkArea and journal/evidence retain their separate roles.
+  Old flat temporary trees remain a separate cleanup decision because existing
+  processes have no new cache leases.
+
+Behavior is now owned by the [specification](../../../spec/car-sar-cache-management.md)
+and [design](../../../design/car-sar-cache-management.md), not this journal.
+
+## Development handoff
+
+[Phase 116](../../../phase/phase-116.md) and its
+[checklist](../../../phase/phase-116-checklist.md) are PLANNED. Establish the CAR
+main route before SAR and collection-policy extensions:
+
+```text
+resolved CAR → stable source generation → one published extraction
+           → two runtime leases → one runtime closes → other keeps working
+           → final release → managed collection → offline re-extraction
+```
+
+Prove same-JVM and two-JVM use through actual runtime/resource ownership. Then
+add SAR backing relationships, changed source generations, process-death recovery
+and bounded capacity/inspection operations. Local test fixtures suffice; do not
+make Docker or external services a prerequisite. Reuse current admission and
+resource checks; a cache hit must not bypass them or introduce duplicate gates.
+
+CC-01 must bind internal lease/result types, mutable-source generation storage,
+operation/configuration names and concrete limits to current code before
+implementation. These are bounded design details, not permission to reopen the
+approved lifetime/storage decisions or expand into distributed cache management.
+
+Preserve all existing source edits, WorkArea validation, active Goals/sessions,
+history and repair counts. Do not restart ongoing development or automatically
+adopt/delete old extracted directories. This update edits documents only and
+does not run tests, publish artifacts, commit or activate the Phase.
+
+Phase 112 remains the separate owner of Documentation Subcomponent/ScalaDoc
+projection. Large documentation was the incident's main payload, but dropping
+it silently is not this plan: reuse the complete declared generation first.
+Selective extraction would require an explicit profile aligned with that contract.
+
+## SNAPSHOT refinement — 2026-10-21
+
+The user approved replacing the current SNAPSHOT selection and retaining old
+generations only while used. This refines the earlier original-retention default:
+current/reusable originals remain available for offline reconstruction; unused
+superseded SNAPSHOT originals and expansions are not historical archives.
+
+The specification C2.1/C3, lifecycle design and Phase 116 CC-01/03/04 now require:
+
+- Prepare an immutable replacement, then atomically switch the coordinate's
+  current generation. Existing users keep their old leases; subsequent users
+  acquire the new generation. Identical content/profile reuses the same object.
+- A short coordinate update lock protects both switching and selecting/pinning
+  the current generation. Separate generation usage locks protect source/tree
+  payloads for their actual use lifetime. No download/extraction or long wait
+  holds the update lock. Retrying acquisition reselects current state.
+- Attempt retirement collection at replacement and after final release. Active
+  payloads remain protected; unused payloads have no history/idle retention.
+  Source and expansion use are independent; current references elsewhere prevent
+  mistaken deletion of shared content. Caller-owned originals remain untouched.
+- Retry interrupted/failed retirement through normal bounded collection. Persist
+  or derive pending retirement from committed selection state. Stable lock files
+  stay outside removed payloads; the collector coordinates reference checks and
+  takes generation exclusion without creating a reverse lock-order wait.
+
+Acceptance now includes concurrent refresh/acquire/collect, continued lazy access
+to an old generation, collection after release, same-content reuse and interrupted
+retirement. These are planned acceptance obligations, not new test results.
+Phase 116 remains PLANNED; existing implementation, evidence and active work are
+preserved. This refinement changes documentation only.
+
+## CC-01 contract authoring
+
+After the pre-existing work was preserved in purpose-separated local commits,
+the ordinary host issued CC-01. The lifecycle design now binds actual APIs:
+`ComponentCreate.configuration`, `StandardRepository.cacheRoot`, the existing
+CAR/SAR discovery and extraction paths, `SystemNode.ownRuntimeResourceC` and
+`Subsystem.shutdownOwned`. The latter keeps ClassLoader shutdown before backing
+lease release. The owner is the existing `subsystem` package; an absent `system`
+directory is not a reason to introduce a parallel owner.
+
+The selected design fixes typed source/tree leases, independently immutable
+captured source bodies, current-selection revisions, conservative coordinate
+reference publication and collection rechecks. A collector obtains known
+coordinate locks before generation exclusion, rereads the full reference set
+and retries if it discovers another coordinate. Prepared candidates stay pinned
+across the switch; a stale refresh cannot overwrite a newer pointer revision.
+Retired source and tree payloads have independent use and collection decisions.
+
+Capacity defaults distinguish 16 GiB of source payloads, 8 GiB of expansions and
+a 2 GiB staging subset. Persistent per-pool slot reservations avoid a global
+cache lock, include temporary copies and survive interruption conservatively.
+Retained coordinate bodies and independent captured originals both count.
+Inspection distinguishes exact bytes from rounded reservations; insufficient
+safe capacity yields a structured failure. Existing admission remains authoritative.
+
+This entry records engineering decisions, not a native Journal Entry or an
+accepted Step. Compile, independent review, real cache behavior and integrated
+acceptance remain pending. Earlier WorkArea results, Goals, histories and repair
+counts retain their original meaning; no previous evidence was moved or reset.
+# CC-02 implementation candidate
+
+The corrected installed sm-workflow completed the original CC-01 compile check.
+Independent review accepted its contract, and the native Workflow created Step
+commit `0f3a433809e2f9ee6b575d114d1fcb7ba8c7b5cc` before issuing CC-02 in the same
+Session `06016330fa63b5eac6097ff2b8ff42c2`. No sbt-cozy plugin was added.
+
+The CC-02 candidate connects the existing packed-CAR discovery route to immutable
+captured sources and generation-specific shared extraction leases. Existing
+CarExtractor structure/admission and SystemNode resource ownership remain the
+boundaries; ClassLoaders close before the backing lease. Shared native file locks
+use one JVM registry entry per stable generation lock, outside payload deletion.
+Publication is atomic and collection requires exclusive generation protection.
+Explicit StandardRepository roots override runtime cache configuration.
+
+ManagedCarCacheSpec supplies local CAR fixtures for two runtime owners, two
+fixture-owned JVMs, concurrent builders, acquire/collect races, unrelated-key
+progress, exceptional startup, idempotent shutdown and offline rebuild through
+ComponentDirRepository. Existing repository ownership tests now isolate their
+managed cache and distinguish WorkArea cleanup from explicit cache collection.
+These are authored checks, not yet successful validation or CC-02 acceptance.
+SAR composition, coordinate/SNAPSHOT switching, automatic retirement, crash
+recovery and complete root capacity reservations remain CC-03/CC-04 work.
+
+## CC-02 interrupted native progression and development validation
+
+The CC-02 implementation Submit was accepted. Its one paired native Advance
+terminated before SBT with `Source history rule: unterminated literal` and no
+business response. The runtime owner identified a legal Scala terminal quote
+run in the existing repository specification. Four earlier history effects
+succeeded; the fifth effect remains unknown. Preserve that prefix and unknown
+outcome, the accepted Submit, original Session, Plan/base and repair history.
+Do not replay Submit/Advance or treat absence of a response as non-execution.
+The runtime owner is qualifying a bounded normal continuation; neither source
+corrections nor fixture consent establish live Human recovery authorization.
+
+An ownership overlap was also found: the runtime owner's RuntimeConfig change
+is covered by CC-02's broad config candidate path. The earlier implementation
+summary's statement that all four runtime-owner files were outside the candidate
+was inaccurate. Preserve those changes and settle their separate attribution
+before CC-02 staging/commit; no implicit adoption or rollback is permitted.
+
+Independent development validation through the registered command runner selected
+`testOnly org.goldenport.cncf.component.cache.ManagedCarCacheSpec org.goldenport.cncf.component.repository.ComponentRepositoryCarSpec`.
+Attempt `p116-cc02-development-b41c1ea84d79422688c7e862e363603e@1` terminated
+with SBT/wrapper exit 1 before tests. Two local `_complete_` declarations needed
+explicit parameter parentheses to avoid Scala's underscore/colon tokenization;
+the six diagnostics included their four cascading unresolved references.
+Those declarations and calls were corrected for the next focused execution.
+This is development evidence, not a native validation receipt, Step acceptance,
+repair-counter reset or shared-cache success. The original failed result and
+complete logs remain under the original disposable allocations.
+
+After the syntax correction, independent development attempt
+`p116-cc02-development-121e608c00aa42d6b4010092c5b080fa@1`, subject
+`p116-cc02-development-subject@2`, completed both selected suites: 91 tests
+passed, none failed or aborted; SBT/wrapper exit 0 and the actual process
+termination marker were retained and admitted against the current selection.
+The new suite exercised same-JVM and cold two-JVM sharing, lazy reads after one
+owner closes, active-generation collection skips, final-release collection,
+offline reconstruction, generated close orders and concurrent publication.
+The existing CAR repository suite also passed with its isolated cache fixtures.
+This establishes the selected development tests only. Native CC-02 validation,
+independent review/Step commit and later-Step behavior remain outstanding.
+
+## Runtime prerequisite review observation
+
+The separately owned ordinary-project SBT binding repair has its own accepted
+focused source review and 44/44 successful tests. It is a prerequisite repair,
+not part of the managed-cache program implementation. The following nonblocking
+observation comes from reviewer `/root/project_build_binding_independent_review`
+and is retained here with that attribution; this entry neither adopts a config
+refactor into Phase 116 nor changes CC-02 acceptance.
+
+HYG-RUNTIME-CONFIG-SIZE-001 — RuntimeConfig.scala remains pre-existing
+ordinary-source size debt (1,146 baseline / 1,168 current lines, >1,000 threshold).
+The ordinary-project SBT binding fix adds one cohesive setting without a
+discovered correctness defect. Defer coherent configuration-role split
+assessment to a separately selected CNCF maintenance task; no refactor is
+admitted by CB-RUNTIME-V3-004.
+
+## 2026-10-22: same-Session recovery and CC-02 review repair
+
+The runtime owner's two installed-CLI recovery qualification cases passed 2/2
+through the newly authorized registered command runner. The separate four-file
+ordinary-project SBT prerequisite repair was committed as
+`3ee1d844a8ac8d85f4f34f08391bf02c41170d1e`, preserving the accepted CC-01 commit
+and the cache candidate. The actual user then answered the native recovery
+question with `AuthorizeNewAttempt`. Its independently retained Human record was
+prepared and accepted through the ordinary installed CLI; the single subsequent
+Advance inspected the new candidate and completed `car-shared-main-route` with
+10/10 successful tests. The original unknown source-history effect, successful
+prefix, original base, Plan, Session and prior validation history remain retained.
+
+Independent reviewer `/root/p116_cc02_independent_review` found no CAR behavioral
+blocker within CC-02, and returned three concrete repository-rule corrections.
+The native Workflow accepted that repair verdict and issued `issue-2` through
+`issue-4` in the same Session, with ordinary/automatic repair counts 1/1 of 10.
+
+The repair binds all ten executable examples to their real C1–C6 contract clauses
+with visible E1–E10, `afterWord` metadata and specification-path/contract/example
+Given descriptions; it preserves GWT execution boundaries and generated close
+order coverage. The package-visible fixture helpers now use `withFixture` and
+`fileIdentity`. `CacheCollectionResult` supplies a default empty argument,
+canonical `empty` and explicit zero-argument `apply()`. These are authored
+corrections awaiting native revalidation and affected independent re-review;
+they do not establish Step acceptance or Phase completion.
+
+The first repair's native test-only invocation terminated with exit 1 during
+Test compilation: the new `withFixture` helper name collided with inherited
+ScalaTest `withFixture`, so the lambda was interpreted as `NoArgTest` rather
+than the intended `Path => A`. The other missing-default diagnostics cascaded
+from that mismatch. The Workflow retained that failure as `issue-5` and issued
+the next bounded repair at ordinary/automatic counts 2/2 of 10. The helper and
+all call sites now use `withCacheFixture`; the original three rule corrections
+remain. Fresh native validation and affected independent review are still owed.
+
+## 2026-10-22: CC-02 closure recovered; CC-03 resumed
+
+The corrected fixture helper passed the native CAR check (10/10), and the
+affected independent re-review accepted the three rule corrections. The next
+Step closure stopped after recording a commit intent because its host selection
+included two nonexistent system-package paths. Its original result remains
+UNKNOWN; absence of a response was never treated as non-execution.
+
+The runtime owner implemented and qualified a public closure-recovery route
+(CNCF 43/43, application 39 pure and 19 CLI regressions, isolated installed
+closure scenarios 2/2), independently reviewed it and completed ordinary local
+publication. Two unrelated opt-in tests were canceled, not counted as passes.
+The host selection was limited to the actual reviewed 13 files. Public describe,
+passive evidence preparation, explicit AuthorizeNewAttempt and one ordinary
+Advance completed CC-02 as `9da7d491d87d0e01ab630cbdd7cd05ba2181816a`, tree
+`ba88a443e70da7a8fa0196ae59b94e0acffb74e8`. The original history and mechanical
+receipts remain unchanged. The new attempt has its own successful exit/commit
+receipt. No accepted check/review, Start or Submit was repeated, and no push was
+performed. Details remain in the original task's
+`cc02-public-recovery-20261022/completion-handoff.md`; evidence was not moved.
+
+The user then requested continuation. The actual normal response issues
+`ImplementStep / CC-03` in Session `06016330fa63b5eac6097ff2b8ff42c2`,
+continuation `ordered-implementation:169`, expected revision 170. Its supplied
+repair counts are automatic 0 / ordinary 0 / limit 10 for the new Step.
+Authoring now targets SAR parent/child backing leases and SNAPSHOT generation
+switch/retirement through the existing repository/extractor/runtime owner.
+Four unstaged process-execution recovery files remain separately owned and
+untouched. CC-03 checks and independent acceptance remain pending. The original
+WorkArea 116/116 result remains valid only for its ownership/cleanup boundary.
+
+## CC-03 authored candidate and native validation handoff
+
+Registered `sm_workflow_implementation` agent
+`/root/p116_cc03_implementation` (gpt-6.1-sol / medium) authored the assigned
+SAR/SNAPSHOT implementation without running commands or accepting its own work.
+The candidate adds immutable coordinate selections with revision comparison,
+parent/alias references, independent source/tree retirement and protected reads
+of cache-owned originals; SAR destination extraction reuses its existing
+structure checks. Directory children retain their parent lease with the existing
+SystemNode, and packed children acquire independently reusable CAR expansions.
+Eight visible metadata/GWT examples cover real repository owners, generated
+source/tree release orders, same-content/alias reuse, failed refresh, stale
+revision rejection, native contention/retry, managed input and another JVM's
+old reader. Their actual validation is still pending. Existing SAR repository
+ownership assertions now distinguish reusable trees from explicit collection.
+
+The CC-03 public host check/index/commit bindings now select the exact eleven
+existing candidate files, avoiding the original nonexistent system-package
+prefixes. The immutable business Plan, routing and previous selections were
+not changed. The four unrelated runtime-recovery files remain unmodified and
+outside this candidate. No test success, review acceptance or Step commit is
+claimed by this authored result.
+
+## CC-03 first native check and independent repair findings
+
+The ordinary implementation Submit was accepted. Its one paired Advance
+completed `sar-snapshot-generations` with 8/8 tests, no canceled/failed/aborted
+cases, actual SBT Exited(0), and issued ReviewStep at candidate
+`5b3420ea5c50d9d78ae4f73803d80a418728da89`, receipt
+`06016330fa63b5eac6097ff2b8ff42c2:ordered-validation:199:validation`. The
+initial helper preparation had stopped before CLI launch because its empty
+output directory was absent; correcting that confirmed non-execution did not
+repeat a native operation.
+
+Independent read-only reviewer `/root/p116_cc03_independent_review`
+(gpt-6.1-sol / medium) assessed all eleven paths and requested three repairs.
+`issue-6` identifies extraction/source lease cleanup after exceptional
+finalization; `issue-7` identifies embedded-source retirement starvation when
+metadata exceeds the bounded scan prefix; `issue-8` identifies inconsistent
+source dates after native normalization (new files had a local Oct22 creation
+date but the normalizer selected its owning call's current UTC date, Oct21).
+The actual clock was Oct21 UTC / Oct22 Asia/Tokyo, not a stale or fixed clock.
+The owning date contract needs consistent interpretation; no clock offset,
+history suppression or dependency edit is adopted to conceal the mismatch.
+
+Ordinary review preparation, accepted Submit and one Advance issued RepairStep
+with automatic 1 / ordinary 1 / limit 10. Prior issues 1–5 remain resolved.
+The registered `sm_workflow_repair` agent authors the bounded lease/retirement
+corrections and regression examples; new native checks and affected independent
+re-review remain owed. Existing successful evidence and old unknown intent
+remain intact.
+
+## CC-03 bounded repair authoring and date-contract clarification
+
+The original independent reviewer clarified issue-8 against RULE.md's current
+system-date requirement: the rules do not mandate Asia/Tokyo. The actual
+owning call's UTC date, Oct21, is a legitimate creation/version date. Its
+original demand for Oct22 specifically was overstated; the concrete mismatch
+between new-file creation and version dates still requires repair. The six
+touched Scala headers use the owning UTC date consistently, preserving earlier
+creation dates and canonical compressed history. Local journal headings retain
+Oct22. No clock producer, runtime configuration or dependency change is needed.
+
+The assigned repair retains acquisition cleanup ownership until finalization
+has succeeded and attempts every reverse-order cleanup while retaining primary
+and suppressed failures. It also records parent-to-embedded dependencies so a
+parent replacement reconciles affected sources directly, independently of the
+bounded general scan. New E9/E10 examples exercise actual native pins with
+filesystem cleanup errors and retirement beyond a scan limit of one, including
+another current alias. These are authored corrections, not validation or
+independent acceptance. E1-E8 and the separately owned recovery changes remain.
+
+## CC-03 repair validation and remaining formatter incompatibility
+
+The first repair Submit was accepted. Its paired native Advance passed all
+10 ManagedSarCacheSpec examples (including E9/E10), Exited(0), receipt
+`06016330fa63b5eac6097ff2b8ff42c2:ordered-validation:234:validation`, candidate
+`d82d4fade1ddd6489ca0c31bc4c19639c9d755f1`. The same independent reviewer
+accepted the lease cleanup and targeted retirement corrections. Their genuine
+affected re-review was prepared and submitted through the ordinary route;
+the subsequent RepairStep has issues 1-7 RESOLVED, only issue-8 OPEN, and
+automatic 2 / ordinary 2 / limit 10. No successful check was replayed to
+manufacture an acceptance result.
+
+The date correction is valid, but eleven historical lines still use one space
+after `*`, contrary to RULE.md's two-space history format. Read-only inspection
+and the independent reviewer confirmed the actual producer limitation:
+sm-workflow's `WorkflowSourceHistoryRule._date_line` shares one prefix between
+history and latest tags, while its tag validator disallows embedded whitespace.
+The unchanged public rule cannot express both required forms. Native
+normalization would undo a consumer-only spacing edit, so another identical
+edit/check cycle cannot resolve this issue. A bounded dependency-scope proposal
+is being prepared; no dependency source or runtime configuration was changed,
+no Human approval is claimed, and CC-03 remains uncommitted.
+
+The assigned repair agent returned the four-file proposal
+`cncf-cc03-source-history-spacing@1` through ordinary `decision-needed` work.
+Its actual Submit was accepted and the paired Advance issued Human question
+`06016330fa63b5eac6097ff2b8ff42c2:ordered-human:241`, with exactly
+ApproveDependencyScope / RejectDependencyScope / Defer / Cancel. It retains
+the same Session, original base, completed Steps and 2/2/10 repair counts.
+The four literal sm-workflow paths and focused pure/File-UoW acceptance are
+retained in the task's `cc03-resume-20261022/dependency-scope-submission-01.json`.
+The dependency's ongoing owner edits are outside this task and preserved.
+The question has been presented to the user; no answer, dependency edit,
+runtime publication, Step commit or Phase completion is claimed.
+
+## CC-03 resumes with independently provided formatter repair
+
+The sm-workflow owner subsequently corrected the real formatter's tag alignment
+and existing comment indentation. Its retained handoff reports 45 pure examples
+and one ordinary native normalization example passed, independent review PASS,
+normal publishLocal Completed and runtime Activated. Current selection matches
+installation `1c5ea235-0027-48dd-9425-31d04578795f`, update
+`c74b7fd4-753b-4dac-ac6b-bbb7d3329026`; evidence remains in
+`/private/tmp/sm-workflow-p64-resume-20261022/completion-handoff.md` and
+`history-activation.json`. These supplied dependency results do not replace
+CNCF's own pending validation or review. This task made no dependency edits.
+
+The human explicitly answered “追加修正不要として続行（RejectDependencyScope）”
+to the presented question. Normal evidence preparation, accepted ordered Human
+Submit and its one paired Advance returned the same CC-03 RepairStep, retaining
+the complete proposal/rejection rationale and genuine decision reference
+`p116-cc03-provided-fix-human-direction@1`. Source/base/history, completed Steps,
+resolved issues 1-7 and automatic 2 / ordinary 2 / limit 10 remain intact.
+Only issue-8's consumer header correction remains assigned; no new dependency
+scope is approved or needed. The six CC-03 headers are being normalized under
+the existing date contract before native checks and affected re-review.
+
+## CC-03 accepted and committed; CC-04 begins
+
+The provided formatter repair was consumed by ordinary native validation:
+`06016330fa63b5eac6097ff2b8ff42c2:ordered-validation:273:validation`
+passed ManagedSarCacheSpec 10/10, Exited(0), candidate
+`00fae34b58ab3bc68abab937c4fa54ce62c84eb4`. Independent affected re-review
+resolved the final header issue while retaining the applicable prior behavioral
+judgments. The first final-review submission omitted explicit dispositions for
+already resolved issues 6/7 and was rejected by the issue-coverage precondition;
+no accepted Submit or Advance resulted from it. The same independent reviewer
+supplied a genuinely revised complete report `p116-cc03-final-rereview@2`,
+explicitly resolving 6/7/8 without claiming fresh tests of unchanged behavior.
+Its Submit was accepted and its paired Advance reached ordinary Step closure.
+
+The host admitted only the exact reviewed eleven-path local commit under the
+existing human Phase-development instruction. Normal authority preparation and
+native Advance committed CC-03 as
+`69284867c58915f2b6a0d138e5fdfb608247b03d`, parent
+`9da7d491d87d0e01ab630cbdd7cd05ba2181816a`, tree
+`00fae34b58ab3bc68abab937c4fa54ce62c84eb4`. The actual response is retained in
+`call-advance-cc03-closure-01/response.json` under the existing Phase task.
+It issued ImplementStep CC-04 with repair progress 0/0/10; this normal new-Step
+window does not erase the previous accumulated history. The same Session and
+original base remain, and the four unrelated process-execution modifications
+remain unstaged. No push was performed. CC-04 interruption recovery, bounded
+operations and capacity policy are now being authored; no success for those
+checks or Phase completion is claimed.
+
+## CC-04 authored recovery and capacity implementation
+
+The assigned implementation worker returned completed authoring for durable
+per-pool capacity claims, protected staging and repository downloads, recovery
+of abandoned ownership, retryable deletion and SNAPSHOT retirement, bounded
+fair collection, independent original retention/eviction and typed diagnostic
+counts/reasons/last-use/bytes. ManagedCacheRecoverySpec contains nineteen
+metadata-bound GWT examples, including two kinds of real test-owned JVM hard
+death, interrupted publication/download, damaged-entry rebuild, partial deletion
+retry, pending retirement, bounded fairness, dry-run, generated accounting,
+idle policy and structured capacity failure. The shared CAR fixture gains
+hard-death/classpath support. No execution was performed by the author.
+
+The five planning documents retain the real accepted CC-03 prefix and explain
+the operational projection. CC-04 remains under validation: authored examples
+and implementation completion are not passing tests, independent acceptance
+or Phase closure. Native selected check cache-recovery-capacity remains the
+original ManagedCacheRecoverySpec selection; no Plan/check scope was changed.
+
+## CC-04 first validation and independent repair request
+
+The ordinary implementation Submit was accepted; its paired native Advance
+passed all nineteen ManagedCacheRecoverySpec examples, Exited(0), receipt
+`06016330fa63b5eac6097ff2b8ff42c2:ordered-validation:316:validation`,
+candidate `5ba9d28faf15cb9b388bbaec99aed9d7aa191c61`. This is selected
+recovery/capacity evidence, not the full regression suite or Step acceptance.
+Independent review of all thirteen paths identified two missing histories:
+recovery using a pre-lock stale reservation manifest can release a successfully
+published payload's capacity, and interruption immediately after replacing a
+coordinate body can leave both old and new owner charges retained indefinitely.
+
+Actual review `p116-cc04-independent-review@1` was accepted and the paired
+Advance issued RepairStep with issue-9/issue-10 OPEN and automatic1/ordinary1/
+limit10. The assigned bounded correction targets protected state rereading and durable
+replacement reconciliation, with deterministic examples for both failures.
+Earlier successful receipts and all prior accepted commits remain preserved.
+No Step commit or new test success for this correction is claimed.
+
+### Hygiene: HYG-P116-REPOSITORY-SIZE (nonblocking)
+
+The independent reviewer classified ComponentRepository.scala's existing size
+as a maintenance follow-up: the CC-04 candidate changes 3031 lines to 3028,
+still above the repository's 2000-line threshold. Separating repository
+responsibilities requires coordinated work beyond this recovery repair batch.
+ManagedArchiveCache remains below that threshold and capacity/selection have
+separate owners. This observation is not a CC-04 blocker or added repair scope.
+
+## CC-04 bounded reservation-recovery correction authored
+
+Issue-9 now rereads and validates the current reservation manifest after obtaining
+its staging protection, then reconciles a published target under generation
+exclusion. Deterministic E20 controls actual producer completion between the
+collector's initial read and its owner-lock acquisition and checks exact charges.
+Issue-10 persists publication content identity and replaced-owner identities,
+retains a renamed payload's charge through exceptional finalization and reconciles
+obsolete owners under generation protection. E21 injects failure immediately
+after rename across twelve replacements, including identical bytes, dry-run and
+repeated collection, and checks one exact rounded charge and one owner.
+
+The repair changed only four already-selected cache files and preserved E1–E19.
+No tests, self-review, commands or commits were performed by its author. These
+are actual authored corrections awaiting the native selected check and affected
+independent re-review; issue dispositions FIXED are not acceptance claims.
+
+## CC-04 first affected validation and follow-up repair
+
+The first bounded repair Submit was accepted and its paired native Advance
+passed all twenty-one examples, Exited(0), receipt
+`06016330fa63b5eac6097ff2b8ff42c2:ordered-validation:355:validation`,
+candidate `e8d7d98a43a90252c020ade59ef7c73e7dd67d9f`. The independent
+affected re-review resolved original issue-9 and issue-10, preserving applicable
+unaffected judgments. It identified two side effects: an identical existing
+coordinate could be mistaken for a successful rename after a pre-rename failure,
+releasing staging charges despite partial cleanup leaving bytes; and publication
+hashing occurred inside the short coordinate transaction, while settled targets
+were repeatedly rehashed during normal recovery checkpoints.
+
+The actual revised review `p116-cc04-independent-rereview@1` was accepted.
+Native Advance issued issue-11/issue-12 OPEN with issue-9/issue-10 RESOLVED and
+automatic2/ordinary2/limit10. The same repair worker is assigned the bounded
+correction: preserve surviving staging charges and move content identity work
+outside coordinate exclusion, retaining durable settled state to avoid repeated
+full reads. The successful twenty-one-example result and earlier failure/review
+history are retained. No success or acceptance for this new correction is claimed.
+
+## CC-04 staging-accounting and short-lock correction authored
+
+The same four-file batch now records explicit published/aborted/settled outcomes
+before cleanup, charges actual surviving staging bytes and no longer infers
+rename success from equal content at an existing target. E22 combines identical
+bytes, pre-rename failure and partial cleanup, asserts capacity pressure while
+staging survives, then checks charge release only after actual deletion.
+Content identity capture precedes coordinate protection; recovery uses durable
+outcome/replacement state without hashing settled payloads. E23 observes identity
+reads with coordinate/generation locks available, post-rename interruption and
+no additional identity reads through settlement and repeated acquisitions.
+E20/E21 and earlier examples are preserved; twenty-three examples are authored.
+These are worker-reported corrections awaiting actual native validation and
+independent review, not new passing results or accepted issue dispositions.
+
+## 2026-10-22 user-authorized simplification supersedes reservation requirements
+
+The user withdrew strict capacity reservations and authorized revision of the
+specification, design and remaining Phase 116 plan. Ordinary I/O and failure
+cleanup replace slot/manifest accounting. Unnecessary hit-time/global scans,
+managed immutable-body recopy/rehash and unchanged durable metadata writes are
+also removed from the target. Usage/staging protection, current-selection safety
+and atomic complete publication remain required.
+
+Continue CC-04 in the same Goal/Session; preserve all accepted commits, results,
+review/failure history and repair counts above. These historical entries remain
+evidence for their original scope, not acceptance of the revised behavior.
+Reservation-only assertions are superseded, while applicable lifecycle and
+interruption scenarios are reused. Later actual results take precedence over
+this planning note; do not roll back ongoing work to its observation time.
+
+The [2026-10-22 developer handoff](2026-10-22-phase116-cache-simplification-handoff.md)
+records the findings, CC04-S1/S2/S3 execution order and focused acceptance delta.
+This entry changes documents only and claims no new implementation/test success.
+
+## CC-04 simplification reconciled with the preserved Session
+
+The real Human `ReviseWork` direction was admitted through the repaired public
+continuation route. One ordinary Advance issued a fresh same-Step implementation
+request. Its old capacity-failure requirement differed from the approved
+simplification, so the parent submitted one complete bounded Plan revision.
+The actual Human `AdoptPlanRevision` answer was accepted, and ordinary Advance
+issued CC-04 under `cncf-phase-116-managed-cache` revision `2` in the same Session.
+Only the current Step purpose changed; every check identity, owned path,
+dependency, other Step and Phase check remains. The original base, accepted
+CC-01–03 commits, old UNKNOWN observations, findings and consumed automatic /
+ordinary repair counts `2/2` of `10` were retained. No old stage/history effect
+or accepted submission was replayed.
+
+The current implementation removes the unreleased quota/reservation machinery
+and persistent capacity-policy equality gate. It uses ordinary I/O with structured
+causes and suppressed cleanup failures, protected atomic publication, cheap
+managed immutable-generation reuse and unchanged-reference no-ops. Explicit
+inspection/collection bounds discovery, carries remaining work forward and
+reports scoped/truncated or unknown totals. Existing generation/staging use,
+SNAPSHOT selection and independent source/tree retention stay protected.
+
+The affected independent development run passed all 117 cache/repository
+examples across four suites, including the real repository/runtime route,
+cross-JVM lifetime, offline rebuild, faults and deterministic work-count checks.
+The current code/test bytes still match that run. This reuses the result only
+within its recorded scope: it is not a new native receipt or independent review.
+An earlier full repository run failed; later no-cache isolation reproduced two
+HTTP/launch failures, while the full-suite datastore-lease interaction remains
+unresolved. No full-suite failure is waived. Native CC-04 validation and affected
+independent review are the next acceptance gates; CC-04/05 checklist entries
+remain open. Detailed results and original logs remain under the existing task
+in `cc04-simplification-development-validation-20261022.md` and the reconciliation
+record, without moving evidence or modifying unrelated process-execution work.
+
+## CC-04 formal acceptance and CC-05 integrated implementation
+
+Actual native validation `ordered-validation:477` passed 16/16 recovery examples
+for candidate `e66256f1c1a6d96140349d1ec852e772d3945805`. Independent affected
+review `p116-cc04-simplification-independent-rereview@1` resolved issues 9–13,
+including visible E1–E16 / afterWord / Given specification traceability. The test
+assertions and Given/When/Then output were preserved. Old quota-specific results
+remain historical; the revised ordinary-I/O contract is the accepted boundary.
+
+The first native commit failed, Exited(1): the host selected the old thirteen
+paths, including never-committed `ManagedCacheCapacity.scala`. The host corrected
+only the CC-04 check/diff/commit physical selections to the fourteen reviewed
+paths, including Inventory and the SAR spec. The original failure is retained.
+The actual user authorized one new attempt for source482/frontier485; public
+`recoverGoalPhaseClosure` accepted that direction with independently observed
+old-execution termination. A separate ordinary Advance rechecked the exact live
+selection and committed CC-04 as `a8676706c1062a5e09da6c87ae4371747cd8bba8`,
+then issued CC-05 at source490 in the same Session. No successful validation or
+review was replayed. The original base, accepted prefix, old UNKNOWN records and
+CC-04 consumed repairs3/10 remain; the next Step's window starts normally at0/10.
+
+CC-05 adds `ManagedCarCacheSpec` E11 for actual ComponentRepository discovery
+and Subsystem ownership: first runtime closes, a fresh runtime reuses the same
+completed tree and lazy resources, active collection skips it, final close allows
+collection, then a third runtime reconstructs offline without the previous tree's
+marker. This is a local fixture through production repository/ClassLoader/resource
+owners, not an external Textus deployment claim. The operational handoff now
+names the actual inspectC/collectC API, soft configuration targets, bounded/scoped
+diagnostics and explicit owner close, retaining advisory-lock and old-tree limits.
+
+The new E11 and seven-suite native integration check await validation and
+independent review. Existing independent development evidence is117/117; the
+earlier full run is5463tests/5391passed/72failed with4canceled/1ignored/37pending,
+not a green full run. Later no-cache isolation reproduced HTTP status400-versus409
+and launch missing-command-versus-invalid-configuration failures (37/35/2);
+the full-suite datastore lease/configuration interaction remains unresolved.
+Those results are retained without arithmetic claims about a later full run.
+WorkArea116/116 remains only its original ownership/cleanup evidence. Final native
+repository-full validation, integrated review and Phase closure remain required.
+
+## 2026-10-23 accepted CC-01–06 and ordinary CC-07 source preparation
+
+The actual accepted native prefix now includes CC-01 `0f3a4338`, CC-02
+`9da7d491`, CC-03 `69284867`, CC-04 `a8676706`, CC-05
+`365250dc6057933b7fdf8f007864516ff0605f7e`, and CC-06
+`d7e4ce8255a57343270d5f9de88309bee5d1ddd1` (D7). Original full651 recorded
+876 suites / 6427 passed / 0 failed / 4 canceled / 1 ignored / 46 pending.
+These later actual facts supersede the outstanding-state descriptions in the
+older dated entries without erasing their failures, receipts or original scope.
+The WorkArea116/116 result remains evidence only for that earlier repair.
+
+Final independent review source654 `p116-integrated-independent-review@1`
+identified P1 `P116-INTEGRATED-SOURCE-READERS`. ComponentRepository's eager API,
+descriptor, defaults and canonical-selection readers could select a managed
+coordinate and open its ZIP without protecting the read lifetime. Explicit
+source eviction could delete that body first. C3 already requires the shared
+coordinate/source-generation usage pin; selection remains repository-owned and
+short coordinate transactions must not span ZIP I/O.
+
+Actual Human `01a165a5-d1af-7182-afb3-6f2c7e30e567` adopted the exact Plan4
+CC-07 proposal and Submit was accepted. The next Advance stopped409 during
+historical CC-06 repair reconstruction, so no native CC-07 work was issued.
+Earlier explicit direction authorizes product progress independently of Workflow
+recovery. The isolated checkout therefore prepares only the adopted seven
+source/test/document paths as ordinary product work, preserving the nineteen
+API baseline inputs and eight previously reviewed resource-read repairs.
+
+The prepared repair uses one repository metadata-read boundary and the existing
+ManagedArchiveCache input pin. It covers each selected packed CAR/SAR through
+the synchronous callback, including paired descriptor/default reads, then
+releases on success, failure or exception. Explicit standard/download roots are
+threaded into reads; legacy calls use the actual default root or the selected
+archive's already initialized managed ancestor. Caller-owned archives and
+directories acquire no cache ownership. No source copy/hash/extraction,
+repository-wide transaction, new resolver, owner registry or persisted policy
+is added. Eager API class bytes retain their value after the callback closes.
+
+Authored regression evidence covers deterministic CAR/SAR coordinate and source
+generation reads, callback failures/exceptions, competing publication, a
+test-owned reader JVM versus collection, custom/default/initialized roots and
+unchanged standalone inputs. These examples have not been executed in this
+preparation pass. Parent-selected development validation and independent review
+remain pending. Native CC-07 issuance/checks/review/commit and final Phase review
+and closure remain pending separately; original full651 is not relabeled as
+validation of this source. Session history, all checks and accumulated repair
+counters are preserved, with no fabricated native Entry or issued-work context.
+
+### Actual ordinary CC-07 validation and independent closure — 2026-10-23
+
+The seven-path preparation is now implemented and locally verified. The first
+two-suite invocation `p116-cc07-ordinary-20261023-focused01` compiled but passed
+108/115: its new SAR fixture incorrectly declared empty component bindings,
+which the existing subsystem descriptor contract rejects. The bounded fixture
+repair supplied the nested CAR's actual canonical binding and exposed the
+underlying reader result before metadata assertions. Focused02 then passed
+115/115. Both receipts remain preserved.
+
+Independent ordinary reviewer `/root/p116_cc07_ordinary_review01`
+(GPT-6.1 Sol/high) returned one P1 residual,
+`CB-P116-CC07-ROOT-PIN-IDENTITY`, under the original source-reader finding.
+A directory symlink could leave the archive lexical while the cache root was
+real, causing the existing pin lookup to return no protection. The same-boundary
+repair makes guard/membership identities agree with the collector's actual root
+and existing coordinate/generation keys. Loader callbacks and descriptors keep
+their original input path. No acquisition, resolver, persisted key format,
+publication lock ordering or ownership mechanism is replaced.
+
+The final invocation `p116-cc07-ordinary-20261023-focused03` passed two suites
+and 134 tests, with zero failures, aborts, cancellations, ignored or pending
+tests. Production/test compilation succeeded; SBT and wrapper exited0 with
+`process=terminated serialization=sbt-native`. The owning parent independently
+admitted the typed result and original retained log/summary. E19's sixteen
+CAR/SAR coordinate/generation alias scenarios prove collection skips the active
+reader, original callback/provenance and eager bytes survive, and later
+collection reclaims. E75D–F additionally cover custom, initialized and default
+alias roots. E17 success/failure/throw, E18 separate JVMs and E76 caller-owned
+inputs retain their actual passing evidence.
+
+Fresh independent ordinary reviewer `/root/p116_cc07_ordinary_review02`
+(GPT-6.1 Sol/high) returned PASS with no findings and closed both
+`CB-P116-CC07-ROOT-PIN-IDENTITY` and `P116-INTEGRATED-SOURCE-READERS` for this
+ordinary source assurance boundary. Alias histories are in-process; E18 covers
+the unchanged cross-process guard. Missing/unreadable paths were reviewed in
+source. Existing repository-size/private-parameter Hygiene remains deferred;
+no Development Candidate was added. The parent updated these factual progress
+records only, without changing executable source after focused03/review02.
+
+Actual receipts, parent admissions, review results, frozen repairs and agent-use
+records are retained under the existing caller task
+`target/sm-workflow/tasks/phase-116-01a0f928-bec2-7703-8782-43e85f553dd7`.
+The source remains in the existing isolated development checkout. Main D7 and
+the nineteen unrelated primary inputs remain separate; eight approved
+resource-read prerequisite changes remain preserved for proper source
+integration. sm-workflow is separately repairing the retained historical
+closure-policy reconstruction. Native CC-07 issuance, checks, independent
+acceptance, commit and final Phase gates are still pending. No historical
+receipt, Session, accepted prefix or repair count is reset or replaced.
+
+
+### Same-Session CC-07 implementation resumed — 2026-10-23
+
+The producer repaired historical closure-policy reconstruction and qualified
+normal publishLocal plus installed CLI. Selected installation
+`d93f67fc-d100-4ba4-a8bc-30e5d4303199` then ran one ordinary Advance in the
+original Session, exit0, issuing `ordered-implementation:658` for Plan4 CC-07.
+No Human answer, accepted Submit, closed check, staging or history update was
+replayed. Accepted CC-01–06, original base, failure records and counters remain;
+the actual Step progress is automatic0/ordinary0/limit10. The exact prepared
+seven-file candidate is integrated here, with factual document updates only.
+The separately approved8-file resource-read prerequisite was also integrated
+from its unchanged86-pass/reviewed/published candidate and stays outside the
+seven-path CC-07 commit. All19 prior dirty inputs are retained. Native CC-07
+checks, independent acceptance, commit and final Phase gates remain pending.
+
+### Same-Session formal completion — 2026-10-23
+
+CC-01 through CC-07, the required repository-full validation and final integrated
+review are accepted. The actual Human selected `AdoptLocalCompletion` for the
+public source702 completion-policy target. The public adoption and following
+ordinary Advance completed the original Session; the returned outcome is
+`Terminal / completed`. [Final Phase acceptance](../../../phase/phase-116.md#final-phase-acceptance--2026-10-23)
+and the checklist now record the current completed boundary. Earlier pending,
+failed and recovery entries above remain historical records.
+
+Completion preserves Plan4, the original base, all seven Step commits, the
+reviewed candidate, applicable validation/review results, failure history and
+repair counts. Separately accepted ordinary commits and the pre-existing
+WorkArea evidence keep their own scope. This closes the cache Phase without
+restarting its work or relabeling an old result.
+
+The design correction separates accepted development from optional repository
+synchronization. Native synchronization is `deferred` because no current closure
+effect authority was granted; it was not attempted. Ordinary GitHub sync had
+already completed separately, and final document reconciliation follows the
+ordinary reviewed commit/sync route. Existing nonblocking Hygiene retains its
+canonical records; later sm-workflow synchronization features remain with that
+owner. No cache sweep, evidence move, unrelated rollback or successor work is
+part of this completion. Actual call inputs, outputs and Human provenance remain
+in the existing private caller task rather than being copied into this journal.

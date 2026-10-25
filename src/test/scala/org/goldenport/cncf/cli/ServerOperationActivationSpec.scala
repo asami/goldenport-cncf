@@ -10,6 +10,7 @@ import scala.collection.mutable
 
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.cncf.component.{Component, ComponentActivation, ComponentActivationContext, ComponentActivationDiagnostic, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
+import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.http.Http4sHttpServer
 import org.goldenport.cncf.log.LogBackendHolder
 import org.goldenport.cncf.subsystem.{Subsystem, SystemNode}
@@ -21,7 +22,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Sep.  8, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ServerOperationActivationSpec
@@ -453,9 +455,11 @@ final class ServerOperationActivationSpec
 
   private def _without_test_runtime_flag[A](body: => A): A = {
     val previous = sys.props.get("textus.test")
+    val previousruntime = GlobalRuntimeContext.current
     System.clearProperty("textus.test")
     try RuntimeOutputCapture.capture(body).value
     finally {
+      GlobalRuntimeContext.current = previousruntime
       previous match {
         case Some(value) => System.setProperty("textus.test", value)
         case None => System.clearProperty("textus.test")

@@ -11,7 +11,7 @@ import org.goldenport.Consequence
 /*
  * @since   Jul. 17, 2026
  *  version Jul. 18, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -21,14 +21,21 @@ import org.goldenport.Consequence
  */
 final class LocalProcessExecutionDriver(
   val safeIdentity: String = "local-process",
-  private[processexecution] val _launcher: LocalProcessLauncher = LocalProcessLauncher.local
+  private[processexecution] val _launcher: LocalProcessLauncher = LocalProcessLauncher.local,
+  progress: ProcessExecutionProgress = ProcessExecutionProgress.none
 ) extends ProcessExecutionDriver with AutoCloseable {
+  // Retain the original JVM constructor as well as existing Scala call forms.
+  def this(safeIdentity: String, launcher: LocalProcessLauncher) =
+    this(safeIdentity, launcher, ProcessExecutionProgress.none)
+
   private val _active_processes: java.util.Set[Process] =
     ConcurrentHashMap.newKeySet[Process]()
   private val _active_handles: java.util.Set[LocalProcessExecutionHandle] =
     ConcurrentHashMap.newKeySet[LocalProcessExecutionHandle]()
   private val _closed = new AtomicBoolean(false)
   private val _lifecycle_lock = new AnyRef
+  private val _launches_in_flight = new AtomicInteger(0)
+  private val _termination_unconfirmed = new AtomicBoolean(false)
 
   def startC(execution: ResolvedProcessExecution): Consequence[ProcessExecutionHandle] =
     if (_closed.get && execution.definition._sbt_metadata.isEmpty)
@@ -109,16 +116,43 @@ final class LocalProcessExecutionDriver(
   /** Package-visible lifecycle seam for controlled local-driver specifications. */
   private[processexecution] def activeHandleCount: Int = _active_handles.size
 
+  /** Final runtime audit remains truthful after ordinary close clears resource registries. */
+  def terminationConfirmed: Boolean =
+    _launches_in_flight.get == 0 && _active_handles.isEmpty && _active_processes.isEmpty &&
+      !_termination_unconfirmed.get
+
+  /** Close launch admission while retaining handles and capture resources for the owning await. */
+  def requestStopC(): Consequence[Unit] = {
+    val handles = _lifecycle_lock.synchronized {
+      _closed.set(true)
+      _active_handles.asScala.toVector
+    }
+    var result: Consequence[Unit] = Consequence.unit
+    handles.foreach { handle =>
+      handle.cancelC match {
+        case failure @ Consequence.Failure(_) if result.isSuccess => result = failure
+        case _ => ()
+      }
+    }
+    result
+  }
+
   def close(): Unit = {
     val handles = _lifecycle_lock.synchronized {
       _closed.set(true)
       _active_handles.asScala.toVector
     }
     handles.foreach { handle =>
-      handle._cancel_and_close()
+      try {
+        if (!handle._cancel_and_close()) _termination_unconfirmed.set(true)
+      } catch {
+        case NonFatal(_) => _termination_unconfirmed.set(true)
+      }
     }
     _active_handles.clear()
     _active_processes.clear()
+    if (!terminationConfirmed)
+      throw new IllegalStateException("Local Process Execution termination could not be confirmed")
   }
 
   private def _validate_prelaunch_c(
@@ -169,8 +203,10 @@ final class LocalProcessExecutionDriver(
     val abandoned = new AtomicBoolean(false)
     val launched = new AtomicReference[Process](null)
     val command = execution.definition._executable_location +: execution.effectiveArguments
-    val task = LocalProcessExecutionDriver._launch_executor.submit(new Callable[Process] {
-      def call(): Process = {
+    ProcessExecutionProgress.observe(progress, execution, ProcessExecutionProgressState.Launching)
+    _launches_in_flight.incrementAndGet()
+    val task = try LocalProcessExecutionDriver._launch_executor.submit(new Callable[Process] {
+      def call(): Process = try {
         val process = workingdirectory match {
           case Some(value) => _launcher.startBlocking(command, value, execution.definition._environment.values)
           case None => _launcher.startBlocking(command, execution.definition._environment.values)
@@ -181,10 +217,17 @@ final class LocalProcessExecutionDriver(
           throw new InterruptedException("Process launch timed out")
         }
         process
+      } finally {
+        _launches_in_flight.decrementAndGet()
       }
-    })
+    }) catch {
+      case NonFatal(_) =>
+        _launches_in_flight.decrementAndGet()
+        return Consequence.success(_completed_handle(execution, startedat, ProcessExecutionTermination.LaunchFailed))
+    }
     try {
       val process = task.get(execution.effectiveLimits.launchTimeoutMillis.get, TimeUnit.MILLISECONDS)
+      ProcessExecutionProgress.observe(progress, execution, ProcessExecutionProgressState.Started, Some(process))
       val reference = new AtomicReference[LocalProcessExecutionHandle](null)
       val handle = new LocalProcessExecutionHandle(
         process,
@@ -192,6 +235,8 @@ final class LocalProcessExecutionDriver(
         startedat,
         inputfile,
         workarea,
+        progress,
+        () => _termination_unconfirmed.set(true),
         () => {
           _active_processes.remove(process)
           Option(reference.get).foreach { handle =>
@@ -213,8 +258,8 @@ final class LocalProcessExecutionDriver(
       if (accepted)
         Consequence.success(handle)
       else {
-        handle._cancel_and_close()
-        Consequence.success(_completed_handle(execution, startedat, ProcessExecutionTermination.LaunchFailed))
+        handle.cancelC
+        Consequence.success(handle)
       }
     } catch {
       case _: TimeoutException =>
@@ -257,16 +302,19 @@ final class LocalProcessExecutionDriver(
     startedat: Long,
     termination: ProcessExecutionTermination
   ): ProcessExecutionHandle = {
+    if (termination == ProcessExecutionTermination.LaunchFailed) _termination_unconfirmed.set(true)
     val elapsed = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedat)
     val capture = ProcessExecutionCapture(Vector.empty, 0L, truncated = false)
-    new CompletedProcessExecutionHandle(ProcessExecutionResult(
+    val result = ProcessExecutionResult(
       termination,
       capture,
       capture,
       Vector.empty,
       elapsed,
       execution.definition.safeProgramIdentity
-    ))
+    )
+    ProcessExecutionProgress.observe(progress, execution, ProcessExecutionProgressState.Terminal, result = Some(result))
+    new CompletedProcessExecutionHandle(result)
   }
 }
 
@@ -359,12 +407,19 @@ private final class LocalProcessExecutionHandle(
   startedat: Long,
   inputfile: Option[Path],
   workarea: Option[ProcessExecutionWorkArea],
+  progress: ProcessExecutionProgress,
+  onunconfirmed: () => Unit,
   onterminal: () => Unit
 ) extends ProcessExecutionHandle {
   private val _io_executor = Executors.newFixedThreadPool(3, new DaemonThreadFactory("cncf-process-io"))
   private val _cancelled = new AtomicBoolean(false)
   private val _finished = new AtomicBoolean(false)
   private val _termination_started = new AtomicBoolean(false)
+  private val _termination_lock = new AnyRef
+  @volatile private var _termination_confirmed = false
+  private var _tracked_descendants = Vector.empty[ProcessHandle]
+  private val _stdout_capture = new AtomicReference[ProcessExecutionCapture](ProcessExecutionCapture(Vector.empty, 0L, truncated = false))
+  private val _stderr_capture = new AtomicReference[ProcessExecutionCapture](ProcessExecutionCapture(Vector.empty, 0L, truncated = false))
   private val _output_limit_stream = new AtomicReference[ProcessExecutionStream](null)
   private val _stdout_future = _io_executor.submit(new Callable[ProcessExecutionCapture] {
     def call(): ProcessExecutionCapture =
@@ -387,20 +442,28 @@ private final class LocalProcessExecutionHandle(
     }
   }
 
-  def cancelC: Consequence[Unit] = {
-    if (_result.isEmpty && process.isAlive) {
+  def cancelC: Consequence[Unit] = _termination_lock.synchronized {
+    if (_result.isEmpty) {
       _cancelled.set(true)
       _terminate_process()
-    }
-    Consequence.unit
+      if (_termination_confirmed) Consequence.unit
+      else {
+        onunconfirmed()
+        Consequence.serviceUnavailable("Process Execution termination could not be confirmed")
+      }
+    } else Consequence.unit
   }
 
-  private[processexecution] def _cancel_and_close(): Unit = {
-    cancelC
+  private[processexecution] def _cancel_and_close(): Boolean = {
+    val cancelled = cancelC
+    if (_result.isEmpty)
+      ProcessExecutionProgress.observe(progress, execution, ProcessExecutionProgressState.Uncertain, Some(process))
     _finish()
+    cancelled.isSuccess && !_result.exists(_.termination == ProcessExecutionTermination.TerminationUnconfirmed)
   }
 
-  private def _await_c: Consequence[ProcessExecutionResult] =
+  private def _await_c: Consequence[ProcessExecutionResult] = {
+    ProcessExecutionProgress.observe(progress, execution, ProcessExecutionProgressState.Waiting, Some(process))
     try {
       val exited = process.waitFor(_remaining_execution_timeout_millis, TimeUnit.MILLISECONDS)
       val termination =
@@ -408,6 +471,7 @@ private final class LocalProcessExecutionHandle(
           _terminate_process()
           ProcessExecutionTermination.TimedOut
         } else if (_cancelled.get) {
+          _terminate_process()
           ProcessExecutionTermination.Cancelled
         } else {
           Option(_output_limit_stream.get) match {
@@ -418,33 +482,43 @@ private final class LocalProcessExecutionHandle(
       val stdout = _await_capture(_stdout_future)
       val stderr = _await_capture(_stderr_future)
       _await_input(_stdin_future)
-      _result_c(termination, stdout, stderr).map { result =>
-        _complete(result)
-        result
+      val completed = _termination_lock.synchronized {
+        _result_c(_confirmed_termination(termination), stdout, stderr).map { result =>
+          _complete(result)
+          result
+        }
       }
+      if (completed.isFaillure)
+        ProcessExecutionProgress.observe(progress, execution, ProcessExecutionProgressState.Uncertain, Some(process))
+      completed
     } catch {
       case _: TimeoutException =>
         _terminate_process()
-        val result = _terminal_result(_timeout_termination)
+        val result = _terminal_result(_confirmed_termination(_timeout_termination))
         _complete(result)
         Consequence.success(result)
       case _: InterruptedException =>
-        Thread.currentThread().interrupt()
         _cancelled.set(true)
         _terminate_process()
-        val result = _terminal_result(ProcessExecutionTermination.Cancelled)
+        val result = _terminal_result(_confirmed_termination(ProcessExecutionTermination.Cancelled))
         _complete(result)
+        Thread.currentThread().interrupt()
         Consequence.success(result)
       case NonFatal(_) =>
         _terminate_process()
+        ProcessExecutionProgress.observe(progress, execution, ProcessExecutionProgressState.Uncertain, Some(process))
         Consequence.serviceUnavailable("Process Execution stream handling failed")
     } finally {
       _finish()
     }
+  }
 
   private def _complete(result: ProcessExecutionResult): Unit =
-    if (_result.isEmpty)
+    if (_result.isEmpty) {
       _result = Some(result)
+      if (result.termination == ProcessExecutionTermination.TerminationUnconfirmed) onunconfirmed()
+      ProcessExecutionProgress.observe(progress, execution, ProcessExecutionProgressState.Terminal, Some(process), Some(result))
+    }
 
   private def _finish(): Unit =
     if (_finished.compareAndSet(false, true)) {
@@ -455,11 +529,10 @@ private final class LocalProcessExecutionHandle(
   private def _terminal_result(
     termination: ProcessExecutionTermination
   ): ProcessExecutionResult = {
-    val capture = ProcessExecutionCapture(Vector.empty, 0L, truncated = false)
     ProcessExecutionResult(
       termination,
-      capture,
-      capture,
+      _stdout_capture.get,
+      _stderr_capture.get,
       Vector.empty,
       TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedat),
       execution.definition.safeProgramIdentity
@@ -475,7 +548,7 @@ private final class LocalProcessExecutionHandle(
       case Some(value) =>
         value.collectArtifactsC(execution).map { collected =>
           val effectivetermination =
-            if (collected.limitExceeded)
+            if (collected.limitExceeded && termination != ProcessExecutionTermination.TerminationUnconfirmed)
               ProcessExecutionTermination.ArtifactLimitExceeded
             else
               termination
@@ -502,7 +575,8 @@ private final class LocalProcessExecutionHandle(
   private def _await_capture(
     future: Future[ProcessExecutionCapture]
   ): ProcessExecutionCapture =
-    future.get(_remaining_execution_timeout_millis, TimeUnit.MILLISECONDS)
+    future.get(if (_termination_started.get) execution.effectiveLimits.terminationGraceMillis.get
+      else _remaining_execution_timeout_millis, TimeUnit.MILLISECONDS)
 
   private def _await_input(
     future: Future[Unit]
@@ -547,8 +621,10 @@ private final class LocalProcessExecutionHandle(
         }
         if (accepted < read) {
           truncated = true
+          _retain_capture(streamkind, output, captured, truncated)
           _limit_output(streamkind)
         }
+        _retain_capture(streamkind, output, captured, truncated)
         read = stream.read(buffer)
       }
       ProcessExecutionCapture(output.toByteArray.toVector, captured, truncated)
@@ -585,18 +661,71 @@ private final class LocalProcessExecutionHandle(
     if (_output_limit_stream.compareAndSet(null, stream))
       _terminate_process()
 
-  private def _terminate_process(): Unit =
-    if (_termination_started.compareAndSet(false, true)) {
-      LocalProcessExecutionHandle._destroy_process_tree(process, force = false)
+  private def _retain_capture(
+    streamkind: ProcessExecutionStream,
+    output: ByteArrayOutputStream,
+    captured: Long,
+    truncated: Boolean
+  ): Unit = {
+    val capture = ProcessExecutionCapture(output.toByteArray.toVector, captured, truncated)
+    if (streamkind == ProcessExecutionStream.Stdout) _stdout_capture.set(capture)
+    else _stderr_capture.set(capture)
+  }
+
+  private def _confirmed_termination(termination: ProcessExecutionTermination): ProcessExecutionTermination = {
+    if (_termination_started.get || _cancelled.get || _output_limit_stream.get != null) {
+      _terminate_process()
+      if (!_termination_confirmed) ProcessExecutionTermination.TerminationUnconfirmed
+      else if (_cancelled.get) ProcessExecutionTermination.Cancelled
+      else Option(_output_limit_stream.get).map(ProcessExecutionTermination.OutputLimitExceeded.apply).getOrElse(termination)
+    } else termination
+  }
+
+  /** One completion for cancel, await and output-limit races; never waits for an IO worker here. */
+  private def _terminate_process(): Unit = _termination_lock.synchronized {
+    if (!_termination_started.get) {
+      _termination_started.set(true)
+      var interrupted = Thread.interrupted()
+      var inspected = true
+      val grace = execution.effectiveLimits.terminationGraceMillis.get
       try {
-        if (!process.waitFor(execution.effectiveLimits.terminationGraceMillis.get, TimeUnit.MILLISECONDS))
-          LocalProcessExecutionHandle._destroy_process_tree(process, force = true)
-      } catch {
-        case _: InterruptedException =>
-          Thread.currentThread().interrupt()
-          LocalProcessExecutionHandle._destroy_process_tree(process, force = true)
+        if (process.isAlive)
+          _tracked_descendants = process.toHandle.descendants().iterator().asScala.toVector.reverse
+        else
+          inspected = false // Root exit before any tree observation cannot prove descendant absence.
+      } catch { case NonFatal(_) => inspected = false }
+      def _alive_(): Boolean =
+        try process.isAlive || _tracked_descendants.exists(_.isAlive)
+        catch { case NonFatal(_) => inspected = false; true }
+      def _signal_(force: Boolean): Unit = {
+        _tracked_descendants.foreach { handle =>
+          try {
+            if (handle.isAlive) { if (force) handle.destroyForcibly() else handle.destroy() }
+          } catch { case NonFatal(_) => inspected = false }
+        }
+        try {
+          if (process.isAlive) { if (force) process.destroyForcibly() else process.destroy() }
+        } catch { case NonFatal(_) => inspected = false }
+      }
+      def _wait_(): Unit = {
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(grace)
+        while (_alive_() && System.nanoTime() < deadline) {
+          try TimeUnit.MILLISECONDS.sleep(1L)
+          catch { case _: InterruptedException => interrupted = true }
+        }
+      }
+      try {
+        _signal_(false)
+        _wait_()
+        // Retained handles remain valid even after the root exits and descendants reparent.
+        _signal_(true)
+        _wait_()
+        _termination_confirmed = inspected && !_alive_()
+      } finally {
+        if (interrupted) Thread.currentThread().interrupt()
       }
     }
+  }
 }
 
 private object LocalProcessExecutionHandle {

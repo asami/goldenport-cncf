@@ -1,4 +1,4 @@
-# Registered SBT host execution
+# Runtime-owned SBT execution
 
 Status: public runtime and UnitOfWork contract, Oct. 20, 2026.
 
@@ -8,155 +8,167 @@ Status: public runtime and UnitOfWork contract, Oct. 20, 2026.
 
 - `Observed(result: SbtExecutionResult)`: an actual process observation, retaining
   the existing SBT outcome and TestOnly qualification semantics;
-- `AdmissionRejected(target, operation, conclusion)`: the actual current-context
-  admission failed before execution, retaining its original `Conclusion` without
-  manufacturing a process receipt;
-- `Uncertain(target, operation, conclusion)`: admission succeeded, but the managed
+- `AdmissionRejected(target, operation, conclusion)`: current-context admission
+  failed before execution, retaining its original `Conclusion`;
+- `Uncertain(target, operation, conclusion)`: admission succeeded, but managed
   execution returned a failure and external execution cannot be inferred absent.
 
 Protected `sbt_compile_attempt`, `sbt_test_attempt` and `sbt_test_only_attempt`
-construct one `UnitOfWorkOp.SbtExecAttempt` each. They perform no admission or
-launch during construction. Recording and planning classify that one occurrence
-as External. The owning interpreter resolves the actual Component, shared
-workspace Manage grant, independent process capability and fixed definition in
-its current UnitOfWork context. After admission, it uses the existing process
-calltree, WorkArea, handle registration, Job cancellation and resource cleanup.
-Only the actual admission failure becomes `AdmissionRejected`; a failure at or
-after driver start becomes `Uncertain`. There is no automatic retry, new generic
-ProcessExec occurrence or new ProcessExecutionRequest construction site.
+construct one `UnitOfWorkOp.SbtExecAttempt` each. Construction performs no
+admission or launch. Recording and planning classify that occurrence as External.
+The interpreter resolves the actual Component, shared workspace Manage grant,
+independent process capability and fixed definition in its current UnitOfWork
+context. Existing `sbt_compile`, `sbt_test`, `sbt_test_only`, `SbtExec` and
+`SbtExecutionResult` retain their APIs and behavior.
 
-Existing `sbt_compile`, `sbt_test`, `sbt_test_only`, `SbtExec` and
-`SbtExecutionResult` retain their APIs and behavior. The attempt API does not
-turn a nonzero exit, timeout receipt, cancellation receipt or output overflow
-into build success. Observed TestOnly results pass through the existing
-`SbtExecutionAdmission` selected-report decoder.
+Only actual admission failure becomes `AdmissionRejected`. A managed failure at
+or after driver start becomes `Uncertain`. Nonzero exit, timeout, cancellation
+and output overflow retain their existing outcomes. Observed TestOnly results
+pass through the existing selected-report decoder. There is no automatic replay
+or additional ProcessExecutionRequest construction site.
 
-## Explicit runtime selection
+## Runtime ownership
 
-`cncf.runtime-process-execution.v4` contains exactly the V3 root fields
-`schema`, `programs`, `grants`, `workspaces`, `workspaceGrants`, `sbtPrograms`,
-`gitPrograms`, plus `registeredSbtHost`. The added object contains exactly
-`requestFile` and `responseFile` strings. Both identify distinct absolute,
-normalized sibling files beneath a directory named `target`; neither path may
-contain a symbolic-link segment. They are selected by the owning host for one
-CLI invocation. V4 reuses actual V3 authority admission and fixed declarations.
-The routing object grants no Component capability or workspace permission.
+The normal runtime factory installs `LocalProcessExecutionDriver` directly.
+`SystemNode` owns that driver as a runtime resource. After UnitOfWork admission,
+the driver launches the ordinary configured SBT executable with the admitted
+fixed argument vector, runtime-owned environment and canonical workspace cwd.
+The same program owns launch, waiting, process observation and result collection.
+UnitOfWork retains the existing calltree, WorkArea, handle registration, Job
+cancellation and resource cleanup responsibilities.
 
-V1, V2 and V3 wire shapes and encoding remain unchanged. They do not accept the
-new object and continue to select the ordinary runtime-owned local driver.
-Only explicit V4 installs `RegisteredSbtHostDriver` around that local driver.
-SystemNode owns the decorator and its local delegate. Non-SBT starts delegate
-through the same local-driver overload. Tagged SBT has no direct-launch fallback.
-The JVM does not invoke Codex tools or an executable shim.
+V1, V2 and V3 configuration retain their exact wire shapes, fixed declarations,
+workspace authority and independent process grants. The retired
+`cncf.runtime-process-execution.v4` schema is explicitly unsupported, including
+when its underlying V3 declarations are valid. V1–V3 reject
+`registeredSbtHost` as an unknown field. There is no V4-to-V3 fallback,
+file rendezvous, provider response receipt or external runner in this product
+execution route.
 
-One driver instance numbers tagged SBT starts monotonically from 1 in memory.
-Start 1 uses the exact configured paths. Start N greater than 1 appends `.` and
-decimal N to each configured filename in the same parent. Non-SBT starts do not
-consume a number. Every request has its own UUID and actual numbered response
-path. Earlier request and response files remain intact. The host knows the base
-paths and next expected number, handles one issued check at a time, and never
-scans directories. A fresh owning CLI invocation supplies fresh base paths.
-This naming rule introduces no lock, registry, management hash or retry protocol.
+Independent SBT invocations use SBT's native boot, dependency-cache and workspace
+locks. There is no application-owned machine-wide lock or manual response step.
+Local-driver launch and execution limits remain runtime-owned. Normal callers
+wait for the actual response without a 60/240-second cutoff or a deadline derived
+from telemetry. Cancellation requests alone cannot establish actual process
+termination or safe replay.
 
-## Issued request
+## CLI SIGTERM lifecycle
 
-After validating fixed typed intent and obtaining the actual canonical cwd from
-the admitted private `SbtProgramMetadata`, start atomically publishes one complete
-UTF-8 JSON request at the selected request path. An existing request file is a
-configuration error and remains untouched. Publication first writes the complete
-bounded bytes to a private temporary sibling, then atomically creates the request
-path as a hard link to that file without replacing an existing path. Concurrent
-publishers of the same path therefore retain exactly one complete winning request;
-each publisher deletes only its own temporary path. Unsupported hard links or a
-concurrent collision fail closed without a replacement fallback, shared lock or
-retry. The initial existence check provides diagnostics, not exclusion. The wire
-is bounded to 1 MiB.
+Only the normal CLI `run` path installs `RuntimeCommandTermination`, after the
+Subsystem initializes. Embedding and `initializeHandle` install no signal hook.
+The invocation-scoped JVM shutdown hook requests local-driver stop once and
+waits for the main command and its normal owned Subsystem shutdown to complete.
+The bounded hook grace is the existing `SystemNode.drainTimeoutMillis`; there
+is no caller cleanup timer, process-group fallback or new configuration.
 
-The request has exactly these fields:
+`requestStopC` closes process launch admission under the existing lifecycle lock
+and cancels all active handles. It retains their capture resources and owning
+awaits. Every UnitOfWork process using that owned driver participates
+automatically, including generic ProcessExec operations; application code does
+not opt in through a cancellation callback. Actual process termination does not
+imply automatic rollback of business effects. A launch that raced closure returns its actual cancelled or unconfirmed
+handle, never a prelaunch `NotStarted` claim. Storage remains available while
+the command returns and persists its incomplete response and logs. Only the
+main command's normal finally path invokes owned Subsystem shutdown; it always
+signals hook completion, including when command or shutdown fails.
 
-| Field | Meaning |
-| --- | --- |
-| `schema` | `cncf.registered-sbt-request.v1` |
-| `requestId` | New UUID for this actual issued request |
-| `workspaceId` | Admitted logical workspace |
-| `operation` | `compile`, `test` or `test-only` |
-| `programIdentity` | Admitted safe program identity |
-| `workingDirectory` | Actual admitted canonical checkout cwd |
-| `executable` | Actual fixed runtime executable |
-| `arguments` | Actual CNCF `effectiveArguments` vector |
-| `environment` | Actual fixed runtime environment map |
-| `executionTimeoutMillis` | Admitted finite execution deadline |
-| `stdoutBytes`, `stderrBytes` | Independently admitted capture bounds |
-| `responseFile` | Actual selected response path for this sequence |
+Cancel, await and output-limit termination share one synchronized completion.
+Before TERM, the driver snapshots descendants and retains their handles even
+when the root subsequently exits. It gives the tree the effective termination
+grace, forces still-alive retained descendants, and bounds confirmation by that
+runtime grace. Both root and retained descendants must be observed gone before
+confirmed cancellation or timeout is published. Captures remain attached to
+the actual result. A root already exited before any descendant observation,
+failed tree inspection or unconfirmed cleanup produces
+`ProcessExecutionTermination.TerminationUnconfirmed`, retaining the existing SBT
+`Incomplete` interpretation. `cancelC` and `requestStopC` report an unconfirmed
+stop as a failure while the main await retains that incomplete result and its
+captures. Every active handle is still cancelled when one stop fails.
 
-Components cannot supply argv, environment, cwd, executables or host-file paths
-through typed SBT intent. Scenario narrowing retains its existing fixed command
-rendering. Host coordination uses these exact files, without stdout protocol
-output. The external workstation host invokes the registered
-`cncf_command_runner` through the normal SBT distribution; CNCF retains ownership
-of target and command interpretation. Independent project executions may run
-concurrently. SBT retains its native boot and dependency-cache locks; there is no
-shared machine-wide application lock.
+Runtime metadata uses the exact prefix `[cncf-runtime-event] ` followed by one
+compact JSON object and newline. Its required fields are `state` and the actual
+positive current JVM `pid`. The closed states are:
 
-## Trusted host response
+- `runtime-started`: the invocation's hook was registered;
+- `cancellation-requested`: that hook requested stop;
+- `settled`: stop was confirmed and both command persistence and normal owned
+  shutdown completed successfully, followed by a final driver audit confirming
+  no in-flight launcher task, active handle/process or recorded unconfirmed
+  cleanup;
+- `uncertain`: the bounded wait, stop confirmation, command or shutdown did not
+  complete successfully.
 
-The response is trusted runtime/provider input produced only from genuine
-registered-runner terminal evidence correlated with the exact issued CNCF
-request. It is never an AI-supplied operation result. The JVM validates its
-binding and structure; it does not authenticate an untrusted file writer.
+Observer failures cannot change these effects. Runtime events contain no stack,
+configuration, argv, environment or source. Ordinary completion removes the
+hook; JVM shutdown already in progress does not make hook removal an error.
+SIGKILL and unknown effects remain unknown with no automatic replay. SIGINT
+handback/resumption is deferred; this adds no suspension protocol.
 
-The strict JSON object has exactly:
+The final driver audit tracks actual launcher Callable lifetime, including work
+that outlives a launch timeout, and preserves unconfirmed cleanup as a sticky
+fact across ordinary resource-registry clearing. Successful stop of an empty
+handle snapshot therefore cannot hide an in-flight launch or later unconfirmed
+post-launch cancellation.
 
-- `schema`: `cncf.registered-sbt-response.v1`;
-- `requestId` and `programIdentity`, equal to the issued values;
-- `termination`: `exited`, `timed-out`, `cancelled` or `output-limit-exceeded`;
-- `exitCode`: an integer required only for `exited`;
-- `exceededStream`: `stdout` or `stderr`, required only for
-  `output-limit-exceeded`;
-- `stdoutBase64`, `stderrBase64`: bounded captured bytes;
-- `elapsedMillis`: a nonnegative integer;
-- `processTerminated`: exactly `true`, proving actual terminal completion of the
-  issued process;
-- `runner`: exactly `logicalRole: "cncf_command_runner"`, nonempty `agentId`,
-  `model: "gpt-6-luna"`, `reasoningEffort: "medium"`;
-- nonempty `commandRequest` and `commandResult` strings identifying the actual
-  typed registered-runner request and result accepted by the trusted producer.
+## Progress observations
 
-Unknown fields, duplicate keys, malformed JSON/UTF-8/base64, crossed identities,
-missing runner or process-termination proof, invalid terminal fields and captures
-exceeding either admitted limit are failures. Response reading is bounded by
-the base64 capture sizes plus 64 KiB of metadata. Validation occurs once at
-the response-input boundary and the handle caches the resulting observation.
-There is no `NotStarted` host response. Output overflow maps to the actual
-`ProcessExecutionTermination.OutputLimitExceeded(stream)` with that capture
-marked truncated; it cannot report success.
+`LocalProcessExecutionDriver` accepts an optional `ProcessExecutionProgress`
+observer, defaulting to `ProcessExecutionProgress.none`. Existing constructor
+forms remain available. The normal runtime factory installs
+`ProcessExecutionProgress.stderr`, which writes one compact JSON object per
+line after the exact prefix `[cncf-sbt-event] `.
 
-`awaitC` waits only until the admitted execution timeout. An absent, unreadable
-or malformed response yields a failure stating that external execution is
-unknown, which the attempt interpreter preserves as `Uncertain`. Absence of a
-file establishes no prelaunch or safe-replay fact. A genuine bound `timed-out`
-or `cancelled` response can establish its corresponding observed process
-terminal, because it includes actual runner completion and process-termination
-proof. A shared lock-release claim is not terminal evidence and is not an
-accepted response field.
+Only SBT-tagged executions emit these observations. Each
+`ProcessExecutionProgressEvent` contains the typed operation, logical workspace
+ID, safe program identity and lifecycle state. The JSON operation is `compile`,
+`test` or `test-only`; state is `launching`, `started`, `waiting`, `terminal` or
+`uncertain`.
 
-Cancellation and decorator closure stop local waiting and retain uncertainty;
-they do not claim the external runner was stopped. SystemNode closes the owned
-local delegate. UnitOfWork continues to own and reclaim its WorkArea and handle
-resources. Host files are retained for the owning host and are separate from
-that WorkArea cleanup. This contract adds no application lock, host arbitration,
-automatic replay or safe-retry inference.
+- `launching` precedes launcher submission; it has no PID or terminal fields.
+  It includes `launchTimeoutMillis`, `executionTimeoutMillis` and
+  `terminationGraceMillis` from the actual execution's effective limits. These
+  non-authoritative budget observations describe the runtime's limits; callers
+  still wait without an execution cutoff. They do not grant admission or change
+  effect/result decisions. These fields are omitted from all other lifecycle
+  events.
+- `started` follows an actually returned process. PID is included only when
+  process inspection supplies it.
+- `waiting` marks the handle's actual wait, retaining the observed PID when
+  available. Repeated awaits use the cached result without repeating events.
+- `terminal` includes the existing result termination and elapsed milliseconds
+  only after an actual process exit is observed. `exitCode` is the actual
+  process exit, including when the result termination records timeout or
+  cancellation. A confirmed prelaunch `NotStarted` is terminal with no PID or
+  exit code.
+- `uncertain` records launch uncertainty, observation failure, a result whose
+  process exit is not yet observed, `TerminationUnconfirmed` even when root exit
+  was observed, or closure of an unawaited handle. It never manufactures a
+  terminal result or a safe-not-started fact.
 
-## Executable specifications and qualification
+Optional fields are omitted when unobserved. Events contain no argv,
+environment, captured stdout/stderr, source text or workspace filesystem paths.
+Observer reporting is best effort: nonfatal inspection or observer failures are
+swallowed and cannot skip launch, change effect decisions or replace the actual
+result. Progress is supplementary visibility rather than execution authority or
+acceptance evidence.
 
-`SbtExecutionDslSpec` specifies actual UnitOfWork admission rejection, unchanged
-legacy behavior, observed decoding and failures after admission.
-`RuntimeProcessExecutionPlanCodecSpec` specifies V1–V3 compatibility and explicit
-V4 round trips and refusals. `RegisteredSbtHostDriverSpec` uses explicitly
-test-owned provider observations to specify exact requests, two consecutive
-checks, real fixture bytes, crossed/malformed/unproven responses, output limits,
-timeout, cancellation, local delegation and closure.
+## Executable specifications
 
-These authored fixtures are not installed registered-runner evidence. An actual
-registered-host integration, validation, publication and real Session operations
-remain the owning development workflow's separate responsibility.
+`SbtExecutionDslSpec` retains current-context admission rejection, legacy
+behavior, observed decoding, uncertainty after admission and consecutive typed
+operations. `RuntimeProcessExecutionPlanCodecSpec` specifies V1–V3 round trips,
+strict host-field refusal and explicit unsupported V4 rejection.
+`LocalProcessExecutionDriverSpec` specifies real local zero/nonzero exits,
+timeout, cancellation and cleanup, plus observer order, cached awaits,
+confidentiality, observer-failure isolation, confirmed prelaunch observations
+and uncertain launch deadlines. It also specifies automatic participation of
+generic UoW processes in runtime stop, retained captures across stop, root-first
+termination with a TERM-resistant grandchild, unconfirmed tree inspection and
+the final audit of delayed launchers. `RuntimeCommandTerminationSpec` specifies
+that stop, command persistence, owned shutdown and final driver confirmation
+must all complete before `settled`, and that bounded waits, failed callbacks or
+observer failures preserve the required completion semantics. No response-file
+fixture supplies a product SBT result.
+
+Validation, local publication and real Session operations remain the owning
+development workflow's separate responsibility.

@@ -7,12 +7,13 @@ import java.util.Base64
 import scala.util.Try
 
 import org.goldenport.Conclusion
-import org.goldenport.http.HttpResponse
+import org.goldenport.http.{HttpResponse, HttpStatus}
+import org.goldenport.observation.Taxonomy
 import org.goldenport.record.Record
 
 /*
  * @since   Aug. 15, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object HttpFailureTransportMetadata {
@@ -42,6 +43,17 @@ private[cncf] object HttpFailureTransportMetadata {
 
   object Metadata {
     val empty: Metadata = Metadata(None, None, None)
+  }
+
+  def httpStatus(conclusion: Conclusion): HttpStatus = {
+    val taxonomy = conclusion.observation.taxonomy
+    if (
+      taxonomy.category == Taxonomy.Category.Operation &&
+      taxonomy.symptom == Taxonomy.Symptom.Conflict
+    )
+      HttpStatus.Conflict
+    else
+      HttpStatus.fromInt(conclusion.status.webCode.code).getOrElse(HttpStatus.InternalServerError)
   }
 
   def attach(

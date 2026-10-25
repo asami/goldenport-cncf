@@ -80,7 +80,7 @@ import org.goldenport.bag.Bag
  *  version Apr. 30, 2026
  *  version Aug. 15, 2026
  *  version Sep.  8, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -151,6 +151,13 @@ final class Subsystem(
   private lazy val _component_record_storage_binding = new ComponentRecordStorageBinding(
     _component_record_storage_declaration,
     _component_record_reserved_collections,
+    () => Option(_active_datastore_lease.get()),
+    lease => _datastore_binding.inheritLeaseC(lease).map(_ => ()),
+    request => resolveManagedComponentDataStoreC(
+      org.goldenport.cncf.datastore.ComponentDataStore.Environment(
+        ResolvedParameters.fromResolvedConfiguration(configuration), Some(configuration)), request))
+  private lazy val _event_store_history_binding = new EventStoreHistoryBinding(
+    _event_store_persistence_declaration,
     () => Option(_active_datastore_lease.get()),
     lease => _datastore_binding.inheritLeaseC(lease).map(_ => ()),
     request => resolveManagedComponentDataStoreC(
@@ -928,6 +935,11 @@ final class Subsystem(
     context: ExecutionContext
   ): Consequence[org.goldenport.cncf.datastore.ComponentRecordStorage] =
     _component_record_storage_binding.bindC(componentId, storeName, collection, entryId, context)
+
+  /** Captured EventStore only; never opens a replacement dispatch lease. */
+  private[cncf] def bindEventHistoryC(context: ExecutionContext):
+      Consequence[org.goldenport.cncf.event.ManagedEventHistory] =
+    _event_store_history_binding.bindC(context)
 
   /** Explicit trusted bootstrap only. Duplicate Create fails; never reset/upsert. */
   private[cncf] def initializeEventCursorC(
@@ -2813,7 +2825,7 @@ final class Subsystem(
   }
 
   private def _http_status(c: org.goldenport.Conclusion): HttpStatus =
-    HttpStatus.fromInt(c.status.webCode.code).getOrElse(HttpStatus.InternalServerError)
+    HttpFailureTransportMetadata.httpStatus(c)
 
   private val _alias_resolver: AliasResolver = aliasResolver
   private val _http_run_mode: RunMode = runMode

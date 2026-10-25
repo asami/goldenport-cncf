@@ -1,19 +1,20 @@
 package org.goldenport.cncf.component
 
-import java.nio.file.{Files, Path, StandardCopyOption}
+import java.nio.file.{Files, Path}
 import java.util.zip.{ZipEntry, ZipInputStream}
 
 import scala.jdk.CollectionConverters._
 import scala.util.Using
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.workarea.WorkAreaSpace
+import org.goldenport.cncf.workarea.{WorkAreaHandle, WorkAreaSpace}
 
 /*
  * @since   Feb.  3, 2026
- *  version Mar. 22, 2026
- *  version Apr.  8, 2026
- * @version Aug. 13, 2026
+ * version Mar. 22, 2026
+ * version Apr.  8, 2026
+ * version Aug. 13, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class CarExtracted(
@@ -40,25 +41,50 @@ object CarExtractor {
     workarea: WorkAreaSpace
   )(
     use: CarExtracted => Consequence[R]
-  ): Consequence[R] = workarea.execute { handle =>
+  ): Consequence[R] = workarea.execute(handle => _with_extracted(car, handle, use))
+
+  private[cncf] def withRetainedExtracted[R](
+    car: Path,
+    workarea: WorkAreaSpace,
+    register: AutoCloseable => Consequence[Unit]
+  )(
+    use: CarExtracted => Consequence[R]
+  ): Consequence[R] =
+    workarea.executeRetained(register)(handle => _with_extracted(car, handle, use))
+
+  private def _with_extracted[R](
+    car: Path,
+    handle: WorkAreaHandle,
+    use: CarExtracted => Consequence[R]
+  ): Consequence[R] =
     handle.createTempDir("car-").flatMap { tmproot =>
       for {
-        _ <- _unzip(car, tmproot)
-        extracted <- _resolve_structure(tmproot, car)
+        extracted <- extractToC(car, tmproot)
         _ <- CarRuntimeAdmission.validate(extracted)
         result <- use(extracted)
       } yield result
     }
-  }
 
   def resolveDirectory(root: Path): Consequence[CarExtracted] =
     _resolve_structure(root, root).flatMap { extracted =>
       CarRuntimeAdmission.validate(extracted).map(_ => extracted)
     }
 
+  /** Materialize at the cache's private destination. Admission stays at the
+    * existing resolve/use boundary; this method never exposes an active tree.
+    * The callback reserves/checks actual uncompressed bytes before each write.
+    */
+  private[cncf] def extractToC(
+    car: Path,
+    root: Path,
+    beforeWrite: Long => Unit = _ => ()
+  ): Consequence[CarExtracted] =
+    _unzip(car, root, beforeWrite).flatMap(_ => _resolve_structure(root, car))
+
   private def _unzip(
     car: Path,
-    root: Path
+    root: Path,
+    beforewrite: Long => Unit
   ): Consequence[Unit] = Consequence {
     Using.resource(new ZipInputStream(Files.newInputStream(car))) { zip =>
       var entry: ZipEntry = zip.getNextEntry
@@ -71,7 +97,17 @@ object CarExtractor {
           Files.createDirectories(target)
         } else {
           Option(target.getParent).foreach(parent => Files.createDirectories(parent))
-          Files.copy(zip, target, StandardCopyOption.REPLACE_EXISTING)
+          Using.resource(Files.newOutputStream(target)) { output =>
+            val buffer = new Array[Byte](65536)
+            var count = zip.read(buffer)
+            while (count >= 0) {
+              if (count > 0) {
+                beforewrite(count.toLong)
+                output.write(buffer, 0, count)
+              }
+              count = zip.read(buffer)
+            }
+          }
         }
         zip.closeEntry()
         entry = zip.getNextEntry

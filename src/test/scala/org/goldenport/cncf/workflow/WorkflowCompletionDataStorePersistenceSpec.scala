@@ -34,7 +34,7 @@ import org.sqlite.{SQLiteConfig, SQLiteDataSource}
 
 /*
  * @since   Sep. 29, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 20, 2026
  */
 final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
 
@@ -206,6 +206,82 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
   }
 
   "Phase 88 typed completion through the managed event host" should {
+    "supersede an unanswered Decision without inventing an answer and recover its disposition after physical reopen" in {
+      Given("an actually issued Decision in the managed SQLite host and an application-owned new directive")
+      val file = _temporary_directory("cncf-decision-supersession-").resolve("workflow.sqlite")
+      val intent = _intent(_initial)
+      val work = _issue(intent)
+      val order = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[String]]
+      val decision = WorkflowInteraction[String, Nothing](work.handle,
+        WorkflowContinuation.Decision(order.request, MinimalPresentation("Fixture old question", "Unanswered")))
+      def _binding_(s: Subsystem) = _take(WorkflowManagedDecisionSupersession.bindC(s, _component, _config,
+        _completion_operation, Vector(_binding), _instances, _continuations, _codec, _codec))
+      _with_managed_host_at(file) { s =>
+        _take(s.initializeEventCursorC(_environment(s)))
+        _take(s.withWorkflowVerifiedMultiGuardSpaceC(_component, _environment(s)) { space =>
+          space.dataStore(_instances).flatMap(store => _root(store).create(_config, _initial))
+        })
+        val questions = _take(WorkflowManagedIssuedDecision.bindC(s, _component, _config, _completion_operation,
+          Vector(_binding), _instances, _continuations, _codec))
+        val pending = _take(questions.suspendC(intent, decision)).instance
+        val entry = HistoryEntry(HistorySequence(2L), InstanceRevision(2L), Lifecycle.Active,
+          Some(ProgressionReference("implementation")), pending.correlation,
+          CausationReference("actual-new-directive"), None, None, None)
+        val payload = TypedValue(_codec.typeIdentity, "SPECIFICATION-OWNED independent directive, not an old answer")
+        val binding = _binding_(s)
+        When("an obsolete revision or a foreign pending question is offered")
+        val obsolete = binding.executeC(_identity, initialRevision, pending, entry, payload)
+        val foreign = binding.executeC(ContinuationIdentity("foreign-question"), pending.revision, pending, entry, payload)
+        Then("the original unanswered frontier remains available")
+        obsolete.isSuccess shouldBe false
+        foreign.isSuccess shouldBe false
+        _take(binding.loadRetainedC(_identity, pending.identity)) shouldBe None
+        Given("an application codec that throws rather than producing an owned disposition")
+        val defective = new WorkflowResultJsonV1.PayloadCodec[String] {
+          val typeIdentity = _codec.typeIdentity
+          def encode(value: String): Json = throw new IllegalArgumentException("fixture codec failure")
+          def decode(value: Json): Either[String, String] = throw new IllegalArgumentException("fixture codec failure")
+        }
+        val failedcodec = _take(WorkflowManagedDecisionSupersession.bindC(s, _component, _config,
+          _completion_operation, Vector(_binding), _instances, _continuations, _codec, defective))
+        When("the owner attempts to encode its directive with that defective codec")
+        val failedencode = failedcodec.executeC(_identity, pending.revision, pending, entry, payload)
+        Then("a typed failure retains the original unanswered question and releases host leases")
+        failedencode.isSuccess shouldBe false
+        _take(binding.loadRetainedC(_identity, pending.identity)) shouldBe None
+        s.systemNode.activeLeaseCount shouldBe 0
+        When("the owner supersedes the exact unclaimed Decision and then tries the same intent again")
+        val saved = _take(binding.executeC(_identity, pending.revision, pending, entry, payload))
+        val replay = binding.executeC(_identity, pending.revision, pending, entry, payload)
+        val faileddecode = failedcodec.loadRetainedC(_identity, pending.identity)
+        Then("one adjacent history entry and a separate disposition persist while original question and base remain")
+        saved.current.history shouldBe pending.history :+ entry
+        saved.current.suspension shouldBe None
+        saved.receipt.payload shouldBe payload.value
+        replay.isSuccess shouldBe false
+        faileddecode.isSuccess shouldBe false
+        s.systemNode.activeLeaseCount shouldBe 0
+        _take(questions.loadC(_identity)).get shouldBe decision
+        _take(s.withWorkflowVerifiedMultiGuardSpaceC(_component, _environment(s)) { space =>
+          space.dataStore(_continuations).map { store =>
+            _take(_claims(store).loadStoredC(_identity)).get._1.status shouldBe ContinuationRuntimePersistence.Status.Superseded
+            _claims(store).claimC(_identity).isSuccess shouldBe false
+            _take(store.load(_continuations, WorkflowContinuationDataStorePersistence.id(_identity))).get
+              .getString(WorkflowCompletionDataStorePersistence.payloadField) shouldBe None
+          }
+        })
+      }
+      When("a fresh managed host reads the disposition after closing the original provider")
+      _with_managed_host_at(file) { s =>
+        val retained = _take(_binding_(s).loadRetainedC(_identity, _initial.identity)).get
+        Then("the same directive and actual history survive without manufacturing a completed Human answer")
+        retained.receipt.sourceRevision shouldBe InstanceRevision(1L)
+        retained.receipt.nextRevision shouldBe InstanceRevision(2L)
+        retained.receipt.payload should include ("independent directive")
+        retained.current.history should have size 2
+        s.systemNode.activeLeaseCount shouldBe 0
+      }
+    }
     "execute a declared Decision completion Service and retain committed answers despite response projection failure" in {
       Vector(false, true).foreach { rejectresponse =>
         Given("a native managed Decision and its separately declared public completion Operation; human evidence remains a fixture")

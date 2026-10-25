@@ -2,7 +2,7 @@ package org.goldenport.cncf.unitofwork
 
 import org.scalacheck.{Gen, Prop, Test}
 import org.goldenport.cncf.processexecution.{GitOperation, GitTarget, SbtOperation, SbtTarget}
-import org.goldenport.cncf.workspace.{FileTarget, FileWriteMode, WorkspaceFilePath, WorkspaceId}
+import org.goldenport.cncf.workspace.{FileRepresentation, FileTarget, FileWriteMode, WorkspaceFilePath, WorkspaceId}
 import org.goldenport.cncf.workflow.{CompletionContract, ContextBundle, ContextContract, ContextSnapshot, EvidenceContract, ProviderExecutionRequest, StateMachineOperationIdentity, StateMachineProvidedApiRequest, StateMachineRequiredOperation, StateMachineRequiredOperationIdentity, StateMachineRequiredOperationMetadata, StateMachineRunIdentity}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *
  * @since   Sep.  8, 2026
  *  version Sep. 28, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkProgramPlanningSpec
@@ -30,6 +30,7 @@ final class UnitOfWorkProgramPlanningSpec
   private val _sbt_target = SbtTarget(WorkspaceId.parseC("planning").toOption.get)
   private val _sbt_compile = UnitOfWorkOp.SbtExec(_sbt_target, SbtOperation.Compile)
   private val _sbt_test = UnitOfWorkOp.SbtExec(_sbt_target, SbtOperation.Test)
+  private val _sbt_fix_check = UnitOfWorkOp.SbtExec(_sbt_target, SbtOperation.FixCheck)
   private val _context = ContextBundle(
     "planning context",
     Vector.empty,
@@ -71,6 +72,45 @@ final class UnitOfWorkProgramPlanningSpec
   )
 
   "UnitOfWorkProgramPlanner" should {
+    "retain repeated FixCheck and attempt intents as individual External boundaries" in {
+      Given("fixed check and attempt intents between local operations, without runtime services")
+      val attempt = UnitOfWorkOp.SbtExecAttempt(_sbt_target, SbtOperation.FixCheck)
+      val operations = Vector(_local, _sbt_fix_check, _sbt_fix_check, attempt, _local)
+      When("the planner interprets the intent sequence without lowering it to ProcessExec")
+      val plan = UnitOfWorkProgramPlanner.plan(operations)
+      Then("each typed check keeps its own ordinal and External segment")
+      plan.occurrences.map(_.operation) shouldBe operations
+      plan.occurrences.map(_.ordinal) shouldBe operations.indices.toVector
+      plan.occurrences.map(_.effectClass) shouldBe Vector(UnitOfWorkEffectClass.Local) ++
+        Vector.fill(3)(UnitOfWorkEffectClass.External) ++ Vector(UnitOfWorkEffectClass.Local)
+      plan.segments shouldBe Vector(UnitOfWorkPlanSegment.LocalAtomic(plan.occurrences.take(1))) ++
+        plan.occurrences.slice(1, 4).map(UnitOfWorkPlanSegment.ExternalBoundary.apply) ++
+        Vector(UnitOfWorkPlanSegment.LocalAtomic(plan.occurrences.drop(4)))
+    }
+
+    "retain directory preparation and repeated byte operations as individual External boundaries" in {
+      Given("a directory intent and repeated equal binary intents between local operations")
+      val target = FileTarget(WorkspaceId.parseC("planning").toOption.get)
+      val path = WorkspaceFilePath.parseC("private archive/exact.gz").toOption.get
+      val bytes = Vector[Byte](0, -1, -128, 127)
+      val prepare = UnitOfWorkOp.FilePrepareDirectory(target, path)
+      val write = UnitOfWorkOp.FileWriteBytes(target, path, bytes, FileRepresentation.Gzip)
+      val read = UnitOfWorkOp.FileReadBytes(target, path, FileRepresentation.Gzip)
+      val operations = Vector(_local, prepare, write, write, read, read, _local)
+      When("the metadata-independent planner classifies every occurrence without interpretation")
+      val plan = UnitOfWorkProgramPlanner.plan(operations)
+      Then("each new occurrence stays External in order, outside either local atomic segment")
+      plan.occurrences.map(_.operation) shouldBe operations
+      plan.occurrences.map(_.ordinal) shouldBe operations.indices.toVector
+      plan.occurrences.map(_.effectClass) shouldBe
+        Vector(UnitOfWorkEffectClass.Local) ++ Vector.fill(5)(UnitOfWorkEffectClass.External) ++ Vector(UnitOfWorkEffectClass.Local)
+      plan.segments shouldBe Vector(UnitOfWorkPlanSegment.LocalAtomic(plan.occurrences.take(1))) ++
+        plan.occurrences.slice(1, 6).map(UnitOfWorkPlanSegment.ExternalBoundary.apply) ++
+        Vector(UnitOfWorkPlanSegment.LocalAtomic(plan.occurrences.drop(6)))
+      plan.occurrences.mkString should not include bytes.toString
+      plan.occurrences.mkString should not include "private archive"
+    }
+
     "retain File reads and repeated writes in order beside local, control, Git and SBT intents" in {
       Given("logical File read and write intents mixed with existing control, local, Git and SBT operations")
       val id = WorkspaceId.parseC("planning").toOption.get
@@ -260,6 +300,7 @@ final class UnitOfWorkProgramPlanningSpec
           _external,
           _sbt_compile,
           _sbt_test,
+          _sbt_fix_check,
           _provider_operation,
           _provided_api_operation
         )

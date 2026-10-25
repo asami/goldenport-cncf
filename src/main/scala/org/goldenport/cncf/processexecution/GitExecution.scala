@@ -10,7 +10,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GitTarget(workspaceId: WorkspaceId)
@@ -250,12 +250,50 @@ final case class GitExecutionResult[A](
   operation: GitOperation[A],
   outcome: GitExecutionOutcome,
   value: Option[A],
-  processResult: ProcessExecutionResult
+  processResult: ProcessExecutionResult,
+  selectedPaths: Vector[GitPath] = Vector.empty
 ) {
+  def this(target: GitTarget, operation: GitOperation[A], outcome: GitExecutionOutcome,
+    value: Option[A], processResult: ProcessExecutionResult) =
+    this(target, operation, outcome, value, processResult, Vector.empty)
+
   def valueC: Consequence[A] = (outcome, value) match {
     case (GitExecutionOutcome.Succeeded, Some(result)) => Consequence.success(result)
-    case _ => Consequence.argumentPolicyViolation("git", "git.execution.result", "complete successful typed Git value", "unavailable")
+    case _ => Consequence.argumentPolicyViolation("git", "git.execution.result", "complete successful typed Git value", _failure_diagnostic)
   }
+
+  private def _failure_diagnostic: String =
+    s"operation=${operation.kind.wireName};outcome=${_outcome_diagnostic};" +
+      s"termination=${_termination_diagnostic(processResult.termination)};" +
+      s"stdout=${_capture_diagnostic(processResult.stdout)};stderr=${_capture_diagnostic(processResult.stderr)}"
+
+  private def _outcome_diagnostic: String = outcome match {
+    case GitExecutionOutcome.Succeeded => "succeeded-without-value"
+    case GitExecutionOutcome.Failed(exitcode) => s"failed(exitCode=$exitcode)"
+    case GitExecutionOutcome.Incomplete(termination) => s"incomplete(${_termination_diagnostic(termination)})"
+    case GitExecutionOutcome.InvalidOutput(_) => "invalid-output"
+    case GitExecutionOutcome.ConflictObservationRequired => "conflict-observation-required"
+  }
+
+  private def _termination_diagnostic(termination: ProcessExecutionTermination): String = termination match {
+    case ProcessExecutionTermination.Exited(exitcode) => s"exited(exitCode=$exitcode)"
+    case ProcessExecutionTermination.NotStarted => "not-started"
+    case ProcessExecutionTermination.LaunchFailed => "launch-failed"
+    case ProcessExecutionTermination.TimedOut => "timed-out"
+    case ProcessExecutionTermination.Cancelled => "cancelled"
+    case ProcessExecutionTermination.TerminationUnconfirmed => "termination-unconfirmed"
+    case ProcessExecutionTermination.OutputLimitExceeded(ProcessExecutionStream.Stdout) => "output-limit-exceeded(stream=stdout)"
+    case ProcessExecutionTermination.OutputLimitExceeded(ProcessExecutionStream.Stderr) => "output-limit-exceeded(stream=stderr)"
+    case ProcessExecutionTermination.ArtifactLimitExceeded => "artifact-limit-exceeded"
+  }
+
+  private def _capture_diagnostic(capture: ProcessExecutionCapture): String =
+    s"{byteCount=${capture.byteCount},retainedBytes=${capture.content.size},truncated=${capture.truncated}}"
+}
+object GitExecutionResult {
+  def apply[A](target: GitTarget, operation: GitOperation[A], outcome: GitExecutionOutcome,
+    value: Option[A], processResult: ProcessExecutionResult): GitExecutionResult[A] =
+    new GitExecutionResult(target, operation, outcome, value, processResult, Vector.empty)
 }
 
 private[cncf] final case class GitCommitIdentity(name: String, email: String)
@@ -408,6 +446,10 @@ private[cncf] object GitProgramDefinition {
     prefix.map(Literal.apply) ++ command
   }
 
+  private[processexecution] def physicalCommitArguments(metadata: GitProgramMetadata,
+    paths: Vector[GitPath]): Vector[String] =
+    _slots(metadata.copy(selectedPaths = paths)).collect { case ProcessArgumentSlot.Literal(text) => text }
+
   private[cncf] def typedArgumentsC(operation: GitOperation[?], metadata: GitProgramMetadata): Consequence[Vector[String]] = {
     def _oid_(value: GitObjectId): Consequence[String] =
       if (value == null) invalidC else GitObjectId.parseC(value.value).map(_.value)
@@ -448,7 +490,13 @@ private[cncf] object GitExecutionAdmission {
     admission <- context.cncfCore.scope.processExecutionAdmissionOption.map(Consequence.success).getOrElse(
       Consequence.serviceUnavailable("Process Execution admission is not configured"))
     execution <- admission.admitGitForScopeC(context.cncfCore.scope, binding, operation)
-  } yield execution
+    bounded <- if (operation.kind == GitOperationKind.PendingDiff)
+      GitDiffParameters.resolveC(context).map { bytes =>
+        execution.copy(effectiveLimits = execution.effectiveLimits.copy(
+          stdoutBytes = execution.effectiveLimits.stdoutBytes.map(_.min(bytes))))
+      }
+    else Consequence.success(execution)
+  } yield bounded
 
   def validateGenericExecutionC(execution: ResolvedProcessExecution): Consequence[Unit] =
     if (execution.definition._git_metadata.isEmpty) Consequence.unit else
@@ -465,7 +513,11 @@ private[cncf] object GitExecutionAdmission {
     val metadata = execution.definition._git_metadata.get
     val decoded: (GitExecutionOutcome, Option[A]) = result.termination match {
       case ProcessExecutionTermination.Exited(code) =>
-        if ((operation.kind == GitOperationKind.CheckPendingIndex || operation.kind == GitOperationKind.CheckSelectedIndex) && (code == 0 || code == 2))
+        if (operation.kind == GitOperationKind.PendingDiff &&
+            (result.stdout.truncated || result.stdout.byteCount != result.stdout.content.size.toLong ||
+              result.stderr.truncated || result.stderr.byteCount != result.stderr.content.size.toLong))
+          GitExecutionOutcome.InvalidOutput("Incomplete Git diff capture") -> None
+        else if ((operation.kind == GitOperationKind.CheckPendingIndex || operation.kind == GitOperationKind.CheckSelectedIndex) && (code == 0 || code == 2))
           GitOutputParser.parseIndexCheck(result.stdout, result.stderr, code) match {
             case Right(value) => GitExecutionOutcome.Succeeded -> Some(value.asInstanceOf[A])
             case Left(reason) => GitExecutionOutcome.InvalidOutput(reason) -> None
@@ -480,7 +532,7 @@ private[cncf] object GitExecutionAdmission {
         }
       case termination => GitExecutionOutcome.Incomplete(termination) -> None
     }
-    GitExecutionResult(target, operation, decoded._1, decoded._2, result)
+    GitExecutionResult(target, operation, decoded._1, decoded._2, result, metadata.selectedPaths)
   }
 }
 
@@ -516,6 +568,19 @@ private[cncf] object GitOutputParser {
     err <- utf8(stderr.content).toRight("Invalid UTF-8 Git index-check stderr")
     value <- GitIndexCheck.parseText(exitCode, out, err)
   } yield value
+
+  def parsePaths(capture: ProcessExecutionCapture): Either[String, Vector[GitPath]] = for {
+    _ <- Either.cond(!capture.truncated && capture.byteCount == capture.content.size.toLong,
+      (), "Incomplete Git filename capture")
+    text <- utf8(capture.content).toRight("Invalid UTF-8 Git filenames")
+    paths <- _paths(text)
+  } yield paths
+
+  private def _paths(text: String): Either[String, Vector[GitPath]] = for {
+    fields <- _nul_fields(text)
+    paths <- _sequence(fields.map(_path))
+    _ <- Either.cond(paths.distinct.size == paths.size, (), "Duplicate changed Git filename")
+  } yield paths
 
   private def _oid(text: String): Either[String, GitObjectId] = GitObjectId.parseC(text).toOption.toRight("Invalid Git object ID")
   private def _path(text: String): Either[String, GitPath] = GitPath.parseC(text).toOption.toRight("Invalid Git filename")
@@ -574,11 +639,7 @@ private[cncf] object GitOutputParser {
       tree <- _oid(lines(1))
       parents <- if (lines(2).isEmpty) Right(Vector.empty) else _sequence(lines(2).split(" ", -1).toVector.map(_oid))
     } yield GitCommitMetadata(commit, tree, parents)
-    case GitOperationKind.PendingPaths => for {
-      fields <- _nul_fields(text)
-      paths <- _sequence(fields.map(_path))
-      _ <- Either.cond(paths.distinct.size == paths.size, (), "Duplicate changed Git filename")
-    } yield paths
+    case GitOperationKind.PendingPaths => _paths(text)
     case GitOperationKind.PendingDiff => Right(GitDiff(text, text.linesIterator.exists(x => x.startsWith("Binary files ") || x == "GIT binary patch")))
     case GitOperationKind.BlobContent => Left("Unexpected blob decoder")
     case _ => Right(())

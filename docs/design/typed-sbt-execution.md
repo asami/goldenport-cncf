@@ -115,6 +115,22 @@ external-CAR ProcessExec fallback or new request purpose.
 
 ## Lifecycle and effects
 
+### JVM memory ownership
+
+SbtExecutionAdmission applies SbtJvmParameters after target/scenario/installed
+runtime binding and before driver execution. sm-workflow selects the logical
+SBT intent; this shared CNCF producer resolves the ordinary
+`cncf.sbt.jvm.maximum-heap-mib` property (default 4096 MiB), project JVM options
+and explicitly bound launcher configuration. The resulting immutable definition
+preserves the admitted capability, target, command and lifecycle while carrying
+the effective heap into the existing local driver. The program registry is not
+mutated. Config parsing is runtime preparation, not a shell subprocess or a
+skill-owned lifecycle. There is no change to workflow persistence or receipts.
+
+Manual shell SBT is outside this workflow route and uses standard SBT config.
+It is not redirected through an additional global launcher. Source delivery of
+this producer is distinct from adoption by an already installed runtime.
+
 Semantic SBT changes cwd selection only. Both driver entry points revalidate
 the shared binding and pass the actual checkout directory to the existing
 launcher. Tagged SBT rejects caller argv/cwd/stdin, input files, trees, outputs

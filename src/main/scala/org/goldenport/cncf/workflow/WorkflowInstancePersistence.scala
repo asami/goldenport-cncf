@@ -5,7 +5,7 @@ import org.goldenport.{Conclusion, Consequence}
 /*
  * @since   Sep. 21, 2026
  *  version Sep. 27, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 /** Provider-neutral persistence boundary for an independently durable workflow
@@ -216,10 +216,28 @@ object WorkflowInstancePersistence {
     migrationPolicy: MigrationPolicy,
     retentionPolicy: RetentionPolicy,
     leasePolicy: LeasePolicy,
-    delivery: DeliveryConfiguration
+    delivery: DeliveryConfiguration,
+    mechanicalReceiptMaxBytes: Option[Int] = None
   ) {
+    def this(workflowStore: NamedWorkflowStore, migrationPolicy: MigrationPolicy,
+      retentionPolicy: RetentionPolicy, leasePolicy: LeasePolicy, delivery: DeliveryConfiguration) =
+      this(workflowStore, migrationPolicy, retentionPolicy, leasePolicy, delivery, None)
+
+    def mechanicalReceiptLimitsC: Consequence[WorkflowMechanicalReceiptLimits] =
+      if (mechanicalReceiptMaxBytes == null)
+        _failure_c(Diagnostic(DiagnosticCode.MissingPersistencePolicy, Map("kind" -> "mechanical-receipt-limits")))
+      else mechanicalReceiptMaxBytes.fold(Consequence.success(WorkflowMechanicalReceiptLimits.default))(
+        WorkflowMechanicalReceiptLimits.createC)
+
     def validateC: Consequence[Configuration] =
       WorkflowInstancePersistence.validateC(this)
+  }
+
+  object Configuration {
+    def apply(workflowStore: NamedWorkflowStore, migrationPolicy: MigrationPolicy,
+      retentionPolicy: RetentionPolicy, leasePolicy: LeasePolicy, delivery: DeliveryConfiguration): Configuration =
+      new Configuration(workflowStore, migrationPolicy, retentionPolicy, leasePolicy, delivery,
+        None)
   }
 
   enum DiagnosticCode(val value: String) {
@@ -442,6 +460,9 @@ object WorkflowInstancePersistence {
       Some(Diagnostic(DiagnosticCode.MissingPersistencePolicy, Map("kind" -> "retention-policy")))
     else if (_blank(configuration.leasePolicy))
       Some(Diagnostic(DiagnosticCode.MissingPersistencePolicy, Map("kind" -> "lease-policy")))
+    else if (configuration.mechanicalReceiptMaxBytes == null ||
+      configuration.mechanicalReceiptMaxBytes.exists(bytes => bytes < 1 || bytes > WorkflowMechanicalReceiptLimits.maximumBytes))
+      Some(Diagnostic(DiagnosticCode.MissingPersistencePolicy, Map("kind" -> "mechanical-receipt-limits")))
     else
       configuration.delivery match {
         case DeliveryConfiguration.SameStore(entitystore) =>

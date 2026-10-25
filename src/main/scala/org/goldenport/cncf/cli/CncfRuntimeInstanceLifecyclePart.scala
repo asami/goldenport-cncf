@@ -34,7 +34,7 @@ import org.goldenport.cncf.config.SubsystemStorageConfiguration
 import org.goldenport.cncf.config.SubsystemProcessExecutionConfiguration
 import org.goldenport.cncf.config.SubsystemHttpExecutionConfiguration
 import org.goldenport.cncf.http.HttpExecutionAdmission
-import org.goldenport.cncf.processexecution.{LocalProcessExecutionDriver, ProcessExecutionAdmission, ProcessExecutionDriver, RegisteredSbtHostDriver}
+import org.goldenport.cncf.processexecution.{LocalProcessExecutionDriver, ProcessExecutionAdmission, ProcessExecutionDriver, ProcessExecutionProgress}
 import org.goldenport.cncf.workspace.WorkspaceExecutionAdmission
 import org.goldenport.cncf.config.SystemNodeShutdownConfiguration
 import org.goldenport.cncf.context.ExecutionContext
@@ -92,7 +92,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Jul. 30, 2026
  *  version Aug. 19, 2026
  *  version Sep.  8, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cli] trait CncfRuntimeInstanceLifecyclePart {
@@ -120,12 +120,11 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
 
   private[cli] val _runtime_protocol_engine = ProtocolEngine.create(_runtime_protocol)
 
-  private[cli] def _create_global_context(config: RuntimeConfig): Unit =
-    GlobalContext.set(
-      GlobalContext(
-        WorkAreaSpace.create(config)
-      )
-    )
+  private[cli] def _create_global_context(config: RuntimeConfig): WorkAreaSpace = {
+    val workarea = WorkAreaSpace.create(config)
+    GlobalContext.set(GlobalContext(workarea))
+    workarea
+  }
 
   private[cli] var _global_runtime_context: Option[GlobalRuntimeContext] = None
 
@@ -274,7 +273,8 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
     }
     _initialize_consequence(_initialize(args, extraComponents)) match {
       case Consequence.Success(subsystem) =>
-        try {
+        val termination = RuntimeCommandTermination.install(subsystem)
+        termination.run {
           normalizedargs.headOption.flatMap(RunMode.from) match {
             case Some(RunMode.Command) =>
               _execute_command_args(subsystem, normalizedargs.drop(1))
@@ -287,7 +287,7 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
                   _exit_code(Consequence.Failure(conclusion))
               }
           }
-        } finally {
+        } {
           Subsystem.shutdownOwned(subsystem)
         }
       case Consequence.Failure(conclusion) =>
@@ -409,7 +409,6 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
     val aliasresolver = AliasLoader.load(configuration.configuration)
     LogBackendHolder.install(runconfig.logBackend)
     ObservabilityEngine.updateVisibilityPolicy(VisibilityPolicy(minLevel = runconfig.logLevel))
-    _create_global_context(runconfig)
     _reset_global_runtime_context() // TODO
     val mode = runconfig.mode
     val systemnodeshutdownconfiguration = runtimeconfigurationpreflight.fold(SystemNodeShutdownConfiguration.default) { preflight =>
@@ -418,12 +417,19 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
     observe_info(systemnodeshutdownconfiguration.observationMessage)
     val systemnode = SystemNode.create(systemnodeshutdownconfiguration)
     val subsystem0 = try {
-      val processdriver = processplan.map { plan =>
-        val local = new LocalProcessExecutionDriver()
-        val driver: ProcessExecutionDriver & AutoCloseable = plan.registeredSbtHost match {
-          case Some(configuration) => new RegisteredSbtHostDriver(local, configuration)
-          case None => local
-        }
+      val workarea = _create_global_context(runconfig)
+      systemnode.ownRuntimeResourceC(workarea) match {
+        case Consequence.Success(_) => ()
+        case Consequence.Failure(conclusion) =>
+          val failure = conclusion.getException.getOrElse(new IllegalStateException(conclusion.show))
+          try workarea.close()
+          catch {
+            case cleanup: Throwable => failure.addSuppressed(cleanup)
+          }
+          throw failure
+      }
+      val processdriver = processplan.map { _ =>
+        val driver = new LocalProcessExecutionDriver(progress = ProcessExecutionProgress.stderr)
         systemnode.ownRuntimeResourceC(driver) match {
           case Consequence.Success(_) => driver
           case Consequence.Failure(conclusion) =>

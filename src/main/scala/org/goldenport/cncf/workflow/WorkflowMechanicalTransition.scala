@@ -10,7 +10,7 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.TypedValue
 /**
  * Ordinary host-selected progress, with no issued AI interaction or claim.
  * @since   Oct.  2, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 25, 2026
  */
 object WorkflowMechanicalTransition {
   final case class Reference(identity: String, revision: String)
@@ -71,7 +71,8 @@ object WorkflowMechanicalTransition {
         current.history == null || current.suspension == null || current.currentProgression == null ||
         expected == null || entry == null || entry.suspension == null || payload == null ||
         current.lifecycle != Lifecycle.Active || current.suspension.nonEmpty ||
-        entry.lifecycle != Lifecycle.Active || entry.suspension.nonEmpty ||
+        !(entry.lifecycle == Lifecycle.Active ||
+          (entry.lifecycle == Lifecycle.Completed && entry.currentProgression == None)) || entry.suspension.nonEmpty ||
         entry.correlation != current.correlation)
       Consequence.stateConflict("Mechanical progress requires an owned active unsuspended one-append intent")
     else for {

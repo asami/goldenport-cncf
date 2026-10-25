@@ -14,7 +14,7 @@ import org.goldenport.cncf.workflow.WorkflowResultJsonV1.PayloadCodec
 /** Factory-time composition capability, not a physical storage owner.
   * Usable before Component initialization; no raw provider or lease escapes.
   * @since   Oct.  1, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 20, 2026
   */
 final class WorkflowComponentStorage private (
   subsystem: Subsystem,
@@ -41,6 +41,11 @@ final class WorkflowComponentStorage private (
       Consequence[WorkflowManagedIssuedDecision[W]] =
     WorkflowManagedIssuedDecision.bindC(subsystem, component, configuration, operation,
       definitions, instances, continuations, codec)
+
+  def bindDecisionSupersessionC[W, A](operation: StateMachineOperationIdentity,
+    inputCodec: PayloadCodec[W], codec: PayloadCodec[A]): Consequence[WorkflowManagedDecisionSupersession[W, A]] =
+    WorkflowManagedDecisionSupersession.bindC(subsystem, component, configuration, operation,
+      definitions, instances, continuations, inputCodec, codec)
 
   def bindMechanicalC[A](operation: StateMachineOperationIdentity, codec: PayloadCodec[A]):
       Consequence[WorkflowManagedMechanicalTransition[A]] =

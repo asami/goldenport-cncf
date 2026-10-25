@@ -23,7 +23,7 @@ import org.goldenport.cncf.workarea.WorkAreaSpace
 /*
  * @since   Jul. 28, 2026
  *  version Aug. 13, 2026
- * @version Oct.  9, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CarRuntimeAdmissionSpec
@@ -52,15 +52,24 @@ final class CarRuntimeAdmissionSpec
           )
           val archive = _zip(content, root.resolve("sample.car"))
           val workarea = WorkAreaSpace.create(RuntimeConfig.default)
+          var extractedroot: Option[Path] = None
+          try {
+            When("CNCF extracts and admits the packaged CAR")
+            val admitted = CarExtractor.withExtracted(archive, workarea) { extracted =>
+              extractedroot = Some(extracted.root)
+              Files.isRegularFile(extracted.componentMain) shouldBe true
+              Consequence.success(extracted.descriptor)
+            }
 
-          When("CNCF extracts and admits the packaged CAR")
-          val admitted = CarExtractor.withExtracted(archive, workarea) { extracted =>
-            Consequence.success(extracted.descriptor)
+            Then("activation succeeds and callback-scoped extraction is removed immediately")
+            admitted.toOption.flatMap(_.componentName) shouldBe Some(_componentid.name)
+            Files.exists(extractedroot.get) shouldBe false
+            Files.exists(extractedroot.get.getParent) shouldBe false
+            Files.exists(archive) shouldBe true
+            Try(Class.forName("cozy.archive.CozyArchivePackager")).isFailure shouldBe true
+          } finally {
+            workarea.close()
           }
-
-          Then("activation succeeds while no Cozy implementation is available to load")
-          admitted.toOption.flatMap(_.componentName) shouldBe Some(_componentid.name)
-          Try(Class.forName("cozy.archive.CozyArchivePackager")).isFailure shouldBe true
         }
       }
 

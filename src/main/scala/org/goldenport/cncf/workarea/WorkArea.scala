@@ -1,18 +1,22 @@
 package org.goldenport.cncf.workarea
 
-import scala.util.Using
-import java.nio.file.{Files, Path, Paths}
+import scala.collection.mutable
+import scala.util.control.NonFatal
+import java.io.IOException
+import java.nio.file.{Files, FileVisitResult, LinkOption, NoSuchFileException, Path, Paths, SimpleFileVisitor}
+import java.nio.file.attribute.BasicFileAttributes
+import java.time.LocalDate
 import org.goldenport.Consequence
 import org.goldenport.id.UniversalId
 import org.goldenport.cncf.config.RuntimeConfig
-import java.util.UUID
 
 /*
  * @since   Feb.  3, 2026
- * @version Feb.  4, 2026
+ *  version Feb.  4, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
-abstract class WorkArea {
+abstract class WorkArea extends AutoCloseable {
   def id: WorkAreaId
   def limits: WorkArea.Limit
 
@@ -37,18 +41,106 @@ object WorkArea {
   )
 }
 
-final class FileWorkArea(
+final class FileWorkArea private (
   val id: WorkAreaId,
   val limits: WorkArea.Limit,
-  private val base: Path
+  private val _base: Path,
+  private val _owns_base: Boolean
 ) extends WorkArea {
-  def partition(): FileWorkArea = FileWorkArea(
-    id,
-    limits,
-    base
-  ) // TODO
+  def this(id: WorkAreaId, limits: WorkArea.Limit, base: Path) =
+    this(id, limits, base, false)
 
-  def dispose(): Consequence[Unit] = Consequence.success(()) // TODO
+  private val _paths = mutable.LinkedHashSet.empty[Path]
+  private val _children = mutable.LinkedHashSet.empty[FileWorkArea]
+  private var _closed = false
+
+  def partition(): FileWorkArea = synchronized {
+    _require_open()
+    val child = new FileWorkArea(id, limits, Files.createTempDirectory(_base, "scope-"), true)
+    _children += child
+    child
+  }
+
+  def dispose(): Consequence[Unit] = Consequence {
+    synchronized {
+      _closed = true
+      val failures = Vector.newBuilder[Throwable]
+      _children.toVector.foreach { child =>
+        child.dispose() match {
+          case Consequence.Success(_) => _children -= child
+          case Consequence.Failure(conclusion) =>
+            failures += conclusion.getException.getOrElse(new IOException(conclusion.show))
+        }
+      }
+      _paths.toVector.foreach { path =>
+        try {
+          _delete_owned_path(path)
+          _paths -= path
+        } catch {
+          case NonFatal(e) => failures += e
+        }
+      }
+      if (_owns_base && _children.isEmpty && _paths.isEmpty) {
+        try Files.deleteIfExists(_base)
+        catch {
+          case NonFatal(e) => failures += e
+        }
+      }
+      val errors = failures.result()
+      if (errors.nonEmpty) {
+        val failure = new IOException("WorkArea cleanup failed")
+        errors.foreach(failure.addSuppressed)
+        throw failure
+      }
+    }
+  }
+
+  private def _require_open(): Unit =
+    if (_closed)
+      throw new IllegalStateException("WorkArea is closed")
+
+  private def _delete_owned_path(path: Path): Unit = {
+    val present = try {
+      Files.readAttributes(path, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS)
+      true
+    } catch {
+      case _: NoSuchFileException => false
+    }
+    if (present) {
+      // walkFileTree does not follow symbolic links, including an owned root link.
+      val failures = Vector.newBuilder[IOException]
+      Files.walkFileTree(path, new SimpleFileVisitor[Path] {
+        override def visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult = {
+          try Files.deleteIfExists(file)
+          catch {
+            case e: IOException => failures += e
+          }
+          FileVisitResult.CONTINUE
+        }
+
+        override def visitFileFailed(file: Path, exc: IOException): FileVisitResult = {
+          failures += exc
+          FileVisitResult.CONTINUE
+        }
+
+        override def postVisitDirectory(dir: Path, exc: IOException): FileVisitResult = {
+          if (exc != null)
+            failures += exc
+          try Files.deleteIfExists(dir)
+          catch {
+            case e: IOException => failures += e
+          }
+          FileVisitResult.CONTINUE
+        }
+      })
+      val errors = failures.result()
+      if (errors.nonEmpty) {
+        val failure = new IOException("WorkArea owned path cleanup failed")
+        errors.foreach(failure.addSuppressed)
+        throw failure
+      }
+    }
+  }
 
  /**
    * Close this WorkArea and release all managed resources.
@@ -63,11 +155,7 @@ final class FileWorkArea(
    * - Track total allocated size
    * - Emit final usage metrics on close
    */
-  def close(): Unit = {
-    // Best-effort cleanup; detailed handling is done via dispose(): Consequence
-    dispose()
-    ()
-  }
+  def close(): Unit = dispose().TAKE
 
   /**
     * Ownership:
@@ -86,7 +174,12 @@ final class FileWorkArea(
 
   def createTempFile(prefix: String, suffix: String): Consequence[Path] =
     Consequence {
-      Files.createTempFile(base, prefix, suffix)
+      synchronized {
+        _require_open()
+        val path = Files.createTempFile(_base, prefix, suffix)
+        _paths += path
+        path
+      }
     }
 
   def createTempDir(prefix: String): Consequence[Path] =
@@ -94,43 +187,35 @@ final class FileWorkArea(
 
   def createTempDir(prefix: String, suffix: String): Consequence[Path] =
     Consequence {
-      Files.createTempDirectory(base, s"${prefix}${suffix}")
+      synchronized {
+        _require_open()
+        val path = Files.createTempDirectory(_base, s"${prefix}${suffix}")
+        _paths += path
+        path
+      }
     }
 
-  // def execute[T](f: Path => Consequence[T]): Consequence[T] =
-  //   for {
-  //     path <- createTempFile("work")
-  //     r <- Consequence.run(f(path))
-  //   } yield {
-  //     try {
-  //       Files.deleteIfExists(path)
-  //     } catch {
-  //       case _: Throwable => ()
-  //     }
-  //     r
-  //   }
 }
 object FileWorkArea {
   def create(config: RuntimeConfig): FileWorkArea = {
     // TODO RuntimeConfig
-    val tmpRoot = Paths.get(System.getProperty("java.io.tmpdir", "tmp")).resolve("cncf")
-    Files.createDirectories(tmpRoot)
-    FileWorkArea(
-      id = WorkAreaId("system"),
-      limits = WorkArea.Limit(None, None, None),
-      base = tmpRoot
+    val date = LocalDate.now()
+    val bucket = Paths.get(System.getProperty("java.io.tmpdir", "tmp")).resolve("cncf")
+      .resolve(f"${date.getYear}%04d").resolve(f"${date.getMonthValue}%02d")
+    Files.createDirectories(bucket)
+    new FileWorkArea(
+      WorkAreaId("system"),
+      WorkArea.Limit(None, None, None),
+      Files.createTempDirectory(bucket, "workarea-"),
+      true
     )
   }
 }
 
-sealed trait WorkAreaGroupOperations {
+sealed trait WorkAreaGroupOperations extends AutoCloseable {
   def dispose(): Consequence[Unit]
 
-  def close(): Unit = {
-    // Best-effort cleanup: dispose failures are intentionally ignored here.
-    dispose()
-    ()
-  }
+  def close(): Unit = dispose().TAKE
 
   def createTempFile(prefix: String): Consequence[Path]
 
@@ -189,7 +274,45 @@ final class WorkAreaSpace(
   def allocate(): Consequence[WorkAreaHandle] = areas.allocate()
 
   def execute[T](f: WorkAreaHandle => Consequence[T]): Consequence[T] =
-    Consequence.using(allocate())(f)
+    allocate().flatMap { handle =>
+      _release_scope(handle, _invoke(handle)(f(handle)))
+    }
+
+  private[cncf] def executeRetained[T](
+    register: AutoCloseable => Consequence[Unit]
+  )(
+    f: WorkAreaHandle => Consequence[T]
+  ): Consequence[T] =
+    allocate().flatMap { handle =>
+      val result = _invoke(handle) {
+        Consequence.run(f(handle)).flatMap { value =>
+          Consequence.run(register(handle)).map(_ => value)
+        }
+      }
+      result match {
+        case Consequence.Success(_) => result
+        case Consequence.Failure(_) => _release_scope(handle, result)
+      }
+    }
+
+  private def _invoke[T](handle: WorkAreaHandle)(body: => Consequence[T]): Consequence[T] =
+    try Consequence.run(body)
+    catch {
+      case failure: Throwable =>
+        try handle.close()
+        catch {
+          case cleanup: Throwable => failure.addSuppressed(cleanup)
+        }
+        throw failure
+    }
+
+  private def _release_scope[T](handle: WorkAreaHandle, result: Consequence[T]): Consequence[T] =
+    (result, handle.dispose()) match {
+      case (_, Consequence.Success(_)) => result
+      case (Consequence.Success(_), Consequence.Failure(cleanup)) => Consequence.Failure(cleanup)
+      case (Consequence.Failure(primary), Consequence.Failure(cleanup)) =>
+        Consequence.Failure(cleanup ++ primary)
+    }
 }
 object WorkAreaSpace {
   def create(config: RuntimeConfig): WorkAreaSpace = WorkAreaSpace(

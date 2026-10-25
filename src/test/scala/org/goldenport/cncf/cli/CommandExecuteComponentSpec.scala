@@ -32,7 +32,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version May.  2, 2026
  *  version Jun. 29, 2026
  *  version Aug. 15, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 class CommandExecuteComponentSpec
@@ -1141,18 +1141,27 @@ class CommandExecuteComponentSpec
   }
 
   private def _capture_stdout(body: => Int): (Int, String) = {
+    val previouscontext = GlobalRuntimeContext.current
+    val previouslegacycontext = CncfRuntime._global_runtime_context
     val out = new ByteArrayOutputStream()
     val err = new ByteArrayOutputStream()
     val outps = new PrintStream(out)
     val errps = new PrintStream(err)
-    val code =
-      Console.withOut(outps) {
-        Console.withErr(errps) {
-          body
+    try {
+      val code =
+        Console.withOut(outps) {
+          Console.withErr(errps) {
+            body
+          }
         }
-      }
-    outps.flush()
-    errps.flush()
-    (code, out.toString("UTF-8") + err.toString("UTF-8"))
+      outps.flush()
+      errps.flush()
+      (code, out.toString("UTF-8") + err.toString("UTF-8"))
+    } finally {
+      GlobalRuntimeContext.current = previouscontext
+      CncfRuntime._global_runtime_context = previouslegacycontext
+      outps.close()
+      errps.close()
+    }
   }
 }

@@ -1,16 +1,17 @@
 package org.goldenport.cncf.component
 
-import java.nio.file.{Files, Path, StandardCopyOption}
+import java.nio.file.{Files, Path}
 import java.util.zip.{ZipEntry, ZipInputStream}
 import scala.jdk.CollectionConverters._
 import scala.util.Using
 import org.goldenport.Consequence
-import org.goldenport.cncf.workarea.WorkAreaSpace
+import org.goldenport.cncf.workarea.{WorkAreaHandle, WorkAreaSpace}
 import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
 
 /*
  * @since   Mar. 22, 2026
- * @version Apr.  8, 2026
+ *  version Apr.  8, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SarExtracted(
@@ -28,7 +29,22 @@ object SarExtractor {
     workarea: WorkAreaSpace
   )(
     use: SarExtracted => Consequence[R]
-  ): Consequence[R] = workarea.execute { handle =>
+  ): Consequence[R] = workarea.execute(handle => _with_extracted(sar, handle, use))
+
+  private[cncf] def withRetainedExtracted[R](
+    sar: Path,
+    workarea: WorkAreaSpace,
+    register: AutoCloseable => Consequence[Unit]
+  )(
+    use: SarExtracted => Consequence[R]
+  ): Consequence[R] =
+    workarea.executeRetained(register)(handle => _with_extracted(sar, handle, use))
+
+  private def _with_extracted[R](
+    sar: Path,
+    handle: WorkAreaHandle,
+    use: SarExtracted => Consequence[R]
+  ): Consequence[R] =
     handle.createTempDir("sar-").flatMap { tmproot =>
       for {
         _ <- _unzip(sar, tmproot)
@@ -36,14 +52,22 @@ object SarExtractor {
         result <- use(extracted)
       } yield result
     }
-  }
 
   def resolveDirectory(root: Path): Consequence[SarExtracted] =
     _resolve_structure(root)
 
+  /** Expand only into a cache-owned unpublished destination. */
+  private[cncf] def extractToC(
+    sar: Path,
+    root: Path,
+    beforeWrite: Long => Unit = _ => ()
+  ): Consequence[SarExtracted] =
+    _unzip(sar, root, beforeWrite).flatMap(_ => _resolve_structure(root))
+
   private def _unzip(
     sar: Path,
-    root: Path
+    root: Path,
+    beforewrite: Long => Unit = _ => ()
   ): Consequence[Unit] = Consequence {
     Using.resource(new ZipInputStream(Files.newInputStream(sar))) { zip =>
       var entry: ZipEntry = zip.getNextEntry
@@ -56,7 +80,17 @@ object SarExtractor {
           Files.createDirectories(target)
         } else {
           Option(target.getParent).foreach(parent => Files.createDirectories(parent))
-          Files.copy(zip, target, StandardCopyOption.REPLACE_EXISTING)
+          Using.resource(Files.newOutputStream(target)) { output =>
+            val buffer = new Array[Byte](65536)
+            var count = zip.read(buffer)
+            while (count >= 0) {
+              if (count > 0) {
+                beforewrite(count.toLong)
+                output.write(buffer, 0, count)
+              }
+              count = zip.read(buffer)
+            }
+          }
         }
         zip.closeEntry()
         entry = zip.getNextEntry

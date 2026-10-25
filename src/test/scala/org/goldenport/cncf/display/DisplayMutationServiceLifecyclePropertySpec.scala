@@ -1,6 +1,7 @@
 package org.goldenport.cncf.display
 
 import java.time.Instant
+import java.nio.file.Files
 import logicalui.DisplayMutationServiceDomain.BodyMode
 import org.goldenport.cncf.datastore.PostgresqlPersistenceFixture.Database
 import org.goldenport.cncf.entity.EntityRevisionRepresentation
@@ -10,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 16, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 22, 2026
  */
 object DisplayMutationServiceLifecyclePropertySpec {
   import DisplayMutationServiceFixture.*
@@ -54,6 +55,12 @@ object DisplayMutationServiceLifecyclePropertySpec {
   }
 
   val parameters: Test.Parameters = Test.Parameters.default.withMinSuccessfulTests(100).withWorkers(1)
+  // Generated data deliberately includes unpaired UTF-16 surrogates. Keep them
+  // in the law inputs, but make failure clues safe for the UTF-8 JUnit reporter.
+  private def _diagnostic_text(value: String): String =
+    value.flatMap { character =>
+      if (Character.isSurrogate(character)) f"\\u${character.toInt}%04x" else character.toString
+    }
   def fields(sample: Sample): Vector[DisplayMutation.FieldInput] = {
     val values = Vector(field("title", DisplayValue.Text("Created:" + sample.text)),
       field("description", DisplayValue.Text(sample.description)),
@@ -125,7 +132,7 @@ object DisplayMutationServiceLifecyclePropertySpec {
       When("the total positive-create law runs sequentially with reducing Unicode, number, time, optional-value and mode shrinkers")
       val result = Test.check(parameters, property)
       Then("at least one hundred successful samples and zero discards are required")
-      withClue(s"$label ${result.status.toString}: ") { result.passed shouldBe true; result.succeeded should be >= 100; result.discarded shouldBe 0 }
+      withClue(s"$label ${_diagnostic_text(result.status.toString)}: ") { result.passed shouldBe true; result.succeeded should be >= 100; result.discarded shouldBe 0 }
       result
     }
     def deleteLaw(pool: Pool, label: String): Test.Result = {
@@ -163,7 +170,7 @@ object DisplayMutationServiceLifecyclePropertySpec {
       When("the total observed-delete law runs sequentially with positive revision and finite-mode shrinking")
       val result = Test.check(parameters, property)
       Then("at least one hundred successful samples and zero discards are required")
-      withClue(s"$label ${result.status.toString}: ") { result.passed shouldBe true; result.succeeded should be >= 100; result.discarded shouldBe 0 }
+      withClue(s"$label ${_diagnostic_text(result.status.toString)}: ") { result.passed shouldBe true; result.succeeded should be >= 100; result.discarded shouldBe 0 }
       result
     }
   }
@@ -174,6 +181,26 @@ final class DisplayMutationServiceLifecyclePropertySpec extends AnyWordSpec
   import DisplayMutationServiceLifecyclePropertySpec.*
   private val _governed = afterWord("under docs/spec/display-mutation-service.md DLC-10..12, docs/design/display-mutation-service.md DLC-D01 and RULE.md")
   "Ordinary Display lifecycle generated laws" should {
+    "E1 retain malformed UTF-16 counterexamples in UTF-8 XML failure diagnostics" must afterWord("in spec:display-mutation-service, example:E1, rules:DLC-10,DLC-11,DLC-12, phase:116") {
+      "preserve the actual counterexample through XML-safe failure clues" in {
+        Given("Spec: docs/spec/display-mutation-service.md; Rules: DLC-10,DLC-11,DLC-12; Example: E1; a failing generated sample containing unpaired high and low surrogates")
+        val sample = "日\ud800x\udfff"
+        val result = Test.check(parameters, Prop.forAll(Gen.const(sample))(_ => false))
+        When("the actual ScalaCheck counterexample is rendered as a JUnit failure clue")
+        val diagnostic = _diagnostic_text(result.status.toString)
+        val report = Files.createTempFile("cncf-lifecycle-diagnostic-", ".xml")
+        try {
+          scala.xml.XML.save(report.toString, <testsuite><failure>{diagnostic}</failure></testsuite>, "UTF-8")
+          Then("UTF-8 XML retains both offending code units without changing the generated input")
+          result.passed shouldBe false
+          diagnostic should include("\\ud800")
+          diagnostic should include("\\udfff")
+          (scala.xml.XML.loadFile(report.toFile) \ "failure").text shouldBe diagnostic
+          sample.charAt(1) shouldBe '\ud800'
+          sample.charAt(3) shouldBe '\udfff'
+        } finally Files.deleteIfExists(report)
+      }
+    }
     "total canonical create and observed delete" which _governed {
       "DLC-P1 preserve independently expected positive typed creates on memory and SQLite with meaningful shrinking" in {
         for (backend <- Vector("memory", "sqlite")) {

@@ -1,7 +1,8 @@
 package org.goldenport.cncf.resource
 
-import java.io.{InputStream, IOException}
+import java.io.{FilterInputStream, InputStream, IOException}
 import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Path}
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -9,25 +10,25 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ResourceReadLimitsSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Runtime resource read limits" should {
     "default to one MiB and reject every out-of-range construction" in {
       Given("the default policy, both admitted endpoints and invalid integer limits")
-      val invalid = Vector(Int.MinValue, -1, 0, 16777217, Int.MaxValue)
+      val invalid = Vector(Int.MinValue, -1, 0, 268435457, Int.MaxValue)
 
       When("runtime policies are constructed directly and through structured validation")
       val defaults = ResourceReadLimits()
-      val endpoints = Vector(1, 16777216).map(ResourceReadLimits.createC)
+      val endpoints = Vector(1, 268435456).map(ResourceReadLimits.createC)
       val rejected = invalid.map(ResourceReadLimits.createC)
       val thrown = invalid.map(value => intercept[IllegalArgumentException](ResourceReadLimits(value)))
 
       Then("the default is finite, endpoints are admitted and invalid policies never exist")
       defaults.maximumBytes shouldBe 1048576
       ResourceReadLimits.default shouldBe defaults
-      endpoints.flatMap(_.toOption.map(_.maximumBytes)) shouldBe Vector(1, 16777216)
+      endpoints.flatMap(_.toOption.map(_.maximumBytes)) shouldBe Vector(1, 268435456)
       rejected.forall(_.isFaillure) shouldBe true
       thrown should have size invalid.size
     }
@@ -106,17 +107,64 @@ final class ResourceReadLimitsSpec extends AnyWordSpec with Matchers with GivenW
     }
 
     "acquire the maximum admitted cap without integer overflow" in {
-      Given("a finite sixteen-MiB stream and the maximum admitted runtime policy")
-      val stream = new TrackingInputStream(16777216)
+      Given("a finite 256-MiB stream and the maximum admitted runtime policy")
+      val stream = new TrackingInputStream(268435456)
 
       When("the helper consumes the complete maximum-size resource")
-      val result = ResourceReadAcquisition.readC(stream, ResourceReadLimits(16777216))
+      val result = ResourceReadAcquisition.readC(stream, ResourceReadLimits(268435456))
 
       Then("the complete immutable value is returned and the stream is released")
-      result.toOption.map(_.size) shouldBe Some(16777216)
+      result.toOption.map(_.size) shouldBe Some(268435456)
       result.toOption.map(bytes => bytes.head -> bytes.last) shouldBe Some(65.toByte -> 65.toByte)
-      stream.consumed shouldBe 16777216
+      stream.consumed shouldBe 268435456
       stream.closed shouldBe true
+    }
+
+    "refuse one byte above the maximum admitted cap and close the stream" in {
+      Given("a stream containing exactly one byte beyond the 256-MiB maximum")
+      val stream = new TrackingInputStream(268435457)
+
+      When("ordinary acquisition applies the maximum admitted runtime policy")
+      val result = ResourceReadAcquisition.readC(stream, ResourceReadLimits(268435456))
+
+      Then("the finite read consumes maximum plus one, returns no partial value and releases ownership")
+      result.isFaillure shouldBe true
+      result.toOption shouldBe None
+      stream.consumed shouldBe 268435457
+      stream.closed shouldBe true
+    }
+
+    "acquire a real UTF-8 file above sixteen MiB only under a sufficient selected limit" in {
+      Given("a test-owned seventeen-MiB UTF-8 file containing multibyte characters")
+      val text = "日" * (17 * 1024 * 1024 / 3) + "ab"
+      val expected = text.getBytes(StandardCharsets.UTF_8)
+      val path = Files.createTempFile("resource-read-above-sixteen-mib-", ".txt")
+      try {
+        Files.write(path, expected)
+        val stream = new TrackingFileInputStream(path)
+
+        When("ordinary acquisition reads the actual file under 128 MiB, the default and sixteen MiB")
+        val result = ResourceReadAcquisition.readC(stream, ResourceReadLimits(134217728))
+        val refusals = Vector(ResourceReadLimits.default, ResourceReadLimits(16777216)).map { limits =>
+          val limitedstream = new TrackingFileInputStream(path)
+          val refused = ResourceReadAcquisition.readC(limitedstream, limits)
+          refused -> limitedstream.closed
+        }
+
+        Then("every UTF-8 byte survives the selected policy while smaller policies return no partial value and all streams close")
+        Files.size(path) shouldBe 17L * 1024 * 1024
+        result.toOption.map(_.size) shouldBe Some(expected.length)
+        result.toOption.map(bytes => java.util.Arrays.equals(bytes.toArray, expected)) shouldBe Some(true)
+        result.toOption.map(bytes => new String(bytes.toArray, StandardCharsets.UTF_8) == text) shouldBe Some(true)
+        stream.closed shouldBe true
+        refusals.foreach { case (refused, closed) =>
+          refused.isFaillure shouldBe true
+          refused.toOption shouldBe None
+          closed shouldBe true
+        }
+      } finally {
+        Files.deleteIfExists(path)
+      }
     }
 
     "encode preowned Unicode only when its complete UTF-8 bytes fit" in {
@@ -137,6 +185,15 @@ final class ResourceReadLimitsSpec extends AnyWordSpec with Matchers with GivenW
       checked.passed shouldBe true
       checked.succeeded should be >= 32
       empty.toOption shouldBe Some(Vector.empty)
+    }
+  }
+
+  private final class TrackingFileInputStream(path: Path) extends FilterInputStream(Files.newInputStream(path)) {
+    private var _closed = false
+    def closed: Boolean = _closed
+    override def close(): Unit = {
+      try super.close()
+      finally { _closed = true }
     }
   }
 

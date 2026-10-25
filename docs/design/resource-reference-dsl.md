@@ -75,7 +75,8 @@ Component read_resource / read_resource_text(logical reference)
 ```
 
 Runtime configuration owns one `ResourceReadLimits` policy, defaulting to
-1,048,576 bytes with an admitted inclusive range of 1..16,777,216. Only
+1,048,576 bytes (1 MiB) with an admitted inclusive range of
+1..268,435,456 bytes (256 MiB). Only
 `textus.resource.read.max-bytes`, its `textus.runtime` spelling and the matching
 `cncf` aliases select it; invalid numeric settings fail construction. Settings,
 storage assembly and the normal global-runtime context pass the actual policy
@@ -83,6 +84,9 @@ into `ResourceAccess.standard`. Existing factory arities explicitly delegate to
 finite defaults; explicit runtime overloads carry the configured policy.
 Components own only logical references and charset choices. There is no
 component safety variant or per-call maximum argument.
+
+A larger selected limit permits more input; it is not a peak-memory bound.
+Immutable byte, text and JSON values may require more memory than the input size.
 
 Provider acquisition takes `ResourceReadLimits` in the existing URL, Textus and
 external URN SPIs, including `readStaticWeb`. Every selected route receives the

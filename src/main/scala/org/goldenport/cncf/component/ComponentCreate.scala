@@ -56,7 +56,7 @@ import org.goldenport.schema.{DataType, XString}
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentCreate(
@@ -64,7 +64,8 @@ final case class ComponentCreate(
   origin: ComponentOrigin,
   componentDescriptors: Vector[ComponentDescriptor] = Vector.empty,
   instanceMetadata: Option[ComponentInstanceMetadata] = None,
-  assemblyApiClassLoader: Option[ClassLoader] = None
+  assemblyApiClassLoader: Option[ClassLoader] = None,
+  private[cncf] val managedCacheRoot: Option[Path] = None
 ) {
   private[cncf] def subsystem: Subsystem = assembly.subsystem
 
@@ -83,6 +84,9 @@ final case class ComponentCreate(
 
   def withAssemblyApiClassLoader(p: ClassLoader) =
     copy(assemblyApiClassLoader = Some(p))
+
+  private[cncf] def withManagedCacheRoot(p: Path): ComponentCreate =
+    copy(managedCacheRoot = Some(p))
 
   private[cncf] def withRuntimeConfiguration(p: ResolvedConfiguration) =
     copy(assembly = ComponentAssemblyContext(subsystem, p))

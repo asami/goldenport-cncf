@@ -5,7 +5,7 @@ import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.{ExecutionContext, GlobalContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.processexecution.*
-import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
+import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp, UnitOfWorkProgramRecorder, UnitOfWorkProgramStubProvider}
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
@@ -17,11 +17,99 @@ import org.scalatest.wordspec.AnyWordSpec
  * protected internal-DSL integration.
  *
  * @since   Jul. 17, 2026
- * @version Jul. 30, 2026
+ *  version Jul. 30, 2026
+ * @version Oct. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ProcessExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _exit_codes = Gen.choose(-16, 16)
+
+  "E7 Host-source DSL routing" must afterWord("in spec:host-source-read, example:E7, rules:R3,R4,R5, phase:6.4") {
+    "route both typed entry points through one resolved ProcessExec per call and preserve every terminal mapping" in {
+      Given("docs/spec/host-source-read.md R3 R4 R5 E7, a component grant and actual deterministic terminal receipts")
+      val base = HostSourceReadSpecSupport.result()
+      val receipts = Vector(base) ++ HostSourceReadSpecSupport.failedTerminations.map(t => base.copy(termination = t)) ++ Vector(
+        base.copy(termination = ProcessExecutionTermination.TerminationUnconfirmed),
+        base.copy(stdout = base.stdout.copy(truncated = true)),
+        base.copy(stderr = base.stderr.copy(byteCount = 1)),
+        base.copy(stdout = ProcessExecutionCapture(Vector(0xff.toByte), 1, false)))
+      When("the direct and Free typed host-source APIs execute in their ordinary UnitOfWork")
+      val results = receipts.map { receipt =>
+        val profile = ProcessExecutionTestProfile(Map(HostSourceReadSpecSupport.capability -> receipt))
+        val context = HostSourceReadSpecSupport.contextFor(HostSourceReadSpecSupport.definition(), receipt, driver = Some(profile.driver))
+        val behavior = new ProcessExecutionBehavior(Behavior.Core(context, None, None))
+        val direct = behavior.directSource(HostSourceReadSpecSupport.target, HostSourceReadSpecSupport.payload)(using new UnitOfWork(context))
+        val free = new UnitOfWorkInterpreter(new UnitOfWork(context)).run(
+          behavior.freeSource(HostSourceReadSpecSupport.target, HostSourceReadSpecSupport.payload))
+        (receipt, direct, free, profile.driver.executions,
+          context.observability.callTreeContext.build().map(_.toRecord.print).getOrElse(""))
+      }
+      Then("each call uses the real ProcessExec interpreter exactly once, without retry or success forgery")
+      results.foreach { case (receipt, direct, free, executions, rendered) =>
+        val expected = HostSourceRead.decodeC(receipt)
+        direct.toOption shouldBe expected.toOption
+        free.toOption shouldBe expected.toOption
+        direct.isFaillure shouldBe expected.isFaillure
+        free.isFaillure shouldBe expected.isFaillure
+        executions should have size 2
+        executions.foreach { execution =>
+          execution.request.arguments shouldBe empty
+          execution.request.input shouldBe ProcessExecutionInput.Bytes(HostSourceReadSpecSupport.payload.bytes)
+          execution.definition.safeProgramIdentity shouldBe HostSourceReadSpecSupport.capability.print
+        }
+        rendered should include ("uow:process-exec")
+      }
+    }
+
+    "record only the existing resolved ProcessExec algebra operation" in {
+      Given("docs/spec/host-source-read.md R5 E7, an admitted component source call and a typed terminal stub")
+      val receipt = HostSourceReadSpecSupport.result()
+      val context = HostSourceReadSpecSupport.contextFor(HostSourceReadSpecSupport.definition(), receipt)
+      val behavior = new ProcessExecutionBehavior(Behavior.Core(context, None, None))
+      val provider = new UnitOfWorkProgramStubProvider {
+        def resultFor[A](ordinal: Int, operation: UnitOfWorkOp[A]): Consequence[A] = operation match {
+          case UnitOfWorkOp.ProcessExec(_) => Consequence.success(receipt).asInstanceOf[Consequence[A]]
+          case _ => Consequence.serviceUnavailable("Unexpected host-source algebra operation")
+        }
+      }
+      When("the typed Free program is recorded")
+      val recording = UnitOfWorkProgramRecorder.record(
+        behavior.freeSource(HostSourceReadSpecSupport.target, HostSourceReadSpecSupport.payload), provider)
+      Then("one resolved ProcessExec carries the payload and no new operation or raw selection crosses the algebra")
+      recording.result.toOption shouldBe Some(HostSourceReadResult.Complete(receipt.stdout.content))
+      recording.occurrences should have size 1
+      recording.occurrences.head.operation match {
+        case UnitOfWorkOp.ProcessExec(execution) =>
+          execution.request.capability shouldBe HostSourceReadSpecSupport.capability
+          execution.request.arguments shouldBe empty
+        case other => fail(s"Expected ProcessExec, received $other")
+      }
+    }
+  }
+
+  "E8 Host-source DSL refusal" must afterWord("in spec:host-source-read, example:E8, rules:R3,R5, phase:6.4") {
+    "refuse wider declarations and missing component grants before either path invokes its driver" in {
+      Given("docs/spec/host-source-read.md R3 R5 E8, wrong identity, wider templates and unauthorized component scopes")
+      val receipt = HostSourceReadSpecSupport.result()
+      val profile = ProcessExecutionTestProfile(Map(HostSourceReadSpecSupport.capability -> receipt))
+      val definitions = Vector(HostSourceReadSpecSupport.definition(identity = "another-reader"),
+        HostSourceReadSpecSupport.definition(policy = HostSourceReadSpecSupport.templatePolicy(Set(
+          ProcessArgumentTemplate(Vector.empty), ProcessArgumentTemplate(Vector(ProcessArgumentSlot.Literal("extra")))))))
+      val contexts = definitions.map(d => HostSourceReadSpecSupport.contextFor(d, receipt, driver = Some(profile.driver))) ++ Vector(
+        HostSourceReadSpecSupport.contextFor(HostSourceReadSpecSupport.definition(), receipt, granted = false, driver = Some(profile.driver)),
+        HostSourceReadSpecSupport.contextFor(HostSourceReadSpecSupport.definition(), receipt, installed = false, driver = Some(profile.driver)))
+      When("both typed entry points attempt source admission")
+      val results = contexts.flatMap { context =>
+        val behavior = new ProcessExecutionBehavior(Behavior.Core(context, None, None))
+        Vector(behavior.directSource(HostSourceReadSpecSupport.target, HostSourceReadSpecSupport.payload)(using new UnitOfWork(context)),
+          new UnitOfWorkInterpreter(new UnitOfWork(context)).run(
+            behavior.freeSource(HostSourceReadSpecSupport.target, HostSourceReadSpecSupport.payload)))
+      }
+      Then("every refusal remains a structured failure and no driver invocation occurs")
+      results.foreach(_.isFaillure shouldBe true)
+      profile.driver.executions shouldBe empty
+    }
+  }
 
   "Process Execution internal DSL" should {
     "construct equivalent UnitOfWork intent through direct and Free execution paths" in {
@@ -33,7 +121,7 @@ final class ProcessExecutionDslSpec extends AnyWordSpec with Matchers with Given
         val result = _result(capability, exitcode)
         val fixture = ProcessExecutionTestProfile.admittedC(capability, result).toOption.get
         val context = _context(Some(fixture.profile.driver))
-        val behavior = new _ProcessExecutionBehavior(Behavior.Core(context, None, None))
+        val behavior = new ProcessExecutionBehavior(Behavior.Core(context, None, None))
         val execution = fixture.execution
         val directuow = new UnitOfWork(context)
         val freeuow = new UnitOfWork(context)
@@ -83,7 +171,7 @@ final class ProcessExecutionDslSpec extends AnyWordSpec with Matchers with Given
       Given("an admitted execution and a scope without a Process Execution driver")
       val capability = ProcessCapabilityId.parseC("codex-cli").toOption.get
       val context = _context(None)
-      val behavior = new _ProcessExecutionBehavior(Behavior.Core(context, None, None))
+      val behavior = new ProcessExecutionBehavior(Behavior.Core(context, None, None))
       val execution = ProcessExecutionTestProfile.admittedC(capability, _result(capability, exitcode = 0)).toOption.get.execution
       given UnitOfWork = new UnitOfWork(context)
 
@@ -100,7 +188,7 @@ final class ProcessExecutionDslSpec extends AnyWordSpec with Matchers with Given
       val result = _result(capability, exitcode = 0)
       val fixture = ProcessExecutionTestProfile.admittedC(capability, result).toOption.get
       val context = _context(Some(fixture.profile.driver), Some(fixture.admission))
-      val behavior = new _ProcessExecutionBehavior(Behavior.Core(context, None, None))
+      val behavior = new ProcessExecutionBehavior(Behavior.Core(context, None, None))
       val request = ProcessExecutionRequest(capability)
       given UnitOfWork = new UnitOfWork(context)
 
@@ -120,7 +208,7 @@ final class ProcessExecutionDslSpec extends AnyWordSpec with Matchers with Given
       val result = _result(capability, exitcode = 0)
       val fixture = ProcessExecutionTestProfile.admittedC(capability, result).toOption.get
       val context = _context(Some(fixture.profile.driver))
-      val behavior = new _ProcessExecutionBehavior(Behavior.Core(context, None, None))
+      val behavior = new ProcessExecutionBehavior(Behavior.Core(context, None, None))
       given UnitOfWork = new UnitOfWork(context)
 
       When("the provider submits a logical Process Execution request")
@@ -139,7 +227,7 @@ final class ProcessExecutionDslSpec extends AnyWordSpec with Matchers with Given
       val result = _result(capability, exitcode = 0).copy(stdout = capture)
       val fixture = ProcessExecutionTestProfile.admittedC(capability, result).toOption.get
       val context = _context(Some(fixture.profile.driver), calltreeenabled = true)
-      val behavior = new _ProcessExecutionBehavior(Behavior.Core(context, None, None))
+      val behavior = new ProcessExecutionBehavior(Behavior.Core(context, None, None))
       given UnitOfWork = new UnitOfWork(context)
 
       When("the protected Process Execution DSL completes")
@@ -161,7 +249,7 @@ final class ProcessExecutionDslSpec extends AnyWordSpec with Matchers with Given
       val result = _result(capability, exitcode = 0).copy(stdout = capture)
       val fixture = ProcessExecutionTestProfile.admittedC(capability, result).toOption.get
       val context = _context(Some(fixture.profile.driver))
-      val behavior = new _ProcessExecutionBehavior(Behavior.Core(context, None, None))
+      val behavior = new ProcessExecutionBehavior(Behavior.Core(context, None, None))
       val before = RuntimeDashboardMetrics.processExecutionSnapshot.summary.cumulative.total
       given UnitOfWork = new UnitOfWork(context)
 
@@ -185,7 +273,7 @@ final class ProcessExecutionDslSpec extends AnyWordSpec with Matchers with Given
           Consequence.serviceUnavailable(secret)
       }
       val context = _context(Some(failingdriver), calltreeenabled = true)
-      val behavior = new _ProcessExecutionBehavior(Behavior.Core(context, None, None))
+      val behavior = new ProcessExecutionBehavior(Behavior.Core(context, None, None))
       val before = RuntimeDashboardMetrics.processExecutionSnapshot.summary.cumulative.total
       given UnitOfWork = new UnitOfWork(context)
 
@@ -237,9 +325,15 @@ final class ProcessExecutionDslSpec extends AnyWordSpec with Matchers with Given
 
 }
 
-private final class _ProcessExecutionBehavior(
+private final class ProcessExecutionBehavior(
   val behaviorCore: Behavior.Core
 ) extends Behavior {
+  def freeSource(target: HostSourceTarget, payload: HostSourcePayload) =
+    host_source_read(target, payload)
+
+  def directSource(target: HostSourceTarget, payload: HostSourcePayload)(using UnitOfWork): Consequence[HostSourceReadResult] =
+    host_source_read_c(target, payload)
+
   def free(execution: ResolvedProcessExecution) =
     process_exec(execution)
 

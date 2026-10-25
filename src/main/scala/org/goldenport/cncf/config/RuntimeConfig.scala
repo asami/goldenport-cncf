@@ -3,8 +3,8 @@ package org.goldenport.cncf.config
 import java.nio.file.{Path, Paths}
 
 import org.goldenport.Consequence
-import org.goldenport.configuration.ResolvedConfiguration
-import org.goldenport.cncf.cli.RunMode
+import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.cncf.cli.{InstalledRuntimeDistribution, RunMode}
 import org.goldenport.cncf.log.LogBackend
 import org.goldenport.cncf.observability.LogLevel
 import org.goldenport.cncf.http.{HttpDriver, FakeHttpDriver, HttpDriverFactory, StaticFormAppRendererConfig}
@@ -17,6 +17,7 @@ import org.goldenport.cncf.context.{ExecutionProfileResolver, IdGenerationContex
 import org.goldenport.cncf.observability.{DiagnosticPayloadExternalizationConfig, ObservabilityEngine, OpenTelemetryExportConfig}
 import org.goldenport.cncf.blob.BlobStoreConfig
 import org.goldenport.cncf.resource.{ResourceReadLimits, ResourceTreePolicy, ResourceTreeQueryLimits, ResourceUrlPolicy, TextusUrnResourcePolicy, UrnResourceProvider, UrnResourceProviderConfig}
+import org.goldenport.cncf.workspace.WorkspaceId
 
 /*
  * @since   Jan. 18, 2026
@@ -26,7 +27,7 @@ import org.goldenport.cncf.resource.{ResourceReadLimits, ResourceTreePolicy, Res
  *  version Apr. 30, 2026
  *  version Jun. 19, 2026
  *  version Jul. 30, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -71,6 +72,45 @@ final case class RuntimeConfig(
 }
 
 object RuntimeConfig {
+  val installedRuntimeManifestKey = "cncf.installed-runtime.manifest"
+
+  private[cncf] enum SbtRuntimeBinding {
+    case Project, Installed
+  }
+
+  private[cncf] def sbtRuntimeBindingKey(workspaceId: WorkspaceId): String =
+    s"cncf.sbt.runtime-binding.${workspaceId.value}"
+
+  /** Each target selects its build binding independently of the owning CLI installation. */
+  private[cncf] def sbtRuntimeBindingC(
+    parameters: ResolvedParameters,
+    workspaceId: WorkspaceId
+  ): Consequence[SbtRuntimeBinding] =
+    parameters.get(sbtRuntimeBindingKey(workspaceId)) match {
+      case None => Consequence.success(SbtRuntimeBinding.Project)
+      case Some(parameter) => parameter.value match {
+        case ConfigurationValue.StringValue("project") => Consequence.success(SbtRuntimeBinding.Project)
+        case ConfigurationValue.StringValue("installed") => Consequence.success(SbtRuntimeBinding.Installed)
+        case _ => Consequence.resourceInvalid("SBT runtime binding configuration must be project or installed")
+      }
+    }
+
+  /** Operational binding comes from ordinary resolved configuration, never a property bypass. */
+  def installedRuntimeDistributionC(
+    parameters: ResolvedParameters
+  ): Consequence[Option[InstalledRuntimeDistribution]] =
+    parameters.get(installedRuntimeManifestKey) match {
+      case None => Consequence.success(None)
+      case Some(parameter) => parameter.value match {
+        case ConfigurationValue.StringValue(value) if value.nonEmpty && !value.exists(_.isControl) =>
+          try InstalledRuntimeDistribution.readC(Paths.get(value)).map(Some(_))
+          catch {
+            case scala.util.control.NonFatal(_) => Consequence.resourceInvalid("Invalid installed runtime manifest path")
+          }
+        case _ => Consequence.resourceInvalid("Installed runtime manifest configuration must be an absolute filename")
+      }
+    }
+
   /** Parsed runtime settings, without owning any storage resources. */
   private[cncf] final case class Settings(
     logBackend: LogBackend,
@@ -855,9 +895,9 @@ object RuntimeConfig {
   private def _resource_read_limits(configuration: ResolvedConfiguration): ResourceReadLimits =
     _get_string(configuration, RESOURCE_READ_MAX_BYTES_KEY).fold(ResourceReadLimits.default) { value =>
       val parsed = if (value.matches("[0-9]+")) scala.util.Try(value.toInt).toOption else None
-      parsed.filter(number => number >= 1 && number <= 16777216)
+      parsed.filter(number => number >= 1 && number <= 268435456)
         .map(ResourceReadLimits(_)).getOrElse {
-          throw new IllegalArgumentException("textus.resource.read.max-bytes must be an integer between 1 and 16777216")
+          throw new IllegalArgumentException("textus.resource.read.max-bytes must be an integer between 1 and 268435456")
         }
     }
 

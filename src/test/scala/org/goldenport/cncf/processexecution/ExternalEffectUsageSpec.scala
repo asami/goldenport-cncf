@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 17, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 24, 2026
  */
 final class ExternalEffectUsageSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "External effect usage classification" should {
@@ -35,7 +35,7 @@ final class ExternalEffectUsageSpec extends AnyWordSpec with Matchers with Given
     "E2 classify typed builds and resource reads" should
       afterWord("in spec:managed-effect-classification, example:E2, rules:R1,R2, phase:6") {
       "return only their Managed kinds" in {
-        Given("docs/spec/managed-effect-classification.md R1,R2 E2 with every SBT operation and a resource read")
+        Given("docs/spec/managed-effect-classification.md R1,R2 E2 with every SBT operation including FixCheck and a resource read")
         val usages = SbtOperation.values.toVector.map(ExternalEffectUsage.TypedSbt.apply) :+ ExternalEffectUsage.ResourceRead
         When("the shared policy classifies those supplied observations")
         val results = usages.map(ProcessExternalEffectPolicy.classifyUsageC)
@@ -43,6 +43,7 @@ final class ExternalEffectUsageSpec extends AnyWordSpec with Matchers with Given
         results.map(_.toOption) shouldBe (Vector.fill(SbtOperation.values.length)(
           Some(ExternalEffectClassification(Set(ExternalEffectKind.Build), ExternalEffectRoute.Managed))) :+
           Some(ExternalEffectClassification(Set(ExternalEffectKind.ResourceRead), ExternalEffectRoute.Managed)))
+        usages should contain (ExternalEffectUsage.TypedSbt(SbtOperation.FixCheck))
       }
     }
 

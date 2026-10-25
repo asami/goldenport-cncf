@@ -3,13 +3,47 @@ package org.goldenport.cncf.subsystem
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import java.nio.file.Files
+import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.workarea.WorkAreaSpace
 
 /*
  * @since Oct.  7, 2026
- * @version Oct.  7, 2026
+ * @version Oct. 21, 2026
  */
 final class SystemNodeRuntimeResourceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "SystemNode runtime ownership" should {
+    "reuse its assembly WorkArea and isolate a bare embedding's owned area" in {
+      Given("one node with an assembly-owned WorkArea and a second bare embedding node")
+      val first = SystemNode.create()
+      val second = SystemNode.create()
+      val assemblyarea = WorkAreaSpace.create(RuntimeConfig.default)
+      first.ownRuntimeResourceC(assemblyarea).TAKE
+      try {
+        When("each node acquires its own WorkArea and the second owner shuts down")
+        val firstarea = first.workAreaSpaceC.TAKE
+        val secondarea = second.workAreaSpaceC.TAKE
+        val firstfile = firstarea.createTempFile("first").TAKE
+        val secondfile = secondarea.createTempFile("second").TAKE
+        val secondclose = second.shutdownC()
+        Then("assembly ownership is reused, only the second owner's files disappear, and late acquisition fails")
+        (firstarea eq assemblyarea) shouldBe true
+        (first.workAreaSpaceC.TAKE eq firstarea) shouldBe true
+        secondclose.isSuccess shouldBe true
+        Files.exists(firstfile) shouldBe true
+        Files.exists(secondfile) shouldBe false
+        second.workAreaSpaceC.isFaillure shouldBe true
+        When("the first owner also shuts down")
+        val firstclose = first.shutdownC()
+        Then("its original assembly-owned files are removed")
+        firstclose.isSuccess shouldBe true
+        Files.exists(firstfile) shouldBe false
+      } finally {
+        first.shutdownC()
+        second.shutdownC()
+      }
+    }
+
     "close each owned resource once in reverse registration order and refuse late admission" in {
       Given("a running SystemNode and two resources, including a duplicate registration")
       val node = SystemNode.create()

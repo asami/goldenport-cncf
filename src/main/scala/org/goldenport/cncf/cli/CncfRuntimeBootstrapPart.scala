@@ -31,6 +31,7 @@ import org.goldenport.cncf.config.CncfConfigurationResolutionContext
 import org.goldenport.cncf.config.CncfRuntimeConfigurationProjection
 import org.goldenport.cncf.config.RepositoryBootstrapPolicy
 import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.config.ResolvedParameters
 import org.goldenport.cncf.config.RuntimeProcessExitPolicy
 import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.context.ExecutionContext
@@ -70,7 +71,8 @@ import org.goldenport.cncf.observability.global.GlobalObservable
  *  version May. 25, 2026
  *  version Jun. 29, 2026
  *  version Jul. 30, 2026
- * @version Aug. 19, 2026
+ *  version Aug. 19, 2026
+ * @version Oct. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cli] trait CncfRuntimeBootstrapPart {
@@ -602,23 +604,27 @@ private[cli] trait CncfRuntimeBootstrapPart {
           configurationsnapshot.map(_.resolved).getOrElse(ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty))
         )
         observation.onGlobalPolicyResolution()
-        _global_configuration_policies(
-          cwd,
-          configurationsnapshot,
-          assemblyconfiguration,
-          argumentadmission.assignments,
-          environmentadmission.assignments
-        ).flatMap { globalpolicies =>
-          _bootstrap_with_global_policies(
+        RuntimeConfig.installedRuntimeDistributionC(
+          ResolvedParameters.fromResolvedConfiguration(assemblyconfiguration.configuration)
+        ).flatMap { _ =>
+          _global_configuration_policies(
             cwd,
-            args,
-            configuration = assemblyconfiguration.configuration,
             configurationsnapshot,
             assemblyconfiguration,
-            argumentadmission,
-            environmentadmission,
-            globalpolicies
-          )
+            argumentadmission.assignments,
+            environmentadmission.assignments
+          ).flatMap { globalpolicies =>
+            _bootstrap_with_global_policies(
+              cwd,
+              args,
+              configuration = assemblyconfiguration.configuration,
+              configurationsnapshot,
+              assemblyconfiguration,
+              argumentadmission,
+              environmentadmission,
+              globalpolicies
+            )
+          }
         }
       }
     } yield bootstrap
@@ -667,7 +673,25 @@ private[cli] trait CncfRuntimeBootstrapPart {
       )
     else {
       val repositories = repositoryParameters(repositorypolicy, configuration, repositoryargs, cwd)
-      Consequence.success(RuntimeBootstrap(configuration, configurationsnapshot, assemblyconfiguration, effectiveargumentadmission.assignments, environmentadmission.assignments, repositorypolicy, front, invocation, repositories))
+      RuntimeConfig.installedRuntimeDistributionC(
+        ResolvedParameters.fromResolvedConfiguration(configuration)
+      ).flatMap {
+        case None => Consequence.unit
+        case Some(distribution) =>
+          val subsystemsources = Vector(
+            RuntimeConfig.subsystemFileKey, RuntimeConfig.runtimeSubsystemFileKey,
+            RuntimeConfig.subsystemDescriptorKey, RuntimeConfig.runtimeSubsystemDescriptorKey,
+            "cncf.subsystem.file", "cncf.runtime.subsystem.file",
+            "cncf.subsystem.descriptor", "cncf.runtime.subsystem.descriptor"
+          ).flatMap(RuntimeConfig.getString(configuration, _))
+          InstalledRuntimeDistribution.admitBootstrapC(
+            distribution, repositorypolicy, front.factoryClasses, front.discoverClasses,
+            _test_home_repository_inheritance_disabled(configuration),
+            repositories.activeRepositories, repositories.searchRepositories, subsystemsources
+          )
+      }.map { _ =>
+        RuntimeBootstrap(configuration, configurationsnapshot, assemblyconfiguration, effectiveargumentadmission.assignments, environmentadmission.assignments, repositorypolicy, front, invocation, repositories)
+      }
     }
     }
 
@@ -1188,10 +1212,12 @@ private[cli] trait CncfRuntimeBootstrapPart {
                     Subsystem.shutdownOwned(subsystem)
                 case Some(RunMode.Command) =>
                   val subsystem = buildSubsystem(extraComponents, Some(RunMode.Command), args)
-                  try
+                  val termination = RuntimeCommandTermination.install(subsystem)
+                  termination.run {
                     new CncfRuntime().executeCommand(subsystem, launch.domainargs.drop(1))
-                  finally
+                  } {
                     Subsystem.shutdownOwned(subsystem)
+                  }
                 case Some(RunMode.ServerEmulator) =>
                   _execute_server_emulator(launch.domainargs.drop(1), args, extraComponents)
                 case Some(RunMode.Script) =>
@@ -1261,10 +1287,12 @@ private[cli] trait CncfRuntimeBootstrapPart {
                   Subsystem.shutdownOwned(subsystem)
               case Some(RunMode.Command) =>
                 val subsystem = buildSubsystem(mode = Some(RunMode.Command), args = args)
-                try
+                val termination = RuntimeCommandTermination.install(subsystem)
+                termination.run {
                   new CncfRuntime().executeCommand(subsystem, launch.domainargs.drop(1))
-                finally
+                } {
                   Subsystem.shutdownOwned(subsystem)
+                }
               case Some(RunMode.ServerEmulator) =>
                 _execute_server_emulator(launch.domainargs.drop(1), args, _ => Nil)
               case Some(RunMode.Script) =>

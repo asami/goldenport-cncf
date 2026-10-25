@@ -8,7 +8,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceExecutionAdmiss
 /*
  * @since   Jul. 17, 2026
  *  version Jul. 22, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ProcessCapabilityId private (value: String) {
@@ -528,6 +528,56 @@ final class ProcessProgramDefinition private (
 
 object ProcessProgramDefinition {
   private val _safe_identity_pattern = "[a-z][a-z0-9-]{0,63}".r
+
+  /** Closed preparation available only after CommitSelected admission. */
+  private[processexecution] def gitSelectionProbeC(
+    definition: ProcessProgramDefinition
+  ): Consequence[ProcessProgramDefinition] =
+    _git_selected_metadata_c(definition).map { metadata =>
+      val arguments = GitProgramDefinition.prefix ++ Vector("--literal-pathspecs", "diff", "--cached",
+        "--no-ext-diff", "--no-textconv", "--no-renames", "--name-only", "-z", "HEAD", "--") ++
+        metadata.selectedPaths.map(_.value)
+      _git_selected_definition(definition, metadata, arguments)
+    }
+
+  private[processexecution] def gitSelectedWorktreeProbeC(
+    definition: ProcessProgramDefinition,
+    paths: Vector[GitPath]
+  ): Consequence[ProcessProgramDefinition] = for {
+    metadata <- _git_selected_metadata_c(definition)
+    _ <- _validate_git_physical_paths_c(metadata, paths)
+    arguments = GitProgramDefinition.prefix ++ Vector("--literal-pathspecs", "diff", "--quiet",
+      "--no-ext-diff", "--no-textconv", "--") ++ paths.map(_.value)
+  } yield _git_selected_definition(definition, metadata.copy(selectedPaths = paths), arguments)
+
+  private[processexecution] def narrowGitSelectedCommitC(
+    definition: ProcessProgramDefinition,
+    paths: Vector[GitPath]
+  ): Consequence[ProcessProgramDefinition] = for {
+    metadata <- _git_selected_metadata_c(definition)
+    _ <- _validate_git_physical_paths_c(metadata, paths)
+  } yield _git_selected_definition(definition, metadata.copy(selectedPaths = paths),
+    GitProgramDefinition.physicalCommitArguments(metadata, paths))
+
+  private def _git_selected_metadata_c(definition: ProcessProgramDefinition): Consequence[GitProgramMetadata] =
+    definition._git_metadata.filter(_.kind == GitOperationKind.CommitSelected)
+      .map(Consequence.success).getOrElse(GitProgramDefinition.invalidC)
+
+  private def _validate_git_physical_paths_c(metadata: GitProgramMetadata,
+    paths: Vector[GitPath]): Consequence[Unit] =
+    if (paths.nonEmpty && paths.size <= 256 && paths.distinct.size == paths.size &&
+      paths.forall(path => path != null && GitPath.parseC(path.value).isSuccess &&
+        metadata.selectedPaths.exists(scope => path == scope || path.value.startsWith(scope.value + "/"))))
+      Consequence.unit
+    else GitProgramDefinition.invalidC
+
+  private def _git_selected_definition(definition: ProcessProgramDefinition, metadata: GitProgramMetadata,
+    arguments: Vector[String]): ProcessProgramDefinition =
+    new ProcessProgramDefinition(definition.capability, definition.safeProgramIdentity,
+      definition._executable_location, arguments, ProcessArgumentPolicy(arguments),
+      definition.maximumLimits, definition.allowedArtifacts, definition.allowsWorkingDirectory,
+      definition.allowedInputFiles, definition.allowedInputFilePaths, definition.allowedResourceTrees,
+      definition._environment, definition._sbt_metadata, Some(metadata))
 
   /** Derive only a narrower immutable TestOnly definition after actual grant lookup. */
   private[processexecution] def narrowSbtScenarioC(
@@ -1082,6 +1132,7 @@ enum ProcessExecutionTermination {
   case LaunchFailed
   case TimedOut
   case Cancelled
+  case TerminationUnconfirmed
   case OutputLimitExceeded(stream: ProcessExecutionStream)
   case ArtifactLimitExceeded
 }

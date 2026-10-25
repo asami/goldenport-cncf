@@ -11,7 +11,7 @@ import org.goldenport.record.Record
 /**
  * Separate bounded envelope; explicit V1 recovery is never a failed-reader fallback.
  * @since   Sep. 30, 2026
- * @version Oct. 12, 2026
+ * @version Oct. 25, 2026
  */
 object EventRecordJsonV2 {
   val schemaVersion = "cncf.event-record.v2"
@@ -56,7 +56,13 @@ object EventRecordJsonV2 {
         "V2 Create requires persistent transactional facts")
       val bytes = encodeStorage(value)
       require(decodeStorageC(bytes).toOption.nonEmpty, "V2 Create cannot round-trip")
-      EntityVersionedSideEffect.Create(collection, DataStore.StringEntryId(value.id.value), Record.dataAuto("event_json" -> bytes))
+      bytes
+    }.flatMap { bytes =>
+      EventHistoryCorrelation.projectC(value).map { projection =>
+        val canonical = Record.dataAuto("event_json" -> bytes)
+        EntityVersionedSideEffect.Create(collection, DataStore.StringEntryId(value.id.value),
+          Record(canonical.fields ++ projection.fields))
+      }
     }
 
   /** Preserve the internal discriminator while assigning a proposal, not a

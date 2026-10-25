@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 28, 2026
  *  version Jun. 19, 2026
  *  version Jul. 30, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -39,21 +39,23 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
     }
 
     "resolve canonical runtime and CNCF aliases for ordinary resource limits" in {
-      Given("each supported configuration spelling and a nondefault positive byte limit")
+      Given("each supported configuration spelling, a small cap, a 128-MiB setting and the 256-MiB maximum")
       val keys = Vector(
         "textus.resource.read.max-bytes", "textus.runtime.resource.read.max-bytes",
         "cncf.resource.read.max-bytes", "cncf.runtime.resource.read.max-bytes"
       )
+      val limits = Vector(7, 134217728, 268435456)
 
       When("each setting is resolved into a normal RuntimeConfig")
-      val configs = keys.map { key =>
-        RuntimeConfig.from(ResolvedConfiguration(
-          Configuration(Map(key -> ConfigurationValue.StringValue("7"))), ConfigurationTrace.empty
-        ))
-      }
+      val configs = for {
+        key <- keys
+        limit <- limits
+      } yield RuntimeConfig.from(ResolvedConfiguration(
+        Configuration(Map(key -> ConfigurationValue.StringValue(limit.toString))), ConfigurationTrace.empty
+      ))
 
       Then("every alias selects the exact runtime-owned byte policy")
-      configs.map(_.resourceReadLimits.maximumBytes) shouldBe Vector.fill(4)(7)
+      configs.map(_.resourceReadLimits.maximumBytes) shouldBe keys.flatMap(_ => limits)
     }
 
     "reject malformed zero negative excessive and overflowing resource limits" in {
@@ -62,7 +64,7 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
         "textus.resource.read.max-bytes", "textus.runtime.resource.read.max-bytes",
         "cncf.resource.read.max-bytes", "cncf.runtime.resource.read.max-bytes"
       )
-      val values = Vector("", "0", "-1", "16777217", "2147483648", "99999999999999999999", "1.5", "one", "+1", " 4 ")
+      val values = Vector("", "0", "-1", "268435457", "2147483648", "99999999999999999999", "1.5", "one", "+1", " 4 ")
 
       When("runtime construction consumes each malformed or out-of-range setting")
       val failures = for {

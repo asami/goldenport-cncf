@@ -304,3 +304,25 @@ Only the runtime implementation does.
 > This approach is well-suited for modern hardware and
 > enables simple, reliable, and cost-efficient systems,
 > especially for small to mid-scale domains.**
+
+---
+
+## 4.4 Application Function-First Realization
+
+Application-tier modeling remains provider-neutral. CML defines ordinary Services and Operations plus semantic execution properties; it does not require authors to model a cloud provider as an application concept.
+
+The preferred realization policy is **Function First, CNCF Container Fallback**:
+
+- the CNCF Container realization is generated for the complete Application Service and contains every Operation;
+- Operations whose effective contracts are eligible for function execution are additionally projected into a lightweight function realization;
+- a non-eligible Operation remains available through the complete CNCF Container realization;
+- function candidacy and deployment eligibility are distinct.
+
+Function realizations SHOULD optimize spin-up and isolation. The initial preferred generated implementation language is TypeScript. This is a realization choice, not a CML semantic type.
+
+Generated function logic is split into a provider-neutral TypeScript core and thin platform adapters. Initial adapter profiles are local/test, AWS, and Google Cloud. Provider-specific APIs MUST NOT leak into the common function logic.
+
+Common TypeScript source is generated and developed once. Packaging copies the admitted common core into each platform-specific Function Subcomponent CAR together with that platform adapter and deployment metadata. Platform CARs are self-contained and MUST NOT introduce a runtime dependency on a separate common-function CAR merely to deduplicate generated source.
+
+The local adapter is a first-class development realization. Local testing SHOULD cover common function logic, the Function ABI boundary, Function-to-local-CNCF-Domain integration, and, where required by the Domain profile, Active/Standby and read/cache routing. The local adapter is not a cloud-provider emulator.
+

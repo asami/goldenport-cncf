@@ -13,7 +13,7 @@ import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.cncf.cli.{CncfRuntime, RunMode}
 import org.goldenport.cncf.config.RuntimeConfig
-import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
 import org.goldenport.cncf.spi.{SpiContract, SpiProvider, SpiProviderComponent, SpiSelection}
 import org.goldenport.cncf.spi.ai.runner.{AiChatRequest, AiChatResponse, AiGenerateRequest, AiGenerateResponse, AiMessage, AiRecordRequest, AiRecordResponse, AiRunner as AiRunnerSpi, AiRunnerSocket}
 import org.goldenport.cncf.log.LogBackendHolder
@@ -28,7 +28,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Sep.  7, 2026
  *  version Sep. 28, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentActivationLifecycleSpec
@@ -36,6 +36,11 @@ final class ComponentActivationLifecycleSpec
   with Matchers
   with GivenWhenThen
   with TableDrivenPropertyChecks {
+  override protected def withFixture(test: NoArgTest): org.scalatest.Outcome = {
+    val previous = GlobalRuntimeContext.current
+    try super.withFixture(test)
+    finally GlobalRuntimeContext.current = previous
+  }
   private val _e1 = afterWord("in spec:component-activation-lifecycle, example:E1, rules:R1,R2,R9, phase:70, slice:CA70-01B")
   private val _e2 = afterWord("in spec:component-activation-lifecycle, example:E2, rules:R3,R4,R6, phase:70, slice:CA70-01B")
   private val _e3 = afterWord("in spec:component-activation-lifecycle, example:E3, rules:R2,R3,R4, phase:70, slice:CA70-01B")
