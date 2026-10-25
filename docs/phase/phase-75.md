@@ -65,3 +65,14 @@ Freeze any shared source boundary after its current edits settle.
 - [Design note](../notes/service-purpose-and-operation-statefulness-design-note.md)
 - [Discussion journal](../journal/2026/09/2026-09-14-service-purpose-and-operation-statefulness.md)
 - [Existing application modeling note](../notes/cml-application-modeling-guideline.md)
+
+## Function Candidacy Handoff
+
+Phase 75 supplies the semantic input for Application-tier Function First realization without taking ownership of cloud-provider adapters or deployment.
+
+An Application Operation's effective purpose/statefulness contract may make it a function candidate. Candidacy does not guarantee deployment eligibility and does not remove the Operation from the complete CNCF Container realization.
+
+Downstream generation/distribution may therefore produce both a complete CNCF Container realization containing every Application Operation and Function Subcomponent realizations containing the eligible subset.
+
+Provider-neutral TypeScript generation, local/AWS/Google adapters, CAR packaging, and deployment are downstream concerns. Phase 92 owns the Platform Subcomponent CAR distribution boundary. This preserves the existing Phase 75 exclusion of cloud-provider adapter/deployment implementation.
+
