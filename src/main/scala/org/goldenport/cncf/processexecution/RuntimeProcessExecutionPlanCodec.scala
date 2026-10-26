@@ -112,6 +112,7 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
           case SbtOperation.Test => "test"
           case SbtOperation.TestOnly => "test-only"
           case SbtOperation.FixCheck => "fix-check"
+          case SbtOperation.PublishLocal => "publish-local"
         }), "capability" -> Json.fromString(x.capability.print), "identity" -> Json.fromString(x.identity),
         "sbtExecutable" -> Json.fromString(x.sbtExecutable.toString), "limits" -> _limits_json(x.limits),
         "environment" -> Json.obj(x.environment.toVector.map { case (k, v) => k -> Json.fromString(v) }*))
@@ -155,6 +156,7 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
       case "test" => Right(SbtOperation.Test)
       case "test-only" => Right(SbtOperation.TestOnly)
       case "fix-check" => Right(SbtOperation.FixCheck)
+      case "publish-local" => Right(SbtOperation.PublishLocal)
       case _ => Left("Invalid typed build operation")
     }
     capabilitytext <- _string(obj, "capability")

@@ -43,6 +43,32 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
   )
 
   "Typed SBT internal DSL" should {
+    "record local publication as one External intent and admit it only inside the executing UoW" in {
+      Given("a publication DSL built without workspace admission or a driver")
+      val fixture = _fixture(_result(ProcessExecutionTermination.Exited(0)),
+        workspaceinstalled = false, processinstalled = false, driverinstalled = false)
+      val behavior = new SbtDslBehavior(Behavior.Core(fixture.context, None, None))
+      val conclusion = Consequence.serviceUnavailable("No current publication workspace").conclusion
+      val provider = new UnitOfWorkProgramStubProvider {
+        def resultFor[A](ordinal: Int, operation: UnitOfWorkOp[A]): Consequence[A] = operation match {
+          case UnitOfWorkOp.SbtExecAttempt(target, SbtOperation.PublishLocal) =>
+            Consequence.success(SbtExecutionAttempt.AdmissionRejected(target, SbtOperation.PublishLocal, conclusion))
+          case _ => Consequence.notImplemented("Unexpected publication operation")
+        }
+      }
+      val uow = new UnitOfWork(fixture.context)
+      try {
+        When("the thin program is recorded and the actual owning UoW evaluates it")
+        val program = behavior.publishLocalAttempt(fixture.target)
+        val recorded = UnitOfWorkProgramRecorder.record(program, provider)
+        val actual = new UnitOfWorkInterpreter(uow).run(program)
+        Then("one typed External operation is recorded and current-context admission starts no process")
+        recorded.occurrences.map(_.operation) shouldBe Vector(UnitOfWorkOp.SbtExecAttempt(fixture.target, SbtOperation.PublishLocal))
+        recorded.occurrences.map(_.effectClass) shouldBe Vector(UnitOfWorkEffectClass.External)
+        actual.toOption.get shouldBe a[SbtExecutionAttempt.AdmissionRejected]
+        fixture.profile.driver.executions shouldBe empty
+      } finally { uow.dispose(); _close(fixture.root) }
+    }
     "record thin attempt intents as External without retaining construction authority" in {
       Given("an unconfigured construction context and explicit admission-rejection stub data")
       val fixture = _fixture(_result(ProcessExecutionTermination.Exited(0)),
@@ -1116,6 +1142,7 @@ object SbtExecutionDslSpec {
 }
 
 private final class SbtDslBehavior(val behaviorCore: Behavior.Core) extends Behavior {
+  def publishLocalAttempt(target: SbtTarget) = sbt_publish_local_attempt(target)
   def compile(target: SbtTarget) = sbt_compile(target)
   def test(target: SbtTarget) = sbt_test(target)
   def testOnly(target: SbtTarget) = sbt_test_only(target)

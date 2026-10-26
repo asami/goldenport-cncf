@@ -16,7 +16,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection] = None)
 
 enum SbtOperation {
-  case Compile, Test, TestOnly, FixCheck
+  case Compile, Test, TestOnly, FixCheck, PublishLocal
 }
 
 /** Admission failure carries no process receipt; admitted failures never imply safe replay. */
@@ -91,6 +91,7 @@ private[cncf] object SbtProgramDefinition {
           case SbtOperation.Test => "test"
           case SbtOperation.TestOnly => "testOnly " + testClasses.mkString(" ")
           case SbtOperation.FixCheck => "fixCheck"
+          case SbtOperation.PublishLocal => "publishLocal"
         }
       )
       definition <- ProcessProgramDefinition.fromSbtRuntimeC(
@@ -120,7 +121,7 @@ private[cncf] object SbtProgramDefinition {
     )
 
   private def _invalid_operation_c: Consequence[Unit] =
-    Consequence.argumentPolicyViolation("operation", "sbt.execution.operation", "Compile, Test, TestOnly or FixCheck", "unknown")
+    Consequence.argumentPolicyViolation("operation", "sbt.execution.operation", "Compile, Test, TestOnly, FixCheck or PublishLocal", "unknown")
 }
 
 private[cncf] object SbtExecutionAdmission {

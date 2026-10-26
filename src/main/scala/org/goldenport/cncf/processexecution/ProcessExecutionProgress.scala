@@ -50,6 +50,7 @@ object ProcessExecutionProgress {
         case SbtOperation.Test => "test"
         case SbtOperation.TestOnly => "test-only"
         case SbtOperation.FixCheck => "fix-check"
+        case SbtOperation.PublishLocal => "publish-local"
       }),
       "workspaceId" -> Json.fromString(event.workspaceId.print),
       "programIdentity" -> Json.fromString(event.programIdentity),

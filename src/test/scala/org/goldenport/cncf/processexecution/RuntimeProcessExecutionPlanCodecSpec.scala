@@ -400,7 +400,7 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
     "round-trip exact seven-field Compile, Test and FixCheck declarations and reject selectors or argv" in {
       Given("V2 and V3 Compile/Test/FixCheck host declarations without TestOnly fields")
       val wires = Vector(_v2_root(_directory()), _v3_root(_directory())).flatMap(root =>
-        Vector("compile", "test", "fix-check").map(operation => _changed_entry(root, "sbtPrograms",
+        Vector("compile", "test", "fix-check", "publish-local").map(operation => _changed_entry(root, "sbtPrograms",
           _.mapObject(_.add("operation", Json.fromString(operation))))))
       val extras = Vector("testClasses" -> Json.arr(), "testClasses" -> Json.Null,
         "testClasses" -> Json.arr(Json.fromString("org.example.SelectedSpec")),
@@ -412,7 +412,7 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
         _decode(_changed_entry(wire, "sbtPrograms", _.mapObject(_.add(name, value)))) })
       Then("all finite operation tokens retain their seven-field shape and extra fields fail closed")
       restored.map(_.sbtDeclarations.head.operation) shouldBe Vector.fill(2)(
-        Vector(SbtOperation.Compile, SbtOperation.Test, SbtOperation.FixCheck)).flatten
+        Vector(SbtOperation.Compile, SbtOperation.Test, SbtOperation.FixCheck, SbtOperation.PublishLocal)).flatten
       accepted.zip(wires).foreach { case (encoded, original) =>
         parse(encoded.asInstanceOf[ConfigurationValue.StringValue].value).toOption.get shouldBe original
         val entry = parse(encoded.asInstanceOf[ConfigurationValue.StringValue].value).toOption.get
@@ -431,6 +431,7 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
           case SbtOperation.Compile => "compile"
           case SbtOperation.Test => "test"
           case SbtOperation.FixCheck => "fixCheck"
+          case SbtOperation.PublishLocal => "publishLocal"
           case SbtOperation.TestOnly => fail("Seven-field declaration cannot be TestOnly")
         })
       }

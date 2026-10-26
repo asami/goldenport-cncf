@@ -284,6 +284,9 @@ trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.
   protected final def sbt_fix_check(target: SbtTarget): ExecUowM[SbtExecutionResult] =
     _sbt_exec(target, SbtOperation.FixCheck)
 
+  protected final def sbt_publish_local(target: SbtTarget): ExecUowM[SbtExecutionResult] =
+    _sbt_exec(target, SbtOperation.PublishLocal)
+
   private def _sbt_exec(target: SbtTarget, operation: SbtOperation): ExecUowM[SbtExecutionResult] =
     ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.SbtExec(target, operation)))
 
@@ -298,6 +301,9 @@ trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.
 
   protected final def sbt_fix_check_attempt(target: SbtTarget): ExecUowM[SbtExecutionAttempt] =
     _sbt_exec_attempt(target, SbtOperation.FixCheck)
+
+  protected final def sbt_publish_local_attempt(target: SbtTarget): ExecUowM[SbtExecutionAttempt] =
+    _sbt_exec_attempt(target, SbtOperation.PublishLocal)
 
   private def _sbt_exec_attempt(target: SbtTarget, operation: SbtOperation): ExecUowM[SbtExecutionAttempt] =
     ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.SbtExecAttempt(target, operation)))
