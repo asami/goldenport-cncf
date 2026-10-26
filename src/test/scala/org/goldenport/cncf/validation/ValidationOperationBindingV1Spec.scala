@@ -20,6 +20,7 @@ import ValidationMetadataV1.{FeatureReference, Purpose}
  * @version Oct. 19, 2026
  * @author  ASAMI, Tomoharu
  */
+@annotation.ValidationSpecification(declaration = classOf[AdmissionTestDeclaration])
 final class ValidationOperationBindingV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _workspace_id = WorkspaceId.parseC("fixture").toOption.get
 

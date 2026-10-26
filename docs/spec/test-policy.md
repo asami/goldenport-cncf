@@ -199,7 +199,8 @@ the five representatives. Other detailed Job suites, including integrations
 outside the job package, are opt-in. This is a coverage/budget distinction, not
 a claim that every individual case is slow. Keep assertions, depths and property
 counts intact. New tests declare their category at the test definition; there is
-no classification registry, package-name filter or custom selection command.
+no classification registry, package-name filter or custom FULL/HEAVY selection
+command. The additive ADMISSION entry below uses canonical metadata.
 
 Use the standard SBT commands below through the repository's prescribed SBT
 execution route:
@@ -226,7 +227,54 @@ obligations remain applicable. This build policy is not a new metadata ABI or
 an implementation of CNCF Phase 103 discovery.
 
 ----------------------------------------------------------------------
-6. Use of TDD
+6. ADMISSION labels (updated 2026-10-26)
+----------------------------------------------------------------------
+
+ADMISSION uses canonical Validation/Test Metadata at the executable specification,
+not a class-name registry or an inference from measured duration. Initial local
+specifications cover metadata interpretation, discovery selection and exact
+operation binding. Their declaration includes ADMISSION, FOCUSED and FULL.
+This additive classification does not change existing FULL/HEAVY tags, exclusions,
+fixtures, assertions or default `test`/explicit `testOnly` behavior.
+
+Through the prescribed SBT execution owner, use:
+
+```text
+admissionTestSelection
+testAdmission
+```
+
+The first command inspects the selected suite/operation arguments. The second
+uses the same canonical discovery/composition/query and standard `testOnly` with
+exact operation names. Adding a labelled specification requires no second manual
+registration. Intentional DoNotDiscover helpers stay excluded. An empty selection
+does not constitute a successful acceptance run. These commands do not migrate
+legacy FULL/HEAVY selection to a new mechanism.
+
+Existing runnable metadata fixtures with valid ADMISSION declarations also follow
+their declared membership. Deliberately malformed discovery fixtures can produce
+PARTIAL discovery; the adapter reports that limitation and canonical selection
+excludes invalid/ambiguous rows. Success establishes the selected executed
+operations only, not complete repository inventory or absence of other coverage.
+
+The operating target is **one minute or less for the sum of all selected test
+bodies**, excluding compilation, dependency resolution, generation, discovery,
+startup, fixture setup/teardown and reporting/retention. Parallelism does not turn
+this into wall-clock time or a separate budget per suite. It is a guideline,
+not a fixed timeout, cancellation rule, assertion or automatic label change.
+Successful results remain successful when the target is exceeded; review the
+selection and cost without discarding coverage. Existing execution deadlines
+remain independent and must not become 60 seconds because of this target.
+
+Keep net body time distinct from suite/run duration in evidence. If the available
+report cannot separate setup/teardown, report net time as unavailable or explicitly
+use a conservative upper bound. Do not populate per-operation expectedDuration
+with the aggregate budget or fabricate measurements. ADMISSION is a bounded
+acceptance selection; affected FOCUSED and required FULL/HEAVY checks retain their
+existing roles. This repository policy is not a global CNCF metadata ABI limit.
+
+----------------------------------------------------------------------
+7. Use of TDD
 ----------------------------------------------------------------------
 
 TDD MAY be applied selectively in later stages,
@@ -243,7 +291,7 @@ Exploratory pending specifications must be replaced by executable behavior
 specifications when the contract is promoted to design/spec.
 
 ----------------------------------------------------------------------
-7. Summary
+8. Summary
 ----------------------------------------------------------------------
 
 - Tests are executable behavior specifications by default

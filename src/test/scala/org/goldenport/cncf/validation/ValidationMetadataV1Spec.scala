@@ -14,6 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Oct. 18, 2026
  * @version Oct. 19, 2026
  */
+@annotation.ValidationSpecification(declaration = classOf[AdmissionTestDeclaration])
 final class ValidationMetadataV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
   import ValidationMetadataV1.*
 

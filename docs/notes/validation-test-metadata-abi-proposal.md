@@ -61,7 +61,7 @@ Initial ValidationPurpose values:
 
 These are semantic membership values, not an ordinal inclusion hierarchy. One operation may belong to multiple purposes.
 
-CNCF defines the meanings and representation/merge rules. Consumer policy remains outside the ABI. In particular, ADMISSION <= 1 minute and FULL <= 10 minutes are sm-workflow engineering policies, not CNCF constants.
+CNCF defines the meanings and representation/merge rules. Consumer policy remains outside the ABI. The CNCF repository and sm-workflow adopt an ADMISSION target of at most one minute of aggregate test-body execution, excluding preparation and cleanup; it is not a fixed timeout or a per-operation budget. Duration targets, including the earlier FULL <= 10 minutes proposal, are engineering policies rather than CNCF ABI constants.
 
 ValidationFeature is extensible project/application data. Adding a feature identifier does not require an ABI version change.
 

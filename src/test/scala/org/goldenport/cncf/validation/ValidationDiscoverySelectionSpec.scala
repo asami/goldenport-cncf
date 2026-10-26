@@ -14,6 +14,7 @@ import ValidationMetadataV1.*
  * @since   Oct. 18, 2026
  * @version Oct. 18, 2026
  */
+@annotation.ValidationSpecification(declaration = classOf[AdmissionTestDeclaration])
 class ValidationDiscoverySelectionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "ValidationDiscoveryV1 selection" should {
     "query every independent purpose over actual registered operations" in {

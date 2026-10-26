@@ -8,6 +8,19 @@ val scala3Version = "3.3.8"
 val cozyGeneratorVersion = "0.3.3-SNAPSHOT"
 val goldenportCoreVersion = "0.4.3-SNAPSHOT"
 
+lazy val admissionTestSelection = taskKey[Seq[String]]("Inspect canonical ADMISSION selection without running test bodies")
+lazy val testAdmission = taskKey[Unit]("Run canonical ADMISSION operations; one-minute body time is a guideline, not a timeout")
+
+admissionTestSelection := {
+  val arguments = AdmissionTests.arguments((Test / fullClasspath).value.files,
+    (Test / classDirectory).value, version.value, (Test / definedTests).value)
+  arguments.foreach(value => streams.value.log.info("ADMISSION testOnly" + value))
+  arguments
+}
+testAdmission := Def.taskDyn {
+  Def.sequential(admissionTestSelection.value.map(arguments => (Test / testOnly).toTask(arguments)))
+}.value
+
 lazy val cncfCoreModule = "org.goldenport" %% "goldenport-core" % goldenportCoreVersion
 lazy val cncfCoreSourceDirectory = CncfCoreDevelopmentBuild.resolveSourceDirectory(
   file("."), sys.env.get("TEXTUS_GOLDENPORT_CORE_CNCF_SOURCE_ROOT")
