@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory
  *  version Apr. 29, 2026
  *  version May. 30, 2026
  *  version Jul. 21, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 trait HttpDriver {
@@ -26,6 +26,8 @@ trait HttpDriver {
   def postBag(path: String, body: Option[Bag], headers: Map[String, String], properties: Vector[Property] = Vector.empty): HttpResponse =
     throw new UnsupportedOperationException("HttpDriver.postBag is not implemented by this driver")
   def put(path: String, body: Option[String], headers: Map[String, String], properties: Vector[Property] = Vector.empty): HttpResponse
+  def putBag(path: String, body: Option[Bag], headers: Map[String, String], properties: Vector[Property] = Vector.empty): HttpResponse =
+    throw new UnsupportedOperationException("HttpDriver.putBag is not implemented by this driver")
 }
 
 final class UrlConnectionHttpDriver(
@@ -88,6 +90,26 @@ final class UrlConnectionHttpDriver(
     _execute(conn, body.map(Bag.text(_, StandardCharsets.UTF_8)), properties)
   }
 
+  override def putBag(
+    path: String,
+    body: Option[Bag],
+    headers: Map[String, String],
+    properties: Vector[Property] = Vector.empty
+  ): HttpResponse = {
+    _reject_bounded_method(properties)
+    val conn = _open_connection(_build_url(path), "PUT", properties)
+    headers.foreach { case (key, value) => conn.setRequestProperty(key, value) }
+    body match {
+      case Some(bag) =>
+        bag.metadata.size.filter(_ >= 0) match {
+          case Some(size) => conn.setFixedLengthStreamingMode(size)
+          case None => conn.setChunkedStreamingMode(8192)
+        }
+      case None => conn.setFixedLengthStreamingMode(0L)
+    }
+    _execute(conn, body, properties)
+  }
+
   private val _log = LoggerFactory.getLogger(classOf[UrlConnectionHttpDriver])
 
   private def _bounded_policy(properties: Vector[Property]): Option[BoundedHttpExchange.Policy] =
@@ -119,6 +141,18 @@ final class UrlConnectionHttpDriver(
       throw new IOException("Bounded HTTP method is unsupported")
   }
 
+  private def _binary_response(properties: Vector[Property]): Boolean = {
+    val modes = properties.collect {
+      case Property(name, value, _) if "http.response-body-mode".equalsIgnoreCase(name) => value
+    }
+    modes match {
+      case Vector() => false
+      case Vector("auto") => false
+      case Vector("binary") => true
+      case _ => throw new IOException("Invalid HTTP response body mode")
+    }
+  }
+
   private def _execute_bounded(
     path: String,
     method: String,
@@ -128,6 +162,7 @@ final class UrlConnectionHttpDriver(
     policy: BoundedHttpExchange.Policy
   ): HttpResponse =
     try {
+      val binary = _binary_response(properties)
       val url = _build_url(path)
       if (
         _public_network_only(properties) &&
@@ -138,7 +173,9 @@ final class UrlConnectionHttpDriver(
       val contenttype = _content_type(raw.contenttype)
       val status = _status(raw.status)
       val response =
-        if (contenttype.mimeType.isText) {
+        if (binary) {
+          HttpResponse.Binary(status, contenttype, Bag.binary(raw.bytes))
+        } else if (contenttype.mimeType.isText) {
           val charset = contenttype.charset.getOrElse(StandardCharsets.UTF_8)
           HttpResponse.Text(status, contenttype, Bag.text(new String(raw.bytes, charset), charset))
         } else {
@@ -249,21 +286,21 @@ final class UrlConnectionHttpDriver(
     properties: Vector[Property]
   ): HttpResponse = {
     try {
+      val binary = _binary_response(properties)
       body.foreach { b =>
         val in = b.openInputStream()
-        val out = conn.getOutputStream
         try {
-          val buffer = new Array[Byte](8192)
-          var read = in.read(buffer)
-          while (read != -1) {
-            out.write(buffer, 0, read)
-            read = in.read(buffer)
-          }
-          out.flush()
-        } finally {
-          in.close()
-          out.close()
-        }
+          val out = conn.getOutputStream
+          try {
+            val buffer = new Array[Byte](8192)
+            var read = in.read(buffer)
+            while (read != -1) {
+              out.write(buffer, 0, read)
+              read = in.read(buffer)
+            }
+            out.flush()
+          } finally out.close()
+        } finally in.close()
       }
       val code = conn.getResponseCode
       val stream = _response_stream(conn)
@@ -271,7 +308,9 @@ final class UrlConnectionHttpDriver(
       val status = _status(code)
       val bytes = _read_bytes(stream, _max_response_bytes(properties))
       val response =
-        if (contenttype.mimeType.isText) {
+        if (binary) {
+          HttpResponse.Binary(status, contenttype, Bag.binary(bytes))
+        } else if (contenttype.mimeType.isText) {
           val charset = contenttype.charset.getOrElse(StandardCharsets.UTF_8)
           HttpResponse.Text(status, contenttype, Bag.text(new String(bytes, charset), charset))
         } else {
@@ -399,6 +438,16 @@ final class FakeHttpDriver(
   def put(
     path: String,
     body: Option[String],
+    headers: Map[String, String],
+    properties: Vector[Property] = Vector.empty
+  ): HttpResponse = {
+    val _ = (path, body, headers, properties)
+    response
+  }
+
+  override def putBag(
+    path: String,
+    body: Option[Bag],
     headers: Map[String, String],
     properties: Vector[Property] = Vector.empty
   ): HttpResponse = {

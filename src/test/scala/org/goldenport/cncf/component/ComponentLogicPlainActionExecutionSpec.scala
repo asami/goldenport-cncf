@@ -35,7 +35,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since Aug. 12, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 22, 2026
  * @author ASAMI, Tomoharu
  */
 final class ComponentLogicPlainActionExecutionSpec
@@ -248,11 +248,13 @@ final class ComponentLogicPlainActionExecutionSpec
         val action = _plain_action("embedded-no-route", response, observed = observed)
         val supplied = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
         val supplieduow = supplied.unitOfWork
+        val suppliedcore = supplied.runtime.core
+        val suppliedowner = supplied.entitySpace
 
         When("the embedded Action is executed through ComponentLogic")
         val result = component.logic.executeAction(action, supplied)
 
-        Then("the direct response and supplied security/context boundary are retained")
+        Then("the direct response, callee EntitySpace owner and other supplied context fields are retained without changing the parent")
         result shouldBe Consequence.success(response)
         _jobs(component) shouldBe empty
         val bound = observed.get().getOrElse(fail("bound ActionCall context was not observed"))
@@ -260,7 +262,9 @@ final class ComponentLogicPlainActionExecutionSpec
         bound.runtime should not be theSameInstanceAs(supplied.runtime)
         bound.unitOfWork should not be theSameInstanceAs(supplieduow)
         bound.unitOfWork.executionContext should be theSameInstanceAs bound
-        bound.runtime.core should be theSameInstanceAs supplied.runtime.core
+        bound.entitySpace should be theSameInstanceAs component.entitySpace
+        bound.runtime.entitySpace should be theSameInstanceAs component.entitySpace
+        bound.runtime.core.copy(entityspace = suppliedcore.entityspace) shouldBe suppliedcore
         bound.runtime.context shouldBe supplied.runtime.context
         bound.runtime.toToken shouldBe supplied.runtime.toToken
         bound.runtime.operationMode shouldBe supplied.runtime.operationMode
@@ -272,6 +276,10 @@ final class ComponentLogicPlainActionExecutionSpec
         bound.scope.name shouldBe action.name
         bound.operationEvaluation.invocation shouldBe None
         bound.jobContext.jobId shouldBe None
+        supplied.runtime.core should be theSameInstanceAs suppliedcore
+        supplied.entitySpace should be theSameInstanceAs suppliedowner
+        supplied.unitOfWork should be theSameInstanceAs supplieduow
+        supplieduow.executionContext should be theSameInstanceAs supplied
       }
     }
 

@@ -8,6 +8,7 @@ import scala.util.control.NonFatal
 import org.goldenport.{Consequence, Conclusion, ConsequenceT}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.oauth.OAuthConnectionRuntime
 import org.goldenport.cncf.blob.{
   BlobInlineImageWorkflow,
   ContentReferenceWorkflow,
@@ -60,7 +61,7 @@ import org.simplemodeling.model.directive.Update
  *  version May. 11, 2026
  *  version Aug.  1, 2026
  *  version Sep. 19, 2026
- * @version Oct. 24, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -292,6 +293,27 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         }
       }
 
+    case UnitOfWorkOp.OAuthConnectionExecute(request) =>
+      _with_calltree("uow:oauth:connection") {
+        if (request == null || request.connectionId == null ||
+            !request.connectionId.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}"))
+          Consequence.argumentInvalid("OAuth connection request is invalid")
+        else _component_option match {
+          case Some(runtime: org.goldenport.cncf.filestore.GoogleDriveConnectionRuntime)
+              if request.isDriveAuthorization && runtime.googleDriveServiceAccount.isDefined =>
+            val account = runtime.googleDriveServiceAccount.get
+            if (account.connectionId != request.connectionId)
+              Consequence.resourceNotFound("Google Drive service account connection is not configured")
+            else account.authorizationC(uow).asInstanceOf[Consequence[A]]
+          case Some(runtime: OAuthConnectionRuntime) => runtime.oauthConnection match {
+            case Some(connection) if connection.configuration.connectionId == request.connectionId =>
+              request.executeC(connection, uow)
+            case _ => Consequence.resourceNotFound("OAuth connection is not configured")
+          }
+          case _ => Consequence.serviceUnavailable("OAuth connection runtime is unavailable")
+        }
+      }
+
     case UnitOfWorkOp.HttpGet(path, headers, properties) =>
       _with_calltree("uow:http:get") {
         HttpExecutionAdmission.resolveC(uow.executionContext, HttpExecutionMethod.Get, path, properties).flatMap { admitted =>
@@ -317,6 +339,13 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       _with_calltree("uow:http:put") {
         HttpExecutionAdmission.resolveC(uow.executionContext, HttpExecutionMethod.Put, path, properties).flatMap { admitted =>
           Consequence(_http_driver.put(admitted.absoluteUrl, body, headers, admitted.properties))
+        }
+      }
+
+    case UnitOfWorkOp.HttpPutBag(path, body, headers, properties) =>
+      _with_calltree("uow:http:put") {
+        HttpExecutionAdmission.resolveC(uow.executionContext, HttpExecutionMethod.Put, path, properties).flatMap { admitted =>
+          Consequence(_http_driver.putBag(admitted.absoluteUrl, body, headers, admitted.properties))
         }
       }
 

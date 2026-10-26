@@ -174,6 +174,15 @@ ExecutionContext Instance binds a fresh runtime and UnitOfWork to the selected
 Action context while retaining its other execution fields and runtime facilities.
 Normal synchronous Action rebinding MUST preserve shared diagnostic and
 operation-evaluation accumulation without changing the parent UnitOfWork binding.
+The selected callee component MUST own the EntitySpace and registered Entity
+descriptors observed by the Action context, its runtime, and its UnitOfWork
+interpreter, including native revision resolution and nested component calls.
+Nested and sibling Actions MUST select their own component's EntitySpace without
+changing the caller's selection or UnitOfWork. Ordinary security, framework,
+execution-invocation/profile, and explicit fresh-UnitOfWork transforms MUST retain
+the selected EntitySpace. Selecting that owner MUST preserve all other caller
+runtime facilities, datastore and EntityStore bindings, and inherited privileges;
+it MUST NOT replace the complete runtime core with the callee's core.
 No-route embedding MUST preserve the supplied context without fabricating a Subsystem
 route or operation-evaluation identity; its ActionCall still binds the
 ordinary execution selector described in R1. Event continuation MUST preserve
@@ -351,6 +360,11 @@ effective mode, response kind, Job envelope, and transport headers follow the
 explicit metadata without response-shape inference.
 
 ## Related executable specifications
+
+* [ExecutionContextActionEntitySpaceSpec](../../src/test/scala/org/goldenport/cncf/context/ExecutionContextActionEntitySpaceSpec.scala)
+  specifies callee-owned EntitySpace binding, nested and sibling independence,
+  context-transform preservation, and synchronous versus fresh metadata ownership
+  with a total ScalaCheck selection law (R9, R11).
 
 The following non-normative references identify executable specifications that
 exercise portions of these rules:

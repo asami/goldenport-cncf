@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 16, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkHttpAdmissionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -81,6 +81,13 @@ final class UnitOfWorkHttpAdmissionSpec extends AnyWordSpec with Matchers with G
       }
       _record("POST", path, text, headers, properties)
     }
+    override def putBag(path: String, body: Option[Bag], headers: Map[String, String], properties: Vector[Property] = Vector.empty): HttpResponse = {
+      val text = body.map { bag =>
+        val in = bag.openInputStream()
+        try new String(in.readAllBytes(), StandardCharsets.UTF_8) finally in.close()
+      }
+      _record("PUT", path, text, headers, properties)
+    }
     def put(path: String, body: Option[String], headers: Map[String, String], properties: Vector[Property] = Vector.empty): HttpResponse =
       _record("PUT", path, body, headers, properties)
   }
@@ -100,7 +107,8 @@ final class UnitOfWorkHttpAdmissionSpec extends AnyWordSpec with Matchers with G
 
   private def _operations(bag: Bag, path: String = "/selected", properties: Vector[Property] = Vector.empty): Vector[UnitOfWorkOp[HttpResponse]] =
     Vector(UnitOfWorkOp.HttpGet(path, _headers, properties), UnitOfWorkOp.HttpPost(path, Some(_body), _headers, properties),
-      UnitOfWorkOp.HttpPostBag(path, Some(bag), _headers, properties), UnitOfWorkOp.HttpPut(path, Some(_body), _headers, properties))
+      UnitOfWorkOp.HttpPostBag(path, Some(bag), _headers, properties), UnitOfWorkOp.HttpPut(path, Some(_body), _headers, properties),
+      UnitOfWorkOp.HttpPutBag(path, Some(bag), _headers, properties))
 
   private def _execute(uow: UnitOfWork, op: UnitOfWorkOp[HttpResponse], free: Boolean): Consequence[HttpResponse] = {
     val interpreter = new UnitOfWorkInterpreter(uow)
@@ -109,9 +117,9 @@ final class UnitOfWorkHttpAdmissionSpec extends AnyWordSpec with Matchers with G
   }
 
   "Actual HTTP UnitOfWork admission" should {
-    "deny all four unconfigured operations in direct and Free execution before driver or bag acquisition" in {
+    "deny all five unconfigured operations in direct and Free execution before driver or bag acquisition" in {
       Vector(false, true).foreach { free =>
-        Given(s"an unconfigured actual Component and all four passive HTTP operations, Free=$free")
+        Given(s"an unconfigured actual Component and all five passive HTTP operations, Free=$free")
         val opens = new AtomicInteger
         val operations = _operations(_bag(opens))
         val fixtures = operations.map { op =>
@@ -120,7 +128,7 @@ final class UnitOfWorkHttpAdmissionSpec extends AnyWordSpec with Matchers with G
         }
         When("the same declared operations reach actual interpretation")
         val outcomes = fixtures.map { case (uow, driver, op) => (_execute(uow, op, free), uow, driver) }
-        Then("every method fails unconfigured without acquiring any driver or opening the POST bag")
+        Then("every method fails unconfigured without acquiring any driver or opening either binary body")
         outcomes.foreach { case (outcome, uow, driver) =>
           _policy(outcome) shouldBe Some("http.execution.unconfigured")
           uow.acquisitions shouldBe 0
@@ -132,7 +140,7 @@ final class UnitOfWorkHttpAdmissionSpec extends AnyWordSpec with Matchers with G
 
     "refuse wrong current owners, methods, destinations and metadata-only authority before driver acquisition" in {
       Vector(false, true).foreach { free =>
-        Given(s"four operations with purported metadata grants and otherwise exact host authority, Free=$free")
+        Given(s"five operations with purported metadata grants and otherwise exact host authority, Free=$free")
         val opens = new AtomicInteger
         val metadata = Vector(Property("componentId", _owner.name, None), Property("http.execution.grant", "purported", None))
         val operations = _operations(_bag(opens), properties = metadata)
@@ -160,7 +168,7 @@ final class UnitOfWorkHttpAdmissionSpec extends AnyWordSpec with Matchers with G
 
     "return the identical driver response for each admitted direct and Free program with original bodies and headers" in {
       Vector(false, true).foreach { free =>
-        Given(s"an exact real Component, all three granted methods and the same four HTTP programs, Free=$free")
+        Given(s"an exact real Component, all three granted methods and the same five HTTP programs, Free=$free")
         val opens = new AtomicInteger
         val response = _response()
         val operations = _operations(_bag(opens))
@@ -176,7 +184,7 @@ final class UnitOfWorkHttpAdmissionSpec extends AnyWordSpec with Matchers with G
           uow.acquisitions shouldBe 1
           driver.calls.size shouldBe 1
           val call = driver.calls.head
-          call._1 shouldBe Vector("GET", "POST", "POST", "PUT")(index)
+          call._1 shouldBe Vector("GET", "POST", "POST", "PUT", "PUT")(index)
           call._2 shouldBe "http://127.0.0.1:8089/selected"
           call._3 shouldBe (if (index == 0) None else Some(_body))
           call._4 shouldBe _headers
@@ -184,7 +192,30 @@ final class UnitOfWorkHttpAdmissionSpec extends AnyWordSpec with Matchers with G
             Property("http.read-timeout-ms", "1000", None), Property("http.max-response-bytes", "4096", None),
             Property("http.follow-redirects", "false", None))
         }
-        opens.get() shouldBe 1
+        opens.get() shouldBe 2
+      }
+    }
+
+    "redact sensitive paths, headers and bodies from all five operation displays" in {
+      Given("HTTP operations carrying distinct bearer, body and resumable-session markers")
+      val path = "https://example.invalid/session-sensitive-path"
+      val headers = Map("Authorization" -> "Bearer sensitive-bearer")
+      val body = "sensitive-body"
+      val operations = Vector[UnitOfWorkOp[HttpResponse]](
+        UnitOfWorkOp.HttpGet(path, headers),
+        UnitOfWorkOp.HttpPost(path, Some(body), headers),
+        UnitOfWorkOp.HttpPostBag(path, Some(Bag.text(body, StandardCharsets.UTF_8)), headers),
+        UnitOfWorkOp.HttpPut(path, Some(body), headers),
+        UnitOfWorkOp.HttpPutBag(path, Some(Bag.text(body, StandardCharsets.UTF_8)), headers))
+      When("the passive operation values are rendered")
+      val displays = operations.map(_.toString)
+      Then("only the operation name and a fixed redaction marker are visible")
+      displays shouldBe Vector("HttpGet(<redacted>)", "HttpPost(<redacted>)", "HttpPostBag(<redacted>)",
+        "HttpPut(<redacted>)", "HttpPutBag(<redacted>)")
+      displays.foreach { display =>
+        Vector("session-sensitive-path", "sensitive-bearer", "sensitive-body", "Authorization").foreach { marker =>
+          display should not include marker
+        }
       }
     }
 

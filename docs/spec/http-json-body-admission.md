@@ -13,6 +13,10 @@ It supplies syntax-presence evidence for later Operation validation.
 
 After raw parameter selection and the Entity update null policy, the adapter
 MUST preserve every original root property, its spelling and its order. An
+occurrence of a repeated root name MUST remain a separate ordered Record field
+with its own original value, including names made equivalent by JSON Unicode
+escapes. The JSON parser owns decoding of property names; object-map collapse
+MUST NOT remove occurrence evidence before Operation validation. An
 ordinary or unknown root property whose JSON value is null MUST remain a
 singular `io.circe.Json.Null` value in the Record. An absent property MUST remain
 absent. The adapter MUST NOT insert Scala null.
@@ -51,7 +55,11 @@ object properties; R1 defines the selected HTTP object-root presence boundary.
 ## R4. Operation Validation
 
 Body admission MUST leave unknown root keys and invalid ordinary null values
-visible to the selected Operation's existing key and type validation. Presence
+visible to the selected Operation's existing key and type validation. Repeated
+root occurrences likewise remain visible to that Operation's existing
+cardinality and physical-shape admission. This is evidence preservation, not a
+global duplicate-key rejection policy; nested objects retain the established
+Circe/raw or Core/semantic ownership described in R2. Presence
 does not authorize a key or make a null valid for its declared datatype. An
 ordinary integer null, for example, remains present and is rejected by the
 existing integer `ValueReader`. No application packet names or allowed-key
@@ -70,6 +78,14 @@ contains the connected scenarios:
 - E5: independent names, nonempty disjoint keys, null presence, ordinary values
   and varying order in a shrinking property requiring at least 100 successes
   and zero discards; raw children remain unchanged and no Scala null is added.
+- Repeated ordinary and escaped-equivalent root selectors retain both distinct
+  values, occurrence count and order in the actual Record. Repeated raw roots
+  retain each whole document or collection, nested raw nulls, decimal lexemes
+  and repeated sequence positions with existing nested Circe semantics.
+- Independent repeated root names, String values and escaped-key spellings
+  require at least 100 successful property samples and zero discards. Unique
+  root, ordinary-null, Entity update and malformed/non-object fallback
+  controls retain their existing contracts.
 
 The existing raw-document, multiplicity, Entity update refusal, carrier-conflict
 and semantic-sequence specifications continue to define their respective
