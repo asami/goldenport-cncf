@@ -10,7 +10,7 @@ import org.goldenport.cncf.workflow.WorkflowResultJsonV1.{_expect, _required_fie
   * Reopening selects a separately admitted declared definition reference.
   * Legacy fixture digests carry no reopening authority.
   * @since   Sep. 29, 2026
-  * @version Oct. 12, 2026
+  * @version Oct. 27, 2026
   */
 object WorkflowInstanceRecordJsonV1 {
   val schemaVersion = "cncf.workflow-instance-record.v1"
@@ -61,7 +61,7 @@ object WorkflowInstanceRecordJsonV1 {
       val current = HistoryEntry(HistorySequence(valid.history.size.toLong),
         valid.revision, valid.lifecycle, valid.currentProgression, valid.correlation,
         valid.causation, valid.derivedCompositeOccurrence, valid.committedPredecessor,
-        valid.suspension)
+        valid.suspension, valid.history.lastOption.flatMap(_.terminalClosure))
       Json.obj(
         "schemaVersion" -> Json.fromString(schemaVersion),
         "identity" -> Json.fromString(valid.identity.value),
@@ -88,6 +88,7 @@ object WorkflowInstanceRecordJsonV1 {
           (prior, value) => for { entries <- prior; entry <- _decode_entry(value) } yield entries :+ entry
         }
         _ <- _expect(current.sequence.value == history.size.toLong, "Workflow current history size differs")
+        _ <- _expect(current.terminalClosure == history.lastOption.flatMap(_.terminalClosure), "Workflow current terminal provenance differs")
       } yield InstanceRecord(InstanceIdentity(identity), definition, current.revision,
         current.lifecycle, current.currentProgression, current.correlation, current.causation,
         current.derivedCompositeOccurrence, current.committedPredecessor, current.suspension, history)
@@ -119,7 +120,27 @@ object WorkflowInstanceRecordJsonV1 {
     "composite" -> _optional(entry.derivedCompositeOccurrence.map(_.value)),
     "predecessor" -> _optional(entry.committedPredecessor.map(_.value)),
     "suspension" -> entry.suspension.fold(Json.Null)(_suspension_json)
-  )
+  ).mapObject(fields => entry.terminalClosure.fold(fields)(marker => fields.add("terminalClosure", _terminal_json(marker))))
+
+  private def _terminal_json(marker: TerminalClosureProvenance): Json = Json.obj(
+    "component" -> Json.fromString(marker.component), "service" -> Json.fromString(marker.service),
+    "operation" -> Json.fromString(marker.operation), "referenceIdentity" -> Json.fromString(marker.referenceIdentity),
+    "referenceRevision" -> Json.fromString(marker.referenceRevision), "terminalSequence" -> Json.fromLong(marker.terminalSequence.value),
+    "terminalRevision" -> Json.fromLong(marker.terminalRevision.value), "terminalCausation" -> Json.fromString(marker.terminalCausation.value))
+
+  private def _decode_terminal(json: Json): Either[String, TerminalClosureProvenance] = for {
+    fields <- _required_fields(json, Set("component", "service", "operation", "referenceIdentity", "referenceRevision",
+      "terminalSequence", "terminalRevision", "terminalCausation"))
+    component <- _string(fields, "component")
+    service <- _string(fields, "service")
+    operation <- _string(fields, "operation")
+    identity <- _string(fields, "referenceIdentity")
+    revision <- _string(fields, "referenceRevision")
+    sequence <- _integral(fields, "terminalSequence")
+    terminal <- _integral(fields, "terminalRevision")
+    cause <- _string(fields, "terminalCausation")
+  } yield TerminalClosureProvenance(component, service, operation, identity, revision,
+    HistorySequence(sequence), InstanceRevision(terminal), CausationReference(cause))
 
   private def _decode_entry(json: Json): Either[String, HistoryEntry] = {
      for {
@@ -136,10 +157,14 @@ object WorkflowInstanceRecordJsonV1 {
     predecessor <- _optional_string(fields, "predecessor")
     suspension <- if (fields("suspension").isNull) Right(None)
       else _decode_suspension(fields("suspension")).map(Some(_))
+    terminal <- fields.get("terminalClosure") match {
+      case None => Right(None)
+      case Some(value) => _decode_terminal(value).map(Some(_))
+    }
   } yield HistoryEntry(HistorySequence(sequence), InstanceRevision(revision), lifecycle,
     progression.map(ProgressionReference.apply), CorrelationReference(correlation),
     CausationReference(causation), composite.map(DerivedCompositeOccurrenceReference.apply),
-    predecessor.map(CommittedEntityTransitionReference.apply), suspension)
+    predecessor.map(CommittedEntityTransitionReference.apply), suspension, terminal)
   }
 
   private def _decode_suspension(json: Json): Either[String, SuspensionBoundary] = {

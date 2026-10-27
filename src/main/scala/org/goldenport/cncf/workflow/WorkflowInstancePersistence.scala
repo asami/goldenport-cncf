@@ -5,7 +5,7 @@ import org.goldenport.{Conclusion, Consequence}
 /*
  * @since   Sep. 21, 2026
  *  version Sep. 27, 2026
- * @version Oct. 21, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 /** Provider-neutral persistence boundary for an independently durable workflow
@@ -106,6 +106,15 @@ object WorkflowInstancePersistence {
       WorkflowInstancePersistence.validateC(this)
   }
 
+  /** Inert provenance. Only the dedicated managed terminal continuation may
+    * append it; decoding it confers no permission to progress a native root.
+    */
+  final case class TerminalClosureProvenance(
+    component: String, service: String, operation: String,
+    referenceIdentity: String, referenceRevision: String,
+    terminalSequence: HistorySequence, terminalRevision: InstanceRevision,
+    terminalCausation: CausationReference)
+
   final case class HistoryEntry(
     sequence: HistorySequence,
     revision: InstanceRevision,
@@ -115,8 +124,24 @@ object WorkflowInstancePersistence {
     causation: CausationReference,
     derivedCompositeOccurrence: Option[DerivedCompositeOccurrenceReference],
     committedPredecessor: Option[CommittedEntityTransitionReference],
-    suspension: Option[SuspensionBoundary]
-  )
+    suspension: Option[SuspensionBoundary],
+    terminalClosure: Option[TerminalClosureProvenance] = None
+  ) {
+    def this(sequence: HistorySequence, revision: InstanceRevision, lifecycle: Lifecycle,
+      currentProgression: Option[ProgressionReference], correlation: CorrelationReference,
+      causation: CausationReference, derivedCompositeOccurrence: Option[DerivedCompositeOccurrenceReference],
+      committedPredecessor: Option[CommittedEntityTransitionReference], suspension: Option[SuspensionBoundary]) =
+      this(sequence, revision, lifecycle, currentProgression, correlation, causation,
+        derivedCompositeOccurrence, committedPredecessor, suspension, None)
+  }
+  object HistoryEntry {
+    def apply(sequence: HistorySequence, revision: InstanceRevision, lifecycle: Lifecycle,
+      currentProgression: Option[ProgressionReference], correlation: CorrelationReference,
+      causation: CausationReference, derivedCompositeOccurrence: Option[DerivedCompositeOccurrenceReference],
+      committedPredecessor: Option[CommittedEntityTransitionReference], suspension: Option[SuspensionBoundary]): HistoryEntry =
+      new HistoryEntry(sequence, revision, lifecycle, currentProgression, correlation, causation,
+        derivedCompositeOccurrence, committedPredecessor, suspension, None)
+  }
 
   /** Immutable record whose present facts are the final accepted history entry. */
   final case class InstanceRecord(
@@ -148,7 +173,18 @@ object WorkflowInstancePersistence {
     private[workflow] def _append_c_unchecked(
       expectedrevision: InstanceRevision,
       entry: HistoryEntry
-    ): Consequence[InstanceRecord] = {
+    ): Consequence[InstanceRecord] =
+      if (entry != null && entry.terminalClosure != None)
+        Consequence.stateConflict("Ordinary Workflow append cannot supply terminal closure provenance")
+      else _append_entry_c(expectedrevision, entry)
+
+    private[workflow] def _append_terminal_closure_c(expectedrevision: InstanceRevision,
+      entry: HistoryEntry): Consequence[InstanceRecord] =
+      if (lifecycle != Lifecycle.Completed || entry == null || entry.terminalClosure == null || entry.terminalClosure.isEmpty)
+        Consequence.stateConflict("Dedicated terminal continuation requires its Completed source and provenance")
+      else _append_entry_c(expectedrevision, entry)
+
+    private def _append_entry_c(expectedrevision: InstanceRevision, entry: HistoryEntry): Consequence[InstanceRecord] = {
       val current = this
         if (expectedrevision == null || expectedrevision != current.revision)
           _failure_c(Diagnostic(
@@ -618,12 +654,25 @@ object WorkflowInstancePersistence {
           entry.currentProgression,
           entry.suspension,
           entry.revision
-        )).orElse(_transition_diagnostic(
-          previous.map(_.lifecycle).getOrElse(Lifecycle.NotStarted),
-          entry.lifecycle,
-          identity
-        ))
+        )).orElse(_terminal_transition_diagnostic(identity, entry, previous))
     }
+  }
+
+  private def _terminal_transition_diagnostic(identity: InstanceIdentity, entry: HistoryEntry,
+    previous: Option[HistoryEntry]): Option[Diagnostic] = {
+    val valid = entry.terminalClosure != null && entry.terminalClosure.forall { marker =>
+      marker != null && Vector(marker.component, marker.service, marker.operation,
+        marker.referenceIdentity, marker.referenceRevision).forall(WorkflowMechanicalTransition.canonical) &&
+      previous.exists(prior => prior.lifecycle == Lifecycle.Completed && prior.suspension.isEmpty &&
+        entry.lifecycle == Lifecycle.Active && entry.suspension.isEmpty && entry.currentProgression.nonEmpty &&
+        entry.correlation == prior.correlation && entry.derivedCompositeOccurrence == prior.derivedCompositeOccurrence &&
+        entry.committedPredecessor == prior.committedPredecessor && marker.terminalSequence == prior.sequence &&
+        marker.terminalRevision == prior.revision && marker.terminalCausation == prior.causation)
+    }
+    if (!valid) Some(Diagnostic(DiagnosticCode.IllegalLifecycleProgression,
+      Map("instance" -> _identity_value(identity), "reason" -> "invalid-terminal-closure-provenance")))
+    else if (entry.terminalClosure.nonEmpty) None
+    else _transition_diagnostic(previous.map(_.lifecycle).getOrElse(Lifecycle.NotStarted), entry.lifecycle, identity)
   }
 
   private def _references_diagnostic(

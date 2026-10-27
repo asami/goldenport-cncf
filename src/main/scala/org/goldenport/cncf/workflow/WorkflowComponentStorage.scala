@@ -57,6 +57,11 @@ final class WorkflowComponentStorage private (
     WorkflowManagedMechanicalTransition.bindC(subsystem, component, configuration, operation,
       definitions, instances, continuations, codec)
 
+  def bindTerminalClosureContinuationC[A](operation: StateMachineOperationIdentity, codec: PayloadCodec[A]):
+      Consequence[WorkflowManagedTerminalClosureContinuation[A]] =
+    WorkflowManagedTerminalClosureContinuation.bindC(subsystem, component, configuration, operation,
+      definitions, instances, continuations, codec)
+
   def bindCompletionC[W, R](operation: StateMachineOperationIdentity,
     inputCodec: PayloadCodec[W], resultCodec: PayloadCodec[R],
     closingType: StateMachineResultTypeReference,
