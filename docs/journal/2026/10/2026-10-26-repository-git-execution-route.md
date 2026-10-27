@@ -115,3 +115,46 @@ There was no re-Start, and no successful fetch, push or synchronization is
 claimed. Installed runtime activation and continuation remain parent-owned.
 
 Existing Debt (Separate Follow-up): none admitted by this bounded repair.
+
+## Installed activation and sync SBT binding correction
+
+Failure identity: GIT-ROUTE-HOST-SBT-01.
+
+The parent subsequently verified normal sm-workflow installation
+`54ea51ef-6e14-405a-8938-532b6d2c9a23` and activation update
+`9e0d06c6-dc27-4f00-820f-5f0b7976cd04` against the selected installation and
+its `publication.json`. This supersedes the earlier delivery-pending state;
+the prior failed publication evidence remains recorded above.
+
+The same RepositorySync Session `8f27ea7624b104a81e0b97e8ebe5eb50` then
+advanced through the normal installed route. `advance02` terminated with exit 1
+and policy `sbt.execution.program-definition`; the actual diagnostic is retained
+in `target/sm-workflow/tasks/repository-sync-cncf-20261026-cbc74074-a744-4dbd-885b-9f9f9b179a68/call-advance-repository-02/stderr.log`.
+The configured repository validation check has identity `test`, ordinal 1 and
+default kind Test. `WorkflowManagedProcessExecution.repositoryValidationC`
+therefore requests SbtOperation.Test at
+`sm-workflow-repository-validation-1`. The host declared only Compile at that
+target, while its existing full Test declaration targeted validation-6. The
+parent confirmed this exact binding mismatch and froze the configuration fix.
+
+Before mutation, the complete current host configuration was backed up to
+`target/sm-workflow/tasks/repository-sync-cncf-20261026-cbc74074-a744-4dbd-885b-9f9f9b179a68/git-route-fix/config-before-sync-sbt-binding.json`.
+The inner process plan now has a seventh SBT declaration copied from the
+validation-6 full Test declaration, with identical executable, environment and
+limits, targeting `sm-workflow-repository-validation-1`. Its public capability
+is `sm-workflow-sbt-sync-full-test` and safe identity is
+`cncf-repository-sync-full-test`. Only the existing
+`org.simplemodeling.textus.SmWorkflow` process grant receives this capability.
+The six original SBT entries, 50 selected Git entries, repository Git family,
+workspaces and existing grants remain. All outer configuration, including
+repository validation policy and Goal, is retained. No ordinal, validation
+policy or test limit was changed or reduced.
+
+Same-Session acceptance remains **PENDING**. SBT admission failed, so no test
+success is claimed for advance02. The call may have progressed through earlier
+Git effects; this record does not assert that none occurred. Product checks
+persist intent before execution, so an unknown retained validation may require
+normal public recovery. This configuration correction neither edits Session
+or datastore records nor replays an effect. The parent owns before/after
+configuration comparison, public recovery and same-Session verification.
+Full release verification remains pending.

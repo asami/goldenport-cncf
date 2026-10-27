@@ -22,11 +22,95 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 24, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import GitExecutionSpecSupport.*
+
+  "Read-only typed Git preflight" should {
+    "admit the current selection without executing or changing native source state" in {
+      Given("an ordinary local fixture with an admitted component, workspace and selected Git program")
+      val fixture = create()
+      try {
+        initialize(fixture, Map("selected.txt" -> "initial\n"))
+        Files.writeString(fixture.checkout.resolve("selected.txt"), "later\n")
+        val index = Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector
+        val head = Files.readAllBytes(fixture.checkout.resolve(".git/refs/heads/main")).toVector
+        val source = Files.readAllBytes(fixture.checkout.resolve("selected.txt")).toVector
+        When("the public preflight checks the exact same typed StageSelectedAll intent")
+        val admitted = GitExecutionPreflight.validateC(fixture.context, fixture.target,
+          GitOperation.StageSelectedAll(selectionId))
+        Then("it returns only Unit, starts no process and preserves index, HEAD and source bytes")
+        admitted.toOption shouldBe Some(())
+        fixture.profile.driver.executions shouldBe empty
+        Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector shouldBe index
+        Files.readAllBytes(fixture.checkout.resolve(".git/refs/heads/main")).toVector shouldBe head
+        Files.readAllBytes(fixture.checkout.resolve("selected.txt")).toVector shouldBe source
+      } finally fixture.close()
+    }
+
+    "refuse absent or crossed execution authority and malformed intent without a process" in {
+      Given("fixtures missing workspace, component or capability authority")
+      val fixtures = Vector(() => create(workspaceInstalled = false), () => create(processInstalled = false),
+        () => create(capabilityGranted = false), () => create(workspaceGranted = false),
+        () => create(permission = WorkspacePermission.ReadOnly),
+        () => create(component = ComponentId("org.goldenport.spec.OtherGitOwner")))
+      When("preflight delegates each current scope to ordinary framework admission")
+      val observations = fixtures.map { make =>
+        val fixture = make()
+        try {
+          val admitted = GitExecutionPreflight.validateC(fixture.context, fixture.target,
+            GitOperation.StageSelectedAll(selectionId)).isSuccess
+          (admitted, fixture.profile.driver.executions.isEmpty)
+        } finally fixture.close()
+      }
+      Then("every missing or crossed authority refuses without a process")
+      observations.foreach { case (admitted, idle) =>
+        admitted shouldBe false
+        idle shouldBe true
+      }
+      Given("an otherwise admitted fixture and invalid or foreign typed intent")
+      val fixture = create()
+      try {
+        When("public preflight receives null fields or another workspace")
+        val operation = GitOperation.StageSelectedAll(selectionId)
+        val wrongtarget = GitTarget(WorkspaceId.parseC("foreign-project").toOption.get)
+        val refusals = Vector(GitExecutionPreflight.validateC(null, fixture.target, operation),
+          GitExecutionPreflight.validateC(fixture.context, null, operation),
+          GitExecutionPreflight.validateC[Unit](fixture.context, fixture.target, null),
+          GitExecutionPreflight.validateC(fixture.context, fixture.target, GitOperation.StageSelectedAll(null)),
+          GitExecutionPreflight.validateC(fixture.context, wrongtarget, operation))
+        Then("invalid values and foreign workspaces return typed failures without launching Git")
+        refusals.forall(!_.isSuccess) shouldBe true
+        When("generated unknown selections enter the same public admission route")
+        val selectors = Gen.chooseNum(1, 100000).map(n => GitSelectionId.parseC("unregistered-" + n).toOption.get)
+        val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(32), Prop.forAll(selectors) { selection =>
+          !GitExecutionPreflight.validateC(fixture.context, fixture.target,
+            GitOperation.StageSelectedAll(selection)).isSuccess && fixture.profile.driver.executions.isEmpty
+        })
+        Then("all generated selectors are refused and no process starts")
+        withClue(checked.toString) { checked.passed shouldBe true }
+        fixture.profile.driver.executions shouldBe empty
+      } finally fixture.close()
+    }
+
+    "keep actual UnitOfWork execution subject to its current component authority" in {
+      Given("a successful preflight in the owning component scope")
+      val fixture = create()
+      try {
+        GitExecutionPreflight.validateC(fixture.context, fixture.target,
+          GitOperation.StageSelectedAll(selectionId)).isSuccess shouldBe true
+        val context = contextFor(fixture.root, Some(fixture.workspace), Some(fixture.admission),
+          fixture.profile.driver, ComponentId("org.goldenport.spec.OtherGitOwner"))
+        When("the ordinary typed UnitOfWork executes the same intent under another component")
+        val denied = GitExecutionSpecSupport.execute(fixture.copy(context = context), GitOperation.StageSelectedAll(selectionId))
+        Then("the old Unit observation conveys no authority and no process starts")
+        denied.isSuccess shouldBe false
+        fixture.profile.driver.executions shouldBe empty
+      } finally fixture.close()
+    }
+  }
 
   "Typed Git protocol" should {
     "E1 Existing five-argument result creation" should afterWord(

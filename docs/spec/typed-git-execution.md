@@ -44,6 +44,32 @@ Git-UoW permission covers this site and its regression, separately from SBT
 permission and runtime grants. It grants no primary generic Request use,
 arbitrary argv, shell, endpoint or remote authority.
 
+## Read-only admission preflight — 2026-10-27
+
+`GitExecutionPreflight.validateC[A](context, target, operation)` returns
+`Consequence[Unit]` for an existing typed Git intent. It uses the same current
+workspace, actual component ancestry, operation permission, selected-program
+and capability/grant admission as ordinary UnitOfWork Git execution. It adds
+no operation kind, executable selection mechanism or independent policy check.
+
+- A null execution context, target or operation is a typed
+  argument failure. A null/unknown selector, foreign workspace or missing
+  component/workspace/process/capability authority is refused through the
+  ordinary admission rules. Refusal starts no process.
+- Success exposes only Unit. It runs no Git/process/UoW effect, changes no
+  worktree/index/HEAD or workflow record, and returns no resolved execution,
+  ticket, reservation or authority object.
+- The result describes admission at that observation time. It does not
+  authorize or guarantee future execution. The existing UnitOfWork Git path
+  independently admits its intent against its actual current context again;
+  a previously successful preflight cannot bypass a later refusal.
+
+The paired `GitExecutionSpec` section **Read-only typed Git preflight** verifies
+current-selection success with unchanged source/index/HEAD and no execution;
+typed invalid/crossed-scope refusal including generated unregistered selectors;
+and actual UoW refusal under another component after a successful observation.
+These tests use local specification-owned fixtures, not consumer Session state.
+
 ## Closed values and operations
 
 Object IDs are exact lowercase hexadecimal 40- or 64-character values.

@@ -10,10 +10,26 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 24, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GitTarget(workspaceId: WorkspaceId)
+
+/** Read-only admission of an existing typed Git intent in the current execution scope.
+  * Uses the ordinary workspace, component, capability and selected-program admission.
+  * Runs no process and changes no repository, index or workflow state. The result
+  * is a current observation, not a ticket or authority for a later execution;
+  * the ordinary UnitOfWork Git execution must independently admit the intent again.
+  * Missing or invalid context, target or operation is a typed failure.
+  * @since   Oct. 27, 2026
+  * @version Oct. 27, 2026
+  */
+object GitExecutionPreflight {
+  def validateC[A](context: ExecutionContext, target: GitTarget, operation: GitOperation[A]): Consequence[Unit] =
+    if (context == null || target == null || operation == null)
+      Consequence.argumentFormatError("gitPreflight", "valid execution context and typed Git intent", "invalid")
+    else GitExecutionAdmission.resolveC(context, target, operation).map(_ => ())
+}
 
 final case class GitObjectId private (value: String)
 object GitObjectId {
