@@ -3390,11 +3390,11 @@ class SqlDataStore(
       case EntityQuery.Lte(path, value) =>
         _binary(path, "<=", value, columnname)
       case EntityQuery.Contains(path, value, caseinsensitive) =>
-        _like(path, s"%$value%", caseinsensitive, columnname)
+        _literal_like(path, value, "%", "%", caseinsensitive, columnname)
       case EntityQuery.StartsWith(path, value, caseinsensitive) =>
-        _like(path, s"$value%", caseinsensitive, columnname)
+        _literal_like(path, value, "", "%", caseinsensitive, columnname)
       case EntityQuery.EndsWith(path, value, caseinsensitive) =>
-        _like(path, s"%$value", caseinsensitive, columnname)
+        _literal_like(path, value, "%", "", caseinsensitive, columnname)
       case EntityQuery.Like(path, pattern, caseinsensitive) =>
         _like(path, pattern, caseinsensitive, columnname)
       case EntityQuery.IsNull(path) =>
@@ -3422,6 +3422,25 @@ class SqlDataStore(
 
   private def _binary(path: String, op: String, value: Any, columnname: String => String = _column_name): SqlDataStore.SqlStatement =
     SqlDataStore.SqlStatement(s"${dialect.quoteIdentifier(columnname(path))} $op ?", Vector(_column_value(value)))
+
+  private def _literal_like(
+    path: String,
+    value: String,
+    prefix: String,
+    suffix: String,
+    caseinsensitive: Boolean,
+    columnname: String => String
+  ): SqlDataStore.SqlStatement = {
+    val escaped = new java.lang.StringBuilder()
+    java.lang.String.valueOf(value).foreach {
+      case '!' => escaped.append("!!")
+      case '%' => escaped.append("!%")
+      case '_' => escaped.append("!_")
+      case unit => escaped.append(unit)
+    }
+    val statement = _like(path, prefix + escaped.toString + suffix, caseinsensitive, columnname)
+    statement.copy(sql = statement.sql + " ESCAPE '!'")
+  }
 
   private def _like(path: String, pattern: String, caseinsensitive: Boolean, columnname: String => String = _column_name): SqlDataStore.SqlStatement =
     if (caseinsensitive)

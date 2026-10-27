@@ -22,6 +22,7 @@ import org.goldenport.cncf.blob.{
 import org.goldenport.cncf.embedded.{EmbeddedDataStore, EmbeddedStatement, EmbeddedUpdateResult}
 import org.goldenport.cncf.processexecution.{GitExecutionResult, GitOperation, GitTarget, ProcessExecutionResult, ResolvedProcessExecution, SbtExecutionAttempt, SbtExecutionResult, SbtOperation, SbtTarget}
 import org.goldenport.cncf.operation.evaluation.OperationEvaluationSupplementalIntent
+import org.goldenport.cncf.oauth.OAuthConnectionRequest
 import org.goldenport.cncf.workflow.{ActionExecution, ProviderExecutionRequest, StateMachineProvidedApiRequest}
 import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
 import org.goldenport.cncf.workspace.{FilePrepareDirectoryResult, FileReadBytesResult, FileReadTextResult, FileRepresentation, FileTarget, FileWriteBytesResult, FileWriteMode, FileWriteTextResult, WorkspaceFilePath}
@@ -41,7 +42,7 @@ import org.goldenport.cncf.workspace.{FilePrepareDirectoryResult, FileReadBytesR
  *  version Apr. 29, 2026
  *  version May.  4, 2026
  *  version Jul. 26, 2026
- * @version Oct. 26, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -79,6 +80,12 @@ object UnitOfWorkOp {
     intent: OperationEvaluationSupplementalIntent
   ) extends UnitOfWorkOp[Unit]
 
+  private[cncf] final case class OAuthConnectionExecute[A](
+    request: OAuthConnectionRequest[A]
+  ) extends UnitOfWorkOp[A] {
+    override def toString: String = "OAuthConnectionExecute(<redacted>)"
+  }
+
   // ------------------------------------------------------------
   // HTTP operations
   // ------------------------------------------------------------
@@ -87,28 +94,45 @@ object UnitOfWorkOp {
     path: String,
     headers: Map[String, String] = Map.empty,
     properties: Vector[Property] = Vector.empty
-  ) extends UnitOfWorkOp[HttpResponse]
+  ) extends UnitOfWorkOp[HttpResponse] {
+    override def toString: String = "HttpGet(<redacted>)"
+  }
 
   final case class HttpPost(
     path: String,
     body: Option[String],
     headers: Map[String, String],
     properties: Vector[Property] = Vector.empty
-  ) extends UnitOfWorkOp[HttpResponse]
+  ) extends UnitOfWorkOp[HttpResponse] {
+    override def toString: String = "HttpPost(<redacted>)"
+  }
 
   final case class HttpPostBag(
     path: String,
     body: Option[org.goldenport.bag.Bag],
     headers: Map[String, String],
     properties: Vector[Property] = Vector.empty
-  ) extends UnitOfWorkOp[HttpResponse]
+  ) extends UnitOfWorkOp[HttpResponse] {
+    override def toString: String = "HttpPostBag(<redacted>)"
+  }
 
   final case class HttpPut(
     path: String,
     body: Option[String],
     headers: Map[String, String],
     properties: Vector[Property] = Vector.empty
-  ) extends UnitOfWorkOp[HttpResponse]
+  ) extends UnitOfWorkOp[HttpResponse] {
+    override def toString: String = "HttpPut(<redacted>)"
+  }
+
+  final case class HttpPutBag(
+    path: String,
+    body: Option[org.goldenport.bag.Bag],
+    headers: Map[String, String],
+    properties: Vector[Property] = Vector.empty
+  ) extends UnitOfWorkOp[HttpResponse] {
+    override def toString: String = "HttpPutBag(<redacted>)"
+  }
 
   final case class ShellCommandExec(
     command: ShellCommand

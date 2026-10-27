@@ -51,7 +51,7 @@ import cats.~>
  *  version May. 31, 2026
  *  version Jul. 31, 2026
  *  version Aug. 12, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -487,7 +487,7 @@ object ExecutionContext {
       lazy val active: Instance = instance.copy(
         cncfCore = instance.cncfCore.copy(
           scope = scope,
-          runtime = ctx.runtime.withActionUnitOfWorkContext(active)
+          runtime = ctx.runtime._with_action_unit_of_work_context(active, scope)
         )
       )
       active
@@ -837,7 +837,7 @@ object ExecutionContext {
       _with_runtime_context_preserving_execution_profile(
         ctx,
         if (sharemetadata)
-          ctx.runtime.withActionUnitOfWorkContext(rebound)
+          ctx.runtime._with_action_unit_of_work_context(rebound, ctx.scope)
         else
           ctx.runtime.withUnitOfWorkContext(rebound, ctx.runtime.toToken)
       )

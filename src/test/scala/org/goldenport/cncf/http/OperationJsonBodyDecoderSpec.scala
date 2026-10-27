@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * JSON syntax, semantic Record ownership and explicit update instructions.
  *
  * @since   Oct. 18, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationJsonBodyDecoderSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -174,6 +174,114 @@ final class OperationJsonBodyDecoderSpec extends AnyWordSpec with Matchers with 
         When("ScalaCheck evaluates the connected shrinking presence property")
         val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(100), property)
         Then("at least one hundred successful samples and zero discarded cases are required")
+        withClue(checked.toString) { checked.passed shouldBe true }
+        checked.succeeded should be >= 100
+        checked.discarded shouldBe 0
+      }
+    }
+
+    "retain repeated root occurrences for the selected Operation" which {
+      Vector("resourceId" -> "resource\\u0049d", "registrationId" -> "registration\\u0049d").foreach { case (key, escaped) =>
+        Vector(key, escaped).foreach { spelling =>
+          s"retain both distinct $key values when the second spelling is $spelling" in {
+            Given("R1 and R4: a repeated ordinary selector surrounding an independent root property")
+            val parameters = Vector(_parameter(key, XString))
+            val text = s"""{"$key":"invalid-selector","marker":"between","$spelling":"actual-selector"}"""
+
+            When("the wire JSON object is admitted before the Operation's singular-field validation")
+            val record = _decode(text, parameters, None)
+
+            Then("both decoded names and their original values remain separate ordered Record fields")
+            record.fields.map(_.key) shouldBe Vector(key, "marker", key)
+            record.fields.map(_.value.single) shouldBe Vector("invalid-selector", "between", "actual-selector")
+            record.fields.count(_.key == key) shouldBe 2
+          }
+        }
+      }
+
+      "retain each repeated raw document and collection with standard nested Circe semantics" in {
+        Given("repeated declared raw roots with nested nulls, duplicate object keys, exact decimals and repeated sequence positions")
+        val first = """{"same":1,"same":2,"gone":null,"values":[null,1.2300e+40,null]}"""
+        val second = """[null,{"gone":null},1.2300e+40,null]"""
+        val collection = s"""[$first,null,$first]"""
+        val text = s"""{"payload":$first,"payloads":$collection,"payload":$second,"payloads":[null,null]}"""
+
+        When("each original root occurrence crosses the existing raw-parameter decoder")
+        val record = _decode(text)
+
+        Then("each whole raw node and Vector retains its own value without combining repeated roots")
+        record.fields.map(_.key) shouldBe Vector("payload", "payloads", "payload", "payloads")
+        record.fields.map(_.value.single) shouldBe Vector(_json(first), _json(collection).asArray.get,
+          _json(second), Vector(Json.Null, Json.Null))
+        val document = record.fields.head.value.single.asInstanceOf[Json]
+        document.hcursor.get[Int]("same").toOption shouldBe Some(2)
+        document.hcursor.downField("values").focus.get.noSpaces shouldBe "[null,1.2300e+40,null]"
+        _contains_scala_null(record) shouldBe false
+      }
+
+      "preserve repeated ordinary null presence and existing update refusal" in {
+        Given("repeated ordinary null assignments and repeated scalar raw null documents")
+        val ordinary = """{"nickname":null,"nickname":"later"}"""
+        val raw = """{"payload":null,"payload":{"gone":null}}"""
+
+        When("ordinary decoding, Entity update policy and raw admission receive the same occurrences")
+        val present = _decode(ordinary, operation = None)
+        val refused = OperationJsonBodyDecoder.decode(ordinary, _parameters, Some(_operation))
+        val documents = _decode(raw)
+
+        Then("ordinary null remains present, Entity update still refuses it and raw null remains document data")
+        present.fields.map(_.value.single) shouldBe Vector(Json.Null, "later")
+        refused shouldBe a[Consequence.Failure[?]]
+        documents.fields.map(_.value.single) shouldBe Vector(Json.Null, _json("""{"gone":null}"""))
+      }
+
+      "preserve unique-root nested raw and semantic object behavior" in {
+        Given("unique raw and ordinary roots whose nested objects contain repeated keys")
+        val raw = """{"same":1,"same":2,"gone":null,"values":[null,1.2300e+40,null]}"""
+        val text = s"""{"payload":$raw,"evidence":{"same":"first","same":"last","gone":null,"values":[1,1]}}"""
+
+        When("the unique-root path delegates nested values to the existing Circe and Core decoders")
+        val record = _decode(text)
+
+        Then("raw nodes keep Circe semantics and ordinary nested null omission and sequence order stay unchanged")
+        record.getAny("payload") shouldBe Some(_json(raw))
+        record.getAny("payload").get.asInstanceOf[Json].hcursor.downField("values").focus.get.noSpaces shouldBe "[null,1.2300e+40,null]"
+        val semantic = record.getAny("evidence").get.asInstanceOf[Record]
+        semantic.getString("same") shouldBe Some("last")
+        semantic.getAny("gone") shouldBe None
+        semantic.getAny("values") shouldBe Some(Vector(1, 1))
+      }
+
+      "retain independent repeated names and values across one hundred escaped-key samples without discards" in {
+        Given("independent nonempty ordinary root names and distinct first and last String values")
+        val samples = for {
+          name <- Gen.nonEmptyListOf(Gen.alphaChar).map(_.mkString)
+          first <- Gen.alphaNumStr
+          last <- Gen.alphaNumStr
+          escaped <- Gen.oneOf(true, false)
+        } yield (name, first, last, escaped)
+        val property = Prop.forAll(samples) { case (name, first, last, escaped) =>
+          Given("one ordinary root name with independently generated occurrence values and optional Unicode key escaping")
+          val key = "field_" + name
+          val spelling = if (escaped) "\\u0066ield_" + name else key
+          val firstvalue = "first-" + first
+          val lastvalue = "last-" + last
+          val text = s"""{"$key":${Json.fromString(firstvalue).noSpaces},"middle":true,"$spelling":${Json.fromString(lastvalue).noSpaces}}"""
+          val parameters = Vector(_parameter(key, XString))
+
+          When("the original wire occurrences reach the selected Operation's Record boundary")
+          val record = _decode(text, parameters, None)
+
+          Then("count, decoded names, order and distinct values survive without Scala null or a global rejection")
+          record.fields.map(_.key) shouldBe Vector(key, "middle", key)
+          record.fields.map(_.value.single) shouldBe Vector(firstvalue, true, lastvalue)
+          _contains_scala_null(record) shouldBe false
+          true
+        }
+
+        When("ScalaCheck evaluates the connected repeated-root property")
+        val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(100), property)
+        Then("at least one hundred successful samples and zero discards are required")
         withClue(checked.toString) { checked.passed shouldBe true }
         checked.succeeded should be >= 100
         checked.discarded shouldBe 0
@@ -410,7 +518,8 @@ final class OperationJsonBodyDecoderSpec extends AnyWordSpec with Matchers with 
     }
 
     "retain opaque body compatibility" which {
-      Vector("{", "", "[]", "null", "42", "\"text\"").zipWithIndex.foreach { case (text, index) =>
+      Vector("{", "", "[]", "null", "42", "\"text\"", """[{"key":1,"key":2}]""",
+        """{"key":1,"key":2} trailing""").zipWithIndex.foreach { case (text, index) =>
         s"return None for malformed or non-object syntax case $index" in {
           Given("body syntax that the historical adapter could not decode as an object")
           val parameters = _parameters

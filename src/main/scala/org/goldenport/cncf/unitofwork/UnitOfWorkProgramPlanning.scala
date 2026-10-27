@@ -5,7 +5,7 @@ package org.goldenport.cncf.unitofwork
  *
  * @since   Sep.  8, 2026
  *  version Sep. 28, 2026
- * @version Oct. 26, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] enum UnitOfWorkEffectClass {
@@ -22,10 +22,12 @@ private[cncf] object UnitOfWorkOperationClassifier {
         UnitOfWorkEffectClass.Control
 
       case UnitOfWorkOp.ReadOperationalObservations(_) |
+          UnitOfWorkOp.OAuthConnectionExecute(_) |
           UnitOfWorkOp.HttpGet(_, _, _) |
           UnitOfWorkOp.HttpPost(_, _, _, _) |
           UnitOfWorkOp.HttpPostBag(_, _, _, _) |
           UnitOfWorkOp.HttpPut(_, _, _, _) |
+          UnitOfWorkOp.HttpPutBag(_, _, _, _) |
           UnitOfWorkOp.ShellCommandExec(_) |
           UnitOfWorkOp.ProcessExec(_) |
           UnitOfWorkOp.SbtExec(_, _) |

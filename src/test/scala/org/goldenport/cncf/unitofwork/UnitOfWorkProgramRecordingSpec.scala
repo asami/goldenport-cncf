@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for deterministic UnitOfWork program recording.
  *
  * @since   Sep.  8, 2026
- * @version Oct. 26, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkProgramRecordingSpec
