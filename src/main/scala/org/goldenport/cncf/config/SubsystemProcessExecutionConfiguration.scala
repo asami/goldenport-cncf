@@ -7,7 +7,7 @@ import org.goldenport.cncf.processexecution.RuntimeProcessExecutionPlan
 /** Called only by the owning runtime preflight, before Component assembly. */
 /*
  * @since Oct.  7, 2026
- * @version Oct.  7, 2026
+ * @version Oct. 27, 2026
  */
 private[cncf] object SubsystemProcessExecutionConfiguration {
   def admitC(
@@ -21,7 +21,11 @@ private[cncf] object SubsystemProcessExecutionConfiguration {
             binding.provenance.sourceType.contains("file") &&
             Set(ConfigurationOrigin.Home, ConfigurationOrigin.Project, ConfigurationOrigin.Cwd).contains(binding.provenance.origin) =>
           Consequence.success(Some(binding.value))
-        case _ => Consequence.configurationInvalid("Process Execution requires a selected Subsystem host file binding")
+        case target: CncfConfigurationTarget.SubsystemInstance if target.subsystem == selected &&
+            binding.provenance.origin == ConfigurationOrigin.Resource &&
+            binding.provenance.sourceType.contains(CncfAssemblyConfigurationProjection.ComponentDefaultsSourceType) =>
+          Consequence.success(Some(binding.value))
+        case _ => Consequence.configurationInvalid("Process Execution requires a selected Subsystem file or CAR-default binding")
       }
     }
 }

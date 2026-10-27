@@ -13,7 +13,18 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
  * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
-final case class GitTarget(workspaceId: WorkspaceId)
+/** Per-call selected data within an already granted whole-repository program.
+  * It supplies no executable, environment, capability, workspace or authority.
+  */
+final case class GitSelectionParameters(identity: GitSelectionId, paths: Vector[GitPath], message: Option[String] = None)
+final case class GitTarget(workspaceId: WorkspaceId, selection: Option[GitSelectionParameters] = None) {
+  // Retain the fixed-target JVM entry points for already compiled callers.
+  def this(workspaceId: WorkspaceId) = this(workspaceId, None)
+  def copy(workspaceId: WorkspaceId): GitTarget = new GitTarget(workspaceId, selection)
+}
+object GitTarget {
+  def apply(workspaceId: WorkspaceId): GitTarget = new GitTarget(workspaceId, None)
+}
 
 /** Read-only admission of an existing typed Git intent in the current execution scope.
   * Uses the ordinary workspace, component, capability and selected-program admission.
@@ -374,6 +385,52 @@ private[cncf] object GitProgramDefinition {
         permittedArgumentTemplates = Set(ProcessArgumentTemplate(dynamic))), limits, environment ++ fixedEnvironment, metadata)
   } yield definition
 
+  private[processexecution] def selectedBaseKind(kind: GitOperationKind): GitOperationKind = kind match {
+    case GitOperationKind.StageSelected | GitOperationKind.StageSelectedAll => GitOperationKind.StageFullState
+    case GitOperationKind.CommitSelected => GitOperationKind.CreateCheckpoint
+    case GitOperationKind.CheckSelectedIndex => GitOperationKind.CheckPendingIndex
+    case GitOperationKind.SelectedIndexChanges => GitOperationKind.PendingDiff
+    case other => other
+  }
+
+  private[processexecution] def intersectLimits(left: ProcessExecutionLimits,
+    right: ProcessExecutionLimits): ProcessExecutionLimits = {
+    def minimum(a: Option[Long], b: Option[Long]): Option[Long] = (a,b) match {
+      case (Some(x), Some(y)) => Some(math.min(x,y))
+      case (Some(x), None) => Some(x)
+      case (None, value) => value
+    }
+    ProcessExecutionLimits(minimum(left.launchTimeoutMillis, right.launchTimeoutMillis),
+      minimum(left.executionTimeoutMillis, right.executionTimeoutMillis),
+      minimum(left.terminationGraceMillis, right.terminationGraceMillis), minimum(left.stdinBytes, right.stdinBytes),
+      minimum(left.stdoutBytes, right.stdoutBytes), minimum(left.stderrBytes, right.stderrBytes),
+      minimum(left.argumentCount, right.argumentCount), minimum(left.argumentBytes, right.argumentBytes),
+      minimum(left.artifactCount, right.artifactCount), minimum(left.artifactBytes, right.artifactBytes),
+      minimum(left.workAreaBytes, right.workAreaBytes))
+  }
+
+  /** Narrow a granted repository-wide intent; never turn a read grant into a
+    * write grant or a configured selected-only program into broader ownership.
+    */
+  private[processexecution] def selectC(definition: ProcessProgramDefinition,
+    operation: GitOperation[?], selection: GitSelectionParameters): Consequence[ProcessProgramDefinition] = for {
+    metadata <- definition._git_metadata.map(Consequence.success).getOrElse(invalidC)
+    _ <- if (selection != null && operation.kind.selected && operation.selectionIdOption.contains(selection.identity) &&
+        selection.paths != null && selection.paths.nonEmpty && selection.paths.size <= 256 &&
+        selection.paths.distinct.size == selection.paths.size && selection.paths.forall(path => path != null && GitPath.parseC(path.value).isSuccess) &&
+        selection.message != null && metadata.kind == selectedBaseKind(operation.kind) && metadata.selectionId.isEmpty)
+      Consequence.unit else invalidC
+    stage = Set(GitOperationKind.StageSelected, GitOperationKind.StageSelectedAll)(operation.kind)
+    _ <- if (!stage || selection.paths.size == 1) Consequence.unit else invalidC
+    selected <- createC(metadata.binding, operation.kind, definition.capability, definition.safeProgramIdentity,
+      Paths.get(definition._executable_location), metadata.localBranch, metadata.remote, metadata.remoteBranch, metadata.endpoint,
+      if (operation.kind.requiresIdentity) metadata.commitIdentity else None, Some(selection.identity),
+      if (stage) selection.paths.headOption else None,
+      if (operation.kind == GitOperationKind.CommitSelected) selection.message else None,
+      definition.maximumLimits, definition._environment.values.filter((key, _) => Set("PATH", "SSH_AUTH_SOCK", "TMPDIR")(key)),
+      if (stage) Vector.empty else selection.paths)
+  } yield selected
+
   private def _validate_host_c(kind: GitOperationKind, localbranch: GitBranchName, remote: String,
     remotebranch: GitBranchName, endpoint: String, identity: Option[GitCommitIdentity],
     selection: Option[GitSelectionId], path: Option[GitPath], message: Option[String], paths: Vector[GitPath]): Consequence[Unit] = for {
@@ -497,7 +554,7 @@ private[cncf] object GitProgramDefinition {
 
 private[cncf] object GitExecutionAdmission {
   def resolveC[A](context: ExecutionContext, target: GitTarget, operation: GitOperation[A]): Consequence[ResolvedProcessExecution] = for {
-    _ <- if (target != null && operation != null) Consequence.unit else GitProgramDefinition.invalidC
+    _ <- if (target != null && operation != null && target.selection != null) Consequence.unit else GitProgramDefinition.invalidC
     _ <- WorkspaceId.parseC(target.workspaceId.value)
     _ <- operation.selectionIdOption.fold(Consequence.unit)(x => if (x == null) GitProgramDefinition.invalidC else GitSelectionId.parseC(x.value).map(_ => ()))
     workspace <- context.workspaceExecutionAdmissionOption.map(Consequence.success).getOrElse(
@@ -505,7 +562,7 @@ private[cncf] object GitExecutionAdmission {
     binding <- workspace.admitC(context.cncfCore.scope, target.workspaceId, operation.kind.permission)
     admission <- context.cncfCore.scope.processExecutionAdmissionOption.map(Consequence.success).getOrElse(
       Consequence.serviceUnavailable("Process Execution admission is not configured"))
-    execution <- admission.admitGitForScopeC(context.cncfCore.scope, binding, operation)
+    execution <- admission.admitGitForScopeC(context.cncfCore.scope, binding, operation, target.selection)
     bounded <- if (operation.kind == GitOperationKind.PendingDiff)
       GitDiffParameters.resolveC(context).map { bytes =>
         execution.copy(effectiveLimits = execution.effectiveLimits.copy(

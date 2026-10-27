@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 26, 2026
- * @version Oct. 26, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitRepositoryExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -44,6 +44,82 @@ final class GitRepositoryExecutionSpec extends AnyWordSpec with Matchers with Gi
     typed.processResult.safeProgramIdentity shouldBe "repository-" + operation.kind.wireName
     typed.selectedPaths shouldBe empty
     typed.valueC.toOption.get
+  }
+
+  "Run-selected Git data" should {
+    "stage and commit actual run paths while preserving unrelated dirty work through the ordinary UoW" in {
+      Given("a granted repository family with real files and no configured selected paths or message")
+      val driver = new LocalProcessExecutionDriver()
+      val original = create(driver = Some(driver))
+      try {
+        initialize(original, Map("selected.txt" -> "before\n", "unrelated.txt" -> "keep\n"))
+        val fixture = _configured(original, _plan(original).toOption.get, driver)
+        val parent = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        Files.writeString(fixture.checkout.resolve("selected.txt"), "after\n")
+        Files.writeString(fixture.checkout.resolve("unrelated.txt"), "unrelated edit\n")
+        val id = GitSelectionId.parseC("actual-step").toOption.get
+        val data = GitSelectionParameters(id, Vector(GitPath.parseC("selected.txt").toOption.get), Some("Actual selected Step"))
+        val selected = fixture.copy(target = GitTarget(workspaceId, Some(data)))
+        When("a run supplies typed stage, index and commit intents using its actual selected paths")
+        GitExecutionSpecSupport.execute(selected, GitOperation.StageSelectedAll(id)).toOption.get.valueC.toOption.get
+        val check = GitExecutionSpecSupport.execute(selected, GitOperation.CheckSelectedIndex(id, parent)).toOption.get.valueC.toOption.get
+        val changes = GitExecutionSpecSupport.execute(selected, GitOperation.SelectedIndexChanges(id, parent)).toOption.get.valueC.toOption.get
+        GitExecutionSpecSupport.execute(selected, GitOperation.CommitSelected(id)).toOption.get.valueC.toOption.get
+        val status = GitExecutionSpecSupport.execute(fixture, GitOperation.Status).toOption.get.valueC.toOption.get
+        Then("only the selected path is committed and the unrelated worktree edit remains")
+        check.isClean shouldBe true
+        changes.map(_.path.value) shouldBe Vector("selected.txt")
+        status.map(_.path.value) shouldBe Vector("unrelated.txt")
+        Files.readString(fixture.checkout.resolve(".git/logs/HEAD")) should include("commit: Actual selected Step")
+      } finally { driver.close(); original.close() }
+    }
+
+    "retain both checkpoint grants and their stricter execution limits for a selected commit" in {
+      Given("independent creation and installation capabilities with different finite host and grant bounds")
+      val fixture = create()
+      try {
+        val create = declaration(GitOperationKind.CreateCheckpoint, fixture.endpoint)
+        val install = declaration(GitOperationKind.InstallCheckpoint, fixture.endpoint)
+          .copy(limits = limits.copy(executionTimeoutMillis = Some(1000L)))
+        val binding = fixture.workspace.bindingC(workspaceId).toOption.get
+        val policy = ProcessExecutionPolicy.createC(Vector(definition(binding, create).toOption.get,
+          definition(binding, install).toOption.get)).toOption.get
+        def configured(withInstallation: Boolean) = {
+          val grants = Vector(ProcessExecutionGrant(create.capability)) ++
+            (if (withInstallation) Vector(ProcessExecutionGrant(install.capability,
+              ProcessExecutionLimits(stdoutBytes = Some(512L)))) else Vector.empty)
+          val admission = ProcessExecutionAdmission.forComponentsC(policy, Map(owner -> grants)).toOption.get
+          fixture.copy(admission = admission, context = contextFor(fixture.root, Some(fixture.workspace),
+            Some(admission), fixture.profile.driver, owner))
+        }
+        val granted = configured(true)
+        val missing = configured(false)
+        val id = GitSelectionId.parseC("actual-step").toOption.get
+        val target = GitTarget(workspaceId, Some(GitSelectionParameters(id,
+          Vector(GitPath.parseC("selected.txt").toOption.get), Some("Actual selected Step"))))
+        When("the ordinary admission resolves the selected commit without starting a process")
+        val resolved = GitExecutionAdmission.resolveC(granted.context, target, GitOperation.CommitSelected(id)).toOption.get
+        val denied = GitExecutionAdmission.resolveC(missing.context, target, GitOperation.CommitSelected(id))
+        Then("creation never substitutes for installation authority or discards the installation bounds")
+        resolved.effectiveLimits.executionTimeoutMillis shouldBe Some(1000L)
+        resolved.effectiveLimits.stdoutBytes shouldBe Some(512L)
+        denied.isSuccess shouldBe false
+        fixture.profile.driver.executions shouldBe empty
+      } finally fixture.close()
+    }
+
+    "reject a null selection container at the existing typed input boundary" in {
+      Given("a granted repository target with an invalid optional selection container")
+      val fixture = create()
+      try {
+        val configured = _configured(fixture, _plan(fixture).toOption.get, fixture.profile.driver)
+        When("ordinary typed Git admission receives that target")
+        val result = GitExecutionAdmission.resolveC(configured.context, GitTarget(workspaceId, null), GitOperation.Root)
+        Then("it returns a typed failure and does not start a process")
+        result.isSuccess shouldBe false
+        fixture.profile.driver.executions shouldBe empty
+      } finally fixture.close()
+    }
   }
 
   "E1 Repository Git family route" must afterWord(

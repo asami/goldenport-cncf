@@ -7,7 +7,7 @@ import org.goldenport.cncf.subsystem.{SubsystemStoragePlan, SubsystemStoragePlan
 /**
  * Internal owning-host admission, not actor authentication or sender authority.
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 27, 2026
  */
 private[cncf] final class SubsystemStorageConfiguration private[config] (
   val binding: ConfigurationBinding[SubsystemStoragePlan, CncfConfigurationTarget]
@@ -25,6 +25,8 @@ private[cncf] object SubsystemStorageConfiguration {
       Consequence.configurationInvalid("Host storage admission requires retained runtime configuration and selected Subsystem")
     else collection.binding(CncfConfigurationParameterCatalog.subsystemStoragePlan).flatMap {
       case None => Consequence.success(None)
+      case Some(binding) if _selected_component_default(binding, selected) =>
+        Consequence.success(Some(new SubsystemStorageConfiguration(binding)))
       case Some(binding) if !_selected_file(binding, selected) =>
         Consequence.configurationInvalid("Host storage requires a selected Subsystem file binding")
       case Some(binding) =>
@@ -45,6 +47,16 @@ private[cncf] object SubsystemStorageConfiguration {
           }
         } yield admitted
     }
+
+  private def _selected_component_default(
+    binding: ConfigurationBinding[SubsystemStoragePlan, CncfConfigurationTarget],
+    selected: SubsystemInstanceId
+  ): Boolean = binding.target match {
+    case target: CncfConfigurationTarget.SubsystemInstance =>
+      target.subsystem == selected && binding.provenance.origin == ConfigurationOrigin.Resource &&
+        binding.provenance.sourceType.contains(CncfAssemblyConfigurationProjection.ComponentDefaultsSourceType)
+    case _ => false
+  }
 
   private def _selected_file(binding: ConfigurationBinding[SubsystemStoragePlan, CncfConfigurationTarget],
     selected: SubsystemInstanceId): Boolean =
