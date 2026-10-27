@@ -4,6 +4,13 @@ status = normative
 phase = Phase 55 / GCF-10A
 scope = Textus catalog, typed admission, target-aware resolution, and consumer projections
 
+Standalone startup correction adopted 2026-10-27:
+[assembly-free startup](../spec/assembly-free-standalone-startup.md) removes the
+consumer-authored assembly prerequisite from user-profile admission and effective
+security wiring. Reuse the typed resolver described here; identity is not a grant.
+Implementation is pending under the [bounded correction plan](../phase/assembly-free-startup-correction.md).
+Existing Phase 53/55 acceptance and active consumer Sessions remain preserved.
+
 This document is the dedicated normative CNCF design for the implemented
 configuration-binding boundary. The generic typed identities, codecs, source
 snapshots, candidates, resolver, and trace primitives remain owned by

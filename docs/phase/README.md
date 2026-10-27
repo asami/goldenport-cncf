@@ -1,5 +1,11 @@
 # docs/phase — Engineering Work Management
 
+Assembly-free startup correction adopted 2026-10-27:
+[AF-C1–5](assembly-free-startup-correction.md) owns ordinary standalone identity
+and security wiring without a consumer-authored assembly, followed by sm-workflow
+installed qualification and same-Session adoption. This bounded Phase 53/55
+follow-up reopens no accepted Phase and does not block working CBD development.
+
 Git execution correction adopted 2026-10-26:
 [GIT-C1–4](git-execution-route-correction.md) continues the existing repository
 route repair with optional executable configuration and default PATH Git, then
