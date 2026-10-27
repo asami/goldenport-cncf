@@ -1,5 +1,13 @@
 # docs/phase — Engineering Work Management
 
+Flutter execution delivery allocated 2026-10-28:
+[Phase 117](phase-117.md) / [checklist](phase-117-checklist.md) is PLANNED as the
+next numbered producer delivery after closed Phase 116. It adds typed
+flutter_build/test/analyze while preserving SBT DSLs, and supplies sm-workflow
+Phase 18. Contract alignment and consumer SBT work can overlap; consumer Flutter
+integration follows the qualified producer handoff. Existing corrections and
+active work retain their scope and priority; no Session is started.
+
 Assembly-free startup correction adopted 2026-10-27:
 [AF-C1–5](assembly-free-startup-correction.md) owns ordinary standalone identity
 and security wiring without a consumer-authored assembly, followed by sm-workflow
