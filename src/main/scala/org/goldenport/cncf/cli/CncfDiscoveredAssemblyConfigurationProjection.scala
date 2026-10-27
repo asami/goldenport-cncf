@@ -12,7 +12,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  * identity, while the descriptor path remains the discovered source identity.
  *
  * @since   Aug. 15, 2026
- * @version Aug. 15, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cli] object CncfDiscoveredAssemblyConfigurationProjection {
@@ -46,10 +46,21 @@ private[cli] object CncfDiscoveredAssemblyConfigurationProjection {
       case Some(value) if value == null || value.path == null =>
         Consequence.configurationInvalid("CNCF discovered subsystem descriptor is invalid")
       case Some(value) =>
-        CncfAssemblyConfigurationProjection.candidates(
-          value.config,
-          Some(value.path.toString),
-          subsystem
-        )
+        for {
+          ordinary <- CncfAssemblyConfigurationProjection.candidates(
+            value.config -- value.componentDefaultSources.keySet, Some(value.path.toString), subsystem)
+          defaults <- value.componentDefaultSources.toVector.groupBy(_._2).toVector.sortBy(_._1)
+            .foldLeft(Consequence.success(ConfigurationBindingCandidates.empty[CncfConfigurationTarget])) {
+              case (prior, (source, keys)) => for {
+                accumulated <- prior
+                projected <- CncfAssemblyConfigurationProjection.componentDefaultCandidates(
+                  keys.flatMap { case (key, _) => value.config.get(key).map(key -> _) }.toMap, source, subsystem)
+                combined <- ConfigurationBindingCandidates.from(accumulated.bindings ++ projected.bindings)
+              } yield combined
+            }
+          explicitids = ordinary.bindings.map(_.parameter.id).toSet
+          combined <- ConfigurationBindingCandidates.from(ordinary.bindings ++
+            defaults.bindings.filterNot(binding => explicitids.contains(binding.parameter.id)))
+        } yield combined
     }
 }

@@ -21,7 +21,8 @@ import org.goldenport.cncf.spi.{SpiCardinality, SpiProviderSelector, SpiRuntimeB
  * @since   Apr.  7, 2026
  *  version Apr. 28, 2026
  *  version May.  7, 2026
- * @version Aug. 30, 2026
+ *  version Aug. 30, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -252,7 +253,8 @@ final case class GenericSubsystemDescriptor(
   subsystemCapabilityProviders: Vector[GenericSubsystemCapabilityProviderBinding] = Vector.empty,
   componentDescriptorOverrides: Vector[ComponentDescriptor] = Vector.empty,
   implicitRootComponentName: Option[String] = None,
-  private val _config_projection: Configuration = Configuration.empty
+  private val _config_projection: Configuration = Configuration.empty,
+  private[cncf] val componentDefaultSources: Map[String, String] = Map.empty
 ) {
   /**
    * The descriptor-owned configuration in its original scalar/object/list
@@ -265,8 +267,55 @@ final case class GenericSubsystemDescriptor(
       }.toMap ++ _config_projection.values
     )
 
+  /** Resolve only surviving packaged defaults against the caller's RuntimeRoot.
+    * Explicit file/assembly overrides are not templates and retain their values.
+    */
+  private[cncf] def withComponentDefaultRuntimeRoot(root: Path): GenericSubsystemDescriptor = {
+    def needsEnvironment(value: ConfigurationValue): Boolean = value match {
+      case ConfigurationValue.StringValue(v) => Vector("${repository.", "${git.", "${executable.", "${environment.").exists(v.contains)
+      case ConfigurationValue.ObjectValue(v) => v.values.exists(needsEnvironment)
+      case ConfigurationValue.ListValue(v) => v.exists(needsEnvironment)
+      case _ => false
+    }
+    val needsenvironment = configuration.values.exists { case (key, value) =>
+      componentDefaultSources.contains(key) && needsEnvironment(value) }
+    val values = if (needsenvironment) ComponentDefaultRuntimeValues.values(root)
+      else Map("runtime.root" -> root.toAbsolutePath.normalize.toString)
+    def json(value: io.circe.Json): io.circe.Json = value
+      .mapString(ComponentDefaultRuntimeValues.expand(_, values))
+      .mapArray(_.map(json)).mapObject(_.mapValues(json))
+    def text(value: String): String = io.circe.parser.parse(value).toOption
+      .filter(v => v.isObject || v.isArray).map(v => json(v).noSpaces)
+      .getOrElse(ComponentDefaultRuntimeValues.expand(value, values))
+    def configured(value: ConfigurationValue): ConfigurationValue = value match {
+      case ConfigurationValue.StringValue(v) => ConfigurationValue.StringValue(text(v))
+      case ConfigurationValue.ObjectValue(v) => ConfigurationValue.ObjectValue(v.view.mapValues(configured).toMap)
+      case ConfigurationValue.ListValue(v) => ConfigurationValue.ListValue(v.map(configured))
+      case other => other
+    }
+    def missing(value: ConfigurationValue): Boolean = value match {
+      case ConfigurationValue.StringValue(v) => ComponentDefaultRuntimeValues.missing(v, values)
+      case ConfigurationValue.ObjectValue(v) => v.values.exists(missing)
+      case ConfigurationValue.ListValue(v) => v.exists(missing)
+      case _ => false
+    }
+    val processkey = "textus.subsystem.process-execution.plan"
+    // An unconfigured/non-repository root must still serve Help. A later run
+    // needs actual repository/tool data or an explicit host execution profile.
+    val omitted = if (componentDefaultSources.contains(processkey) && configuration.values.get(processkey).exists(missing))
+      Set(processkey) else Set.empty[String]
+    copy(
+      config = (config -- omitted).map { case (key,value) => key ->
+        (if (componentDefaultSources.contains(key)) text(value) else value) },
+      _config_projection = Configuration((_config_projection.values -- omitted).map { case (key,value) => key ->
+        (if (componentDefaultSources.contains(key)) configured(value) else value) }),
+      componentDefaultSources = componentDefaultSources -- omitted
+    )
+  }
+
   def componentVersion: Option[String] =
     version.orElse(componentBindings.headOption.flatMap(_.componentVersion))
+
 
   def componentName: String =
     componentBindings.headOption.map(_.componentName).getOrElse("")
@@ -361,6 +410,8 @@ object GenericSubsystemDescriptor {
       componentBindings = _merge_component_bindings(defaults.componentBindings, overrideDescriptor.componentBindings),
       extensions = defaults.extensions ++ overrideDescriptor.extensions,
       config = defaults.config ++ overrideDescriptor.config,
+      componentDefaultSources = (defaults.componentDefaultSources --
+        overrideDescriptor.configuration.values.keySet) ++ overrideDescriptor.componentDefaultSources,
       _config_projection = Configuration(
         defaults._config_projection.values ++ overrideDescriptor._config_projection.values
       ),
@@ -400,6 +451,8 @@ object GenericSubsystemDescriptor {
           componentBindings = if (bindings.nonEmpty) bindings else descriptor.componentBindings,
           extensions = descriptor.extensions ++ _string_map_value(rec, List("extension", "extensions")),
           config = descriptor.config ++ _string_map_value(rec, List("config")),
+          componentDefaultSources = descriptor.componentDefaultSources --
+            (_string_map_value(rec, List("config")).keySet ++ configprojection.values.keySet),
           _config_projection = Configuration(
             descriptor._config_projection.values ++ configprojection.values
           ),
@@ -834,6 +887,11 @@ object GenericSubsystemDescriptor {
                 componentBindings = bindings,
                 extensions = descriptor.extensions ++ shape.map(_.extensions).getOrElse(Map.empty),
                 config = shape.map(_.config).getOrElse(Map.empty),
+                componentDefaultSources = assembly.filter(_.source == "component-car").map { source =>
+                  (shape.map(_.config.keySet).getOrElse(Set.empty[String]) ++
+                    _configuration_value(source.record, List("config")).values.keySet)
+                    .map(_ -> path.toString).toMap
+                }.getOrElse(Map.empty),
                 _config_projection = assembly.map(source => _configuration_value(source.record, List("config")))
                   .getOrElse(Configuration.empty),
                 wiring = shape.map(_.wiring).getOrElse(Record.empty),

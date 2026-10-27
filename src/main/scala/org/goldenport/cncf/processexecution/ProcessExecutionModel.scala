@@ -8,7 +8,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceExecutionAdmiss
 /*
  * @since   Jul. 17, 2026
  *  version Jul. 22, 2026
- * @version Oct. 24, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ProcessCapabilityId private (value: String) {
@@ -764,15 +764,25 @@ final class ProcessExecutionAdmission private (
   private[cncf] def admitGitForScopeC(
     scope: ScopeContext,
     binding: WorkspaceBinding,
-    operation: GitOperation[?]
+    operation: GitOperation[?],
+    selection: Option[GitSelectionParameters] = None
   ): Consequence[ResolvedProcessExecution] = for {
     owner <- WorkspaceExecutionAdmission.componentIdC(scope)
     admission <- componentadmissions.flatMap(_.get(owner)).map(Consequence.success).getOrElse(
       Consequence.argumentPolicyViolation("git", "git.execution.component-grant", "actual component Git capability grant", "unapproved"))
-    definition <- policy.gitDefinitionC(binding, operation.kind, operation.selectionIdOption)
+    definition <- if (selection.isEmpty) policy.gitDefinitionC(binding, operation.kind, operation.selectionIdOption)
+      else policy.gitDefinitionC(binding, GitProgramDefinition.selectedBaseKind(operation.kind), None)
     grant <- admission._grant_c(definition.capability)
-    arguments <- GitProgramDefinition.typedArgumentsC(operation, definition._git_metadata.get)
-    execution <- policy.resolveGitC(definition, grant, arguments)
+    installLimits <- if (selection.nonEmpty && operation.kind == GitOperationKind.CommitSelected) for {
+      install <- policy.gitDefinitionC(binding, GitOperationKind.InstallCheckpoint, None)
+      installGrant <- admission._grant_c(install.capability)
+      limits <- ProcessExecutionLimits.effectiveC(install.maximumLimits, installGrant.maximumLimits, ProcessExecutionLimits.empty)
+    } yield Some(limits) else Consequence.success(Option.empty[ProcessExecutionLimits])
+    narrowed <- selection.fold(Consequence.success(definition))(GitProgramDefinition.selectC(definition, operation, _))
+    arguments <- GitProgramDefinition.typedArgumentsC(operation, narrowed._git_metadata.get)
+    admitted <- policy.resolveGitC(narrowed, grant, arguments)
+    execution = installLimits.fold(admitted)(limits => admitted.copy(
+      effectiveLimits = GitProgramDefinition.intersectLimits(admitted.effectiveLimits, limits)))
   } yield execution
 
   /** Semantic admission requires actual component grants, including for single-scope test services. */

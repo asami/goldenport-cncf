@@ -19,7 +19,8 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Apr. 25, 2026
  *  version May. 18, 2026
  *  version Aug. 15, 2026
- * @version Sep.  7, 2026
+ *  version Sep.  7, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -170,7 +171,13 @@ object GenericSubsystemFactory {
     repositoryBootstrapPolicy: Option[RepositoryBootstrapPolicy]
   ): Consequence[Option[GenericSubsystemDescriptor]] =
     repositoryBootstrapPolicy match {
-      case Some(policy) => _runtime_resolve_descriptor_c(configuration, policy)
+      case Some(policy) => _runtime_resolve_descriptor_c(configuration, policy).flatMap {
+        case None => Consequence.success(None)
+        case Some(descriptor) => _runtime_repository_specs_for_descriptor_c(policy).flatMap { specs =>
+          _with_primary_component_defaults_c(descriptor, specs)
+            .map(value => Some(value.withComponentDefaultRuntimeRoot(policy.baseDirectory)))
+        }
+      }
       case None =>
         Consequence.configurationInvalid(
           "runtime repository bootstrap policy has not been admitted"
@@ -542,7 +549,8 @@ object GenericSubsystemFactory {
             mode,
             configuration,
             aliasResolver,
-            repositoryspecs
+            repositoryspecs,
+            Some(policy.baseDirectory)
           )
         }
       case None =>
@@ -559,7 +567,8 @@ object GenericSubsystemFactory {
     repositoryBootstrapPolicy match {
       case Some(policy) =>
         _runtime_repository_specs_for_descriptor_c(policy).flatMap { repositoryspecs =>
-          _admit_descriptor_c(descriptor, configuration, repositoryspecs)
+          _admit_descriptor_detailed_c(descriptor, configuration, repositoryspecs, Some(policy.baseDirectory))
+            .map(_.descriptor)
         }
       case None =>
         Consequence.configurationInvalid(
@@ -592,13 +601,15 @@ object GenericSubsystemFactory {
     mode: Option[RunMode],
     configuration: ResolvedConfiguration,
     aliasresolver: AliasResolver,
-    repositoryspecs: Vector[ComponentRepository.Specification]
+    repositoryspecs: Vector[ComponentRepository.Specification],
+    runtimeRoot: Option[Path] = None
   ): Subsystem = {
     val admission = _or_raise(
       _admit_descriptor_detailed_c(
         descriptor,
         configuration,
-        repositoryspecs
+        repositoryspecs,
+        runtimeRoot
       )
     )
     val admitteddescriptor = admission.descriptor
@@ -890,12 +901,14 @@ object GenericSubsystemFactory {
   private def _admit_descriptor_detailed_c(
     descriptor: GenericSubsystemDescriptor,
     configuration: ResolvedConfiguration,
-    repositoryspecs: Vector[ComponentRepository.Specification]
+    repositoryspecs: Vector[ComponentRepository.Specification],
+    runtimeRoot: Option[Path] = None
   ): Consequence[SubsystemAssemblyAdmission.DetailedAdmission] = {
     val specs =
       if (repositoryspecs.nonEmpty) repositoryspecs
       else _repository_specs_for_descriptor(configuration, descriptor)
-    _with_primary_component_defaults_c(descriptor, specs).flatMap { effective =>
+    _with_primary_component_defaults_c(descriptor, specs).flatMap { raw =>
+      val effective = runtimeRoot.fold(raw)(raw.withComponentDefaultRuntimeRoot)
       SubsystemAssemblyAdmission.resolveWithNoticesC(
         effective,
         _admission_repository_specs(configuration, specs)
@@ -930,9 +943,7 @@ object GenericSubsystemFactory {
               .map(GenericSubsystemDescriptor.mergeComponentDefaults(_, descriptor))
               .getOrElse(descriptor)
             descriptor.assemblyDescriptor
-              .filterNot(source => defaults.exists(default => source.path.exists(
-                _.toAbsolutePath.normalize == default.path.toAbsolutePath.normalize
-              )))
+              .filterNot(_.source == "component-car")
               .map(GenericSubsystemDescriptor.applyAssemblyOverrideC(base, _))
               .getOrElse(Consequence.success(base))
         }
