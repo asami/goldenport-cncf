@@ -34,7 +34,7 @@ import org.sqlite.{SQLiteConfig, SQLiteDataSource}
 
 /*
  * @since   Sep. 29, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 27, 2026
  */
 final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
 
@@ -63,6 +63,9 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
     case other => fail(s"unexpected rejection: $other")
   }
   }
+  private def _native_json(record: InstanceRecord): Json =
+    io.circe.parser.parse(_take(WorkflowInstanceRecordJsonV1.encodeC(record))).toOption.get
+
   private def _resource(resourcepath: String): String = {
     val source = scala.io.Source.fromInputStream(getClass.getResourceAsStream(resourcepath), "UTF-8")
     try source.mkString finally source.close()
@@ -266,6 +269,11 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
           space.dataStore(_continuations).map { store =>
             _take(_claims(store).loadStoredC(_identity)).get._1.status shouldBe ContinuationRuntimePersistence.Status.Superseded
             _claims(store).claimC(_identity).isSuccess shouldBe false
+            val legacyrow = _take(store.load(_continuations, WorkflowContinuationDataStorePersistence.id(_identity))).get
+            val legacytext = _take(WorkflowInstanceDataStorePersistence.storageJsonC(legacyrow.getString("decisionSupersessionPayload").get))
+            val legacyjson = io.circe.parser.parse(legacytext).toOption.get
+            legacyjson.hcursor.get[String]("schemaVersion").toOption.get shouldBe "cncf.workflow-decision-supersession.v1"
+            legacyjson.asObject.get.keys.toSet shouldBe Set("schemaVersion", "identity", "sourceRevision", "nextRevision", "typeIdentity", "payload")
             _take(store.load(_continuations, WorkflowContinuationDataStorePersistence.id(_identity))).get
               .getString(WorkflowCompletionDataStorePersistence.payloadField) shouldBe None
           }
@@ -282,6 +290,268 @@ final class WorkflowCompletionDataStorePersistenceSpec extends AnyWordSpec with 
         s.systemNode.activeLeaseCount shouldBe 0
       }
     }
+    "retain a superseded WorkOrder checkpoint through normal replacement issue, completion and physical reopen" in {
+      Given("a managed SQLite WorkOrder; all correction and authority observations here are specification-owned")
+      val file = _temporary_directory("cncf-workorder-supersession-").resolve("workflow.sqlite")
+      var checkpoint = Option.empty[WorkflowManagedWorkOrderSupersession.Receipt[String]]
+      def binding(s: Subsystem) = _take(WorkflowManagedWorkOrderSupersession.bindC(s, _component, _config,
+        _completion_operation, Vector(_binding), _instances, _continuations, _codec, _codec))
+      _with_managed_host_at(file) { s =>
+        _take(s.initializeEventCursorC(_environment(s)))
+        val source = _take(s.withWorkflowVerifiedMultiGuardSpaceC(_component, _environment(s)) { space =>
+          space.dataStore(_instances).map(store => _seed_available(store))
+        })
+        val issued = _take(WorkflowManagedIssuedWork.bindC(s, _component, _config, _completion_operation,
+          Vector(_binding), _instances, _continuations, _codec))
+        val old = _take(issued.loadC(_identity)).get
+        val originalbytes = _take(s.withWorkflowVerifiedMultiGuardSpaceC(_component, _environment(s)) { space =>
+          space.dataStore(_continuations).map(store => _stored(store)._2.getString(WorkflowIssuedWorkDataStorePersistence.payloadField))
+        })
+        val entry = source.entry.copy(lifecycle = Lifecycle.Active,
+          currentProgression = Some(ProgressionReference("correction.PendingIssue")))
+        val payload = TypedValue(_codec.typeIdentity, "SPECIFICATION-OWNED pending correction; no external nonexecution claim")
+        val supersession = binding(s)
+        val inspected = _take(supersession.inspectC(_identity, source.current.identity)).get
+        _native_json(inspected.current) shouldBe _native_json(source.current)
+        inspected.issued shouldBe old
+        inspected.continuation.status shouldBe ContinuationRuntimePersistence.Status.Available
+        inspected.continuation.claimId shouldBe None
+        inspected.entityRevision.value shouldBe 1L
+        When("the application saves its pending correction checkpoint")
+        val saved = _take(supersession.executeC(_identity, source.current.revision, inspected.entityRevision, source.current, entry, payload))
+        checkpoint = Some(saved.receipt)
+        _take(supersession.inspectC(_identity, source.current.identity)) shouldBe None
+        saved.current.history shouldBe source.current.history :+ entry
+        saved.current.suspension shouldBe None
+        _take(issued.loadC(_identity)).get shouldBe old
+        _take(supersession.loadRetainedC(_identity, _initial.identity)).get.receipt shouldBe saved.receipt
+        _take(supersession.loadRetainedC(_identity, _initial.identity)).get.receipt shouldBe saved.receipt
+        supersession.executeC(_identity, source.current.revision, inspected.entityRevision, source.current, entry, payload).isSuccess shouldBe false
+        _take(s.withWorkflowVerifiedMultiGuardSpaceC(_component, _environment(s)) { space =>
+          space.dataStore(_instances).map { store =>
+            _claims(store).claimC(_identity).isSuccess shouldBe false
+            _stored(store)._2.getString(WorkflowIssuedWorkDataStorePersistence.payloadField) shouldBe originalbytes
+            // A late old answer cannot become a completion or a successor answer.
+            val late = WorkflowCompletionDataStorePersistence.Intent(source.current, source.current.revision,
+              source.entry, "late-old-token", source.result)
+            _completion(store).completeC(late, _owner).isSuccess shouldBe false
+            _take(_completion(store).loadC(_identity)) shouldBe None
+          }
+        })
+        When("the ordinary issue path publishes a distinct replacement later")
+        val template = _intent(saved.current, "replacement-2")
+        val replacemententry = template.entry.copy(sequence = HistorySequence(3L), revision = InstanceRevision(3L),
+          suspension = template.entry.suspension.map(_.copy(expectedRevision = InstanceRevision(3L))))
+        val replacementintent = template.copy(expectedRevision = saved.current.revision, entry = replacemententry)
+        val replacement = _issue(replacementintent)
+        val suspended = _take(issued.suspendC(replacementintent, replacement)).instance
+        _native_json(_take(supersession.loadRetainedC(_identity, _initial.identity)).get.current) shouldBe _native_json(suspended)
+        When("the replacement completes through the ordinary native completion owner")
+        _take(s.withWorkflowVerifiedMultiGuardSpaceC(_component, _environment(s)) { space =>
+          space.dataStore(_instances).map { store =>
+            val token = _take(_claims(store).claimC(ContinuationIdentity("replacement-2"))).claimId.get
+            val completed = source.entry.copy(sequence = HistorySequence(4L), revision = InstanceRevision(4L))
+            _take(_completion(store).completeC(WorkflowCompletionDataStorePersistence.Intent(suspended,
+              suspended.revision, completed, token, _submitted(replacement)), _owner))
+            _take(_issued(store).loadC(_identity)).get shouldBe old
+          }
+        })
+        _take(supersession.loadRetainedC(_identity, _initial.identity)).get.receipt shouldBe saved.receipt
+      }
+      _with_managed_host_at(file) { s =>
+        val retained = _take(binding(s).loadRetainedC(_identity, _initial.identity)).get
+        retained.receipt shouldBe checkpoint.get
+        retained.current.lifecycle shouldBe Lifecycle.Completed
+        retained.current.history should have size 4
+        s.systemNode.activeLeaseCount shouldBe 0
+      }
+    }
+
+    "refuse stale, foreign, wrong-kind, claimed and completed WorkOrder supersession without changing records" in {
+      Vector("stale", "foreign", "wrong-kind", "wrong-kind-decision", "operation", "claimed", "completed", "context", "completion", "evidence").foreach { invalid =>
+        _with_managed_host { s =>
+          _take(s.initializeEventCursorC(_environment(s)))
+          val source = _take(s.withWorkflowVerifiedMultiGuardSpaceC(_component, _environment(s)) { space =>
+            space.dataStore(_instances).map { store =>
+              val seeded = if (invalid == "wrong-kind-decision") {
+                val intent = _intent(_initial)
+                val work = _issue(intent)
+                val order = work.current.asInstanceOf[WorkflowContinuation.WorkOrder[String]]
+                val decision = WorkflowInteraction[String, Nothing](work.handle,
+                  WorkflowContinuation.Decision(order.request, MinimalPresentation("Fixture decision", "Unanswered")))
+                _take(_root(store).create(_config, _initial))
+                val questions = _take(WorkflowIssuedWorkDataStorePersistence.bindForKindC(store, _config,
+                  _component, _completion_operation, Vector(_binding), _instances, _continuations, _codec,
+                  WorkflowIssuedContinuationKind.Decision))
+                val pending = _take(questions.suspendC(intent, decision, _owner)).instance
+                AvailableCompletion(pending, HistoryEntry(HistorySequence(2L), InstanceRevision(2L),
+                  Lifecycle.Completed, None, pending.correlation, CausationReference("fixture-complete"),
+                  None, None, None), _submitted(work))
+              } else _seed_available(store)
+              if (invalid == "claimed" || invalid == "completed") {
+                val token = _take(_claims(store).claimC(_identity)).claimId.get
+                if (invalid == "completed") _take(_claims(store).completeC(_identity, token))
+              }
+              seeded
+            }
+          })
+          def stored = _take(s.withWorkflowVerifiedMultiGuardSpaceC(_component, _environment(s)) { space =>
+            space.dataStore(_instances).map(_stored)
+          })
+          val before = stored
+          val entityrevision = _take(s.withWorkflowVerifiedMultiGuardSpaceC(_component, _environment(s)) { space =>
+            space.dataStore(_continuations).map(store => _take(_claims(store).loadStoredC(_identity)).get._2)
+          })
+          val payload = TypedValue(_codec.typeIdentity, "SPECIFICATION-OWNED correction")
+          val entry = source.entry.copy(lifecycle = Lifecycle.Active,
+            currentProgression = Some(ProgressionReference("correction.PendingIssue")))
+          val actual = source.current
+          if (invalid == "claimed" || invalid == "completed") {
+            val inspector = _take(WorkflowManagedWorkOrderSupersession.bindC(s, _component, _config,
+              _completion_operation, Vector(_binding), _instances, _continuations, _codec, _codec))
+            val observed = _take(inspector.inspectC(_identity, actual.identity)).get
+            observed.continuation.status shouldBe (if (invalid == "claimed")
+              ContinuationRuntimePersistence.Status.Claimed else ContinuationRuntimePersistence.Status.Completed)
+            observed.continuation.claimId.nonEmpty shouldBe true
+            observed.entityRevision.value should be > 1L
+          }
+          val current = invalid match {
+            case "context" => actual.copy(suspension = actual.suspension.map(_.copy(contextSnapshot = ContextSnapshotReference("foreign"))))
+            case "completion" => actual.copy(suspension = actual.suspension.map(_.copy(completion = CompletionReference("foreign"))))
+            case "evidence" => actual.copy(suspension = actual.suspension.map(_.copy(evidence = EvidenceReference("foreign"))))
+            case _ => actual
+          }
+          val rejected = if (invalid == "wrong-kind") {
+            val decision = _take(WorkflowManagedDecisionSupersession.bindC(s, _component, _config,
+              _completion_operation, Vector(_binding), _instances, _continuations, _codec, _codec))
+            decision.executeC(_identity, actual.revision, current, entry, payload).isSuccess
+          } else {
+            val binding = _take(WorkflowManagedWorkOrderSupersession.bindC(s, _component, _config,
+              if (invalid == "operation") StateMachineOperationIdentity("workflow", "foreignCompletion") else _completion_operation,
+              Vector(_binding), _instances, _continuations, _codec, _codec))
+            binding.executeC(if (invalid == "foreign") ContinuationIdentity("foreign") else _identity,
+              if (invalid == "stale") initialRevision else actual.revision, entityrevision, current, entry, payload).isSuccess
+          }
+          withClue(invalid) { rejected shouldBe false; stored shouldBe before }
+          s.systemNode.activeLeaseCount shouldBe 0
+        }
+      }
+    }
+
+    "reject an Available claim-release ABA until specification-owned renewed admission uses the newly inspected revision" in {
+      Given("a real managed SQLite Available issue and specification-owned target admission")
+      _with_managed_host { s =>
+        _take(s.initializeEventCursorC(_environment(s)))
+        val source = _take(s.withWorkflowVerifiedMultiGuardSpaceC(_component, _environment(s)) { space =>
+          space.dataStore(_instances).map(_seed_available)
+        })
+        val binding = _take(WorkflowManagedWorkOrderSupersession.bindC(s, _component, _config,
+          _completion_operation, Vector(_binding), _instances, _continuations, _codec, _codec))
+        val admitted = _take(binding.inspectC(_identity, source.current.identity)).get
+        When("another native owner actually claims and releases the same issue")
+        _take(s.withWorkflowVerifiedMultiGuardSpaceC(_component, _environment(s)) { space =>
+          space.dataStore(_continuations).map { store =>
+            val token = _take(_claims(store).claimC(_identity)).claimId.get
+            _take(_claims(store).releaseC(_identity, token))
+          }
+        })
+        val changed = _take(binding.inspectC(_identity, source.current.identity)).get
+        _native_json(changed.current) shouldBe _native_json(admitted.current)
+        changed.continuation.status shouldBe ContinuationRuntimePersistence.Status.Available
+        changed.continuation.claimId shouldBe None
+        changed.entityRevision.value should be > admitted.entityRevision.value
+        def stored = _take(s.withWorkflowVerifiedMultiGuardSpaceC(_component, _environment(s)) { space =>
+          space.dataStore(_instances).map(_stored)
+        })
+        val before = stored
+        val entry = source.entry.copy(lifecycle = Lifecycle.Active,
+          currentProgression = Some(ProgressionReference("correction.PendingIssue")))
+        _take(source.current.appendC(source.current.revision, entry))
+        val payload = TypedValue(_codec.typeIdentity, "SPECIFICATION-OWNED renewed admission after native ABA")
+        Then("the old inspected revision cannot progress or save a checkpoint despite the unchanged native frontier")
+        binding.executeC(_identity, admitted.current.revision, admitted.entityRevision,
+          admitted.current, entry, payload).isSuccess shouldBe false
+        stored shouldBe before
+        _take(binding.loadRetainedC(_identity, source.current.identity)) shouldBe None
+        When("the specification independently renews admission against the freshly inspected target")
+        val renewed = _take(binding.inspectC(_identity, source.current.identity)).get
+        val saved = _take(binding.executeC(_identity, renewed.current.revision, renewed.entityRevision,
+          renewed.current, entry, payload))
+        saved.receipt.payload shouldBe payload.value
+        saved.current.revision shouldBe source.current.revision.next
+      }
+    }
+
+    "preserve WorkOrder encode failure, collect uncertain readback and refuse an actual competing claim" in {
+      Vector("encode", "decode", "claim").foreach { failure =>
+        _with_managed_host { s =>
+          _take(s.initializeEventCursorC(_environment(s)))
+          val source = _take(s.withWorkflowVerifiedMultiGuardSpaceC(_component, _environment(s)) { space =>
+            space.dataStore(_instances).map(_seed_available)
+          })
+          def stored = _take(s.withWorkflowVerifiedMultiGuardSpaceC(_component, _environment(s)) { space =>
+            space.dataStore(_instances).map(_stored)
+          })
+          val before = stored
+          var armed = true
+          var encodeattempted = false
+          var decodeattempted = false
+          val codec = new PayloadCodec[String] {
+            val typeIdentity = _codec.typeIdentity
+            def encode(value: String): Json = {
+              encodeattempted = true
+              if (failure == "encode") throw new IllegalArgumentException("fixture encode")
+              if (failure == "claim" && armed) {
+                armed = false
+                _take(s.withWorkflowVerifiedMultiGuardSpaceC(_component, _environment(s)) { space =>
+                  space.dataStore(_continuations).flatMap(store => _claims(store).claimC(_identity))
+                })
+              }
+              Json.fromString(value)
+            }
+            def decode(value: Json): Either[String, String] = {
+              decodeattempted = true
+              if (failure == "decode") throw new IllegalArgumentException("fixture readback decode")
+              else value.asString.toRight("expected text")
+            }
+          }
+          val binding = _take(WorkflowManagedWorkOrderSupersession.bindC(s, _component, _config,
+            _completion_operation, Vector(_binding), _instances, _continuations, _codec, codec))
+          val observed = _take(binding.inspectC(_identity, source.current.identity)).get
+          val entry = source.entry.copy(lifecycle = Lifecycle.Active,
+            currentProgression = Some(ProgressionReference("correction.PendingIssue")))
+          _take(source.current.appendC(source.current.revision, entry))
+          val rejected = binding.executeC(_identity, source.current.revision, observed.entityRevision, source.current,
+            entry, TypedValue(_codec.typeIdentity, "SPECIFICATION-OWNED correction"))
+          rejected.isSuccess shouldBe false
+          encodeattempted shouldBe true
+          if (failure == "decode") {
+            decodeattempted shouldBe true
+            _reason(rejected, "transaction-indeterminate")
+          }
+          val after = stored
+          if (failure != "decode") after._1 shouldBe before._1
+          if (failure == "decode") {
+            // Managed native commit precedes application projection: failed decode is UNKNOWN,
+            // never evidence of rollback or permission to issue the effect again.
+            val collecting = _take(WorkflowManagedWorkOrderSupersession.bindC(s, _component, _config,
+              _completion_operation, Vector(_binding), _instances, _continuations, _codec, _codec))
+            val retained = _take(collecting.loadRetainedC(_identity, source.current.identity)).get
+            retained.receipt.payload shouldBe "SPECIFICATION-OWNED correction"
+            retained.current.revision shouldBe source.current.revision.next
+          } else if (failure == "claim") {
+            _take(s.withWorkflowVerifiedMultiGuardSpaceC(_component, _environment(s)) { space =>
+              space.dataStore(_continuations).map { store =>
+                _take(_claims(store).loadC(_identity)).get.status shouldBe ContinuationRuntimePersistence.Status.Claimed
+              }
+            })
+            after._2.getString("workOrderSupersessionPayload") shouldBe None
+          } else after shouldBe before
+          s.systemNode.activeLeaseCount shouldBe 0
+        }
+      }
+    }
+
     "execute a declared Decision completion Service and retain committed answers despite response projection failure" in {
       Vector(false, true).foreach { rejectresponse =>
         Given("a native managed Decision and its separately declared public completion Operation; human evidence remains a fixture")
