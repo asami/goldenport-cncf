@@ -1,7 +1,8 @@
 # Phase 99: Finding Disposition ABI
 
-status=planned
+status=in-progress
 planned_at=2026-10-04
+started_at=2026-10-27
 consumer=CAR lint, Cozy, textus-cbd-support, sm-workflow
 related=Phase 90 Candidate-Admission
 
@@ -64,3 +65,11 @@ A tool may propose Fix / Accept / Defer / Configure, but developer admission det
 5. Cozy can map CML properties into the same semantic contract without depending on Scala annotation syntax.
 6. A fixture proves round-trip interpretation for at least Fix-equivalent disappearance, Accept and Defer.
 7. Documentation explicitly defines unresolved findings, not raw warning count, as the actionable backlog metric.
+
+## Implementation and validation
+
+The implementation contract is [Finding Disposition ABI V1](../spec/finding-disposition.md),
+with the representation/authority boundary in [the design](../design/finding-disposition.md).
+`FindingDispositionSpec` provides executable coverage. Runtime-owned focused and
+whole-repository validation and independent review remain pending; source
+implementation alone does not close this Phase.
