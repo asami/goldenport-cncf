@@ -135,7 +135,7 @@ import org.goldenport.cncf.config.{
 }
 import org.goldenport.cncf.processexecution.{
   GitTarget, GitOperation, GitExecutionResult, GitObjectId, GitPath, GitBranchName, GitSelectionId,
-  GitRemoteTip, GitHistoryCounts, GitCommitMetadata, GitStatusEntry, GitIndexEntry, GitBlobContent, GitDiff, GitIndexCheck, GitTreeChange,
+  GitRemoteTip, GitHistoryCounts, GitCommitMetadata, GitStatusEntry, GitIndexEntry, GitBlobContent, GitDiff, GitIndexCheck, GitTreeChange, GitSelectedTreeEntry,
   ProcessExecutionAdmission,
   ProcessExecutionRequest,
   ProcessExecutionResult,
@@ -149,7 +149,7 @@ import org.goldenport.cncf.processexecution.{
 
 /*
  * @since   Sep. 28, 2026
- * @version Oct. 24, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -264,6 +264,9 @@ trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.
 
   protected final def git_selected_index_changes(target: GitTarget, selectionId: GitSelectionId, parent: GitObjectId): ExecUowM[GitExecutionResult[Vector[GitTreeChange]]] =
     _git_exec(target, GitOperation.SelectedIndexChanges(selectionId, parent))
+
+  protected final def git_tree_entries(target: GitTarget, tree: GitObjectId, selectionId: GitSelectionId): ExecUowM[GitExecutionResult[Vector[GitSelectedTreeEntry]]] =
+    _git_exec(target, GitOperation.TreeEntries(tree, selectionId))
 
   protected final def git_tree_changes(target: GitTarget, before: GitObjectId, after: GitObjectId): ExecUowM[GitExecutionResult[Vector[GitTreeChange]]] =
     _git_exec(target, GitOperation.TreeChanges(before, after))

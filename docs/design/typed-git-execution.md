@@ -1,5 +1,29 @@
 # Typed Git Execution
 
+## Finite committed-entry projection
+
+The explicit `TreeEntries(tree, selectionId)` intent uses the ordinary GitExec
+interpreter and component/workspace/capability admission. Its declaration is
+selected, read-only and bounded to 1..256 ordered `selectedPaths`. It remains
+outside the closed repository-family expansion; adding a Git enum case supplies
+no unselected default permission. V3/V5 host codecs preserve its finite selection.
+
+The fixed command is the existing Git safety prefix followed by
+`--literal-pathspecs ls-tree --full-tree -z <tree> -- <host-selected-paths>`.
+Only the canonical tree object ID is dynamic. Selection paths remain host-owned
+literal arguments and share existing process argument/output limits. The parser
+reads complete UTF-8 NUL records with one metadata/path tab boundary, validates
+regular mode/blob type/object ID and exact selected membership, rejects duplicate
+records, and projects results into host selection order. Absent records become
+explicit `GitSelectedTreeEntry(path, None)`; present records carry the closed
+`GitRegularTreeEntry(mode, blob)` value. Directory entries are refused rather
+than recursively widening the selected set.
+
+Committed identities and bytes remain separate observations. Consumers bind the
+requested tree to actual CommitMetadata, then may use BlobContent and managed
+file observations for their own business comparison. This API does not observe
+the live index/worktree or authorize source-base adoption, publication or commit.
+
 ## Execution responsibility refinement — 2026-10-26
 
 CNCF owns typed operation/argument construction independently of optional
@@ -17,7 +41,7 @@ Status: normative design for the intermediate CNCF Git producer.
 ## One semantic intent and one lifecycle
 
 The [typed Git specification](../spec/typed-git-execution.md) owns the exact
-thirty-three-operation/parameter/result table and strict wire/parser contracts.
+thirty-four-operation/parameter/result table and strict wire/parser contracts.
 
 ```text
 protected git_* wrapper
@@ -132,7 +156,7 @@ The plan retains public repository declarations and public grants separately
 from effective internal policy/grants so encode/decode stays one repository
 entry rather than materializing an operation list. Existing V1/V2/V3 creators,
 wire fields and deny behavior remain strict, and retired V4 remains rejected.
-The five selected operations still need explicit independent declarations and
+The six selected operations need explicit independent declarations and
 grants, preserving their logical/physical scopes, messages and count bounds.
 
 The executable override is optional on the V5 public family. An omitted

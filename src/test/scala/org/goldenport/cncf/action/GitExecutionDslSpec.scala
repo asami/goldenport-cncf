@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 26, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -233,7 +233,8 @@ final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
       val fixture = create(workspaceInstalled = false, processInstalled = false)
       val behavior = new GitSpecBehavior(Behavior.Core(fixture.context, None, None))
       val selected: Vector[GitOperation[?]] = Vector(GitOperation.CheckSelectedIndex(selectionId, objectId),
-        GitOperation.SelectedIndexChanges(selectionId, objectId), GitOperation.TreeChanges(objectId, objectId))
+        GitOperation.SelectedIndexChanges(selectionId, objectId), GitOperation.TreeChanges(objectId, objectId),
+        GitOperation.TreeEntries(objectId, selectionId))
       val provider = new UnitOfWorkProgramStubProvider {
         def resultFor[A](ordinal: Int, operation: UnitOfWorkOp[A]): Consequence[A] = operation match {
           case UnitOfWorkOp.GitExec(target, GitOperation.CheckSelectedIndex(id, parent)) =>
@@ -245,6 +246,9 @@ final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
           case UnitOfWorkOp.GitExec(target, GitOperation.TreeChanges(before, after)) =>
             Consequence.success(GitExecutionResult(target, GitOperation.TreeChanges(before, after),
               GitExecutionOutcome.Succeeded, Some(Vector.empty[GitTreeChange]), result()))
+          case UnitOfWorkOp.GitExec(target, GitOperation.TreeEntries(tree, id)) =>
+            Consequence.success(GitExecutionResult(target, GitOperation.TreeEntries(tree, id),
+              GitExecutionOutcome.Succeeded, Some(Vector(GitSelectedTreeEntry(GitPath.parseC("selected.txt").toOption.get, None))), result()))
           case _ => Consequence.notImplemented("unexpected selected Git recording operation")
         }
       }
@@ -321,6 +325,9 @@ final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
         behavior.program(fixture.target, GitOperation.SelectedIndexChanges(selectionId, null)),
         behavior.program(fixture.target, GitOperation.TreeChanges(null, objectId)),
         behavior.program(fixture.target, GitOperation.TreeChanges(objectId, null)),
+        behavior.program(fixture.target, GitOperation.TreeEntries(null, selectionId)),
+        behavior.program(fixture.target, GitOperation.TreeEntries(objectId, null)),
+        behavior.program(fixture.target, GitOperation.TreeEntries(objectId, GitSelectionId.parseC("unknown").toOption.get)),
         behavior.program(fixture.target, GitOperation.CheckSelectedIndex(GitSelectionId.parseC("unknown").toOption.get, objectId)),
         behavior.program(fixture.target, GitOperation.SelectedIndexChanges(GitSelectionId.parseC("unknown").toOption.get, objectId)))
       try {
@@ -341,7 +348,8 @@ final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
       try {
         When("Head and all new observations use ReadOnly while writes and ungranted contexts attempt interpretation")
         val readoperations: Vector[GitOperation[?]] = Vector(GitOperation.Head, GitOperation.CheckSelectedIndex(selectionId, objectId),
-          GitOperation.SelectedIndexChanges(selectionId, objectId), GitOperation.TreeChanges(objectId, objectId))
+          GitOperation.SelectedIndexChanges(selectionId, objectId), GitOperation.TreeChanges(objectId, objectId),
+          GitOperation.TreeEntries(objectId, selectionId))
         val read = readoperations.map(GitExecutionSpecSupport.execute(readonly, _))
         val write = GitExecutionSpecSupport.execute(readonly, GitOperation.IndexTree)
         val failures = denied.flatMap(fixture => readoperations.map(GitExecutionSpecSupport.execute(fixture, _)))
@@ -350,7 +358,7 @@ final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
         Then("only the explicit read capability starts; write-tree and every missing authority fail before launch")
         read.foreach(_.toOption.get.outcome shouldBe GitExecutionOutcome.Succeeded)
         (failures :+ write :+ unknown).foreach(_.isFaillure shouldBe true)
-        readonly.profile.driver.executions should have size 4
+        readonly.profile.driver.executions should have size 5
         denied.foreach(_.profile.driver.executions shouldBe empty)
       } finally (denied :+ readonly).foreach(_.close())
     }

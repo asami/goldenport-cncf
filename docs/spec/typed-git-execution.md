@@ -1,5 +1,40 @@
 # Typed Git Execution
 
+## Explicit selected committed-tree entries
+
+`GitOperation.TreeEntries(tree, selectionId)` is a read-only operation returning
+`Vector[GitSelectedTreeEntry]`. The host explicitly registers `tree-entries` with
+the finite, ordered `selectedPaths` and matching `selectionId`; there must be
+1..256 distinct canonical Git paths, with at most 64 such declarations per
+workspace. Existing process argument/output limits still apply. Declarations sharing a workspace and
+selection ID with other bounded selected operations must use the same ordered
+paths. No repository-family or unselected enum expansion grants this operation.
+
+Each selected path has exactly one result in selection order. `entry = None`
+means absence in the requested tree; `Some(GitRegularTreeEntry(mode, blob))`
+means an observed regular blob with mode `100644` or `100755`. These are native
+Git observations, not content certificates, worktree-mode observations, Human
+consent or acceptance. The explicit tree is supplied by the caller; consumers
+must bind it to their independently observed commit/tree target.
+
+CNCF uses fixed literal-path `ls-tree --full-tree -z` under the admitted workspace,
+existing process limits and ordinary GitExec UoW. Links, submodules, directories,
+unexpected/duplicate paths, invalid modes/IDs, incomplete capture/records and
+resource overflow never produce a successful entry vector. Missing process or
+workspace grants and unknown selections refuse through normal admission. No
+arbitrary argv, shell interpretation, BlobContent fallback or new UoW operation
+is introduced. Existing BlobContent can separately read observed blob bytes.
+
+Executable contracts: `GitExecutionSpec`, `GitExecutionDslSpec` and
+`RuntimeProcessExecutionPlanCodecSpec`.
+
+V3/V5 `gitPrograms` register the exact operation token `tree-entries`, a
+non-null `selectionId`, and the required `selectedPaths` array. As with the
+existing bounded read declarations, `selectedPath`, `commitMessage` and
+`commitIdentity` are null; the other existing declaration fields and independent
+component/process/workspace grants remain required. The protected DSL is
+`git_tree_entries(target, tree, selectionId)` and records one ordinary GitExec.
+
 ## Adopted execution correction — 2026-10-26
 
 [Git execution defaults and diagnostics](git-execution-defaults-and-diagnostics.md)
@@ -80,9 +115,10 @@ Branches obey strict ref-part rules: no leading option/slash, trailing
 slash/dot, controls or space, forbidden Git ref punctuation, empty/dot-leading
 or .lock-ending segments, double slash/dot or @{; bare @ is invalid.
 Selection IDs are lowercase safe tokens of at most 64 characters.
-The finite operation set has thirty-three kinds. CheckSelectedIndex and
+The finite operation set has thirty-four kinds. CheckSelectedIndex and
 SelectedIndexChanges carry a selection ID and canonical parent OID;
-TreeChanges carries two canonical OIDs without a selection. All three are
+TreeChanges carries two canonical OIDs without a selection. TreeEntries carries
+an explicit tree OID and a selection ID. All four are
 ReadOnly observations without a commit identity. CommitSelected remains
 Manage and requires the fixed host commit identity.
 
@@ -127,6 +163,7 @@ remote branch.
 | `CheckSelectedIndex(selectionId: GitSelectionId, parent: GitObjectId)` | `GitIndexCheck` | `--literal-pathspecs diff --cached --no-ext-diff --no-textconv --check PARENT -- FIXED_SELECTED_PATHS` |
 | `SelectedIndexChanges(selectionId: GitSelectionId, parent: GitObjectId)` | `Vector[GitTreeChange]` | `--literal-pathspecs diff --cached --no-ext-diff --no-textconv --raw --no-abbrev --no-renames -z PARENT -- FIXED_SELECTED_PATHS` |
 | `TreeChanges(before: GitObjectId, after: GitObjectId)` | `Vector[GitTreeChange]` | `diff-tree --no-commit-id --no-ext-diff --no-textconv --raw --no-abbrev --no-renames -r -z BEFORE AFTER --` |
+| `TreeEntries(tree: GitObjectId, selectionId: GitSelectionId)` | `Vector[GitSelectedTreeEntry]` | `--literal-pathspecs ls-tree --full-tree -z TREE -- FIXED_SELECTED_PATHS` |
 
 Every invocation directly starts the configured normal Git executable. The
 shared fixed prefix is
@@ -349,15 +386,15 @@ capability, identity, gitExecutable, localBranch, remote, remoteBranch,
 endpoint, commitIdentity, selectionId, selectedPath, commitMessage, limits
 and environment. commitIdentity is null or exactly {name,email}, required
 only for PendingMerge, CommitPending, CreateCheckpoint and CommitSelected.
-Exactly CommitSelected, CheckSelectedIndex and SelectedIndexChanges also
+Exactly CommitSelected, CheckSelectedIndex, SelectedIndexChanges and TreeEntries also
 require selectedPaths: a nonnull array of 1..256 unique valid literal GitPaths.
 The operation is decoded before selecting its strict allowed and required
-field set. Those three kinds emit selectedPaths; every other kind omits it
+field set. Those four kinds emit selectedPaths; every other kind omits it
 and rejects it even when null or empty. Missing, null, empty, duplicate or
 escaping path arrays fail. The private direct creator's trailing empty default
 is only nonapplicable data; it never authorizes an old unbounded CommitSelected
 declaration. There are no aliases or old-wire fallbacks.
-Selection ID is required only for the five selected kinds. Fixed single path is
+Selection ID is required only for the six selected kinds. Fixed single path is
 required only for StageSelected/StageSelectedAll. Fixed message is required
 only for CommitSelected and is nonempty, non-NUL and at most 4096 UTF-8 bytes.
 Unrelated optional fields must be null. Identity values are nonblank and
@@ -368,7 +405,7 @@ capabilities, workspace/kind/selection keys, owners or grants fail.
 Each process grant requires corresponding same-owner workspace permission.
 Workspace permission alone creates no process grant. Per workspace, at most
 128 StageSelected, 256 StageSelectedAll, 64 CommitSelected,
-64 CheckSelectedIndex and 64 SelectedIndexChanges declarations
+64 CheckSelectedIndex, 64 SelectedIndexChanges and 64 TreeEntries declarations
 are admitted, using the existing conflict-path/goal-path/goal-step bounds.
 A selection token carries no application-specific prefix or new family field.
 
@@ -414,7 +451,7 @@ applications continue to submit typed Git intent only.
 
 ### R4 — Selected and legacy contracts remain explicit
 
-The five selected kinds require their existing explicit `gitPrograms`
+The six selected kinds require their explicit `gitPrograms`
 declarations and independent grants. A family never authorizes them. Their
 selection counts, ordered logical scopes, fixed messages and derived physical
 path rules remain unchanged. A family may coexist with explicit selected

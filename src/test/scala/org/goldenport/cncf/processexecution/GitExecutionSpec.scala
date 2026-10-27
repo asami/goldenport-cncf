@@ -28,6 +28,182 @@ import org.scalatest.wordspec.AnyWordSpec
 final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import GitExecutionSpecSupport.*
 
+  "Selected committed-tree observations" should {
+    "observe literal regular entries and absence in selection order independently of live index and worktree changes" in {
+      Given("a committed tree with equal-content regular files, an executable and literal Unicode, TAB, LF and pathspec-like names")
+      val names = Vector("missing.txt", "run.sh", "nested/leaf", "[x].txt", "日本\t語\n.txt")
+      val driver = new LocalProcessExecutionDriver()
+      val fixture = create(permission = WorkspacePermission.ReadOnly, driver = Some(driver), selectedScopes = names)
+      try {
+        initialize(fixture, names.tail.map(_ -> "same bytes\n").toMap ++ Map("x.txt" -> "outside\n"))
+        setup(fixture.checkout, "update-index", "--chmod=+x", "run.sh")
+        setup(fixture.checkout, "commit", "-m", "executable fixture")
+        val head = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        val metadata = GitExecutionSpecSupport.execute(fixture, GitOperation.CommitMetadata(head)).toOption.get.valueC.toOption.get
+        Files.writeString(fixture.checkout.resolve("run.sh"), "staged live bytes\n")
+        setup(fixture.checkout, "add", "--", "run.sh")
+        Files.writeString(fixture.checkout.resolve("run.sh"), "unstaged live bytes\n")
+        Files.writeString(fixture.checkout.resolve("missing.txt"), "live only\n")
+        val index = Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector
+        When("the ordinary typed UoW requests only the host's selection from the observed committed tree")
+        val observed = GitExecutionSpecSupport.execute(fixture, GitOperation.TreeEntries(metadata.tree, selectionId)).toOption.get
+        val entries = observed.valueC.toOption.get
+        val blobs = entries.flatMap(_.entry.map(_.blob))
+        val content = GitExecutionSpecSupport.execute(fixture, GitOperation.BlobContent(blobs.head)).toOption.get
+        Then("missing committed paths remain absent and every selected regular mode/blob retains its exact identity and order")
+        observed.outcome shouldBe GitExecutionOutcome.Succeeded
+        observed.selectedPaths.map(_.value) shouldBe names
+        entries.map(_.path.value) shouldBe names
+        entries.head.entry shouldBe None
+        entries.tail.map(_.entry.get.mode) shouldBe Vector("100755", "100644", "100644", "100644")
+        blobs.distinct should have size 1
+        content.valueC.toOption.get.bytes shouldBe "same bytes\n".getBytes(StandardCharsets.UTF_8).toVector
+        Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector shouldBe index
+        Files.readString(fixture.checkout.resolve("run.sh")) shouldBe "unstaged live bytes\n"
+        Files.readString(fixture.checkout.resolve("missing.txt")) shouldBe "live only\n"
+      } finally { driver.close(); fixture.close() }
+    }
+
+    "refuse real directories symlinks and gitlinks rather than projecting them as regular files or absence" in {
+      Given("ordinary committed trees containing each unsupported entry kind at the exact selected path")
+      Vector("directory", "symlink", "gitlink").foreach { kind =>
+        val driver = new LocalProcessExecutionDriver()
+        val fixture = create(driver = Some(driver), selectedScopes = Vector("unsupported"))
+        try {
+          initialize(fixture, Map("keep.txt" -> "keep\n"))
+          val head = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+          kind match {
+            case "directory" =>
+              Files.createDirectory(fixture.checkout.resolve("unsupported"))
+              Files.writeString(fixture.checkout.resolve("unsupported/file"), "nested\n")
+              setup(fixture.checkout, "add", "--", "unsupported")
+            case "symlink" =>
+              Files.createSymbolicLink(fixture.checkout.resolve("unsupported"), Paths.get("keep.txt"))
+              setup(fixture.checkout, "add", "--", "unsupported")
+            case _ => setup(fixture.checkout, "update-index", "--add", "--cacheinfo", "160000", head.value, "unsupported")
+          }
+          setup(fixture.checkout, "commit", "-m", "unsupported entry fixture")
+          val tree = GitExecutionSpecSupport.execute(fixture, GitOperation.Tree).toOption.get.valueC.toOption.get
+          When("the typed selected observation reads that actual committed entry")
+          val observed = GitExecutionSpecSupport.execute(fixture, GitOperation.TreeEntries(tree, selectionId)).toOption.get
+          Then("the complete successful Git process is retained but no regular-entry vector is exposed")
+          observed.processResult.termination shouldBe ProcessExecutionTermination.Exited(0)
+          observed.outcome shouldBe a[GitExecutionOutcome.InvalidOutput]
+          observed.value shouldBe None
+        } finally { driver.close(); fixture.close() }
+      }
+    }
+
+    "project complete SHA-1 and SHA-256 records while refusing malformed unexpected duplicate or incomplete observations" in {
+      Given("a finite literal selection and complete native record shapes for both object ID lengths")
+      val names = Vector("missing", "日本\t語\n.txt", "[literal]")
+      val fixture = create(selectedScopes = names)
+      try {
+        Vector(40, 64).foreach { length =>
+          val tree = GitObjectId.parseC("a" * length).toOption.get
+          val blob = GitObjectId.parseC("b" * length).toOption.get
+          val operation = GitOperation.TreeEntries(tree, selectionId)
+          val row = s"100644 blob ${blob.value}\t${names(1)}\u0000"
+          val executable = s"100755 blob ${blob.value}\t${names(2)}\u0000"
+          val malformed = Vector(row.dropRight(1), row + row, row + "extra\u0000", row.replace("100644", "120000"),
+            row.replace("100644", "040000"), row.replace("100644", "160000"), row.replace("100644", "100664"),
+            row.replace("blob", "tree"), row.replace("blob", "commit"), row.replace("blob", "blob extra"),
+            row.replace(blob.value, "0" * length), row.replace(blob.value, "B" * length),
+            row.replace(blob.value, "b" * (if (length == 40) 64 else 40)),
+            row.replace(names(1), "../escape"), row.replace(names(1), "outside"), row.replace("\t", " "))
+          When("the selected parser receives native-order records, complete empty output and malformed records")
+          val valid = parse(fixture, operation, executable + row)
+          val empty = parse(fixture, operation, "")
+          val rejected = malformed.map(parse(fixture, operation, _))
+          val metadata = fixture.definitions.find(_._git_metadata.get.kind == operation.kind).get._git_metadata.get
+          val damaged = Vector(result(row, truncated = true).stdout, result(row).stdout.copy(byteCount = 1L),
+            ProcessExecutionCapture(Vector[Byte](-61, 40), 2L, false)).map(GitOutputParser.parse(operation, metadata, _, 0))
+          Then("only complete regular observations produce exactly one result per selected path in host order")
+          valid.toOption shouldBe Some(Vector(GitSelectedTreeEntry(GitPath.parseC(names.head).toOption.get, None),
+            GitSelectedTreeEntry(GitPath.parseC(names(1)).toOption.get, Some(GitRegularTreeEntry("100644", blob))),
+            GitSelectedTreeEntry(GitPath.parseC(names(2)).toOption.get, Some(GitRegularTreeEntry("100755", blob)))))
+          empty.toOption shouldBe Some(names.map(name => GitSelectedTreeEntry(GitPath.parseC(name).toOption.get, None)))
+          (rejected ++ damaged).foreach(_.isLeft shouldBe true)
+        }
+      } finally fixture.close()
+    }
+
+    "preserve explicit absence and host order for generated subsets of complete selected records" in {
+      Given("twelve finite selected paths with independently generated presence and executable modes")
+      val names = Vector.tabulate(12)(n => s"path$n")
+      val fixture = create(selectedScopes = names)
+      val observations = for {
+        length <- Gen.oneOf(40, 64)
+        states <- Gen.listOfN(names.size, Gen.oneOf(0, 1, 2))
+      } yield length -> states
+      try {
+        When("complete records arrive in reverse selection order for each generated committed tree")
+        val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(48), Prop.forAll(observations) { case (length, states) =>
+          val tree = GitObjectId.parseC("a" * length).toOption.get
+          val blob = GitObjectId.parseC("b" * length).toOption.get
+          val expected = names.zip(states).map { case (name, state) =>
+            GitSelectedTreeEntry(GitPath.parseC(name).toOption.get,
+              if (state == 0) None else Some(GitRegularTreeEntry(if (state == 1) "100644" else "100755", blob)))
+          }
+          val records = expected.reverse.flatMap(value => value.entry.map(entry =>
+            s"${entry.mode} blob ${entry.blob.value}\t${value.path.value}\u0000")).mkString
+          parse(fixture, GitOperation.TreeEntries(tree, selectionId), records).toOption.contains(expected)
+        })
+        Then("every generated observation projects exactly the selected order with no invented regular entry")
+        withClue(checked.toString) { checked.passed shouldBe true }
+      } finally fixture.close()
+    }
+
+    "enforce the admitted stdout ceiling during a real selected-tree process" in {
+      Given("two committed long literal filenames whose ls-tree output exceeds the explicit 128-byte host ceiling")
+      val driver = new LocalProcessExecutionDriver()
+      val names = Vector("a" * 200, "b" * 200)
+      val fixture = create(driver = Some(driver), selectedScopes = names, treeStdoutBytes = 128L)
+      try {
+        initialize(fixture, names.map(_ -> "same\n").toMap)
+        val tree = GitExecutionSpecSupport.execute(fixture, GitOperation.Tree).toOption.get.valueC.toOption.get
+        When("the typed UoW reads the selected tree through the ordinary bounded local driver")
+        val observed = GitExecutionSpecSupport.execute(fixture, GitOperation.TreeEntries(tree, selectionId)).toOption.get
+        Then("the retained bounded capture stays incomplete and cannot become regular entries or absence")
+        observed.value shouldBe None
+        observed.outcome shouldBe GitExecutionOutcome.Incomplete(observed.processResult.termination)
+        observed.processResult.stdout.truncated shouldBe true
+        observed.processResult.stdout.content.size should be <= 128
+      } finally {
+        try {
+          if (driver.terminationConfirmed) driver.close()
+          else intercept[IllegalStateException](driver.close())
+        } finally fixture.close()
+      }
+    }
+
+    "retain incomplete failed and overflow receipts without turning unusable execution into absent entries" in {
+      Given("selected-tree receipts with damaged captures and unsuccessful process completion")
+      val complete = result(s"100644 blob ${objectId.value}\tselected.txt\u0000")
+      val invalid = Vector(complete.copy(stdout = complete.stdout.copy(truncated = true)),
+        complete.copy(stdout = complete.stdout.copy(byteCount = 1L)),
+        complete.copy(stderr = complete.stderr.copy(truncated = true)),
+        complete.copy(stderr = complete.stderr.copy(byteCount = 1L)))
+      val terminals = Vector(ProcessExecutionTermination.TimedOut, ProcessExecutionTermination.Cancelled,
+        ProcessExecutionTermination.TerminationUnconfirmed, ProcessExecutionTermination.OutputLimitExceeded(ProcessExecutionStream.Stdout))
+      val receipts = invalid ++ Vector(result("", ProcessExecutionTermination.Exited(128))) ++ terminals.map(result("", _))
+      val fixtures = receipts.map(raw => create(outputs = Map(GitOperationKind.TreeEntries -> raw)))
+      try {
+        When("the ordinary UoW consumes each actual selected-tree receipt")
+        val observed = fixtures.map(GitExecutionSpecSupport.execute(_, GitOperation.TreeEntries(objectId, selectionId)).toOption.get)
+        Then("no unusable observation has a value and each result retains its exact process receipt")
+        observed.take(invalid.size).foreach(_.outcome shouldBe a[GitExecutionOutcome.InvalidOutput])
+        observed(invalid.size).outcome shouldBe GitExecutionOutcome.Failed(128)
+        observed.takeRight(terminals.size).map(_.outcome) shouldBe terminals.map(GitExecutionOutcome.Incomplete.apply)
+        observed.zip(receipts).foreach { case (typed, raw) =>
+          typed.value shouldBe None
+          typed.processResult shouldBe raw
+          typed.selectedPaths.map(_.value) shouldBe Vector("selected.txt")
+        }
+      } finally fixtures.foreach(_.close())
+    }
+  }
+
   "Read-only typed Git preflight" should {
     "admit the current selection without executing or changing native source state" in {
       Given("an ordinary local fixture with an admitted component, workspace and selected Git program")
@@ -793,10 +969,10 @@ final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThe
     }
 
     "require bounded explicit selected path vectors and preserve selected-observation argument limits" in {
-      Given("three bounded host kinds, an ordinary kind and a shared admitted workspace")
+      Given("four bounded host kinds, an ordinary kind and a shared admitted workspace")
       val fixture = create()
       val binding = fixture.workspace.bindingC(workspaceId).toOption.get
-      val kinds = Vector(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges)
+      val kinds = Vector(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges, GitOperationKind.TreeEntries)
       val path = GitPath.parseC("selected.txt").toOption.get
       val many = Vector.tabulate(257)(n => GitPath.parseC(s"file$n").toOption.get)
       val invalid = kinds.flatMap { kind =>
@@ -810,7 +986,7 @@ final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThe
         val rejected = invalid.map(definition(binding, _))
         val bounded = kinds.map(kind => definition(binding, declaration(kind, fixture.endpoint).copy(
           selectedPaths = many.take(256), limits = limits.copy(argumentCount = Some(512L)))))
-        val limited = Vector(GitOperation.CheckSelectedIndex(selectionId, objectId), GitOperation.SelectedIndexChanges(selectionId, objectId)).map { op =>
+        val limited = Vector(GitOperation.CheckSelectedIndex(selectionId, objectId), GitOperation.SelectedIndexChanges(selectionId, objectId), GitOperation.TreeEntries(objectId, selectionId)).map { op =>
           val declared = definition(binding, declaration(op.kind, fixture.endpoint).copy(selectedPaths = many.take(256))).toOption.get
           val policy = ProcessExecutionPolicy.createC(Vector(declared)).toOption.get
           val arguments = GitProgramDefinition.typedArgumentsC(op, declared._git_metadata.get).toOption.get
@@ -1216,7 +1392,7 @@ private[cncf] object GitExecutionSpecSupport {
     if (kind.selected) Some(selectionId) else None,
     if (kind == GitOperationKind.StageSelected || kind == GitOperationKind.StageSelectedAll) Some(GitPath.parseC("selected.txt").toOption.get) else None,
     if (kind == GitOperationKind.CommitSelected) Some("selected checkpoint") else None, limits, Map("PATH" -> "/usr/bin:/bin"),
-    if (Set(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges).contains(kind))
+    if (Set(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges, GitOperationKind.TreeEntries).contains(kind))
       Vector(GitPath.parseC("selected.txt").toOption.get) else Vector.empty)
 
   def definition(binding: WorkspaceBinding, declaration: GitRuntimeDeclaration): Consequence[ProcessProgramDefinition] =
@@ -1247,6 +1423,7 @@ private[cncf] object GitExecutionSpecSupport {
     case GitOperationKind.PendingPaths => "selected.txt\u0000"
     case GitOperationKind.SelectedIndexChanges | GitOperationKind.TreeChanges =>
       s":000000 100644 ${"0" * 40} ${objectId.value} A\u0000selected.txt\u0000"
+    case GitOperationKind.TreeEntries => s"100644 blob ${objectId.value}\tselected.txt\u0000"
     case _ => ""
   }
 
@@ -1262,7 +1439,8 @@ private[cncf] object GitExecutionSpecSupport {
     checkoutName: String = "checkout",
     selectedPath: String = "selected.txt",
     diffStdoutBytes: Long = limits.stdoutBytes.get,
-    selectedScopes: Vector[String] = Vector.empty
+    selectedScopes: Vector[String] = Vector.empty,
+    treeStdoutBytes: Long = limits.stdoutBytes.get
   ): GitSpecFixture = {
     val base = Files.createDirectories(Paths.get("target", "git-execution-spec").toAbsolutePath)
     val root = Files.createTempDirectory(base, "case-")
@@ -1274,7 +1452,8 @@ private[cncf] object GitExecutionSpecSupport {
     val definitions = GitOperationKind.values.toVector.map { kind =>
       val declared = declaration(kind, endpoint)
       val selected = declared.copy(
-        limits = if (kind == GitOperationKind.PendingDiff) declared.limits.copy(stdoutBytes = Some(diffStdoutBytes)) else declared.limits,
+        limits = if (kind == GitOperationKind.PendingDiff) declared.limits.copy(stdoutBytes = Some(diffStdoutBytes))
+          else if (kind == GitOperationKind.TreeEntries) declared.limits.copy(stdoutBytes = Some(treeStdoutBytes)) else declared.limits,
         selectedPath = if (declared.selectedPath.nonEmpty) Some(GitPath.parseC(selectedPath).toOption.get) else None,
         selectedPaths = if (declared.selectedPaths.nonEmpty)
           (if (selectedScopes.isEmpty) Vector(selectedPath) else selectedScopes).map(GitPath.parseC(_).toOption.get)
@@ -1373,5 +1552,6 @@ private[cncf] final class GitSpecBehavior(val behaviorCore: Behavior.Core) exten
     case GitOperation.CheckSelectedIndex(selectionid, parent) => git_check_selected_index(target, selectionid, parent)
     case GitOperation.SelectedIndexChanges(selectionid, parent) => git_selected_index_changes(target, selectionid, parent)
     case GitOperation.TreeChanges(before, after) => git_tree_changes(target, before, after)
+    case GitOperation.TreeEntries(tree, selectionid) => git_tree_entries(target, tree, selectionid)
   }
 }

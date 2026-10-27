@@ -102,6 +102,7 @@ enum GitOperationKind(val wireName: String) {
   case CheckSelectedIndex extends GitOperationKind("check-selected-index")
   case SelectedIndexChanges extends GitOperationKind("selected-index-changes")
   case TreeChanges extends GitOperationKind("tree-changes")
+  case TreeEntries extends GitOperationKind("tree-entries")
 
   private[cncf] def permission: WorkspacePermission = this match {
     case StageFullState | IndexTree | Fetch | FastForward | PendingMerge | CommitPending | Push |
@@ -115,7 +116,7 @@ enum GitOperationKind(val wireName: String) {
   }
 
   private[cncf] def selected: Boolean = this match {
-    case StageSelected | StageSelectedAll | CommitSelected | CheckSelectedIndex | SelectedIndexChanges => true
+    case StageSelected | StageSelectedAll | CommitSelected | CheckSelectedIndex | SelectedIndexChanges | TreeEntries => true
     case _ => false
   }
 }
@@ -154,6 +155,7 @@ enum GitOperation[A] {
   case CheckSelectedIndex(selectionId: GitSelectionId, parent: GitObjectId) extends GitOperation[GitIndexCheck]
   case SelectedIndexChanges(selectionId: GitSelectionId, parent: GitObjectId) extends GitOperation[Vector[GitTreeChange]]
   case TreeChanges(before: GitObjectId, after: GitObjectId) extends GitOperation[Vector[GitTreeChange]]
+  case TreeEntries(tree: GitObjectId, selectionId: GitSelectionId) extends GitOperation[Vector[GitSelectedTreeEntry]]
 
   def kind: GitOperationKind = this match {
     case Branch => GitOperationKind.Branch
@@ -189,6 +191,7 @@ enum GitOperation[A] {
     case CheckSelectedIndex(_, _) => GitOperationKind.CheckSelectedIndex
     case SelectedIndexChanges(_, _) => GitOperationKind.SelectedIndexChanges
     case TreeChanges(_, _) => GitOperationKind.TreeChanges
+    case TreeEntries(_, _) => GitOperationKind.TreeEntries
   }
 
   private[cncf] def selectionIdOption: Option[GitSelectionId] = this match {
@@ -197,12 +200,15 @@ enum GitOperation[A] {
     case CommitSelected(id) => Some(id)
     case CheckSelectedIndex(id, _) => Some(id)
     case SelectedIndexChanges(id, _) => Some(id)
+    case TreeEntries(_, id) => Some(id)
     case _ => None
   }
 }
 
 final case class GitRemoteTip(branch: GitBranchName, tip: GitObjectId)
 final case class GitHistoryCounts(localAhead: Long, remoteAhead: Long)
+final case class GitRegularTreeEntry(mode: String, blob: GitObjectId)
+final case class GitSelectedTreeEntry(path: GitPath, entry: Option[GitRegularTreeEntry])
 final case class GitCommitMetadata(commit: GitObjectId, tree: GitObjectId, parents: Vector[GitObjectId])
 final case class GitStatusEntry(indexCode: Char, worktreeCode: Char, path: GitPath, renamedFrom: Option[GitPath]) {
   def unmerged: Boolean = GitOutputParser.unmergedPairs.contains(s"$indexCode$worktreeCode")
@@ -391,7 +397,7 @@ private[cncf] object GitProgramDefinition {
     _ <- selection.fold(Consequence.unit)(x => if (x == null) invalidC else GitSelectionId.parseC(x.value).map(_ => ()))
     _ <- path.fold(Consequence.unit)(x => if (x == null) invalidC else GitPath.parseC(x.value).map(_ => ()))
     _ <- if (paths != null && (kind match {
-      case GitOperationKind.CommitSelected | GitOperationKind.CheckSelectedIndex | GitOperationKind.SelectedIndexChanges =>
+      case GitOperationKind.CommitSelected | GitOperationKind.CheckSelectedIndex | GitOperationKind.SelectedIndexChanges | GitOperationKind.TreeEntries =>
         paths.nonEmpty && paths.size <= 256 && paths.distinct.size == paths.size &&
           paths.forall(x => x != null && GitPath.parseC(x.value).isSuccess)
       case _ => paths.isEmpty
@@ -458,6 +464,8 @@ private[cncf] object GitProgramDefinition {
         Vector(oid, Literal("--")) ++ metadata.selectedPaths.map(x => Literal(x.value))
       case GitOperationKind.TreeChanges => _l_("diff-tree", "--no-commit-id", "--no-ext-diff", "--no-textconv", "--raw", "--no-abbrev", "--no-renames", "-r", "-z") ++
         Vector(oid, oid, Literal("--"))
+      case GitOperationKind.TreeEntries => _l_("--literal-pathspecs", "ls-tree", "--full-tree", "-z") ++
+        Vector(oid, Literal("--")) ++ metadata.selectedPaths.map(x => Literal(x.value))
     }
     prefix.map(Literal.apply) ++ command
   }
@@ -487,6 +495,7 @@ private[cncf] object GitProgramDefinition {
       case GitOperation.CheckSelectedIndex(_, parent) => _oid_(parent).map(x => Vector(x, "--") ++ metadata.selectedPaths.map(_.value))
       case GitOperation.SelectedIndexChanges(_, parent) => _oid_(parent).map(x => Vector(x, "--") ++ metadata.selectedPaths.map(_.value))
       case GitOperation.TreeChanges(before, after) => for { b <- _oid_(before); a <- _oid_(after) } yield Vector(b, a, "--")
+      case GitOperation.TreeEntries(tree, _) => _oid_(tree).map(x => Vector(x, "--") ++ metadata.selectedPaths.map(_.value))
       case _ => Consequence.success(Vector.empty)
     }
   }
@@ -529,10 +538,11 @@ private[cncf] object GitExecutionAdmission {
     val metadata = execution.definition._git_metadata.get
     val decoded: (GitExecutionOutcome, Option[A]) = result.termination match {
       case ProcessExecutionTermination.Exited(code) =>
-        if (operation.kind == GitOperationKind.PendingDiff &&
+        if (Set(GitOperationKind.PendingDiff, GitOperationKind.TreeEntries).contains(operation.kind) &&
             (result.stdout.truncated || result.stdout.byteCount != result.stdout.content.size.toLong ||
               result.stderr.truncated || result.stderr.byteCount != result.stderr.content.size.toLong))
-          GitExecutionOutcome.InvalidOutput("Incomplete Git diff capture") -> None
+          GitExecutionOutcome.InvalidOutput(if (operation.kind == GitOperationKind.PendingDiff)
+            "Incomplete Git diff capture" else "Incomplete Git tree-entry capture") -> None
         else if ((operation.kind == GitOperationKind.CheckPendingIndex || operation.kind == GitOperationKind.CheckSelectedIndex) && (code == 0 || code == 2))
           GitOutputParser.parseIndexCheck(result.stdout, result.stderr, code) match {
             case Right(value) => GitExecutionOutcome.Succeeded -> Some(value.asInstanceOf[A])
@@ -571,7 +581,10 @@ private[cncf] object GitOutputParser {
         Right(GitBlobContent(capture.content, text))
       } else utf8(capture.content).toRight("Invalid UTF-8 Git stdout").flatMap { text =>
         if (exitCode == 1) Either.cond(text.isEmpty, None, "Unexpected optional Git output")
-        else _parse_text(operation.kind, metadata, text)
+        else operation match {
+          case GitOperation.TreeEntries(tree, _) => _tree_entries(text, metadata.selectedPaths, tree.value.length)
+          case _ => _parse_text(operation.kind, metadata, text)
+        }
       }
     result.map(_.asInstanceOf[A])
   }
@@ -658,8 +671,31 @@ private[cncf] object GitOutputParser {
     case GitOperationKind.PendingPaths => _paths(text)
     case GitOperationKind.PendingDiff => Right(GitDiff(text, text.linesIterator.exists(x => x.startsWith("Binary files ") || x == "GIT binary patch")))
     case GitOperationKind.BlobContent => Left("Unexpected blob decoder")
+    case GitOperationKind.TreeEntries => Left("Unexpected tree-entry decoder")
     case _ => Right(())
   }
+
+  private def _tree_entries(text: String, paths: Vector[GitPath], oidlength: Int): Either[String, Vector[GitSelectedTreeEntry]] = for {
+    fields <- _nul_fields(text)
+    _ <- Either.cond(fields.size <= paths.size, (), "Unexpected Git tree-entry count")
+    entries <- _sequence(fields.map { row =>
+      val tab = row.indexOf('\t')
+      if (tab < 0) Left("Missing Git tree-entry separator")
+      else {
+        val header = row.take(tab).split(" ", -1)
+        for {
+          _ <- Either.cond(header.length == 3 && Set("100644", "100755").contains(header(0)) &&
+            header(1) == "blob", (), "Unsupported Git tree-entry metadata")
+          blob <- _oid(header(2))
+          _ <- Either.cond(blob.value.length == oidlength && !blob.value.forall(_ == '0'), (), "Invalid Git tree-entry object ID")
+          path <- _path(row.drop(tab + 1))
+          _ <- Either.cond(paths.contains(path), (), "Unexpected Git tree-entry path")
+        } yield path -> GitRegularTreeEntry(header(0), blob)
+      }
+    })
+    _ <- Either.cond(entries.map(_._1).distinct.size == entries.size, (), "Duplicate Git tree-entry path")
+    present = entries.toMap
+  } yield paths.map(path => GitSelectedTreeEntry(path, present.get(path)))
 
   private def _status(text: String): Either[String, Vector[GitStatusEntry]] = _nul_fields(text).flatMap { fields =>
     @scala.annotation.tailrec
