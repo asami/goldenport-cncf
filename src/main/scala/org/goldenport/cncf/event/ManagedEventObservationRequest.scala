@@ -9,7 +9,7 @@ import org.goldenport.cncf.workflow.WorkflowEventSelection
 /** Frozen lookup facts; only an opaque DataStoreSpace invocation grants reads.
   * Expansion is deterministic and bounded, never a caller transaction callback.
   * @since   Sep. 30, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 26, 2026
   */
 private[cncf] final class ManagedEventObservationRequest private (
   val policyRevision: String,
@@ -58,10 +58,8 @@ private[cncf] final class ManagedEventObservationRequest private (
 
   private def eventFacts(rows: Rows): Vector[(String, EventRecord)] = rows.collect {
     case (target, Some(row)) if target.collection == policy.eventCollection =>
-      require(row.fields.size == 1 && row.fields.head.key == "event_json", "Unknown event fields")
+      val event = admitted(EventHistoryCorrelation.admitStoredRowC(row))
       val bytes = row.getString("event_json").getOrElse(throw new IllegalArgumentException("Missing event envelope"))
-      val event = admitted(if (bytes.startsWith("cncf.event-record.v1:")) EventRecordJsonV1.decodeStorageC(bytes)
-        else EventRecordJsonV2.decodeStorageC(bytes))
       require(eventTarget(event.id) == target, "Event physical identity differs from envelope")
       bytes -> event
   }

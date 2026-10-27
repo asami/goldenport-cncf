@@ -4,7 +4,7 @@ import org.goldenport.{Conclusion, Consequence}
 
 /*
  * @since   Jul. 20, 2026
- * @version Jul. 20, 2026
+ * @version Oct. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ServiceContainerResolution {
@@ -32,6 +32,14 @@ final case class ServiceContainerCleanupOutcome(
 )
 
 abstract class ServiceContainerRuntime {
+  /** Read facet only; neither a missing definition nor an observation starts lifecycle work. */
+  private[cncf] def observationDefinitionC(key: ServiceContainerRegistryKey):
+      Consequence[ServiceContainerDefinition.RuntimeOwned] =
+    Consequence.serviceUnavailable("Read-only service ownership is unavailable")
+
+  private[cncf] def validateDeploymentObservationC(key: ServiceContainerRegistryKey, value: io.circe.Json): Consequence[Unit] =
+    Consequence.serviceUnavailable("Read-only deployment compatibility is unavailable")
+
   private[cncf] def configuredDockerExecutable: Option[String] = None
 
   def resolveC(
@@ -65,6 +73,33 @@ final class DefaultServiceContainerRuntime(
   registry: ServiceContainerRegistry,
   gateway: ServiceContainerGateway
 ) extends ServiceContainerRuntime {
+  override private[cncf] def observationDefinitionC(key: ServiceContainerRegistryKey):
+      Consequence[ServiceContainerDefinition.RuntimeOwned] =
+    registry.get(key).fold[Consequence[ServiceContainerDefinition.RuntimeOwned]](
+      Consequence.securityPermissionDenied("Observed service is not registered to the selected owner")
+    )(entry => Consequence.success(entry.definition))
+
+  override private[cncf] def validateDeploymentObservationC(key: ServiceContainerRegistryKey, value: io.circe.Json): Consequence[Unit] =
+    observationDefinitionC(key).flatMap { definition =>
+      val cursor = value.hcursor
+      val decoded = for {
+        id <- cursor.get[String]("Id").toOption.flatMap(ServiceContainerInstanceId.parseC(_).toOption)
+        image <- cursor.get[String]("Image").toOption.flatMap(ServiceContainerImage.parseC(_).toOption)
+        labels <- cursor.get[Map[String, String]]("Labels").toOption
+        ports <- cursor.get[Vector[io.circe.Json]]("Ports").toOption
+        numbers <- ports.foldLeft(Option(Set.empty[Int])) { (prior, port) => for {
+          xs <- prior
+          number <- port.hcursor.get[Int]("PrivatePort").toOption
+          _ <- port.hcursor.get[String]("Type").toOption.filter(_ == "tcp")
+        } yield xs + number }
+        if numbers == definition.ports.map(_.containerPort).toSet
+        if definition.ports.forall(port => labels.get("org.goldenport.cncf.port." + port.name.print).contains(port.containerPort.toString))
+      } yield ServiceContainerInspection(id, key, image, definition.ports,
+        ServiceContainerOwnershipLabels.observed(labels), ServiceContainerStatus.Starting, None)
+      decoded.fold[Consequence[Unit]](Consequence.securityPermissionDenied("Invalid live deployment ownership or definition"))(
+        inspection => ServiceContainerCompatibility.requireCompatibleC(definition, inspection).map(_ => ()))
+    }
+
   override private[cncf] def configuredDockerExecutable: Option[String] =
     gateway match {
       case x: DockerServiceContainerGateway => x.configuredExecutable

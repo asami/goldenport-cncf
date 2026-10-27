@@ -60,7 +60,7 @@ import org.simplemodeling.model.directive.Update
  *  version May. 11, 2026
  *  version Aug.  1, 2026
  *  version Sep. 19, 2026
- * @version Oct. 24, 2026
+ * @version Oct. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -291,6 +291,11 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
             .flatMap(dispatcher.admitResultC(request, _))
         }
       }
+
+    case UnitOfWorkOp.ReadOperationalObservations(limit) =>
+      val capability = uow.executionContext.cncfCore.scope.operationalObservationRuntimeOption
+        .getOrElse(org.goldenport.cncf.operationalobservation.OperationalObservationRuntime.unconfigured)
+      capability.readC(limit, uow.executionContext, _step)
 
     case UnitOfWorkOp.HttpGet(path, headers, properties) =>
       _with_calltree("uow:http:get") {

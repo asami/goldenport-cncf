@@ -15,7 +15,7 @@ import org.goldenport.cncf.servicecontainer.{
 
 /*
  * @since   Jul. 20, 2026
- * @version Jul. 20, 2026
+ * @version Oct. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 object ServiceContainerRuntimeObservation {
@@ -35,6 +35,12 @@ object ServiceContainerRuntimeObservation {
     runtime: ServiceContainerRuntime,
     context: ExecutionContext
   ) extends ServiceContainerRuntime {
+    override private[cncf] def observationDefinitionC(key: ServiceContainerRegistryKey):
+        Consequence[ServiceContainerDefinition.RuntimeOwned] = runtime.observationDefinitionC(key)
+
+    override private[cncf] def validateDeploymentObservationC(key: ServiceContainerRegistryKey, value: io.circe.Json): Consequence[Unit] =
+      runtime.validateDeploymentObservationC(key, value)
+
     override private[cncf] def configuredDockerExecutable: Option[String] =
       runtime.configuredDockerExecutable
 

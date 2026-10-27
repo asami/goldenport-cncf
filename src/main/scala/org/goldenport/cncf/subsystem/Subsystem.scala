@@ -80,7 +80,7 @@ import org.goldenport.bag.Bag
  *  version Apr. 30, 2026
  *  version Aug. 15, 2026
  *  version Sep.  8, 2026
- * @version Oct. 25, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -183,6 +183,13 @@ final class Subsystem(
   private var _resolved_security_wiring: ResolvedSecurityWiring = ResolvedSecurityWiring.empty
   private var _controlled_test_execution: Boolean = false
   private var _runtime_configuration_bindings: Option[ConfigurationBindingCollection[CncfConfigurationTarget]] = None
+  private var _operational_observation_runtime =
+    Option.empty[org.goldenport.cncf.operationalobservation.OperationalObservationRuntime]
+
+  private[cncf] def operationalObservationRuntimeOption:
+      Option[org.goldenport.cncf.operationalobservation.OperationalObservationRuntime] = synchronized {
+    _operational_observation_runtime
+  }
   private var _runtime_operation_security_policy: Option[RuntimeOperationSecurityPolicy] = None
   private var _runtime_execution_profile_configuration: Option[RuntimeExecutionProfileConfiguration] = None
   private var _durable_job_configuration = JobDurableRuntimeConfiguration.default
@@ -256,11 +263,17 @@ final class Subsystem(
         policy <- RuntimeOperationSecurityPolicy.from(bindings)
         executionprofile <- RuntimeExecutionProfileConfiguration.from(bindings)
         durable <- JobDurableRuntimeConfiguration.from(bindings)
+        observations <- bindings.binding(CncfConfigurationParameterCatalog.subsystemOperationalObservationPlan).flatMap {
+          case None => Consequence.success(None)
+          case Some(_) => org.goldenport.cncf.config.SubsystemInstanceId.default(name).flatMap(
+            org.goldenport.cncf.config.SubsystemOperationalObservationConfiguration.admitC(bindings, _))
+        }
       } yield {
         _runtime_configuration_bindings = Some(bindings)
         _runtime_operation_security_policy = Some(policy)
         _runtime_execution_profile_configuration = Some(executionprofile)
         _durable_job_configuration = durable
+        _operational_observation_runtime = observations
       }
   }
 
@@ -940,6 +953,19 @@ final class Subsystem(
   private[cncf] def bindEventHistoryC(context: ExecutionContext):
       Consequence[org.goldenport.cncf.event.ManagedEventHistory] =
     _event_store_history_binding.bindC(context)
+
+  /** Only the explicit trusted bootstrap installs infrastructure. The provider
+    * borrows this same admitted lease; ordinary reads never initialize storage.
+    */
+  private[cncf] def _initialize_event_storage_c(
+    environment: org.goldenport.cncf.datastore.ComponentDataStore.Environment
+  )(using org.goldenport.cncf.context.ExecutionContext):
+      Consequence[org.goldenport.cncf.event.EventCursorRecordV1] =
+    _with_event_cursor_store_c(environment) { (declaration, store) => store match {
+      case sql: org.goldenport.cncf.datastore.sql.SqlDataStore =>
+        sql._initialize_event_storage_c(declaration)
+      case _ => Consequence.configurationInvalid("EventStore installation requires borrowed managed SQLite")
+    }}
 
   /** Explicit trusted bootstrap only. Duplicate Create fails; never reset/upsert. */
   private[cncf] def initializeEventCursorC(

@@ -9,7 +9,7 @@ import org.simplemodeling.model.datatype.EntityRevision
 /** Live host-bound, immutable observation handoff. Not permission to publish.
   * No mutable Record or input EventRecord is used as validation authority.
   * @since   Sep. 30, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 26, 2026
   */
 private[cncf] final class ManagedEventPreparation private[ManagedEventPreparation] (
   private val invocation: DataStoreSpace.ObservationInvocation,
@@ -83,10 +83,10 @@ private[cncf] final class ManagedEventPreparation private[ManagedEventPreparatio
         Consequence.success(Vector.empty)) { case (acc, event) => acc.flatMap { creates =>
         // Preserve the hidden key through the canonical codec, not source input.
         EventRecordJsonV2.decodeStorageC(EventRecordJsonV2.encodeStorage(event)).flatMap { canonical =>
-          EventDeliveryIndexRecordV1.prepareCreateC(invocation.policy.indexCollection, canonical).map { index =>
-            creates ++ Vector(EntityVersionedSideEffect.Create(invocation.policy.eventCollection,
-              DataStore.StringEntryId(canonical.id.value), Record.dataAuto("event_json" -> EventRecordJsonV2.encodeStorage(canonical)))) ++ index.toVector
-          }
+          for {
+            effect <- EventRecordJsonV2.createSideEffectC(invocation.policy.eventCollection, canonical)
+            index <- EventDeliveryIndexRecordV1.prepareCreateC(invocation.policy.indexCollection, canonical)
+          } yield creates ++ Vector(effect) ++ index.toVector
         }
       }}
       owner <- DataStoreComponentOwner.create(EventStorePersistenceDeclaration.serviceId.name)
@@ -114,7 +114,8 @@ private[cncf] object ManagedEventPreparation {
       "revision" -> revision, "last_sequence" -> sequence.toString)
   }
   private final case class Envelope(bytes: String) extends Fact {
-    def toRecord: Record = Record.dataAuto("event_json" -> bytes)
+    def toRecord: Record = EventHistoryCorrelation.storedRowC(bytes).toOption.getOrElse(
+      throw new IllegalStateException("Previously admitted canonical event cannot be reconstructed"))
   }
   private final case class Index(key: String, reference: String, sequence: String, digest: String) extends Fact {
     def toRecord: Record = Record.dataAuto("index_schema" -> EventDeliveryIndexRecordV1.schema,
@@ -150,11 +151,8 @@ private[cncf] object ManagedEventPreparation {
           val cursor = admitted(EventCursorRecordV1.decodeC(row))
           Cursor(cursor.revision, cursor.lastSequence)
         } else if (target.collection == policy.eventCollection) {
-          require(row.fields.size == 1 && row.fields.head.key == "event_json")
-          val bytes = text(row, "event_json")
-          admitted(if (bytes.startsWith("cncf.event-record.v1:")) EventRecordJsonV1.decodeStorageC(bytes)
-            else EventRecordJsonV2.decodeStorageC(bytes))
-          Envelope(bytes)
+          admitted(EventHistoryCorrelation.admitStoredRowC(row))
+          Envelope(text(row, "event_json"))
         } else if (target.collection == policy.indexCollection) {
           admitted(EventDeliveryIndexRecordV1.decodeC(row))
           Index(text(row, "lookup_key"), text(row, "event_reference"), text(row, "sequence"),

@@ -41,12 +41,15 @@ import org.goldenport.cncf.workspace.{FilePrepareDirectoryResult, FileReadBytesR
  *  version Apr. 29, 2026
  *  version May.  4, 2026
  *  version Jul. 26, 2026
- * @version Oct. 21, 2026
+ * @version Oct. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
 
 object UnitOfWorkOp {
+  final case class ReadOperationalObservations(limit: Int = 50)
+    extends UnitOfWorkOp[org.goldenport.cncf.operationalobservation.OperationalObservationSnapshot]
+
   /** Unit means declarative intent accepted, never physical write completed.
     * Only the managed closing preparation interpreter admits this operation.
     */

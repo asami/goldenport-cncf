@@ -7,7 +7,7 @@ import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.component.ComponentId
-import org.goldenport.cncf.context.{ExecutionContext, SecurityContext}
+import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind, SecurityContext}
 import org.goldenport.cncf.datastore.{ComponentDataStore, DataStore}
 import org.goldenport.cncf.event.*
 import org.goldenport.cncf.testutil.TestComponentFactory
@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /** Normal captured declaration, authority and dispatch lease boundaries.
   * @since   Oct. 25, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 27, 2026
   */
 final class EventStoreHistoryBindingSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _context = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
@@ -46,6 +46,69 @@ final class EventStoreHistoryBindingSpec extends AnyWordSpec with Matchers with 
   private def _configuration(path: Path) = ResolvedConfiguration(Configuration(Map(
     "textus.datastore.kind" -> ConfigurationValue.StringValue("sqlite"),
     "textus.datastore.path" -> ConfigurationValue.StringValue(path.toString))), ConfigurationTrace.empty)
+
+  private def _bootstrap(path: Path): SubsystemEventStoreBootstrap = {
+    val policy = _take(EventPersistencePolicy.createC("history-first-install-v1", Vector(
+      EventPersistencePolicy.Rule(EventTypeId("fact"), EventPersistencePolicy.Mode.Persist))))
+    _take(SubsystemEventStoreBootstrap.createC(policy, _declaration,
+      ScopeContext(ScopeKind.Subsystem, "history-first-install", None, _context.observability), _configuration(path)))
+  }
+
+  "Explicit EventStore first installation" should afterWord(
+    "spec:managed-event-history example:E1 rules:R1,R2,R4,R5 phase:5.1") {
+    "expose empty history and retain the initial cursor across duplicate calls and normal reopen" in {
+      Given("Spec: docs/spec/managed-event-history.md; Rules: R1,R2,R4,R5; Example: E1; a fresh managed host")
+      val path = _database
+      given ExecutionContext = _context
+      val first = _bootstrap(path)
+      try {
+        When("the trusted public bootstrap explicitly installs its captured storage")
+        val cursor = _take(first.initializeStorageC())
+        Then("only the real initial cursor exists and normal history is a complete empty retained window")
+        cursor.revision shouldBe 1L
+        cursor.lastSequence shouldBe 0L
+        _take(first.subsystem._with_managed_datastore_lease_c { _ =>
+          first.subsystem.bindEventHistoryC(_context).flatMap(_.readC(_query)).map { snapshot =>
+            snapshot.events shouldBe empty
+            snapshot.truncated shouldBe false
+          }
+        })
+        first.initializeStorageC().isSuccess shouldBe false
+        first.initializeCursorC().isSuccess shouldBe false
+        _take(first.subsystem.loadEventCursorC(ComponentDataStore.Environment(
+          _context.runtime.resolvedParameters, Some(first.subsystem.configuration)))).revision shouldBe 1L
+      } finally _take(first.shutdownC())
+      When("a new public host reopens the retained database without installation")
+      val reopened = _bootstrap(path)
+      try {
+        val environment = ComponentDataStore.Environment(_context.runtime.resolvedParameters, Some(reopened.subsystem.configuration))
+        Then("the cursor remains unchanged and another first-install attempt is refused")
+        _take(reopened.subsystem.loadEventCursorC(environment)).lastSequence shouldBe 0L
+        reopened.initializeStorageC().isSuccess shouldBe false
+        _take(reopened.subsystem._with_managed_datastore_lease_c { _ =>
+          reopened.subsystem.bindEventHistoryC(_context).flatMap(_.readC(_query)).map(_.events shouldBe empty)
+        })
+      } finally _take(reopened.shutdownC())
+    }
+
+    "preserve the legacy cursor-only initializer without implicitly upgrading its existing database" in {
+      Given("Spec: docs/spec/managed-event-history.md; Rules: R2,R5; Example: E1; an explicitly cursor-only host")
+      given ExecutionContext = _context
+      val host = _bootstrap(_database)
+      try {
+        val initial = _take(host.initializeCursorC())
+        When("full installation or history is requested against that retained cursor-only database")
+        val rejected = host.initializeStorageC()
+        val history = _take(host.subsystem._with_managed_datastore_lease_c(_ =>
+          host.subsystem.bindEventHistoryC(_context).map(_.readC(_query))))
+        Then("neither call repairs schema and the legacy cursor is not reset")
+        rejected.isSuccess shouldBe false
+        history.isSuccess shouldBe false
+        _take(host.subsystem.loadEventCursorC(ComponentDataStore.Environment(
+          _context.runtime.resolvedParameters, Some(host.subsystem.configuration)))).revision shouldBe initial.revision
+      } finally _take(host.shutdownC())
+    }
+  }
 
   "EventStore history binding" should {
     "deny missing authority, declaration and active lease before resource resolution" in {

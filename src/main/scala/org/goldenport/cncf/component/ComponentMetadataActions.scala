@@ -56,7 +56,7 @@ import org.goldenport.schema.{DataType, XString}
 
 /*
  * @since   Sep. 28, 2026
- * @version Sep. 28, 2026
+ * @version Oct. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 private[component] trait ComponentMetadataActions { self: Component.type =>
@@ -76,7 +76,8 @@ private[component] trait ComponentMetadataActions { self: Component.type =>
     val withmetaversion = _ensure_operation(withmetastatemachine, _default_meta_service_name, DefaultMetaVersionOperation)
     val withsystemping = _ensure_operation(withmetaversion, _default_system_service_name, DefaultSystemPingOperation)
     val withsystemhealth = _ensure_operation(withsystemping, _default_system_service_name, DefaultSystemHealthOperation)
-    _ensure_operation(withsystemhealth, _default_system_service_name, DefaultSystemStatusOperation)
+    val withsystemstatus = _ensure_operation(withsystemhealth, _default_system_service_name, DefaultSystemStatusOperation)
+    _ensure_operation(withsystemstatus, _default_system_service_name, DefaultSystemOperationalObservationsOperation)
   }
 
   private def _ensure_operation(
@@ -95,6 +96,56 @@ private[component] trait ComponentMetadataActions { self: Component.type =>
         services = protocol.services.addOperation(servicename, operation)
       )
     }
+  }
+
+  private object DefaultSystemOperationalObservationsOperation extends OperationDefinition
+      with org.goldenport.cncf.security.OperationAuthorizationProvider {
+    override val specification: OperationDefinition.Specification = OperationDefinition.Specification(
+      name = "operationalObservations",
+      request = org.goldenport.protocol.spec.RequestDefinition(parameters = List(
+        org.goldenport.protocol.spec.ParameterDefinition(
+          content = org.goldenport.value.BaseContent.simple("limit"),
+          kind = org.goldenport.protocol.spec.ParameterDefinition.Kind.Property,
+          domain = org.goldenport.schema.ValueDomain(org.goldenport.schema.XInteger, org.goldenport.schema.Multiplicity.ZeroOne)))),
+      response = org.goldenport.protocol.spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+
+    def operationAuthorization(policy: org.goldenport.cncf.config.RuntimeOperationSecurityPolicy):
+        org.goldenport.cncf.security.OperationAuthorizationRule =
+      org.goldenport.cncf.security.OperationAuthorizationRule(requireAuthenticated = true)
+
+    override def createOperationRequest(req: Request): Consequence[OperationRequest] = {
+      val entries = req.arguments.map(x => x.name -> x.value) ++ req.properties.map(x => x.name -> x.value)
+      val valid = req.switches.isEmpty && entries.forall(_._1 == "limit") && entries.size <= 1
+      val limit = entries.headOption.fold(Option(50)) { case (_, value) => value match {
+        case x: String if x.matches("[0-9]+") => x.toIntOption
+        case x: Byte => Some(x.toInt)
+        case x: Short => Some(x.toInt)
+        case x: Int => Some(x)
+        case x: Long if x >= 1 && x <= 100 => Some(x.toInt)
+        case x: BigInt if x.isValidInt => Some(x.toInt)
+        case _ => None
+      }}.filter(x => x >= 1 && x <= 100)
+      if (valid && limit.nonEmpty) Consequence.success(DefaultSystemOperationalObservationsAction(req, limit.get))
+      else Consequence.operationInvalid("operationalObservations accepts only one integral limit from 1 to 100")
+    }
+  }
+
+  private final case class DefaultSystemOperationalObservationsAction(request: Request, limit: Int) extends QueryAction {
+    override def createCall(core: ActionCall.Core): ActionCall = DefaultSystemOperationalObservationsActionCall(core, limit)
+  }
+
+  private final case class DefaultSystemOperationalObservationsActionCall(core: ActionCall.Core, limit: Int)
+      extends ProcedureActionCall {
+    override def execute(): Consequence[OperationResponse] =
+      executeProgram(operational_observations(limit)).flatMap { value =>
+        value.jsonC match {
+          case Consequence.Success(text) => io.circe.parser.parse(text).fold(
+            _ => Consequence.operationInvalid("Operational observations could not encode their fixed JSON contract"),
+            json => Consequence.success(OperationResponse.Json(json)))
+          case Consequence.Failure(_) =>
+            Consequence.operationInvalid("Operational observations could not encode their fixed JSON contract")
+        }
+      }
   }
 
   private object DefaultMetaHelpOperation extends OperationDefinition {

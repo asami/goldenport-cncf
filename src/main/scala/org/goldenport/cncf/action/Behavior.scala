@@ -6,7 +6,7 @@ import org.goldenport.cncf.context.{CorrelationId, ExecutionContext}
 /*
  * @since   Mar. 30, 2026
  *  version Jul. 23, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Behavior
@@ -16,6 +16,7 @@ trait Behavior
   with BehaviorProcessExecutionPart
   with BehaviorFileExecutionPart
   with BehaviorInformationPart
+  with BehaviorOperationalObservationPart
 
 object Behavior {
   final case class Core(

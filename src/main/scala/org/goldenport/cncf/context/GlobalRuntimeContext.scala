@@ -21,7 +21,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Mar. 28, 2026
  *  version Apr. 11, 2026
  *  version Jul. 30, 2026
- * @version Oct. 16, 2026
+ * @version Oct. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GlobalRuntimeContext(
@@ -116,7 +116,8 @@ object GlobalRuntimeContext {
     processdriver: Option[ProcessExecutionDriver] = None,
     processadmission: Option[ProcessExecutionAdmission] = None,
     workspaceAdmission: Option[WorkspaceExecutionAdmission] = None,
-    httpAdmission: Option[HttpExecutionAdmission] = None
+    httpAdmission: Option[HttpExecutionAdmission] = None,
+    operationalObservation: Option[org.goldenport.cncf.operationalobservation.OperationalObservationRuntime] = None
   ): GlobalRuntimeContext = {
     val core = ScopeContext.Core(
       ScopeKind.Runtime, // Global
@@ -129,7 +130,8 @@ object GlobalRuntimeContext {
       processExecutionDriverOption = processdriver,
       processExecutionAdmissionOption = processadmission,
       workspaceExecutionAdmissionOption = workspaceAdmission,
-      httpExecutionAdmissionOption = httpAdmission
+      httpExecutionAdmissionOption = httpAdmission,
+      operationalObservationRuntimeOption = operationalObservation
     )
     GlobalRuntimeContext(
       core,

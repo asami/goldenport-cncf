@@ -1,6 +1,44 @@
 # Managed Event History Binding
 
-2026-10-25. Follow the [specification](../spec/managed-event-history.md).
+2026-10-27. Follow the [specification](../spec/managed-event-history.md).
+
+## Explicit managed first installation
+
+The trusted `SubsystemEventStoreBootstrap.initializeStorageC` is separate from
+its retained cursor-only initializer. Subsystem passes only its captured
+EventStore declaration through the existing managed dispatch lease and verified
+SQLite view to a narrow internal SqlDataStore initializer. No caller-supplied
+schema, raw store or replacement owner escapes this boundary.
+
+The initializer reuses the existing conditional transaction/lifecycle machinery:
+validate all fixed existing schemas and empty collections before writes; create
+only missing tables; insert and decode the genuine initial cursor on that same
+connection; revalidate admission before commit. Fixed column/type witnesses use
+the existing dialect renderer without constructing a sample Record or Event.
+Schema checks include the primary key, SQLite affinities, nullable non-key
+fields and absence of synthesized defaults, with no automatic column repair.
+Existing cursor data, including a cursor-only legacy install,
+orphan events/indexes and incompatible schema are rejected without migration.
+Precommit rollback, commit uncertainty and competing writers use the existing
+native transaction outcomes. No automatic retry is introduced.
+
+The cursor table holds cursor_schema/text, revision/integer and
+last_sequence/text; the events table holds event_json/text and the four generic
+history columns (sequence/integer, other fields/text); the delivery-index table
+holds its five canonical text fields. Each table has the existing text primary
+key id. Nullable history columns do not change uncorrelated logical Records:
+the existing JDBC codec omits SQL NULL values. Events/indexes have zero rows
+after initialization, and only genuine persistent publication advances cursor.
+
+The normal host chain prepares infrastructure once, imports only genuine
+selected business inputs, performs public Start, closes and reopens normally,
+then reads native state/history. Workflow instance/continuation storage is
+materialized by actual Start/checkpoint writes. Declaration of additional record
+grants does not request eager provisioning; Development observation is not a
+new physical collection and history uses the same EventStore projection.
+Reopen never invokes initialization, and read paths retain missing-schema
+rejection with no CREATE/ALTER. The existing first-install duplicate check,
+authorization and node shutdown ownership remain unchanged.
 
 `EventHistoryCorrelation` validates only an opaque namespace/key and creates a
 generic same-row projection. EventRecordJsonV1/V2 append that projection during

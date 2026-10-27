@@ -12,12 +12,20 @@ import org.goldenport.configuration.ResolvedConfiguration
   * The returned host owns one fixed EventStore policy and storage declaration.
   * Neither raw datastore views nor claim tokens escape this boundary.
   * @since   Oct.  1, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 27, 2026
   */
 final class SubsystemEventStoreBootstrap private (
   val subsystem: Subsystem,
   ownsNode: Boolean
 ) {
+  /** Explicit full first installation of the captured EventStore infrastructure.
+    * Creates empty event/index tables and the genuine initial cursor together.
+    * Existing installations are refused; normal reopen never calls this method.
+    */
+  def initializeStorageC()(using context: ExecutionContext): Consequence[EventCursorRecordV1] =
+    subsystem._initialize_event_storage_c(ComponentDataStore.Environment(
+      context.runtime.resolvedParameters, Some(subsystem.configuration)))
+
   /** Explicit first-install operation. It never resets an existing cursor;
     * restart opens the existing host without invoking initialization again.
     */

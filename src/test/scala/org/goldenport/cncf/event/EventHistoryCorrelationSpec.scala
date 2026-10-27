@@ -2,6 +2,7 @@ package org.goldenport.cncf.event
 
 import java.time.Instant
 import org.goldenport.Consequence
+import org.goldenport.record.Record
 import org.goldenport.cncf.datastore.DataStore
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
@@ -10,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /** Generic producers share metadata without sharing payload semantics.
   * @since   Oct. 25, 2026
-  * @version Oct. 25, 2026
+  * @version Oct. 26, 2026
   */
 final class EventHistoryCorrelationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _time = Instant.parse("2026-10-25T00:00:00Z")
@@ -73,6 +74,57 @@ final class EventHistoryCorrelationSpec extends AnyWordSpec with Matchers with G
       rejected.foreach(_ shouldBe false)
       EventHistoryCorrelation.projectC(original.copy(sequence = 0L)).isSuccess shouldBe false
       EventHistoryCorrelation.projectC(original.copy(persistent = false)).isSuccess shouldBe false
+    }
+
+    "admit and reconstruct complete canonical V1 and V2 rows without re-encoding their original bytes" in {
+      Given("correlated and uncorrelated committed facts in both supported storage formats")
+      val correlated = _event("sample.orders.v1", "one", Map("value" -> "original"))
+      val events = Vector(correlated, correlated.copy(attributes = Map.empty))
+      val bytes = events.flatMap(event => Vector(EventRecordJsonV1.encodeStorage(event), EventRecordJsonV2.encodeStorage(event)))
+        .map { encoded =>
+          val boundary = encoded.indexOf(':') + 1
+          encoded.take(boundary) + io.circe.parser.parse(encoded.drop(boundary)).toOption.get.spaces2
+        }
+      When("the shared stored-row boundary reconstructs and admits the exact complete rows")
+      val rows = bytes.map(value => _take(EventHistoryCorrelation.storedRowC(value)))
+      val admitted = rows.map(row => _take(EventHistoryCorrelation.admitStoredRowC(row)))
+      Then("each canonical envelope byte is retained and correlated metadata is complete rather than stripped")
+      rows.zip(bytes).foreach { case (row, encoded) =>
+        row.getString("event_json") shouldBe Some(encoded)
+        _take(EventHistoryCorrelation.storedRowC(row.getString("event_json").get)).fields shouldBe row.fields
+      }
+      admitted.map(_.attributes) shouldBe Vector(correlated.attributes, correlated.attributes, Map.empty, Map.empty)
+      rows.map(_.fields.size) shouldBe Vector(5, 5, 1, 1)
+    }
+
+    "refuse missing, null, partial, changed, extra or duplicate history metadata in a canonical stored row" in {
+      Given("one valid canonical correlated row and field-level corruptions of that retained fact")
+      val event = _event("sample.orders.v1", "one", Map.empty)
+      val row = _take(EventRecordJsonV2.createSideEffectC(_collection, event)).record
+      def _replace_(name: String, value: Any): Record =
+        Record(row.fields.filterNot(_.key == name) ++ Record.dataAuto(name -> value).fields)
+      val invalid = Vector(
+        Record(row.fields.filter(_.key == "event_json")),
+        Record(row.fields.filterNot(_.key == EventHistoryCorrelation.sequenceField)),
+        _replace_(EventHistoryCorrelation.namespaceField, null),
+        _replace_(EventHistoryCorrelation.keyField, null),
+        _replace_(EventHistoryCorrelation.nameField, null),
+        _replace_(EventHistoryCorrelation.sequenceField, null),
+        _replace_(EventHistoryCorrelation.namespaceField, "foreign.namespace"),
+        _replace_(EventHistoryCorrelation.keyField, "other"),
+        _replace_(EventHistoryCorrelation.nameField, "other"),
+        _replace_(EventHistoryCorrelation.sequenceField, event.sequence - 1L),
+        Record(row.fields ++ Record.dataAuto("unexpected" -> "field").fields),
+        Record(row.fields ++ row.fields.filter(_.key == "event_json")),
+        Record(row.fields ++ row.fields.filter(_.key == EventHistoryCorrelation.keyField)),
+        _replace_("event_json", "unsupported.event-record.v3:{}"),
+        _replace_("event_json", "cncf.event-record.v2:{invalid"))
+      When("the same shared admission boundary receives each malformed full row")
+      val results = invalid.map(EventHistoryCorrelation.admitStoredRowC)
+      Then("none becomes an admitted event by ignoring metadata or falling back to another format")
+      results.foreach(_.isSuccess shouldBe false)
+      EventHistoryCorrelation.storedRowC("unsupported.event-record.v3:{}").isSuccess shouldBe false
+      EventHistoryCorrelation.storedRowC(null).isSuccess shouldBe false
     }
 
     "preserve arbitrary opaque correlations and arbitrary supported producer payloads" in {

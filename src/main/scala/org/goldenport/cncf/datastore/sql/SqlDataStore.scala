@@ -9,7 +9,7 @@ import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.record.{Field, Record}
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.event.{EventHistoryCorrelation, ManagedEventHistory}
+import org.goldenport.cncf.event.{EventCursorRecordV1, EventHistoryCorrelation, EventStorePersistenceDeclaration, ManagedEventHistory}
 import org.goldenport.cncf.datastore.{
   DataStore,
   DataStoreSpace,
@@ -87,7 +87,7 @@ import org.simplemodeling.model.directive.Update
  *  version May. 26, 2026
  *  version Jul. 26, 2026
  *  version Sep. 29, 2026
- * @version Oct. 25, 2026
+ * @version Oct. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -133,6 +133,104 @@ class SqlDataStore(
 
   private[cncf] def managedResourceOption: Option[ManagedSqlDataStoreResource] =
     _managed_borrow_resource.orElse(_managed_resource)
+
+  /** Narrow first-install path, reached only through the trusted captured host.
+    * Fixed schemas and a real initial cursor share the existing transaction.
+    * No exemplar Record/Event, arbitrary schema or observation-time DDL.
+    */
+  private[cncf] def _initialize_event_storage_c(
+    declaration: EventStorePersistenceDeclaration
+  )(using ExecutionContext): Consequence[EventCursorRecordV1] =
+    if (declaration == null || dialect.name != SqliteDialectDriver.name ||
+        _managed_borrow_resource.isEmpty || _managed_borrow_admission.isEmpty)
+      Consequence.configurationInvalid("EventStore installation requires captured authority and borrowed managed SQLite")
+    else _with_conditional_transition { connection =>
+      val schemas = _event_storage_schemas(declaration)
+      for {
+        _ <- _managed_borrow_admission.get.apply()
+        // Complete validation precedes every CREATE/INSERT, including tables
+        // that happen to exist from an earlier empty schema installation.
+        _ <- schemas.foldLeft(Consequence.unit) { case (previous, (collection, columns)) =>
+          previous.flatMap(_ => _validate_event_storage_schema(connection, collection, columns))
+        }
+        _ <- schemas.foldLeft(Consequence.unit) { case (previous, (collection, columns)) =>
+          previous.flatMap(_ => _managed_borrow_admission.get.apply()).flatMap(_ => _table_exists(connection, collection).flatMap {
+            case true => Consequence.unit
+            case false => _create_table(connection, collection, columns)
+          })
+        }
+        _ <- _managed_borrow_admission.get.apply()
+        _ <- _insert(connection, declaration.cursorCollection, declaration.cursorEntryId,
+          _record_columns(EventCursorRecordV1.initial.toRecord))
+        physical <- _select(connection, declaration.cursorCollection, declaration.cursorEntryId)
+        cursor <- physical match {
+          case Some(record) if record.fields.count(_.key == "id") == 1 &&
+              record.getString("id").contains(declaration.cursorEntryId.print) =>
+            EventCursorRecordV1.decodeC(Record(record.fields.filterNot(_.key == "id")))
+          case _ => Consequence.stateConflict("EventStore initial cursor readback differs from its declared identity")
+        }
+        _ <- if (cursor.revision == 1L && cursor.lastSequence == 0L) Consequence.unit
+          else Consequence.stateConflict("EventStore initial cursor readback differs from the initial state")
+        _ <- _managed_borrow_admission.get.apply()
+      } yield cursor
+    }
+
+  private def _event_storage_schemas(declaration: EventStorePersistenceDeclaration):
+      Vector[(CollectionId, Vector[(String, Any)])] = Vector(
+    declaration.cursorCollection -> Vector("cursor_schema" -> "", "revision" -> 0L, "last_sequence" -> ""),
+    declaration.eventCollection -> Vector("event_json" -> "", EventHistoryCorrelation.namespaceField -> "",
+      EventHistoryCorrelation.keyField -> "", EventHistoryCorrelation.nameField -> "",
+      EventHistoryCorrelation.sequenceField -> 0L),
+    declaration.deliveryIndexCollection -> Vector("index_schema" -> "", "lookup_key" -> "",
+      "event_reference" -> "", "sequence" -> "", "event_body_digest" -> ""))
+
+  /** Type witnesses are schema descriptions only, never inserted sample data.
+    * Reuse requires the exact columns/affinities and text primary key; no ALTER.
+    */
+  private def _validate_event_storage_schema(connection: Connection, collection: CollectionId,
+      columns: Vector[(String, Any)]): Consequence[Unit] =
+    _table_exists(connection, collection).flatMap {
+      case false => Consequence.unit
+      case true => for {
+        metadata <- Consequence {
+          val statement = connection.createStatement()
+          try {
+            val rows = statement.executeQuery(dialect.tableColumnsSql(_table_name(collection)))
+            val values = Vector.newBuilder[(String, String, Int, Int, Option[String])]
+            try while (rows.next()) values += ((rows.getString("name"), rows.getString("type"), rows.getInt("pk"),
+              rows.getInt("notnull"), Option(rows.getString("dflt_value"))))
+            finally rows.close()
+            values.result()
+          } finally statement.close()
+        }
+        _ <- {
+          def _affinity_(value: String): String = {
+            val datatype = value.toUpperCase(java.util.Locale.ROOT)
+            if (datatype.contains("INT")) "INTEGER"
+            else if (Vector("CHAR", "CLOB", "TEXT").exists(datatype.contains)) "TEXT"
+            else "OTHER"
+          }
+          val expected = Vector(("id", "TEXT", 1)) ++ columns.map { case (name, value) =>
+            (name, if (value.isInstanceOf[Long]) "INTEGER" else "TEXT", 0)
+          }
+          val actual = metadata.map { case (name, datatype, primarykey, _, _) => (name, _affinity_(datatype), primarykey) }
+          val nullable = metadata.forall { case (name, _, _, required, defaultvalue) =>
+            (name == "id" || required == 0) && defaultvalue.isEmpty
+          }
+          if (nullable && actual.sortBy(_._1) == expected.sortBy(_._1)) Consequence.unit
+          else Consequence.configurationInvalid("EventStore existing infrastructure schema is incompatible")
+        }
+        empty <- Consequence {
+          val statement = connection.createStatement()
+          try {
+            val rows = statement.executeQuery(s"SELECT 1 FROM ${dialect.quoteIdentifier(_table_name(collection))} LIMIT 1")
+            try !rows.next() finally rows.close()
+          } finally statement.close()
+        }
+        _ <- if (empty) Consequence.unit
+          else Consequence.stateConflict("EventStore first installation cannot replace existing cursor or event/index data")
+      } yield ()
+    }
 
   /** A non-owning verified view is available only for borrowed managed SQLite.
     * It grants no invocation authority and never changes the ordinary view.

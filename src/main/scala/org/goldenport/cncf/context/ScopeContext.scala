@@ -24,7 +24,7 @@ import org.goldenport.cncf.spi.evaluation.{CorpusEvaluationSink, CorpusEvaluatio
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
  *  version Jul. 23, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ScopeKind {
@@ -63,6 +63,14 @@ abstract class ScopeContext() extends ObservationDsl with ScopeContext.Core.Hold
    */
   def processExecutionDriverOption: Option[ProcessExecutionDriver] =
     core.processExecutionDriverOption orElse parent.flatMap(_.processExecutionDriverOption)
+
+  /** Explicit runtime capability, inherited from the actual configured owner. */
+  private[cncf] def operationalObservationRuntimeOption:
+      Option[org.goldenport.cncf.operationalobservation.OperationalObservationRuntime] =
+    core.operationalObservationRuntimeOption.orElse(this match {
+      case selected: Component.Context => selected.component.subsystem.flatMap(_.operationalObservationRuntimeOption)
+      case _ => None
+    }).orElse(parent.flatMap(_.operationalObservationRuntimeOption))
 
   /** Runtime-owned capability/program admission for Process Execution. */
   def processExecutionAdmissionOption: Option[ProcessExecutionAdmission] =
@@ -170,7 +178,9 @@ object ScopeContext {
     operationEvaluationCrossSinkPolicyOption: Option[OperationEvaluationCrossSinkPolicy] = None,
     private[cncf] val workspaceExecutionAdmissionOption: Option[WorkspaceExecutionAdmission] = None,
     private[cncf] val httpExecutionAdmissionOption: Option[HttpExecutionAdmission] = None,
-    presentationContextResolverOption: Option[PresentationContextResolver] = None
+    presentationContextResolverOption: Option[PresentationContextResolver] = None,
+    private[cncf] val operationalObservationRuntimeOption:
+      Option[org.goldenport.cncf.operationalobservation.OperationalObservationRuntime] = None
   )
   object Core {
     trait Holder {

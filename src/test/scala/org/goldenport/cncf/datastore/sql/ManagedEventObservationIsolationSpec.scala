@@ -11,7 +11,7 @@ import org.goldenport.Consequence
 import org.goldenport.observation.Descriptor
 import org.goldenport.record.Record
 import org.goldenport.cncf.component.ComponentId
-import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.context.{Capability, ExecutionContext}
 import org.goldenport.cncf.datastore.*
 import org.goldenport.cncf.event.*
 import org.goldenport.cncf.statemachine.*
@@ -27,7 +27,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRe
 /** Real borrowed managed resource, instrumented only in this test provider.
   * No production callback, unmanaged snapshot or publication adapter.
   * @since   Sep. 30, 2026
-  * @version Oct.  8, 2026
+  * @version Oct. 27, 2026
   */
 final class ManagedEventObservationIsolationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private given context: ExecutionContext = ExecutionContext.create()
@@ -68,13 +68,24 @@ final class ManagedEventObservationIsolationSpec extends AnyWordSpec with Matche
     EventPersistencePolicy.Rule(EventTypeId("fact"), EventPersistencePolicy.Mode.Persist))))
   private def selection(es: Vector[EventRecord]) = take(WorkflowEventSelection.prepareFromStoreC(EventStore.inMemory(policy), es))
   private def env(s: Subsystem) = ComponentDataStore.Environment(context.runtime.resolvedParameters, Some(s.configuration))
-  private def withHost(f: (Subsystem, Path) => Unit): Unit = {
-    val path = Files.createTempDirectory("cncf-observation-isolation-").resolve("events.sqlite")
+  private def _fixture_event(token: String, correlated: Boolean): EventRecord = {
+    val original = event(token)
+    if (!correlated) original
+    else {
+      val value = original.copy(attributes = Map("history.namespace" -> "sample.isolation.v1", "history.key" -> "stream"))
+      ObservationEventTestSupport.copyKey(original, value)
+      value
+    }
+  }
+  private def withHost(f: (Subsystem, Path) => Unit): Unit =
+    _with_host(Files.createTempDirectory("cncf-observation-isolation-").resolve("events.sqlite"))(f)
+
+  private def _with_host(path: Path)(task: (Subsystem, Path) => Unit): Unit = {
     val conf = ResolvedConfiguration(Configuration(Map(
       "textus.datastore.kind" -> ConfigurationValue.StringValue("sqlite"),
       "textus.datastore.path" -> ConfigurationValue.StringValue(path.toString))), ConfigurationTrace.empty)
     EventStorePersistenceConstruction.withDeclaration(declaration) {
-      TestComponentFactory.withEmptySubsystem(configuration = conf)(s => f(s, path))
+      TestComponentFactory.withEmptySubsystem(configuration = conf)(s => task(s, path))
     }
   }
   private class Instrumented(resource: ManagedSqlDataStoreResource, lease: SystemNodeResourceLease)
@@ -103,6 +114,8 @@ final class ManagedEventObservationIsolationSpec extends AnyWordSpec with Matche
     var transientEventSql = Vector.empty[String]
     var transientAcknowledgement: DataStoreMultiGuardAcknowledgement => DataStoreMultiGuardAcknowledgement = identity
     var transientReadback: Consequence[Vector[DataStoreMultiGuardRecord]] => Consequence[Vector[DataStoreMultiGuardRecord]] = identity
+    var beforeInitialCursorInsert: () => Unit = () => ()
+    var afterCommit: () => Consequence[Unit] = () => Consequence.unit
     override protected def commit_transient_events(inv: DataStoreSpace.TransientEventInvocation)
         (using ExecutionContext): Consequence[DataStoreMultiGuardAcknowledgement] = {
       writes += 1
@@ -147,6 +160,8 @@ final class ManagedEventObservationIsolationSpec extends AnyWordSpec with Matche
       retainedReadback(result)
     }
     override protected def sql_statement(sql: String): Unit = {
+      if (sql.startsWith(s"INSERT INTO ${SqliteDialectDriver.quoteIdentifier(cursors.collectionName)} ("))
+        beforeInitialCursorInsert()
       if (traceTransient && Vector(cursors, events, indexes).exists(c =>
           sql.contains(SqliteDialectDriver.quoteIdentifier(c.collectionName)))) transientEventSql :+= sql
       if (active) {
@@ -156,7 +171,7 @@ final class ManagedEventObservationIsolationSpec extends AnyWordSpec with Matche
     }
     override protected def conditional_transition_commit(c: Connection): Consequence[Unit] = {
       commits += 1
-      super.conditional_transition_commit(c)
+      super.conditional_transition_commit(c).flatMap(_ => afterCommit())
     }
     override protected def observe_native(inv: DataStoreSpace.ObservationInvocation)
         (using ExecutionContext): Consequence[Vector[(DataStoreObservationTarget, Option[Record])]] = {
@@ -170,9 +185,10 @@ final class ManagedEventObservationIsolationSpec extends AnyWordSpec with Matche
       } finally active = false
     }
   }
-  private def fixture(s: Subsystem)(f: (DataStoreSpace, Instrumented, SystemNodeResourceLease, WorkflowEventSelection) => Unit): Unit = {
-    take(s.initializeEventCursorC(env(s)))
-    val original = selection(Vector(event("one"), event("two")))
+  private def fixture(s: Subsystem, correlated: Boolean = false, initialize: Boolean = true)(
+      f: (DataStoreSpace, Instrumented, SystemNodeResourceLease, WorkflowEventSelection) => Unit): Unit = {
+    if (initialize) take(s.initializeEventCursorC(env(s)))
+    val original = selection(Vector(_fixture_event("one", correlated), _fixture_event("two", correlated)))
     val prepared = take(WorkflowCursorEventProposal.prepareV2C(original, declaration, EventCursorRecordV1.initial))
     take(s._with_managed_datastore_lease_c { lease =>
       for {
@@ -183,17 +199,25 @@ final class ManagedEventObservationIsolationSpec extends AnyWordSpec with Matche
         value <- {
           val store = new Instrumented(resource, lease)
           val space = take(DataStoreSpace.multiGuardHostViewC(writePolicy, store, lease, Some(readPolicy), Some(s.eventStore)))
-          (prepared.events.creates ++ prepared.events.indexCreates).foreach(c => take(store.create(c.collection, c.entryId, c.record)))
-          take(store.save(cursors, declaration.cursorEntryId, take(EventCursorRecordV1.createC(2L, 2L)).toRecord))
-          val alias = event("alias")
+          if (initialize) {
+            (prepared.events.creates ++ prepared.events.indexCreates).foreach(c => take(store.create(c.collection, c.entryId, c.record)))
+            take(store.save(cursors, declaration.cursorEntryId, take(EventCursorRecordV1.createC(2L, 2L)).toRecord))
+          }
+          val alias = _fixture_event("alias", correlated)
           ObservationEventTestSupport.copyKey(original.events.head, alias)
-          val byId = event("two")
-          ObservationEventTestSupport.clearKey(byId)
-          f(space, store, lease, selection(Vector(alias, byId)))
+          val byid = _fixture_event("two", correlated)
+          ObservationEventTestSupport.clearKey(byid)
+          f(space, store, lease, selection(Vector(alias, byid)))
           Consequence.unit
         }
       } yield value
     })
+  }
+  private def _history(s: Subsystem): Vector[EventRecord] = {
+    val actor = ExecutionContext.withSecurityContext(context,
+      context.security.copy(capabilities = context.security.capabilities + Capability("event_view")))
+    take(take(s.bindEventHistoryC(actor)).readC(
+      ManagedEventHistory.Query("sample.isolation.v1", "stream", Vector("fact")))).events
   }
   private def writer(file: Path): SQLiteDataSource = {
     val config = new SQLiteConfig()
@@ -267,6 +291,404 @@ final class ManagedEventObservationIsolationSpec extends AnyWordSpec with Matche
   private def transientInput = Vector(EventRecord(
     EventId("test", "isolation", Some(time), Some("ephemeral")), "fact", "ephemeral",
     Map("unsupported" -> new Object), Map.empty, time, true, EventRecord.Status.Stored, EventLane.Transactional))
+
+  private def _first_install_path: Path = {
+    val root = Files.createDirectories(Path.of("target", "managed-event-first-install")).toAbsolutePath
+    Files.createTempDirectory(root, "spec-").resolve("events.sqlite")
+  }
+
+  private def _with_install_store(subsystem: Subsystem)(task: (Instrumented, SystemNodeResourceLease) => Unit): Unit =
+    take(subsystem._with_managed_datastore_lease_c { lease =>
+      subsystem.resolveManagedComponentDataStoreC(env(subsystem), declaration.serviceRequest).map { base =>
+        val resource = base.asInstanceOf[SqlDataStore].managedResourceOption.get
+        task(new Instrumented(resource, lease), lease)
+      }
+    })
+
+  // Provider specifications inspect actual schema/data; the consumer fixture
+  // never obtains SQL or uses these helpers to manufacture a successful Start.
+  private def _first_install_sql(path: Path, statements: Vector[String]): Unit = {
+    val connection = writer(path).getConnection()
+    try {
+      val statement = connection.createStatement()
+      try statements.foreach(statement.execute(_)) finally statement.close()
+    } finally connection.close()
+  }
+
+  private def _first_install_contents(path: Path): Vector[String] = {
+    val connection = writer(path).getConnection()
+    try {
+      val statement = connection.createStatement()
+      val tables = try {
+        val rows = statement.executeQuery("SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name")
+        val values = Vector.newBuilder[(String, String)]
+        try while (rows.next()) values += ((rows.getString(1), rows.getString(2)))
+        finally rows.close()
+        values.result()
+      } finally statement.close()
+      tables.flatMap { case (name, schema) =>
+        val query = connection.createStatement()
+        try {
+          val rows = query.executeQuery(s"SELECT * FROM ${SqliteDialectDriver.quoteIdentifier(name)} ORDER BY id")
+          val values = Vector.newBuilder[String]
+          try while (rows.next()) values += (1 to rows.getMetaData.getColumnCount).map(index =>
+            Option(rows.getObject(index)).fold("NULL")(_.toString)).mkString("|")
+          finally rows.close()
+          Vector(schema) ++ values.result()
+        } finally query.close()
+      }
+    } finally connection.close()
+  }
+
+  "Explicit managed EventStore installation" should afterWord(
+    "spec:managed-event-history example:E2 rules:R1,R4 phase:5.1") {
+    "publish the first genuine guarded event and retain it across normal reopen without materializing sample rows" in {
+      Vector(false, true).foreach { correlated =>
+        Given(s"Spec: docs/spec/managed-event-history.md; Rules: R1,R4; Examples: E2,E3,E4; correlation=$correlated")
+        val path = _first_install_path
+        val original = _fixture_event("first-real-publication", correlated)
+        val selected = selection(Vector(original))
+        EventStoreConstruction.withService(EventStore.inMemory(policy)) {
+          _with_host(path) { (subsystem, _) =>
+            take(subsystem._initialize_event_storage_c(env(subsystem))).lastSequence shouldBe 0L
+            _with_install_store(subsystem) { (store, lease) =>
+              val readpolicy = take(DataStoreObservationPolicy.createC(
+                DataStoreObservationTarget(cursors, declaration.cursorEntryId), events, indexes))
+              val writepolicy = take(declaration.policyC(take(declaration.grantC(owner))))
+              val space = take(DataStoreSpace.multiGuardHostViewC(writepolicy, store, lease, Some(readpolicy), Some(subsystem.eventStore)))
+              val transition = workflow(store)
+              When("the first real selected event is observed and committed with its genuine Workflow transition")
+              val snapshot = take(space.observeHostEventsC(selected.events))
+              take(snapshot.classificationC).newDurableCount shouldBe 1
+              take(snapshot.recordsC).tail.foreach(_._2 shouldBe None)
+              val prepared = take(snapshot.preparationC)
+              take(space.conditionalPreparedEventsVerified(transition, prepared)) shouldBe a[DataStoreMultiGuardReadbackResult.Verified]
+              Then("only that event and its actual key are published and cursor advances exactly once")
+              take(subsystem.loadEventCursorC(env(subsystem))).lastSequence shouldBe 1L
+              val row = take(store.load(events, DataStore.StringEntryId(original.id.value))).get
+              val logical = Record(row.fields.filterNot(_.key == "id"))
+              val canonical = take(EventHistoryCorrelation.admitStoredRowC(logical))
+              canonical.id shouldBe original.id
+              canonical.sequence shouldBe 1L
+              logical.fields.exists(_.key == EventHistoryCorrelation.namespaceField) shouldBe correlated
+              val expected = take(WorkflowCursorEventProposal.prepareV2C(selected, declaration, EventCursorRecordV1.initial))
+              expected.events.indexCreates.size shouldBe 1
+              val index = expected.events.indexCreates.head
+              take(store.load(indexes, index.entryId)).nonEmpty shouldBe true
+              store.commits shouldBe 1
+            }
+          }
+          val retained = _first_install_contents(path)
+          When("a fresh normal host reopens without installer, reseeding or replay")
+          _with_host(path) { (subsystem, _) =>
+            take(subsystem.loadEventCursorC(env(subsystem))).lastSequence shouldBe 1L
+            take(subsystem._with_managed_datastore_lease_c { _ =>
+              val history = _history(subsystem)
+              history.map(_.id) shouldBe (if (correlated) Vector(original.id) else Vector.empty)
+              subsystem.withWorkflowVerifiedMultiGuardSpaceC(owner, env(subsystem)) { space =>
+                val grant = take(declaration.grantC(owner))
+                take(take(space.dataStore(grant.rootCollection)).load(grant.rootCollection,
+                  DataStore.StringEntryId("instance"))).get.getString("status") shouldBe Some("closed")
+                take(take(space.dataStore(grant.continuationCollection)).load(grant.continuationCollection,
+                  DataStore.StringEntryId("continuation"))).get.getString("status") shouldBe Some("closed")
+                Consequence.unit
+              }
+            })
+            subsystem._initialize_event_storage_c(env(subsystem)).isSuccess shouldBe false
+          }
+          Then("genuine native/event/index data and the advanced cursor are unchanged")
+          _first_install_contents(path) shouldBe retained
+        }
+      }
+    }
+  }
+
+  "Explicit managed first-install boundaries" should afterWord(
+    "spec:managed-event-history example:E6 rules:R1,R2 phase:5.1") {
+    "reuse every compatible empty subset of the fixed infrastructure without seeding event or index data" in {
+      (0 until 8).foreach { mask =>
+        Given(s"Spec: docs/spec/managed-event-history.md; Rules: R1,R2; Example: E6; empty schema subset=$mask")
+        val path = _first_install_path
+        val definitions = Vector(
+          cursors -> Vector("cursor_schema" -> "", "revision" -> 0L, "last_sequence" -> ""),
+          events -> Vector("event_json" -> "", EventHistoryCorrelation.namespaceField -> "", EventHistoryCorrelation.keyField -> "",
+            EventHistoryCorrelation.nameField -> "", EventHistoryCorrelation.sequenceField -> 0L),
+          indexes -> Vector("index_schema" -> "", "lookup_key" -> "", "event_reference" -> "", "sequence" -> "", "event_body_digest" -> ""))
+        _first_install_sql(path, definitions.zipWithIndex.collect { case ((collection, columns), index) if (mask & (1 << index)) != 0 =>
+          SqliteDialectDriver.createTableSql(collection.collectionName, columns)
+        })
+        When("the captured managed owner performs explicit first installation")
+        _with_host(path) { (subsystem, _) =>
+          val cursor = take(subsystem._initialize_event_storage_c(env(subsystem)))
+          Then("all fixed tables exist and only the genuine initial cursor is stored")
+          cursor.revision shouldBe 1L
+          cursor.lastSequence shouldBe 0L
+        }
+        val contents = _first_install_contents(path)
+        contents.count(_.startsWith("CREATE TABLE")) shouldBe 3
+        contents.count(value => !value.startsWith("CREATE TABLE")) shouldBe 1
+      }
+    }
+
+    "reject incompatible schemas and orphan native data without changing any retained collection" in {
+      Vector("wrong-affinity", "missing-column", "extra-column", "wrong-primary-key", "required-history", "default-history",
+        "foreign-cursor", "orphan-event", "orphan-index").foreach { fault =>
+        Given(s"Spec: docs/spec/managed-event-history.md; Rules: R2; Example: E6; retained $fault")
+        val path = _first_install_path
+        _with_host(path) { (subsystem, _) =>
+          _with_install_store(subsystem) { (store, _) =>
+            val table = SqliteDialectDriver.quoteIdentifier(events.collectionName)
+            if (Vector("wrong-affinity", "missing-column", "extra-column", "wrong-primary-key", "required-history", "default-history").contains(fault)) {
+              val id = if (fault == "wrong-primary-key") "id TEXT" else "id TEXT PRIMARY KEY"
+              val namespace = "event_history_namespace TEXT" + (if (fault == "required-history") " NOT NULL"
+                else if (fault == "default-history") " DEFAULT 'fabricated'" else "")
+              val fields = Vector("event_json TEXT", namespace, "event_history_key TEXT", "event_history_name TEXT") ++
+                (if (fault == "missing-column") Vector.empty else Vector(s"event_history_sequence ${if (fault == "wrong-affinity") "TEXT" else "INTEGER"}")) ++
+                (if (fault == "extra-column") Vector("unexpected TEXT") else Vector.empty)
+              _first_install_sql(path, Vector(s"CREATE TABLE $table (${(Vector(id) ++ fields).mkString(", ")})"))
+            } else if (fault == "foreign-cursor") {
+              take(store.create(cursors, DataStore.StringEntryId("other-cursor"), EventCursorRecordV1.initial.toRecord))
+            } else {
+              // A canonical fact/index retained without its cursor is an
+              // explicit invalid-installation fixture, never a schema seed.
+              val proposal = take(WorkflowCursorEventProposal.prepareV2C(selection(Vector(_fixture_event("orphan", true))),
+                declaration, EventCursorRecordV1.initial))
+              val effect = if (fault == "orphan-event") proposal.events.creates.head else proposal.events.indexCreates.head
+              take(store.create(effect.collection, effect.entryId, effect.record))
+            }
+            val retained = _first_install_contents(path)
+            When("explicit initialization examines all existing infrastructure before any write")
+            store._initialize_event_storage_c(declaration).isSuccess shouldBe false
+            Then("it refuses without repairing, replacing or dropping retained schema/data")
+            store.commits shouldBe 0
+            _first_install_contents(path) shouldBe retained
+          }
+        }
+      }
+    }
+
+  }
+
+  "Managed first-install failure settlement" should afterWord(
+    "spec:managed-event-history example:E7 rules:R3,R5 phase:5.1") {
+    "rollback staged infrastructure on known failures and preserve uncertainty after a real committed acknowledgement is lost" in {
+      Vector("insert-failure", "revoked-before-entry", "revoked-after-ddl", "committed-unknown").foreach { fault =>
+        Given(s"Spec: docs/spec/managed-event-history.md; Rules: R3,R5; Example: E7; $fault at existing provider seam")
+        val path = _first_install_path
+        _with_host(path) { (subsystem, _) =>
+          _with_install_store(subsystem) { (store, lease) =>
+            if (fault == "insert-failure") store.beforeInitialCursorInsert = () => throw new SQLException("injected initial-cursor insert failure")
+            if (fault == "revoked-before-entry") ObservationLeaseTestSupport.revoke(lease)
+            if (fault == "revoked-after-ddl") store.beforeInitialCursorInsert = () => ObservationLeaseTestSupport.revoke(lease)
+            if (fault == "committed-unknown") store.afterCommit = () =>
+              DataStoreConditionalTransitionFailure.transactionIndeterminate("Injected loss of initial-install commit acknowledgement")
+            When("the original managed transaction attempts installation once")
+            val result = store._initialize_event_storage_c(declaration)
+            Then("precommit failures rollback every table and unknown acknowledgement never becomes success or replay")
+            result.isSuccess shouldBe false
+            store.commits shouldBe (if (fault == "committed-unknown") 1 else 0)
+            if (fault == "committed-unknown") {
+              uncertain(result)
+              _first_install_contents(path).count(_.startsWith("CREATE TABLE")) shouldBe 3
+              _first_install_contents(path).count(value => !value.startsWith("CREATE TABLE")) shouldBe 1
+            } else _first_install_contents(path) shouldBe empty
+          }
+        }
+      }
+    }
+
+  }
+
+  "First-install provider and observation boundaries" should afterWord(
+    "spec:managed-event-history example:E5 rules:R5 phase:5.1") {
+    "retain missing-table refusal without changing cursor-only storage during observation" in {
+      Given("Spec: docs/spec/managed-event-history.md; Rules: R5; Example: E5; managed cursor-only infrastructure")
+      val path = _first_install_path
+      _with_host(path) { (subsystem, _) =>
+        take(subsystem.initializeEventCursorC(env(subsystem)))
+        _with_install_store(subsystem) { (store, lease) =>
+          val readpolicy = take(DataStoreObservationPolicy.createC(
+            DataStoreObservationTarget(cursors, declaration.cursorEntryId), events, indexes))
+          val writepolicy = take(declaration.policyC(take(declaration.grantC(owner))))
+          val space = take(DataStoreSpace.multiGuardHostViewC(writepolicy, store, lease, Some(readpolicy), Some(subsystem.eventStore)))
+          val retained = _first_install_contents(path)
+          When("normal observation reads an actual selected event against unprovisioned events and indexes")
+          space.observeHostEventsC(selection(Vector(_fixture_event("unprovisioned", true))).events).isSuccess shouldBe false
+          Then("it refuses authoritative absence without creating any table or publishing an event")
+          store.commits shouldBe 0
+          _first_install_contents(path) shouldBe retained
+        }
+      }
+    }
+
+    "refuse unowned and unsupported providers before creating infrastructure" in {
+      Given("Spec: docs/spec/managed-event-history.md; Rules: R5; Example: E5; a standalone SQLite provider")
+      val path = _first_install_path
+      val store = new SqlDataStore(SqliteDialectDriver, writer(path))
+      When("it receives an infrastructure initialization request without managed host admission")
+      store._initialize_event_storage_c(declaration).isSuccess shouldBe false
+      Then("no database is opened by the rejected call")
+      Files.exists(path) shouldBe false
+      _with_host(path) { (subsystem, _) =>
+        _with_install_store(subsystem) { (managed, lease) =>
+          val unsupported = new SqlDataStore(PostgreSqlDialectDriver, managed.managedResourceOption.get.datasource)
+          unsupported.useManagedResource(managed.managedResourceOption.get,
+            () => if (lease.isRevoked) Consequence.stateInvalid("revoked") else Consequence.unit)
+          unsupported._initialize_event_storage_c(declaration).isSuccess shouldBe false
+          _first_install_contents(path) shouldBe empty
+        }
+      }
+    }
+
+  }
+
+  "Concurrent managed first installation" should afterWord(
+    "spec:managed-event-history example:E8 rules:R3 phase:5.1") {
+    "allow at most one of two separately managed concurrent first installers to succeed" in {
+      Given("Spec: docs/spec/managed-event-history.md; Rules: R3; Example: E8; two independent managed hosts on one fresh database")
+      val path = _first_install_path
+      val ready = new CountDownLatch(2)
+      val start = new CountDownLatch(1)
+      val pool = Executors.newFixedThreadPool(2)
+      given scala.concurrent.ExecutionContext = scala.concurrent.ExecutionContext.fromExecutor(pool)
+      try {
+        val attempts = Vector.fill(2)(Future {
+          var result = Option.empty[Consequence[EventCursorRecordV1]]
+          _with_host(path) { (subsystem, _) =>
+            _with_install_store(subsystem) { (store, _) =>
+              ready.countDown()
+              start.await(10, TimeUnit.SECONDS) shouldBe true
+              result = Some(store._initialize_event_storage_c(declaration))
+            }
+          }
+          result.get
+        })
+        ready.await(10, TimeUnit.SECONDS) shouldBe true
+        When("both admitted hosts enter SQLite first installation without an application-wide lock")
+        start.countDown()
+        val results = Await.result(Future.sequence(attempts), 20.seconds)
+        Then("one installation succeeds, the competitor is refused, and no extra cursor/event/index row appears")
+        results.count(_.isSuccess) shouldBe 1
+        _first_install_contents(path).count(_.startsWith("CREATE TABLE")) shouldBe 3
+        _first_install_contents(path).count(value => !value.startsWith("CREATE TABLE")) shouldBe 1
+      } finally {
+        start.countDown()
+        pool.shutdown()
+        pool.awaitTermination(30, TimeUnit.SECONDS) shouldBe true
+      }
+    }
+  }
+
+  "Correlated managed event retention" should {
+    "reuse retained ID and delivery-key facts, append only new facts and reobserve them after physical host reopen" in {
+      Vector(false, true).foreach { mixed =>
+        Given(s"a real managed SQLite host with correlated retained ID/key duplicates and mixed-new=$mixed")
+        var retainedpath = Option.empty[Path]
+        EventStoreConstruction.withService(EventStore.inMemory(policy)) {
+          withHost { (s, path) =>
+            retainedpath = Some(path)
+            fixture(s, correlated = true) { (space, store, _, selected) =>
+              val transition = workflow(store)
+              val original = take(WorkflowCursorEventProposal.prepareV2C(
+                selection(Vector(_fixture_event("one", true), _fixture_event("two", true))), declaration, EventCursorRecordV1.initial))
+              val retained = (original.events.creates ++ original.events.indexCreates).map(effect =>
+                (effect.collection, effect.entryId, take(store.load(effect.collection, effect.entryId)).get))
+              val input = selected.events ++ (if (mixed) Vector(_fixture_event("fresh", true)) else Vector.empty)
+              When("the actual managed observation classifies both retained identities before one native completion")
+              val snapshot = take(space.observeHostEventsC(input))
+              val classification = take(snapshot.classificationC)
+              classification.newDurableCount shouldBe (if (mixed) 1 else 0)
+              classification.dispositions.count {
+                case ManagedEventDuplicateClassifier.Disposition.RetainedExisting(_) => true
+                case _ => false
+              } shouldBe 2
+              val prepared = take(snapshot.preparationC)
+              val completed = if (mixed) space.conditionalPreparedEventsVerified(transition, prepared)
+                else space.conditionalRetainedEventsVerified(transition, prepared)
+              Then("the transaction preserves every retained byte, index and sequence and consumes a cursor slot only for the new fact")
+              take(completed) shouldBe a[DataStoreMultiGuardReadbackResult.Verified]
+              retained.foreach { case (collection, id, record) =>
+                take(store.load(collection, id)).get.fields.toSet shouldBe record.fields.toSet
+              }
+              take(s.loadEventCursorC(env(s))).lastSequence shouldBe (if (mixed) 3L else 2L)
+              val history = _history(s)
+              history.map(_.sequence) shouldBe (if (mixed) Vector(3L, 2L, 1L) else Vector(2L, 1L))
+              history.map(_.id).toSet shouldBe (Vector(_fixture_event("one", true), _fixture_event("two", true)) ++
+                (if (mixed) Vector(_fixture_event("fresh", true)) else Vector.empty)).map(_.id).toSet
+              take(store.load(events, DataStore.StringEntryId(event("alias").id.value))) shouldBe None
+            }
+          }
+          When("a new host and managed lease reopen the same physical database without cursor initialization or event reseeding")
+          _with_host(retainedpath.get) { (s, _) =>
+            fixture(s, correlated = true, initialize = false) { (space, store, _, selected) =>
+              val snapshot = take(space.observeHostEventsC(selected.events))
+              Then("the same correlated ID/key duplicates remain retained and no read consumes or rewrites a sequence")
+              take(snapshot.classificationC).newDurableCount shouldBe 0
+              take(snapshot.recordsC).flatMap(_._2).count(_.getString("event_json").nonEmpty) shouldBe 2
+              _history(s).map(_.sequence) shouldBe (if (mixed) Vector(3L, 2L, 1L) else Vector(2L, 1L))
+              take(s.loadEventCursorC(env(s))).lastSequence shouldBe (if (mixed) 3L else 2L)
+              store.writes shouldBe 0
+              store.commits shouldBe 0
+            }
+          }
+        }
+      }
+    }
+
+    "refuse every changed frozen metadata column and a consistent envelope replacement before publishing Workflow or local writes" in {
+      Vector(EventHistoryCorrelation.namespaceField, EventHistoryCorrelation.keyField,
+        EventHistoryCorrelation.nameField, EventHistoryCorrelation.sequenceField, "canonical-envelope").foreach { fault =>
+        Given(s"a genuine correlated retained snapshot and a competing physical $fault change after freeze")
+        EventStoreConstruction.withService(EventStore.inMemory(policy)) { withHost { (s, _) =>
+          fixture(s, correlated = true) { (_, store, lease, selected) =>
+            val transition = workflow(store)
+            val basepolicy = take(declaration.policyC(take(declaration.grantC(owner))))
+            val localfacts = collection("correlated_facts")
+            val localid = DataStore.StringEntryId("fact-1")
+            val localpolicy = take(DataStoreConditionalMultiGuardHostPolicy.create(take(DataStoreComponentOwner.create(owner.name)),
+              basepolicy.rootCollection, basepolicy.successorCollection, basepolicy.guardBindings,
+              basepolicy.sideCreateCollections :+ localfacts, basepolicy.guardTargets))
+            val readpolicy = take(DataStoreObservationPolicy.createC(
+              DataStoreObservationTarget(cursors, declaration.cursorEntryId), events, indexes))
+            val space = take(DataStoreSpace.multiGuardHostViewC(localpolicy, store, lease, Some(readpolicy), Some(s.eventStore)))
+            val snapshot = take(space.observeHostEventsC(selected.events :+ _fixture_event("fresh", true)))
+            val prepared = take(snapshot.preparationC)
+            val id = DataStore.StringEntryId(event("one").id.value)
+            val before = take(store.load(events, id)).get
+            val indexrows = take(snapshot.recordsC).collect {
+              case (target, Some(record)) if target.collection == indexes => target -> record
+            }
+            val changed = if (fault == "canonical-envelope") {
+              val original = take(EventRecordJsonV2.decodeStorageC(before.getString("event_json").get))
+              val replacement = original.copy(attributes = original.attributes.updated("history.key", "changed-stream"))
+              ObservationEventTestSupport.copyKey(original, replacement)
+              take(EventRecordJsonV2.createSideEffectC(events, replacement)).record
+            } else Record.dataAuto(fault -> (if (fault == EventHistoryCorrelation.sequenceField) 99L else "changed"))
+            take(store.update(events, id, changed))
+            val create = EntityVersionedSideEffect.Create(localfacts, localid, Record.dataAuto("value" -> "closed"))
+            When("the original frozen preparation requests its one guarded Workflow/local/event completion")
+            val result = space.conditionalPreparedEventsWithLocalIntentsVerified(transition, prepared, Vector.empty, Vector(create))
+            Then("the changed physical fact cannot be stripped or recertified, and no Workflow/local/new-event writes survive")
+            result.toOption shouldBe None
+            store.commits shouldBe 0
+            store.snapshots shouldBe 0
+            take(store.load(localfacts, localid)) shouldBe None
+            take(store.load(events, DataStore.StringEntryId(event("fresh").id.value))) shouldBe None
+            take(s.loadEventCursorC(env(s))).lastSequence shouldBe 2L
+            val grant = take(declaration.grantC(owner))
+            Vector(grant.rootCollection -> "instance", grant.continuationCollection -> "continuation").foreach { case (collection, entry) =>
+              val row = take(store.load(collection, DataStore.StringEntryId(entry))).get
+              row.getString("status") shouldBe Some("open")
+              row.fields.find(_.key == "revision").get.value.single shouldBe 1L
+            }
+            indexrows.foreach { case (target, record) =>
+              take(store.load(target.collection, target.entryId)).get.fields.filterNot(_.key == "id").toSet shouldBe record.fields.toSet
+            }
+          }
+        }}
+      }
+    }
+  }
 
   "Managed ordinary-input host completion" should {
     "stop on missing authority, unsupported new payload or native rollback without selecting another route" in {

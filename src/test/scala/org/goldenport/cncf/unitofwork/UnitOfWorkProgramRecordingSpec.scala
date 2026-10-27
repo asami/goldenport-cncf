@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for deterministic UnitOfWork program recording.
  *
  * @since   Sep.  8, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkProgramRecordingSpec
@@ -158,21 +158,25 @@ final class UnitOfWorkProgramRecordingSpec
       }
     }
 
-    "propagate supplied Compile, Test or TestOnly failures and halt before any later operation" in {
-      Given("a Compile then Test then TestOnly then local program and a structured failure for each typed SBT operation")
+    "propagate supplied Compile, Test, TestOnly, FixCheck or PublishLocal failures and halt before any later operation" in {
+      Given("a Compile then Test then TestOnly then FixCheck then PublishLocal then local program and a structured failure for each typed SBT operation")
       val compile = UnitOfWorkOp.SbtExec(_sbt_target, SbtOperation.Compile)
       val test = UnitOfWorkOp.SbtExec(_sbt_target, SbtOperation.Test)
       val testonly = UnitOfWorkOp.SbtExec(_sbt_target, SbtOperation.TestOnly)
+      val fixcheck = UnitOfWorkOp.SbtExec(_sbt_target, SbtOperation.FixCheck)
+      val publishlocal = UnitOfWorkOp.SbtExec(_sbt_target, SbtOperation.PublishLocal)
       val subsequent = UnitOfWorkOp.LocalDataDir("unvisited")
       val stubfailure = Consequence.serviceUnavailable[Nothing]("supplied typed SBT failure")
       val program: ExecUowM[Path] = for {
         _ <- ConsequenceT.liftF(Free.liftF(compile))
         _ <- ConsequenceT.liftF(Free.liftF(test))
         _ <- ConsequenceT.liftF(Free.liftF(testonly))
+        _ <- ConsequenceT.liftF(Free.liftF(fixcheck))
+        _ <- ConsequenceT.liftF(Free.liftF(publishlocal))
         path <- ConsequenceT.liftF(Free.liftF(subsequent))
       } yield path
 
-      When("each operation is selected in turn as the typed StubProvider failure")
+      When("each of the five typed SBT operations is selected in turn as the StubProvider failure")
       val recordings = SbtOperation.values.toVector.map { failing =>
         val provider = new UnitOfWorkProgramStubProvider {
           def resultFor[A](ordinal: Int, operation: UnitOfWorkOp[A]): Consequence[A] = operation match {
@@ -187,9 +191,15 @@ final class UnitOfWorkProgramRecordingSpec
         UnitOfWorkProgramRecorder.record(program, provider)
       }
 
-      Then("the supplied failure is final and only visited typed external operations are recorded")
-      recordings.map(_.result) shouldBe Vector.fill(3)(stubfailure)
-      recordings.map(_.occurrences.map(_.operation)) shouldBe Vector(Vector(compile), Vector(compile, test), Vector(compile, test, testonly))
+      Then("each supplied failure is final and its exact visited prefix contains only typed external operations")
+      recordings.map(_.result) shouldBe Vector.fill(5)(stubfailure)
+      recordings.map(_.occurrences.map(_.operation)) shouldBe Vector(
+        Vector(compile),
+        Vector(compile, test),
+        Vector(compile, test, testonly),
+        Vector(compile, test, testonly, fixcheck),
+        Vector(compile, test, testonly, fixcheck, publishlocal)
+      )
       recordings.foreach { recording =>
         recording.occurrences.last.outcome shouldBe stubfailure
         recording.occurrences.map(_.ordinal) shouldBe recording.occurrences.indices.toVector

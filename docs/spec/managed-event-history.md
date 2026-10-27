@@ -18,7 +18,53 @@ For persistent transactional sequenced events, V1/V2 Create helpers add generic
 same-row fields `event_history_namespace`, `event_history_key`,
 `event_history_name` and numeric Long `event_history_sequence`. Canonical encoded
 event bytes and their decoders are unchanged. Existing events are not rewritten,
-backfilled or moved. No table, store, cursor, index or migration is introduced.
+backfilled or moved. Correlation introduces no separate table, store or cursor.
+
+## Explicit EventStore first installation (R1–R5)
+
+R1. A trusted host may call
+`SubsystemEventStoreBootstrap.initializeStorageC()` before its first persistent
+publication. This explicit operation uses the captured persistence declaration,
+existing managed lease/provider and one SQLite transaction. It creates missing
+fixed cursor, events and delivery-index tables and exactly the genuine initial
+cursor (revision 1, sequence 0). Events and indexes stay empty. The event schema
+includes the nullable history projection from the beginning. Workflow instances,
+continuations, business inputs, evidence and Journal entries are created only by
+their genuine normal operations, never by infrastructure installation.
+
+R2. Installation is create-only. Any existing cursor row, orphan event/index data
+or incompatible existing infrastructure schema must cause rejection before any
+write. Compatible empty tables have the fixed fields/affinities and text primary
+key, nullable non-key columns and no synthesized defaults. They may be reused. Installation performs no ALTER,
+reset, implicit migration or fake create/delete. The original `initializeCursorC`
+signature and cursor-only behavior remain unchanged; an existing cursor-only
+database is not silently upgraded by `initializeStorageC`.
+
+R3. A known precommit failure rolls back schema and cursor together. Lost
+admission prevents publication; uncertain commit acknowledgement remains
+indeterminate, without automatic replay. Concurrent installers cannot both
+succeed. The existing managed transaction and connection lifecycle own settlement.
+
+R4. Repeated installation refuses existing state without changing it. Normal
+close/reopen reads that state without installation. Persistent publication creates
+only real selected events and actual delivery keys; uncorrelated events do not
+gain phantom metadata through nullable schema columns.
+
+R5. Host construction, ordinary Start and observation do not install storage
+implicitly. Missing tables remain a structured observation/history failure.
+Standalone/unmanaged providers and unsupported dialects cannot perform the new
+initialization. No general schema API, new grant, Operation or independent
+resource owner is introduced.
+
+Executable examples E1–E8 are in the already selected
+`EventStoreHistoryBindingSpec` and `ManagedEventObservationIsolationSpec`.
+E1 covers public initial installation, E2 the first genuine guarded publication,
+E3 duplicate initialization and retained reopen, E4 nullable uncorrelated event
+round-trip, E5 missing/unowned/unsupported provider refusal, E6 compatible empty
+schema subsets and invalid retained installations, E7 failure/uncertainty
+settlement, and E8 concurrent independent installers.
+Selected source validation and independent review remain caller-owned; authored
+examples alone establish no execution or acceptance.
 
 ## Normal read capability
 

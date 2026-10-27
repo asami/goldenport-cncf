@@ -92,7 +92,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Jul. 30, 2026
  *  version Aug. 19, 2026
  *  version Sep.  8, 2026
- * @version Oct. 21, 2026
+ * @version Oct. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cli] trait CncfRuntimeInstanceLifecyclePart {
@@ -140,7 +140,8 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
     processdriver: Option[ProcessExecutionDriver] = None,
     processadmission: Option[ProcessExecutionAdmission] = None,
     workspaceadmission: Option[WorkspaceExecutionAdmission] = None,
-    httpadmission: Option[HttpExecutionAdmission] = None
+    httpadmission: Option[HttpExecutionAdmission] = None,
+    operationalobservation: Option[org.goldenport.cncf.operationalobservation.OperationalObservationRuntime] = None
   ): GlobalRuntimeContext = {
     val execution = ExecutionContext.create(
       runconfig.idNamespace,
@@ -155,7 +156,8 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
         processdriver,
         processadmission,
         workspaceadmission,
-        httpadmission
+        httpadmission,
+        operationalobservation
       // httpDriver = httpDriver,
       // aliasResolver = aliasResolver,
       // runtimeMode = mode,
@@ -405,6 +407,10 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
     val httpplan = runtimeconfigurationpreflight.flatMap { preflight =>
       SubsystemHttpExecutionConfiguration.admitC(preflight.bindings, preflight.identity).TAKE
     }
+    val observationruntime = runtimeconfigurationpreflight.flatMap { preflight =>
+      org.goldenport.cncf.config.SubsystemOperationalObservationConfiguration
+        .admitC(preflight.bindings, preflight.identity).TAKE
+    }
     val runconfig = RuntimeConfig.from(configuration, runtimehint, executionprofile)
     val aliasresolver = AliasLoader.load(configuration.configuration)
     LogBackendHolder.install(runconfig.logBackend)
@@ -438,7 +444,8 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
         }
       }
       _create_global_runtime_context(runconfig, configuration, aliasresolver,
-        processdriver, processplan.map(_.admission), processplan.flatMap(_.workspaceAdmissionOption), httpplan.map(_.admission))
+        processdriver, processplan.map(_.admission), processplan.flatMap(_.workspaceAdmissionOption),
+        httpplan.map(_.admission), observationruntime)
       SystemNodeConstruction.withNode(systemnode) {
         def assemble() = DefaultSubsystemFactory.runtimeDefaultWithScopeC(
           _runtime_scope_context(),
