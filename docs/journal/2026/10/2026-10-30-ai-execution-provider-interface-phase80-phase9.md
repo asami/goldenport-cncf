@@ -61,3 +61,7 @@ Do not add an ExecutionMethod to generic Workflow semantics merely to distinguis
 
 - CNCF: docs/phase/phase-80.md; src/main/scala/org/goldenport/cncf/workflow/WorkflowProtocolV1.scala
 - sm-workflow: docs/phase/phase-9.md; docs/notes/cncf-workflow-protocol-application-specialization.md
+
+## Upper-layer orchestration boundary (2026-10-30)
+
+The architectural authority for Dot/agent supervision versus deterministic orchestration is `asami/textus-orchestrator/docs/design/ai-agent-deterministic-orchestration.md` and its journal `docs/journal/2026/10/2026-10-30-dot-agent-orchestration-boundary.md`. Dot/Astra is intended for human-facing intent clarification and bounded non-routine judgment; textus-orchestrator owns routine participant routing, coordination and correlation without replacing owning Workflow state/Admission. Bulk development inference uses metered API Direct or admitted Agent Continuation. Do not depend on temporary Dots allowance or undocumented autonomous local execution behavior. CNCF Phase 80 and sm-workflow Phase 9 keep their existing respective generic execution-contract and application routing responsibilities.
