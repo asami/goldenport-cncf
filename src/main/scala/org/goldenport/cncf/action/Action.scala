@@ -11,7 +11,8 @@ import org.goldenport.text.Presentable
  *  version Jan. 22, 2026
  *  version Feb. 27, 2026
  *  version Mar. 24, 2026
- * @version May. 31, 2026
+ *  version May. 31, 2026
+ * @version Oct. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Action extends OperationRequest with Presentable {
@@ -217,7 +218,7 @@ final case class CommandExecutionPolicy(
     )
 
   def toRecord: Record =
-    Record.data(
+    Record.dataAuto(
       "mode" -> modeLabel,
       "interfaceMode" -> interfaceMode.toString.toLowerCase(java.util.Locale.ROOT),
       "jobRunMode" -> jobRunMode.toString.toLowerCase(java.util.Locale.ROOT),

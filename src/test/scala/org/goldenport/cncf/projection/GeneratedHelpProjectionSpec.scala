@@ -1,10 +1,19 @@
 package org.goldenport.cncf.projection
 
 import org.goldenport.record.Record
+import org.goldenport.record.io.RecordEncoder
+import org.goldenport.protocol.{Property, Request, Response}
+import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.cncf.action.CommandExecutionPolicy
+import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.cli.renderer.{CliHelpJsonRenderer, CliHelpYamlRenderer}
+import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.component.builtin.tag.TagComponent
+import org.goldenport.cncf.operation.CmlOperationDefinition
 import org.goldenport.cncf.projection.model.HelpModel
-import org.goldenport.cncf.testutil.SubsystemTestFixture
+import org.goldenport.cncf.protocol.OperationResponseFormatter
+import org.goldenport.cncf.testutil.{SubsystemTestFixture, TestComponentFactory}
+import io.circe.Json
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -14,7 +23,8 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Mar. 28, 2026
  *  version Apr.  6, 2026
  *  version May. 31, 2026
- * @version Aug. 13, 2026
+ *  version Aug. 13, 2026
+ * @version Oct. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GeneratedHelpProjectionSpec
@@ -26,6 +36,92 @@ final class GeneratedHelpProjectionSpec
   private val _e3 = afterWord("in spec:generated-help-projection, example:E3, rules:CID05C-R9, phase:56, slice:CID-05C")
 
   "HelpProjection for generated component metadata" should {
+    "preserve projected metadata through strict encoding and public JSON formatting" which {
+      Vector(false, true).foreach { continuation =>
+        s"represents optional continuation metadata when asyncContinuation is $continuation" in {
+          Given("generated metadata with the default policy or a job-managed asynchronous continuation")
+          val policy = if (continuation)
+            CommandExecutionPolicy(managedByJob = true, asyncContinuation = true)
+          else
+            CommandExecutionPolicy.default
+          val component = _component_with_policy(policy)
+          val controls = Vector(
+            (None, "subsystem", "domain", "domain"),
+            (Some("org.goldenport.fixture.Domain"), "component", "domain", "address"),
+            (Some("org.goldenport.fixture.Domain.address"), "service", "address", "lookupAddress")
+          )
+
+          When("actual subsystem, component, service, and operation Help records use both JSON channels")
+          val controljson = controls.map { case (selector, kind, name, child) =>
+            (_help_json(HelpProjection.project(component, selector)), kind, name, child)
+          }
+          val operationjson = Vector(
+            "org.goldenport.fixture.Domain.address.lookupAddress",
+            "domain.address.lookupAddress"
+          ).flatMap(selector => _help_json(HelpProjection.project(component, Some(selector))))
+
+          Then("the control targets retain their identities and discoverable children without error payloads")
+          controljson.foreach { case (documents, kind, name, child) =>
+            documents.foreach { case (document, formatted) =>
+              val cursor = document.hcursor
+              cursor.downField("error").focus shouldBe None
+              cursor.get[String]("type") shouldBe Right(kind)
+              cursor.get[String]("name") shouldBe Right(name)
+              cursor.get[Vector[String]]("children").toOption.getOrElse(fail("children are missing")) should contain (child)
+              if (kind != "subsystem")
+                cursor.get[String](_wire_key("componentId", formatted)) shouldBe Right("org.goldenport.fixture.Domain")
+            }
+          }
+
+          And("each operation channel retains concrete generated metadata and every canonical policy field")
+          val mode = if (continuation) "JobSyncWithAsyncCont" else "Sync"
+          val expectedpolicy = Json.obj(
+            "mode" -> Json.fromString(mode),
+            "interfaceMode" -> Json.fromString("sync"),
+            "jobRunMode" -> Json.fromString("sync"),
+            "managedByJob" -> Json.fromBoolean(continuation),
+            "asyncContinuation" -> Json.fromBoolean(continuation),
+            "callerTransactionPolicy" -> Json.fromString("join-caller"),
+            "eventTransactionRequirement" -> Json.fromString("required"),
+            "jobTransactionScope" -> Json.fromString("per-task"),
+            "continuationEventTransactionRequirement" -> Json.fromString("required"),
+            "legacyMode" -> Json.fromString(if (continuation) "SyncJob" else "SyncDirectNoJob"),
+            "modeStatus" -> Json.fromString("canonical"),
+            "deprecated" -> Json.False
+          ).deepMerge(if (continuation)
+            Json.obj("continuationMode" -> Json.fromString("event-async-same-job-task"))
+          else
+            Json.obj())
+          operationjson.foreach { case (document, formatted) =>
+            val cursor = document.hcursor
+            cursor.downField("error").focus shouldBe None
+            cursor.get[String]("type") shouldBe Right("operation")
+            cursor.get[String]("name") shouldBe Right("lookupAddress")
+            cursor.get[String](_wire_key("componentId", formatted)) shouldBe Right("org.goldenport.fixture.Domain")
+            cursor.get[String]("summary") shouldBe Right("Look up an address by postal code.")
+            cursor.downField("details").get[Vector[String]]("description") shouldBe Right(Vector(
+              "Look up an address by postal code.Returns a normalized address representation."
+            ))
+            cursor.downField("details").get[Vector[String]]("arguments") shouldBe Right(Vector("description"))
+            cursor.downField("details").get[Vector[String]](_wire_key("argumentDetails", formatted)) shouldBe Right(Vector(
+              "description: text 1 [min-length=1, max-length=8192]"
+            ))
+            cursor.downField("details").get[Vector[String]]("returns") shouldBe Right(Vector("LookupAddressResult"))
+            val execution = cursor.downField(_wire_key("commandExecution", formatted))
+            val wirepolicy = Json.fromFields(expectedpolicy.asObject.get.toVector.map { case (key, value) =>
+              _wire_key(key, formatted) -> value
+            })
+            execution.downField(_wire_key("commandExecutionPolicy", formatted)).focus shouldBe Some(wirepolicy)
+            execution.get[String](_wire_key("effectiveCommandExecutionMode", formatted)) shouldBe Right(mode)
+            val evaluation = cursor.downField("evaluation")
+            evaluation.downField("corpus").get[String]("profile") shouldBe Right("postal-lookup")
+            evaluation.downField("corpus").get[String]("capture") shouldBe Right("candidate")
+            evaluation.downField("experiment").get[Boolean]("eligible") shouldBe Right(true)
+          }
+        }
+      }
+    }
+
     "E1 project service and operation help from generated specification metadata" must _e1 {
       "when exercising: project service and operation help from generated specification metadata" in {
         Given("a generated-style component with help metadata on the service and operation")
@@ -203,6 +299,81 @@ final class GeneratedHelpProjectionSpec
         model.service shouldBe Some("system")
         json should include ("\"componentId\":\"org.goldenport.cncf.Admin\"")
       }
+    }
+  }
+
+  private def _component_with_policy(policy: CommandExecutionPolicy): Component = {
+    val template = GeneratedHelpProjectionFixture.component()
+    val factory = new Component.SinglePrimaryBundleFactory {
+      override protected def create_Component(params: ComponentCreate): Component =
+        new Component() {
+          override def displayName: String = template.displayName
+
+          override def operationDefinitions: Vector[CmlOperationDefinition] =
+            template.operationDefinitions.map(_.copy(commandExecutionPolicy = Some(policy)))
+
+          override def componentDefinitionRecords: Vector[Record] = template.componentDefinitionRecords
+
+          override def subsystemDefinitionRecords: Vector[Record] = template.subsystemDefinitionRecords
+        }
+
+      override protected def create_Core(params: ComponentCreate, comp: Component): Component.Core =
+        Component.Core.create(
+          template.componentId.name,
+          template.componentId,
+          ComponentInstanceId.default(template.componentId),
+          template.protocol,
+          this
+        )
+    }
+    val subsystem = TestComponentFactory.emptySubsystem("domain")
+    val component = factory.create(ComponentCreate(
+      subsystem = subsystem,
+      origin = ComponentOrigin.Repository("cozy-generated")
+    )).primary
+    subsystem.add(Vector(component))
+    subsystem.components.find(_.name == component.name).getOrElse(component)
+  }
+
+  private val _formatter_keys = Map(
+    "componentId" -> "component_id",
+    "commandExecution" -> "command_execution",
+    "commandExecutionPolicy" -> "command_execution_policy",
+    "effectiveCommandExecutionMode" -> "effective_command_execution_mode",
+    "argumentDetails" -> "argument_details",
+    "mode" -> "mode",
+    "interfaceMode" -> "interface_mode",
+    "jobRunMode" -> "job_run_mode",
+    "managedByJob" -> "managed_by_job",
+    "asyncContinuation" -> "async_continuation",
+    "callerTransactionPolicy" -> "caller_transaction_policy",
+    "eventTransactionRequirement" -> "event_transaction_requirement",
+    "jobTransactionScope" -> "job_transaction_scope",
+    "continuationEventTransactionRequirement" -> "continuation_event_transaction_requirement",
+    "continuationMode" -> "continuation_mode",
+    "legacyMode" -> "legacy_mode",
+    "modeStatus" -> "mode_status",
+    "deprecated" -> "deprecated"
+  )
+
+  private def _wire_key(key: String, formatted: Boolean): String =
+    if (formatted) _formatter_keys(key) else key
+
+  private def _help_json(record: Record): Vector[(Json, Boolean)] = {
+    val encoded = RecordEncoder.jsonC(record).TAKE
+    val request = Request.ofOperation("meta.help").copy(
+      properties = List(Property("textus.output.format", "json", None))
+    )
+    val formatted = OperationResponseFormatter.toResponse(
+      request,
+      OperationResponse.RecordResponse(record),
+      RunMode.Command
+    ) match {
+      case Response.Json(value) => value
+      case other => fail(s"Expected a public JSON Help response, got $other")
+    }
+    Vector(encoded -> false, formatted -> true).map { case (value, channel) =>
+      io.circe.parser.parse(value).fold(error => fail(s"Invalid Help JSON: $error"), identity) -> channel
     }
   }
 }
