@@ -1,11 +1,13 @@
 package org.goldenport.cncf.cli
 
 import java.io.{ByteArrayOutputStream, PrintStream}
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Path, Paths}
 import java.security.MessageDigest
 import java.sql.DriverManager
 import java.util.Comparator
+import java.util.zip.ZipOutputStream
 import org.goldenport.Consequence
+import org.goldenport.cncf.component.testutil.CarArchiveFixture
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -13,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Aug.  6, 2026
  *  version Aug. 13, 2026
- * @version Oct. 22, 2026
+ * @version Oct. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeLaunchFailureSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -97,6 +99,7 @@ final class RuntimeLaunchFailureSpec extends AnyWordSpec with Matchers with Give
         val datastore = root.resolve("runtime.sqlite")
         val descriptor = root.resolve("test.yaml")
         val assembly = root.resolve("assembly.yaml")
+        val componentfile = _component_fixture(root, "Phase12FixedUserFixture")
         Files.createDirectories(home.resolve(".textus"))
         Files.createDirectories(home.resolve(".cncf"))
         Files.writeString(
@@ -166,6 +169,7 @@ final class RuntimeLaunchFailureSpec extends AnyWordSpec with Matchers with Give
                 s"--textus.test.descriptor=${descriptor.toString}",
                 s"--textus.subsystem.file=${assembly.toString}",
                 s"--textus.assembly.descriptor=${assembly.toString}",
+                s"--textus.component.file=$componentfile",
                 "command"
               ),
               modeHint = Some(RunMode.Command),
@@ -213,6 +217,7 @@ final class RuntimeLaunchFailureSpec extends AnyWordSpec with Matchers with Give
         val home = root.resolve("home")
         val descriptor = root.resolve("test.yaml")
         val assembly = root.resolve("assembly.yaml")
+        val componentfile = _component_fixture(root, "Phase12MalformedProfileFixture")
         Files.createDirectories(home.resolve(".textus"))
         Files.writeString(
           home.resolve(".textus/user-profile.yaml"),
@@ -277,6 +282,7 @@ final class RuntimeLaunchFailureSpec extends AnyWordSpec with Matchers with Give
                   s"--textus.test.descriptor=${descriptor.toString}",
                   s"--textus.subsystem.file=${assembly.toString}",
                   s"--textus.assembly.descriptor=${assembly.toString}",
+                  s"--textus.component.file=$componentfile",
                   "command"
                 ),
                 _ => Nil
@@ -304,6 +310,21 @@ final class RuntimeLaunchFailureSpec extends AnyWordSpec with Matchers with Give
         }
       }
     }
+  }
+
+  private def _component_fixture(root: Path, localid: String): Path = {
+    val directory = Files.createDirectories(root.resolve(localid))
+    val descriptor = directory.resolve("component-descriptor.json")
+    Files.writeString(descriptor,
+      s"""{"schemaVersion":3,"component":{"namespace":"org.goldenport.cncf.test","id":"$localid","version":"1.0.0"}}""")
+    val jar = directory.resolve("main.jar")
+    new ZipOutputStream(Files.newOutputStream(jar)).close()
+    val car = directory.resolve("fixture.car")
+    CarArchiveFixture.write(car, Vector(
+      "component-descriptor.json" -> descriptor,
+      "component/main.jar" -> jar
+    ))
+    car
   }
 
   private def _sha256(path: java.nio.file.Path): String =

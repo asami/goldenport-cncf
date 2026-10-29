@@ -28,7 +28,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jul. 27, 2026
  *  version Aug. 13, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Oct. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll with GivenWhenThen {
@@ -45,13 +46,14 @@ final class RuntimeRepositoryBootstrapProjectionSpec extends AnyWordSpec with Ma
         val cardirectory = _component_car_directory(root.resolve("policy-car-directory"), "policy-car-directory")
         val carfile = _component_car_file(root.resolve("policy-car-file.car"), "policy-car-file")
         val subsystem = _subsystem_fixture(root.resolve("policy-subsystem"), "policy-subsystem")
+        val subsystemcar = _component_car_file(root.resolve("policy-subsystem.car"), "policy-subsystem")
         val cases = Vector(
           ("repositoryDirs", RuntimeConfig.repositoryDirKey, repository, RepositoryBootstrapPolicy(repositoryDirs = Vector(repository.toString)), "policy-repository"),
           ("componentDevDirs", RuntimeConfig.componentDevDirKey, development, RepositoryBootstrapPolicy(componentDevDirs = Vector(development.toString)), "PolicyDevelopment"),
           ("componentCarDirs", RuntimeConfig.componentCarDirKey, cardirectory, RepositoryBootstrapPolicy(componentCarDirs = Vector(cardirectory.toString)), "PolicyCarDirectory"),
           ("componentFiles", RuntimeConfig.componentFileKey, carfile, RepositoryBootstrapPolicy(componentFiles = Vector(carfile.toString)), "PolicyCarFile"),
-          ("subsystemDevDirs", RuntimeConfig.subsystemDevDirKey, subsystem, RepositoryBootstrapPolicy(subsystemDevDirs = Vector(subsystem.toString)), "policy-subsystem"),
-          ("subsystemSarDirs", RuntimeConfig.subsystemSarDirKey, subsystem, RepositoryBootstrapPolicy(subsystemSarDirs = Vector(subsystem.toString)), "policy-subsystem")
+          ("subsystemDevDirs", RuntimeConfig.subsystemDevDirKey, subsystem, RepositoryBootstrapPolicy(subsystemDevDirs = Vector(subsystem.toString), componentFiles = Vector(subsystemcar.toString)), "policy-subsystem"),
+          ("subsystemSarDirs", RuntimeConfig.subsystemSarDirKey, subsystem, RepositoryBootstrapPolicy(subsystemSarDirs = Vector(subsystem.toString), componentFiles = Vector(subsystemcar.toString)), "policy-subsystem")
         )
 
         When("runtime descriptor resolution receives raw values and an independently admitted policy")
