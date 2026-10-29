@@ -70,6 +70,18 @@ A tool may propose Fix / Accept / Defer / Configure, but developer admission det
 
 The implementation contract is [Finding Disposition ABI V1](../spec/finding-disposition.md),
 with the representation/authority boundary in [the design](../design/finding-disposition.md).
-`FindingDispositionSpec` provides executable coverage. Runtime-owned focused and
-whole-repository validation and independent review remain pending; source
-implementation alone does not close this Phase.
+`FindingDispositionSpec` provides executable coverage. On 2026-10-27, native
+compile and all 10 dedicated tests passed, and independent FD-01 review accepted
+commit `8e3e2db4`. These results prove the ABI fixtures, exact binding,
+compatibility, actual correction and actionable-backlog behavior.
+
+The first whole-repository check ran 6,880 tests in 909 completed suites. Its
+only failure was an existing configuration catalog test fixing the total number
+of definitions at 58 while the catalog contained 59. On 2026-10-29, the native
+Phase repair inventory continuation admitted that exact test file within the
+same reserved repair, preserving the accepted Step, original base and counts.
+The correction checks the scenario's single canonical Subsystem user-mode
+registration and retains its alias, target and codec assertions.
+
+Fresh whole-repository validation, independent integrated Phase review and
+native release closure remain required. This Phase remains in progress.
