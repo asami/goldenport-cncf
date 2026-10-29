@@ -64,7 +64,8 @@ independent explicit component process capability for that operation and
 selection. Read operations require ReadOnly or Manage. StageFullState,
 IndexTree, Fetch, FastForward, PendingMerge, CommitPending, Push,
 CreateCheckpoint, InstallCheckpoint, StageSelected, StageSelectedAll and
-CommitSelected require Manage. In particular, write-tree writes Git objects.
+CommitSelected, PreparePurposeCandidate, MaterializePurposeCandidate and
+CommitPurposeCandidate require Manage. In particular, write-tree writes Git objects.
 
 The policy requires the identical binding object, not an equal workspace ID.
 Scope labels do not establish component identity. A binding invalidated after
@@ -115,7 +116,7 @@ Branches obey strict ref-part rules: no leading option/slash, trailing
 slash/dot, controls or space, forbidden Git ref punctuation, empty/dot-leading
 or .lock-ending segments, double slash/dot or @{; bare @ is invalid.
 Selection IDs are lowercase safe tokens of at most 64 characters.
-The finite operation set has thirty-four kinds. CheckSelectedIndex and
+The finite operation set has thirty-seven kinds. CheckSelectedIndex and
 SelectedIndexChanges carry a selection ID and canonical parent OID;
 TreeChanges carries two canonical OIDs without a selection. TreeEntries carries
 an explicit tree OID and a selection ID. All four are
@@ -164,6 +165,47 @@ remote branch.
 | `SelectedIndexChanges(selectionId: GitSelectionId, parent: GitObjectId)` | `Vector[GitTreeChange]` | `--literal-pathspecs diff --cached --no-ext-diff --no-textconv --raw --no-abbrev --no-renames -z PARENT -- FIXED_SELECTED_PATHS` |
 | `TreeChanges(before: GitObjectId, after: GitObjectId)` | `Vector[GitTreeChange]` | `diff-tree --no-commit-id --no-ext-diff --no-textconv --raw --no-abbrev --no-renames -r -z BEFORE AFTER --` |
 | `TreeEntries(tree: GitObjectId, selectionId: GitSelectionId)` | `Vector[GitSelectedTreeEntry]` | `--literal-pathspecs ls-tree --full-tree -z TREE -- FIXED_SELECTED_PATHS` |
+| `PreparePurposeCandidate(selectionId, request)` | `GitPurposeCandidate` | bounded private-tree preparation and fixed-identity `commit-tree` |
+| `MaterializePurposeCandidate(selectionId, candidate, workspace)` | `Unit` | revalidate candidate, then `worktree add --detach -- DESTINATION COMMIT` |
+| `CommitPurposeCandidate(selectionId, candidate)` | `Unit` | revalidate candidate, install any selected worktree repair, compare-parent `update-ref`, then install projected index |
+
+### Purpose-specific candidates
+
+The three purpose operations use finite ordered selections and fixed host commit
+identity/message. An explicit selected declaration admits host-owned paths and
+message. Under adopted GIT-1, per-call `GitSelectionParameters` may instead narrow
+admitted repository capabilities: all three purpose operations require both
+`CreateCheckpoint` and `InstallCheckpoint` grants, and use their intersected
+limits. A repository grant alone supplies no selected paths or message. Their protected DSL wrappers are
+`git_prepare_purpose_candidate`, `git_materialize_purpose_candidate` and
+`git_commit_purpose_candidate`; each records one ordinary GitExec intent.
+No purpose operation is added to the fixed repository-family expansion.
+
+`GitPurposeRequest` binds the expected native parent commit and index tree to 1..256
+distinct selected regular-file paths, expected worktree text and intended
+optional text content. Paths must equal an admitted scope or be within its
+directory. NUL/binary input, unsupported entries, inconsistent existing modes,
+stale branch/HEAD/index/worktree observations and inseparable staged remainders
+are refused. Text is finite UTF-8, bounded by one eighth of work-area capacity
+and the admitted stdin/stdout limits. Only the closed internal purpose lowering
+can supply byte input and a private GIT_INDEX_FILE; ordinary Git requests keep
+their existing input restrictions.
+
+Preparation builds native candidate objects through private indexes without
+changing source HEAD, real index or worktree. The projected index preserves
+independent staged changes. An optional baseline tree allows a selected repair
+to be projected onto the existing worktree while retaining its other content.
+Candidate values and object IDs express observations, not human acceptance.
+
+Materialization requires a separately admitted Manage workspace that is empty,
+distinct from the source and outside its ancestry in either direction. It
+revalidates the candidate before creating its detached Git worktree. Installation
+revalidates the inputs and exact candidate tree, single parent and fixed message,
+then installs the selected worktree projection, advances HEAD with the expected
+parent, and installs the remaining staged tree. A failure after an effect must
+be collected and reconciled by the owning consumer; it is not authority to
+replay. Settled operations release their temporary inputs; an unconfirmed
+process retains the work area it may still own.
 
 Every invocation directly starts the configured normal Git executable. The
 shared fixed prefix is
@@ -385,18 +427,21 @@ Each Git declaration retains exactly the base fields target, operation (stable k
 capability, identity, gitExecutable, localBranch, remote, remoteBranch,
 endpoint, commitIdentity, selectionId, selectedPath, commitMessage, limits
 and environment. commitIdentity is null or exactly {name,email}, required
-only for PendingMerge, CommitPending, CreateCheckpoint and CommitSelected.
-Exactly CommitSelected, CheckSelectedIndex, SelectedIndexChanges and TreeEntries also
+only for PendingMerge, CommitPending, CreateCheckpoint, CommitSelected and the
+three purpose operations.
+Exactly CommitSelected, CheckSelectedIndex, SelectedIndexChanges, TreeEntries,
+PreparePurposeCandidate, MaterializePurposeCandidate and CommitPurposeCandidate also
 require selectedPaths: a nonnull array of 1..256 unique valid literal GitPaths.
 The operation is decoded before selecting its strict allowed and required
-field set. Those four kinds emit selectedPaths; every other kind omits it
+field set. Those seven kinds emit selectedPaths; every other kind omits it
 and rejects it even when null or empty. Missing, null, empty, duplicate or
 escaping path arrays fail. The private direct creator's trailing empty default
 is only nonapplicable data; it never authorizes an old unbounded CommitSelected
 declaration. There are no aliases or old-wire fallbacks.
-Selection ID is required only for the six selected kinds. Fixed single path is
+Selection ID is required only for the nine selected kinds. Fixed single path is
 required only for StageSelected/StageSelectedAll. Fixed message is required
-only for CommitSelected and is nonempty, non-NUL and at most 4096 UTF-8 bytes.
+only for CommitSelected and the three purpose operations and is nonempty,
+non-NUL and at most 4096 UTF-8 bytes. Purpose messages must also be trimmed.
 Unrelated optional fields must be null. Identity values are nonblank and
 control-free. There is no executable fallback or generic argv schema.
 
@@ -405,7 +450,8 @@ capabilities, workspace/kind/selection keys, owners or grants fail.
 Each process grant requires corresponding same-owner workspace permission.
 Workspace permission alone creates no process grant. Per workspace, at most
 128 StageSelected, 256 StageSelectedAll, 64 CommitSelected,
-64 CheckSelectedIndex, 64 SelectedIndexChanges and 64 TreeEntries declarations
+64 CheckSelectedIndex, 64 SelectedIndexChanges, 64 TreeEntries and 64 of each
+purpose operation declarations
 are admitted, using the existing conflict-path/goal-path/goal-step bounds.
 A selection token carries no application-specific prefix or new family field.
 
@@ -451,10 +497,13 @@ applications continue to submit typed Git intent only.
 
 ### R4 — Selected and legacy contracts remain explicit
 
-The six selected kinds require their explicit `gitPrograms`
-declarations and independent grants. A family never authorizes them. Their
-selection counts, ordered logical scopes, fixed messages and derived physical
-path rules remain unchanged. A family may coexist with explicit selected
+The nine selected kinds retain explicit `gitPrograms` declarations and
+independent grants for host-owned selections. Adopted GIT-1 also permits finite
+per-call selections narrowed from admitted repository capabilities; the purpose
+operations require both checkpoint grants and their intersected limits as
+specified above. A family never supplies an unbounded selection. Selection
+counts, ordered logical scopes, fixed messages and derived physical path rules
+remain unchanged. A family may coexist with explicit selected
 declarations, but any explicit nonselected declaration on the family target
 is rejected. V1/V2/V3 retain their exact schemas, encoding and grant behavior;
 an operation absent from V3 remains denied without fallback.

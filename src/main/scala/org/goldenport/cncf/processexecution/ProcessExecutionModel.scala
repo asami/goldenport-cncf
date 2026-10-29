@@ -8,7 +8,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceExecutionAdmiss
 /*
  * @since   Jul. 17, 2026
  *  version Jul. 22, 2026
- * @version Oct. 27, 2026
+ * @version Oct. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ProcessCapabilityId private (value: String) {
@@ -345,7 +345,8 @@ final class ProcessProgramDefinition private (
   val allowedResourceTrees: Map[ResourceTreeReference, ResourceTreeLimits],
   private[processexecution] val _environment: ProcessEnvironment,
   private[processexecution] val _sbt_metadata: Option[SbtProgramMetadata] = None,
-  private[processexecution] val _git_metadata: Option[GitProgramMetadata] = None
+  private[processexecution] val _git_metadata: Option[GitProgramMetadata] = None,
+  private[processexecution] val _git_purpose_input: Boolean = false
 ) {
   def validateRequestC(
     request: ProcessExecutionRequest,
@@ -354,7 +355,7 @@ final class ProcessProgramDefinition private (
     for {
       _ <- limits.requireFiniteC
       _ <- _sbt_metadata.fold(Consequence.unit)(_ => SbtExecutionAdmission.validateRequestC(request))
-      _ <- _git_metadata.fold(Consequence.unit)(_ => GitExecutionAdmission.validateRequestC(request))
+      _ <- validateGitRequestC(request)
       _ <- argumentPolicy.validateC(request.arguments, limits)
       _ <- _validate_working_directory_c(request)
       _ <- _validate_artifacts_c(request)
@@ -363,6 +364,13 @@ final class ProcessProgramDefinition private (
       _ <- _validate_input_c(request.input, limits)
       _ <- _validate_output_limits_c(request.outputs, limits)
     } yield ()
+
+  private[processexecution] def validateGitRequestC(request: ProcessExecutionRequest): Consequence[Unit] =
+    if (_git_purpose_input) request.input match {
+      case ProcessExecutionInput.Empty | ProcessExecutionInput.Bytes(_) =>
+        GitExecutionAdmission.validateRequestC(request.copy(input = ProcessExecutionInput.Empty))
+      case _ => GitProgramDefinition.invalidC
+    } else _git_metadata.fold(Consequence.unit)(_ => GitExecutionAdmission.validateRequestC(request))
 
   private def _validate_working_directory_c(request: ProcessExecutionRequest): Consequence[Unit] =
     if (request.workingDirectory.nonEmpty && !allowsWorkingDirectory)
@@ -579,6 +587,18 @@ object ProcessProgramDefinition {
       definition.allowedInputFiles, definition.allowedInputFilePaths, definition.allowedResourceTrees,
       definition._environment, definition._sbt_metadata, Some(metadata))
 
+  /** Only the admitted purpose owner can lower these closed finite Git steps. */
+  private[processexecution] def gitPurposeStepC(definition: ProcessProgramDefinition,
+    arguments: Vector[String], index: Option[String] = None): Consequence[ProcessProgramDefinition] = for {
+    metadata <- definition._git_metadata.filter(value => GitPurposeCandidateExecution.isPurpose(value.kind))
+      .map(Consequence.success).getOrElse(GitProgramDefinition.invalidC)
+    environment <- ProcessEnvironment.fixedC(definition._environment.values ++ index.map("GIT_INDEX_FILE" -> _))
+  } yield new ProcessProgramDefinition(definition.capability, definition.safeProgramIdentity,
+    definition._executable_location, GitProgramDefinition.prefix ++ arguments,
+    ProcessArgumentPolicy(GitProgramDefinition.prefix ++ arguments), definition.maximumLimits,
+    definition.allowedArtifacts, false, Set.empty, Map.empty, Map.empty, environment,
+    definition._sbt_metadata, Some(metadata), true)
+
   /** Derive only a narrower immutable TestOnly definition after actual grant lookup. */
   private[processexecution] def narrowSbtScenarioC(
     definition: ProcessProgramDefinition,
@@ -773,7 +793,7 @@ final class ProcessExecutionAdmission private (
     definition <- if (selection.isEmpty) policy.gitDefinitionC(binding, operation.kind, operation.selectionIdOption)
       else policy.gitDefinitionC(binding, GitProgramDefinition.selectedBaseKind(operation.kind), None)
     grant <- admission._grant_c(definition.capability)
-    installLimits <- if (selection.nonEmpty && operation.kind == GitOperationKind.CommitSelected) for {
+    installLimits <- if (selection.nonEmpty && (operation.kind == GitOperationKind.CommitSelected || GitPurposeCandidateExecution.isPurpose(operation.kind))) for {
       install <- policy.gitDefinitionC(binding, GitOperationKind.InstallCheckpoint, None)
       installGrant <- admission._grant_c(install.capability)
       limits <- ProcessExecutionLimits.effectiveC(install.maximumLimits, installGrant.maximumLimits, ProcessExecutionLimits.empty)

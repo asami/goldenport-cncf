@@ -114,20 +114,26 @@ enum GitOperationKind(val wireName: String) {
   case SelectedIndexChanges extends GitOperationKind("selected-index-changes")
   case TreeChanges extends GitOperationKind("tree-changes")
   case TreeEntries extends GitOperationKind("tree-entries")
+  case PreparePurposeCandidate extends GitOperationKind("prepare-purpose-candidate")
+  case MaterializePurposeCandidate extends GitOperationKind("materialize-purpose-candidate")
+  case CommitPurposeCandidate extends GitOperationKind("commit-purpose-candidate")
 
   private[cncf] def permission: WorkspacePermission = this match {
     case StageFullState | IndexTree | Fetch | FastForward | PendingMerge | CommitPending | Push |
-        CreateCheckpoint | InstallCheckpoint | StageSelected | StageSelectedAll | CommitSelected => WorkspacePermission.Manage
+        CreateCheckpoint | InstallCheckpoint | StageSelected | StageSelectedAll | CommitSelected |
+        PreparePurposeCandidate | MaterializePurposeCandidate | CommitPurposeCandidate => WorkspacePermission.Manage
     case _ => WorkspacePermission.ReadOnly
   }
 
   private[cncf] def requiresIdentity: Boolean = this match {
-    case PendingMerge | CommitPending | CreateCheckpoint | CommitSelected => true
+    case PendingMerge | CommitPending | CreateCheckpoint | CommitSelected | PreparePurposeCandidate |
+        MaterializePurposeCandidate | CommitPurposeCandidate => true
     case _ => false
   }
 
   private[cncf] def selected: Boolean = this match {
-    case StageSelected | StageSelectedAll | CommitSelected | CheckSelectedIndex | SelectedIndexChanges | TreeEntries => true
+    case StageSelected | StageSelectedAll | CommitSelected | CheckSelectedIndex | SelectedIndexChanges | TreeEntries |
+        PreparePurposeCandidate | MaterializePurposeCandidate | CommitPurposeCandidate => true
     case _ => false
   }
 }
@@ -168,6 +174,10 @@ enum GitOperation[A] {
   case TreeChanges(before: GitObjectId, after: GitObjectId) extends GitOperation[Vector[GitTreeChange]]
   case TreeEntries(tree: GitObjectId, selectionId: GitSelectionId) extends GitOperation[Vector[GitSelectedTreeEntry]]
 
+  case PreparePurposeCandidate(selectionId: GitSelectionId, request: GitPurposeRequest) extends GitOperation[GitPurposeCandidate]
+  case MaterializePurposeCandidate(selectionId: GitSelectionId, candidate: GitPurposeCandidate, workspace: WorkspaceId) extends GitOperation[Unit]
+  case CommitPurposeCandidate(selectionId: GitSelectionId, candidate: GitPurposeCandidate) extends GitOperation[Unit]
+
   def kind: GitOperationKind = this match {
     case Branch => GitOperationKind.Branch
     case Root => GitOperationKind.Root
@@ -203,6 +213,9 @@ enum GitOperation[A] {
     case SelectedIndexChanges(_, _) => GitOperationKind.SelectedIndexChanges
     case TreeChanges(_, _) => GitOperationKind.TreeChanges
     case TreeEntries(_, _) => GitOperationKind.TreeEntries
+    case PreparePurposeCandidate(_, _) => GitOperationKind.PreparePurposeCandidate
+    case MaterializePurposeCandidate(_, _, _) => GitOperationKind.MaterializePurposeCandidate
+    case CommitPurposeCandidate(_, _) => GitOperationKind.CommitPurposeCandidate
   }
 
   private[cncf] def selectionIdOption: Option[GitSelectionId] = this match {
@@ -212,9 +225,22 @@ enum GitOperation[A] {
     case CheckSelectedIndex(id, _) => Some(id)
     case SelectedIndexChanges(id, _) => Some(id)
     case TreeEntries(_, id) => Some(id)
+    case PreparePurposeCandidate(id, _) => Some(id)
+    case MaterializePurposeCandidate(id, _, _) => Some(id)
+    case CommitPurposeCandidate(id, _) => Some(id)
     case _ => None
   }
 }
+
+/** Purpose content is data within an independently admitted finite path selection.
+  * Expected native facts describe the candidate source; they are not authority.
+  * Preparation never changes the source index, HEAD or worktree. The projected
+  * index preserves the original staged delta after the accepted purpose commit.
+  */
+final case class GitPurposeChange(path: GitPath, expectedWorktree: Option[String], content: Option[String])
+final case class GitPurposeRequest(parent: GitObjectId, index: GitObjectId, changes: Vector[GitPurposeChange], baselineTree: Option[GitObjectId] = None)
+final case class GitPurposeCandidate(request: GitPurposeRequest, commit: GitObjectId, tree: GitObjectId,
+  projectedIndex: GitObjectId, message: String, worktreeBefore: Option[GitObjectId] = None, worktreeAfter: Option[GitObjectId] = None)
 
 final case class GitRemoteTip(branch: GitBranchName, tip: GitObjectId)
 final case class GitHistoryCounts(localAhead: Long, remoteAhead: Long)
@@ -393,9 +419,11 @@ private[cncf] object GitProgramDefinition {
 
   private[processexecution] def selectedBaseKind(kind: GitOperationKind): GitOperationKind = kind match {
     case GitOperationKind.StageSelected | GitOperationKind.StageSelectedAll => GitOperationKind.StageFullState
-    case GitOperationKind.CommitSelected => GitOperationKind.CreateCheckpoint
+    case GitOperationKind.CommitSelected | GitOperationKind.PreparePurposeCandidate |
+        GitOperationKind.MaterializePurposeCandidate | GitOperationKind.CommitPurposeCandidate => GitOperationKind.CreateCheckpoint
     case GitOperationKind.CheckSelectedIndex => GitOperationKind.CheckPendingIndex
     case GitOperationKind.SelectedIndexChanges => GitOperationKind.PendingDiff
+    case GitOperationKind.TreeEntries => GitOperationKind.Tree
     case other => other
   }
 
@@ -432,7 +460,7 @@ private[cncf] object GitProgramDefinition {
       Paths.get(definition._executable_location), metadata.localBranch, metadata.remote, metadata.remoteBranch, metadata.endpoint,
       if (operation.kind.requiresIdentity) metadata.commitIdentity else None, Some(selection.identity),
       if (stage) selection.paths.headOption else None,
-      if (operation.kind == GitOperationKind.CommitSelected) selection.message else None,
+      if (operation.kind == GitOperationKind.CommitSelected || GitPurposeCandidateExecution.isPurpose(operation.kind)) selection.message else None,
       definition.maximumLimits, definition._environment.values.filter((key, _) => Set("PATH", "SSH_AUTH_SOCK", "TMPDIR")(key)),
       if (stage) Vector.empty else selection.paths)
   } yield selected
@@ -449,12 +477,13 @@ private[cncf] object GitProgramDefinition {
     _ <- if (identity != null && selection != null && path != null && message != null &&
       identity.isDefined == kind.requiresIdentity && selection.isDefined == kind.selected &&
       path.isDefined == (kind == GitOperationKind.StageSelected || kind == GitOperationKind.StageSelectedAll) &&
-      message.isDefined == (kind == GitOperationKind.CommitSelected)) Consequence.unit else invalidC
+      message.isDefined == (kind == GitOperationKind.CommitSelected || GitPurposeCandidateExecution.isPurpose(kind))) Consequence.unit else invalidC
     _ <- identity.fold(Consequence.unit)(x => if (x != null && _identity_text(x.name) && _identity_text(x.email)) Consequence.unit else invalidC)
     _ <- selection.fold(Consequence.unit)(x => if (x == null) invalidC else GitSelectionId.parseC(x.value).map(_ => ()))
     _ <- path.fold(Consequence.unit)(x => if (x == null) invalidC else GitPath.parseC(x.value).map(_ => ()))
     _ <- if (paths != null && (kind match {
-      case GitOperationKind.CommitSelected | GitOperationKind.CheckSelectedIndex | GitOperationKind.SelectedIndexChanges | GitOperationKind.TreeEntries =>
+      case GitOperationKind.CommitSelected | GitOperationKind.CheckSelectedIndex | GitOperationKind.SelectedIndexChanges | GitOperationKind.TreeEntries |
+          GitOperationKind.PreparePurposeCandidate | GitOperationKind.MaterializePurposeCandidate | GitOperationKind.CommitPurposeCandidate =>
         paths.nonEmpty && paths.size <= 256 && paths.distinct.size == paths.size &&
           paths.forall(x => x != null && GitPath.parseC(x.value).isSuccess)
       case _ => paths.isEmpty
@@ -480,6 +509,7 @@ private[cncf] object GitProgramDefinition {
     val identity = metadata.commitIdentity.toVector.flatMap(x => _l_("-c", s"user.name=${x.name.trim}",
       "-c", s"user.email=${x.email.trim}", "-c", "user.useConfigOnly=true"))
     val command = metadata.kind match {
+      case GitOperationKind.PreparePurposeCandidate | GitOperationKind.MaterializePurposeCandidate | GitOperationKind.CommitPurposeCandidate => _l_("rev-parse", "--verify", "HEAD")
       case GitOperationKind.Branch => _l_("symbolic-ref", "--quiet", "--short", "HEAD")
       case GitOperationKind.Root => _l_("rev-parse", "--show-toplevel")
       case GitOperationKind.RemoteTip => _l_("ls-remote", "--exit-code", "--heads", "--", metadata.endpoint, s"refs/heads/${metadata.remoteBranch.value}")

@@ -22,11 +22,169 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 27, 2026
+ * @version Oct. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import GitExecutionSpecSupport.*
+
+  "Purpose-specific native candidates" should {
+    "commit originally unstaged shared-file content before independent staged content without changing excluded work" in {
+      Given("independent staged and unstaged purposes in one file and unrelated staged, unstaged and untracked work")
+      val driver = new LocalProcessExecutionDriver()
+      val fixture = create(driver = Some(driver))
+      val original = "one\ntwo\nthree\nfour\nfive\nsix\nseven\n"
+      val staged = original.replace("one", "staged purpose")
+      val selected = original.replace("seven", "unstaged purpose")
+      val complete = staged.replace("seven", "unstaged purpose")
+      try {
+        initialize(fixture, Map("selected.txt" -> original, "unrelated.txt" -> "base\n", "ongoing.txt" -> "base\n"))
+        Files.writeString(fixture.checkout.resolve("selected.txt"), staged)
+        Files.writeString(fixture.checkout.resolve("unrelated.txt"), "excluded staged\n")
+        setup(fixture.checkout, "add", "--", "selected.txt", "unrelated.txt")
+        Files.writeString(fixture.checkout.resolve("selected.txt"), complete)
+        Files.writeString(fixture.checkout.resolve("ongoing.txt"), "excluded unstaged\n")
+        Files.writeString(fixture.checkout.resolve("untracked.txt"), "excluded untracked\n")
+        val parent = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        val index = GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption.get
+        val originalindex = Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector
+        val request = GitPurposeRequest(parent, index, Vector(GitPurposeChange(
+          GitPath.parseC("selected.txt").toOption.get, Some(complete), Some(selected))))
+        When("the typed UoW prepares the originally unstaged purpose without staging the live worktree")
+        val candidate = GitExecutionSpecSupport.execute(fixture, GitOperation.PreparePurposeCandidate(selectionId, request))
+          .toOption.get.valueC.toOption.get
+        Then("preparation creates native candidate objects but preserves the original index bytes and HEAD")
+        Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector shouldBe originalindex
+        GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption shouldBe Some(parent)
+        When("an owning consumer installs that candidate through the separate typed operation")
+        val committed = GitExecutionSpecSupport.execute(fixture, GitOperation.CommitPurposeCandidate(selectionId, candidate)).toOption.get
+        Then("the actual first commit contains only the unstaged purpose and the original staged purpose remains staged")
+        committed.outcome shouldBe GitExecutionOutcome.Succeeded
+        val first = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        first shouldBe candidate.commit
+        val remaining = GitExecutionSpecSupport.execute(fixture, GitOperation.PendingDiff(first)).toOption.get.valueC.toOption.get.text
+        remaining should include("+staged purpose")
+        remaining should include("+excluded staged")
+        remaining should not include("+unstaged purpose")
+        val nextindex = GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption.get
+        val next = GitPurposeRequest(first, nextindex, Vector(GitPurposeChange(
+          GitPath.parseC("selected.txt").toOption.get, Some(complete), Some(complete))))
+        When("the second independent purpose is prepared and installed after its actual predecessor")
+        val second = GitExecutionSpecSupport.execute(fixture, GitOperation.PreparePurposeCandidate(selectionId, next))
+          .toOption.get.valueC.toOption.get
+        GitExecutionSpecSupport.execute(fixture, GitOperation.CommitPurposeCandidate(selectionId, second)).toOption.get.outcome shouldBe GitExecutionOutcome.Succeeded
+        Then("the selected file is clean and all excluded content and staging intent survive both commits")
+        val dirty = GitExecutionSpecSupport.execute(fixture, GitOperation.Status).toOption.get.valueC.toOption.get
+        dirty.map(_.path.value).toSet shouldBe Set("unrelated.txt", "ongoing.txt", "untracked.txt")
+        dirty.find(_.path.value == "unrelated.txt").get.indexCode shouldBe 'M'
+        dirty.find(_.path.value == "ongoing.txt").get.worktreeCode shouldBe 'M'
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe complete
+        Files.readString(fixture.checkout.resolve("unrelated.txt")) shouldBe "excluded staged\n"
+        Files.readString(fixture.checkout.resolve("ongoing.txt")) shouldBe "excluded unstaged\n"
+        Files.readString(fixture.checkout.resolve("untracked.txt")) shouldBe "excluded untracked\n"
+        When("a completed candidate is supplied again")
+        GitExecutionSpecSupport.execute(fixture, GitOperation.CommitPurposeCandidate(selectionId, second)).isSuccess shouldBe false
+        Then("its old parent cannot create a duplicate commit")
+        GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption shouldBe Some(second.commit)
+      } finally { driver.close(); fixture.close() }
+    }
+
+    "project an admitted repair delta into the selected worktree while preserving independent staged meaning" in {
+      Given("an actual prepared B candidate and an independent staged A remainder")
+      val driver = new LocalProcessExecutionDriver()
+      val fixture = create(driver = Some(driver))
+      val original = "one\ntwo\nthree\nfour\nfive\nsix\nseven\n"
+      val staged = original.replace("one", "staged A")
+      val selected = original.replace("seven", "broken B")
+      val complete = staged.replace("seven", "broken B")
+      val repaired = selected.replace("broken B", "repaired B")
+      try {
+        initialize(fixture, Map("selected.txt" -> original, "unrelated.txt" -> "base\n"))
+        Files.writeString(fixture.checkout.resolve("selected.txt"), staged)
+        setup(fixture.checkout, "add", "--", "selected.txt")
+        Files.writeString(fixture.checkout.resolve("selected.txt"), complete)
+        Files.writeString(fixture.checkout.resolve("unrelated.txt"), "ongoing excluded\n")
+        val parent = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        val index = GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption.get
+        val path = GitPath.parseC("selected.txt").toOption.get
+        val initial = GitExecutionSpecSupport.execute(fixture, GitOperation.PreparePurposeCandidate(selectionId,
+          GitPurposeRequest(parent, index, Vector(GitPurposeChange(path, Some(complete), Some(selected)))))).toOption.get.valueC.toOption.get
+        When("the consumer supplies the actual prior candidate tree as the repair baseline")
+        val candidate = GitExecutionSpecSupport.execute(fixture, GitOperation.PreparePurposeCandidate(selectionId,
+          GitPurposeRequest(parent, index, Vector(GitPurposeChange(path, Some(complete), Some(repaired))), Some(initial.tree))))
+          .toOption.get.valueC.toOption.get
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe complete
+        GitExecutionSpecSupport.execute(fixture, GitOperation.CommitPurposeCandidate(selectionId, candidate)).toOption.get.outcome shouldBe GitExecutionOutcome.Succeeded
+        Then("only the repair delta changes the original worktree and A remains staged against the accepted repaired B")
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe complete.replace("broken B", "repaired B")
+        Files.readString(fixture.checkout.resolve("unrelated.txt")) shouldBe "ongoing excluded\n"
+        val remaining = GitExecutionSpecSupport.execute(fixture, GitOperation.PendingDiff(candidate.commit)).toOption.get.valueC.toOption.get.text
+        remaining should include("+staged A")
+        remaining should not include("+broken B")
+      } finally { driver.close(); fixture.close() }
+    }
+
+    "materialize the actual candidate into a distinct admitted empty validation workspace" in {
+      Given("a fixed separately granted validation workspace and excluded dirty source content")
+      val driver = new LocalProcessExecutionDriver()
+      val fixture = create(driver = Some(driver), validationWorkspace = true)
+      try {
+        initialize(fixture, Map("selected.txt" -> "base\n"))
+        Files.writeString(fixture.checkout.resolve("selected.txt"), "candidate\nexcluded remainder\n")
+        val parent = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        val index = GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption.get
+        val request = GitPurposeRequest(parent, index, Vector(GitPurposeChange(GitPath.parseC("selected.txt").toOption.get,
+          Some("candidate\nexcluded remainder\n"), Some("candidate\n"))))
+        val candidate = GitExecutionSpecSupport.execute(fixture, GitOperation.PreparePurposeCandidate(selectionId, request))
+          .toOption.get.valueC.toOption.get
+        When("the typed purpose operation materializes only the actual native candidate")
+        val materialized = GitExecutionSpecSupport.execute(fixture, GitOperation.MaterializePurposeCandidate(selectionId,
+          candidate, WorkspaceId.parseC("purpose-validation").toOption.get)).toOption.get
+        Then("normal product checks can consume candidate content while source work and staging remain intact")
+        materialized.outcome shouldBe GitExecutionOutcome.Succeeded
+        Files.readString(fixture.root.resolve("validation/selected.txt")) shouldBe "candidate\n"
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe "candidate\nexcluded remainder\n"
+        GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption shouldBe Some(parent)
+        GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption shouldBe Some(index)
+        val workareas = fixture.root.resolve("workareas")
+        def _retained_paths_(): Set[Path] = Using.resource(Files.walk(workareas))(_.iterator().asScala.toSet)
+        val retained = _retained_paths_()
+        When("materialization repeatedly reconstructs private indexes before refusing the occupied workspace")
+        (1 to 3).foreach { _ =>
+          GitExecutionSpecSupport.execute(fixture, GitOperation.MaterializePurposeCandidate(selectionId,
+            candidate, WorkspaceId.parseC("purpose-validation").toOption.get)).isSuccess shouldBe false
+          Then("each settled refusal releases its allocated work area and private candidate inputs")
+          _retained_paths_() shouldBe retained
+        }
+        Then("existing validation content is preserved rather than cleaned indiscriminately")
+        Files.readString(fixture.root.resolve("validation/selected.txt")) shouldBe "candidate\n"
+      } finally { driver.close(); fixture.close() }
+    }
+
+    "refuse stale selected content and binary input before changing source HEAD or index" in {
+      Given("a real dirty file and actual parent/index facts")
+      Vector("stale", "binary").foreach { kind =>
+        val driver = new LocalProcessExecutionDriver()
+        val fixture = create(driver = Some(driver))
+        try {
+          initialize(fixture, Map("selected.txt" -> "base\n"))
+          val parent = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+          val index = GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption.get
+          val bytes = Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector
+          val content = if (kind == "binary") "binary\u0000input" else "actual changed\n"
+          Files.writeString(fixture.checkout.resolve("selected.txt"), content)
+          val request = GitPurposeRequest(parent, index, Vector(GitPurposeChange(GitPath.parseC("selected.txt").toOption.get,
+            Some("different expected content\n"), Some("purpose\n"))))
+          When("preparation observes unsupported or different actual worktree content")
+          GitExecutionSpecSupport.execute(fixture, GitOperation.PreparePurposeCandidate(selectionId, request)).isSuccess shouldBe false
+          Then("no source commit, staging or cleanup discards the original work")
+          GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption shouldBe Some(parent)
+          Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector shouldBe bytes
+          Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe content
+        } finally { driver.close(); fixture.close() }
+      }
+    }
+  }
 
   "Selected committed-tree observations" should {
     "observe literal regular entries and absence in selection order independently of live index and worktree changes" in {
@@ -1391,8 +1549,8 @@ private[cncf] object GitExecutionSpecSupport {
     endpoint, if (kind.requiresIdentity) Some(GitCommitIdentity("Fixture", "fixture@example.invalid")) else None,
     if (kind.selected) Some(selectionId) else None,
     if (kind == GitOperationKind.StageSelected || kind == GitOperationKind.StageSelectedAll) Some(GitPath.parseC("selected.txt").toOption.get) else None,
-    if (kind == GitOperationKind.CommitSelected) Some("selected checkpoint") else None, limits, Map("PATH" -> "/usr/bin:/bin"),
-    if (Set(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges, GitOperationKind.TreeEntries).contains(kind))
+    if (kind == GitOperationKind.CommitSelected || GitPurposeCandidateExecution.isPurpose(kind)) Some("selected checkpoint") else None, limits, Map("PATH" -> "/usr/bin:/bin"),
+    if (Set(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges, GitOperationKind.TreeEntries, GitOperationKind.PreparePurposeCandidate, GitOperationKind.MaterializePurposeCandidate, GitOperationKind.CommitPurposeCandidate).contains(kind))
       Vector(GitPath.parseC("selected.txt").toOption.get) else Vector.empty)
 
   def definition(binding: WorkspaceBinding, declaration: GitRuntimeDeclaration): Consequence[ProcessProgramDefinition] =
@@ -1440,14 +1598,18 @@ private[cncf] object GitExecutionSpecSupport {
     selectedPath: String = "selected.txt",
     diffStdoutBytes: Long = limits.stdoutBytes.get,
     selectedScopes: Vector[String] = Vector.empty,
-    treeStdoutBytes: Long = limits.stdoutBytes.get
+    treeStdoutBytes: Long = limits.stdoutBytes.get,
+    validationWorkspace: Boolean = false
   ): GitSpecFixture = {
     val base = Files.createDirectories(Paths.get("target", "git-execution-spec").toAbsolutePath)
     val root = Files.createTempDirectory(base, "case-")
     val checkout = Files.createDirectory(root.resolve(checkoutName))
     val endpoint = root.resolve("remote.git").toString
-    val workspace = WorkspaceExecutionAdmission.createC(Vector(workspaceId -> checkout),
-      if (workspaceGranted) Vector(WorkspaceGrant(owner, workspaceId, permission)) else Vector.empty).toOption.get
+    val validationid = WorkspaceId.parseC("purpose-validation").toOption.get
+    val validation = if (validationWorkspace) Vector(validationid -> Files.createDirectory(root.resolve("validation"))) else Vector.empty
+    val workspace = WorkspaceExecutionAdmission.createC(Vector(workspaceId -> checkout) ++ validation,
+      if (workspaceGranted) Vector(WorkspaceGrant(owner, workspaceId, permission)) ++
+        validation.map(pair => WorkspaceGrant(owner, pair._1, WorkspacePermission.Manage)) else Vector.empty).toOption.get
     val binding = workspace.bindingC(workspaceId).toOption.get
     val definitions = GitOperationKind.values.toVector.map { kind =>
       val declared = declaration(kind, endpoint)
@@ -1553,5 +1715,8 @@ private[cncf] final class GitSpecBehavior(val behaviorCore: Behavior.Core) exten
     case GitOperation.SelectedIndexChanges(selectionid, parent) => git_selected_index_changes(target, selectionid, parent)
     case GitOperation.TreeChanges(before, after) => git_tree_changes(target, before, after)
     case GitOperation.TreeEntries(tree, selectionid) => git_tree_entries(target, tree, selectionid)
+    case GitOperation.PreparePurposeCandidate(id, request) => git_prepare_purpose_candidate(target, id, request)
+    case GitOperation.MaterializePurposeCandidate(id, candidate, workspace) => git_materialize_purpose_candidate(target, id, candidate, workspace)
+    case GitOperation.CommitPurposeCandidate(id, candidate) => git_commit_purpose_candidate(target, id, candidate)
   }
 }

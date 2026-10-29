@@ -134,7 +134,7 @@ import org.goldenport.cncf.config.{
   ComponentConfigurationSources
 }
 import org.goldenport.cncf.processexecution.{
-  GitTarget, GitOperation, GitExecutionResult, GitObjectId, GitPath, GitBranchName, GitSelectionId,
+  GitTarget, GitOperation, GitPurposeRequest, GitPurposeCandidate, GitExecutionResult, GitObjectId, GitPath, GitBranchName, GitSelectionId,
   GitRemoteTip, GitHistoryCounts, GitCommitMetadata, GitStatusEntry, GitIndexEntry, GitBlobContent, GitDiff, GitIndexCheck, GitTreeChange, GitSelectedTreeEntry,
   ProcessExecutionAdmission,
   ProcessExecutionRequest,
@@ -149,7 +149,7 @@ import org.goldenport.cncf.processexecution.{
 
 /*
  * @since   Sep. 28, 2026
- * @version Oct. 27, 2026
+ * @version Oct. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -270,6 +270,18 @@ trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.
 
   protected final def git_tree_changes(target: GitTarget, before: GitObjectId, after: GitObjectId): ExecUowM[GitExecutionResult[Vector[GitTreeChange]]] =
     _git_exec(target, GitOperation.TreeChanges(before, after))
+
+  protected final def git_prepare_purpose_candidate(target: GitTarget, selectionId: GitSelectionId,
+    request: GitPurposeRequest): ExecUowM[GitExecutionResult[GitPurposeCandidate]] =
+    _git_exec(target, GitOperation.PreparePurposeCandidate(selectionId, request))
+
+  protected final def git_materialize_purpose_candidate(target: GitTarget, selectionId: GitSelectionId,
+    candidate: GitPurposeCandidate, workspace: org.goldenport.cncf.workspace.WorkspaceId): ExecUowM[GitExecutionResult[Unit]] =
+    _git_exec(target, GitOperation.MaterializePurposeCandidate(selectionId, candidate, workspace))
+
+  protected final def git_commit_purpose_candidate(target: GitTarget, selectionId: GitSelectionId,
+    candidate: GitPurposeCandidate): ExecUowM[GitExecutionResult[Unit]] =
+    _git_exec(target, GitOperation.CommitPurposeCandidate(selectionId, candidate))
 
   private def _git_exec[A](target: GitTarget, operation: GitOperation[A]): ExecUowM[GitExecutionResult[A]] =
     ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.GitExec(target, operation)))

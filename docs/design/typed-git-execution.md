@@ -41,7 +41,7 @@ Status: normative design for the intermediate CNCF Git producer.
 ## One semantic intent and one lifecycle
 
 The [typed Git specification](../spec/typed-git-execution.md) owns the exact
-thirty-four-operation/parameter/result table and strict wire/parser contracts.
+thirty-seven-operation/parameter/result table and strict wire/parser contracts.
 
 ```text
 protected git_* wrapper
@@ -156,8 +156,12 @@ The plan retains public repository declarations and public grants separately
 from effective internal policy/grants so encode/decode stays one repository
 entry rather than materializing an operation list. Existing V1/V2/V3 creators,
 wire fields and deny behavior remain strict, and retired V4 remains rejected.
-The six selected operations need explicit independent declarations and
-grants, preserving their logical/physical scopes, messages and count bounds.
+The nine selected operations retain explicit declarations and independent
+grants for host-owned selections. Under adopted GIT-1, per-call finite
+`GitSelectionParameters` can also narrow admitted repository capabilities.
+Purpose operations require both `CreateCheckpoint` and `InstallCheckpoint`
+grants and their intersected limits. Logical/physical scopes, fixed messages and
+count bounds remain enforced; repository-family expansion supplies no selection.
 
 The executable override is optional on the V5 public family. An omitted
 override resolves ordinary `git` from the declaration's PATH, otherwise the

@@ -11,7 +11,7 @@ import org.goldenport.Consequence
 /*
  * @since   Jul. 17, 2026
  *  version Jul. 18, 2026
- * @version Oct. 20, 2026
+ * @version Oct. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -91,7 +91,7 @@ final class LocalProcessExecutionDriver(
     execution.definition._sbt_metadata.fold(Consequence.unit)(_ =>
       SbtExecutionAdmission.validateRequestC(execution.request)).flatMap { _ =>
       execution.definition._git_metadata.fold(Consequence.unit)(_ =>
-        GitExecutionAdmission.validateRequestC(execution.request).flatMap(_ =>
+        execution.definition.validateGitRequestC(execution.request).flatMap(_ =>
           execution.definition.argumentPolicy.validateC(execution.request.arguments, execution.effectiveLimits)))
     }
 

@@ -9,7 +9,7 @@ import org.goldenport.cncf.workspace.*
 /** Immutable host configuration. Parsing does not install a driver or grant caller authority. */
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 27, 2026
+ * @version Oct. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] final case class WorkspaceRuntimeDeclaration(identity: WorkspaceId, root: Path)
@@ -175,10 +175,14 @@ private[cncf] object RuntimeProcessExecutionPlan {
       declarations.count(_.operation == GitOperationKind.CommitSelected) <= 64 &&
       declarations.count(_.operation == GitOperationKind.CheckSelectedIndex) <= 64 &&
       declarations.count(_.operation == GitOperationKind.SelectedIndexChanges) <= 64 &&
-      declarations.count(_.operation == GitOperationKind.TreeEntries) <= 64
+      declarations.count(_.operation == GitOperationKind.TreeEntries) <= 64 &&
+      declarations.count(_.operation == GitOperationKind.PreparePurposeCandidate) <= 64 &&
+      declarations.count(_.operation == GitOperationKind.MaterializePurposeCandidate) <= 64 &&
+      declarations.count(_.operation == GitOperationKind.CommitPurposeCandidate) <= 64
     }) Consequence.unit else Consequence.configurationInvalid("Git selection declarations exceed the per-workspace bounds")
     _ <- if (gitdeclarations.filter(x => x.operation match {
-      case GitOperationKind.CommitSelected | GitOperationKind.CheckSelectedIndex | GitOperationKind.SelectedIndexChanges | GitOperationKind.TreeEntries => true
+      case GitOperationKind.CommitSelected | GitOperationKind.CheckSelectedIndex | GitOperationKind.SelectedIndexChanges | GitOperationKind.TreeEntries |
+          GitOperationKind.PreparePurposeCandidate | GitOperationKind.MaterializePurposeCandidate | GitOperationKind.CommitPurposeCandidate => true
       case _ => false
     }).groupBy(x => x.target -> x.selectionId).values.forall(_.map(_.selectedPaths).distinct.size == 1))
       Consequence.unit else Consequence.configurationInvalid("Git selection declarations require identical ordered selected paths for each workspace and selection ID")

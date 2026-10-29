@@ -14,11 +14,42 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 27, 2026
+ * @version Oct. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Protected typed Git DSL" should {
+    "record purpose preparation separately from accepted installation without executing either" in {
+      Given("a construction context with no workspace or execution installation")
+      val fixture = create(workspaceInstalled = false, processInstalled = false)
+      val behavior = new GitSpecBehavior(Behavior.Core(fixture.context, None, None))
+      val request = GitPurposeRequest(objectId, objectId, Vector(GitPurposeChange(
+        GitPath.parseC("selected.txt").toOption.get, Some("actual\n"), Some("purpose\n"))))
+      val candidate = GitPurposeCandidate(request, objectId, objectId, objectId, "purpose")
+      val operations = Vector[GitOperation[?]](GitOperation.PreparePurposeCandidate(selectionId, request),
+        GitOperation.MaterializePurposeCandidate(selectionId, candidate, WorkspaceId.parseC("candidate").toOption.get),
+        GitOperation.CommitPurposeCandidate(selectionId, candidate))
+      val provider = new UnitOfWorkProgramStubProvider {
+        def resultFor[A](ordinal: Int, operation: UnitOfWorkOp[A]): Consequence[A] = operation match {
+          case UnitOfWorkOp.GitExec(target, value @ GitOperation.PreparePurposeCandidate(_, _)) =>
+            Consequence.success(GitExecutionResult(target, value, GitExecutionOutcome.Succeeded, Some(candidate), result()).asInstanceOf[A])
+          case UnitOfWorkOp.GitExec(target, value) =>
+            Consequence.success(GitExecutionResult(target, value.asInstanceOf[GitOperation[Any]], GitExecutionOutcome.Succeeded, Some(()), result()).asInstanceOf[A])
+          case _ => Consequence.notImplemented("unexpected purpose recording operation")
+        }
+      }
+      try {
+        When("the recorder traverses each protected purpose operation")
+        val recordings = operations.map(operation => UnitOfWorkProgramRecorder.record(behavior.program(fixture.target, operation), provider))
+        Then("each is one typed Git intent and the declaration grants no execution or acceptance")
+        recordings.zip(operations).foreach { case (recording, operation) =>
+          recording.result.isSuccess shouldBe true
+          recording.occurrences.map(_.operation) shouldBe Vector(UnitOfWorkOp.GitExec(fixture.target, operation))
+        }
+        fixture.profile.driver.executions shouldBe empty
+      } finally fixture.close()
+    }
+
     "observe a new selected EOF-only finding before dispatch and commit only its corrected fixed path" in {
       Given("a normal Git checkout with unrelated staged and unstaged changes and an untracked selected NEW file")
       val driver = new LocalProcessExecutionDriver()
