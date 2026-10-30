@@ -11,9 +11,11 @@ import org.goldenport.Consequence
 import org.goldenport.observation.Descriptor
 import org.goldenport.record.Record
 import org.goldenport.cncf.component.ComponentId
-import org.goldenport.cncf.context.{Capability, ExecutionContext}
+import org.goldenport.cncf.config.{ResolvedParameters, RuntimeConfig}
+import org.goldenport.cncf.context.{Capability, ExecutionContext, GlobalRuntimeContext}
 import org.goldenport.cncf.datastore.*
 import org.goldenport.cncf.event.*
+import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.statemachine.*
 import org.goldenport.cncf.subsystem.{EventStoreConstruction, EventStorePersistenceConstruction, ObservationLeaseTestSupport, Subsystem, SystemNodeResourceLease}
 import org.goldenport.cncf.testutil.TestComponentFactory
@@ -27,7 +29,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRe
 /** Real borrowed managed resource, instrumented only in this test provider.
   * No production callback, unmanaged snapshot or publication adapter.
   * @since   Sep. 30, 2026
-  * @version Oct. 27, 2026
+  * @version Oct. 31, 2026
   */
 final class ManagedEventObservationIsolationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private given context: ExecutionContext = ExecutionContext.create()
@@ -67,7 +69,7 @@ final class ManagedEventObservationIsolationSpec extends AnyWordSpec with Matche
   private val policy = take(EventPersistencePolicy.createC("isolation-v1", Vector(
     EventPersistencePolicy.Rule(EventTypeId("fact"), EventPersistencePolicy.Mode.Persist))))
   private def selection(es: Vector[EventRecord]) = take(WorkflowEventSelection.prepareFromStoreC(EventStore.inMemory(policy), es))
-  private def env(s: Subsystem) = ComponentDataStore.Environment(context.runtime.resolvedParameters, Some(s.configuration))
+  private def env(s: Subsystem) = ComponentDataStore.Environment(ResolvedParameters.fromResolvedConfiguration(s.configuration), Some(s.configuration))
   private def _fixture_event(token: String, correlated: Boolean): EventRecord = {
     val original = event(token)
     if (!correlated) original
@@ -80,10 +82,16 @@ final class ManagedEventObservationIsolationSpec extends AnyWordSpec with Matche
   private def withHost(f: (Subsystem, Path) => Unit): Unit =
     _with_host(Files.createTempDirectory("cncf-observation-isolation-").resolve("events.sqlite"))(f)
 
-  private def _with_host(path: Path)(task: (Subsystem, Path) => Unit): Unit = {
-    val conf = ResolvedConfiguration(Configuration(Map(
-      "textus.datastore.kind" -> ConfigurationValue.StringValue("sqlite"),
-      "textus.datastore.path" -> ConfigurationValue.StringValue(path.toString))), ConfigurationTrace.empty)
+  private def _with_host(path: Path, configuredpath: Option[String] = None)(task: (Subsystem, Path) => Unit): Unit = {
+    val configuration = configuredpath match {
+      case Some(value) if value.startsWith("file:") => Configuration(Map(
+        "textus.datastore.kind" -> ConfigurationValue.StringValue("jdbc"),
+        "textus.datastore.jdbc.url" -> ConfigurationValue.StringValue(s"jdbc:sqlite:$value")))
+      case _ => Configuration(Map(
+        "textus.datastore.kind" -> ConfigurationValue.StringValue("sqlite"),
+        "textus.datastore.path" -> ConfigurationValue.StringValue(configuredpath.getOrElse(path.toString))))
+    }
+    val conf = ResolvedConfiguration(configuration, ConfigurationTrace.empty)
     EventStorePersistenceConstruction.withDeclaration(declaration) {
       TestComponentFactory.withEmptySubsystem(configuration = conf)(s => task(s, path))
     }
@@ -405,6 +413,32 @@ final class ManagedEventObservationIsolationSpec extends AnyWordSpec with Matche
 
   "Explicit managed first-install boundaries" should afterWord(
     "spec:managed-event-history example:E6 rules:R1,R2 phase:5.1") {
+    "keep explicitly selected fixture storage independent of an ambient runtime datastore" in {
+      Given("distinct fresh fixture and foreign ambient runtime datastore paths")
+      val fixturepath = _first_install_path
+      val foreignpath = _first_install_path
+      val foreignconfiguration = ResolvedConfiguration(Configuration(Map(
+        "textus.datastore.kind" -> ConfigurationValue.StringValue("sqlite"),
+        "textus.datastore.path" -> ConfigurationValue.StringValue(foreignpath.toString))), ConfigurationTrace.empty)
+      val previous = GlobalRuntimeContext.current
+      try {
+        GlobalRuntimeContext.current = Some(GlobalRuntimeContext.create(
+          "first-install-foreign-runtime", RuntimeConfig.default, foreignconfiguration,
+          context.observability, AliasResolver.empty))
+        When("the explicitly selected fixture performs its first managed storage installation")
+        _with_host(fixturepath) { (subsystem, _) =>
+          _with_install_store(subsystem) { (store, _) =>
+            take(store._initialize_event_storage_c(declaration))
+          }
+        }
+        Then("only the fixture contains the three infrastructure tables and one initial cursor row")
+        val contents = _first_install_contents(fixturepath)
+        contents.count(_.startsWith("CREATE TABLE")) shouldBe 3
+        contents.count(value => !value.startsWith("CREATE TABLE")) shouldBe 1
+        Files.exists(foreignpath) shouldBe false
+      } finally GlobalRuntimeContext.current = previous
+    }
+
     "reuse every compatible empty subset of the fixed infrastructure without seeding event or index data" in {
       (0 until 8).foreach { mask =>
         Given(s"Spec: docs/spec/managed-event-history.md; Rules: R1,R2; Example: E6; empty schema subset=$mask")
@@ -545,36 +579,47 @@ final class ManagedEventObservationIsolationSpec extends AnyWordSpec with Matche
   "Concurrent managed first installation" should afterWord(
     "spec:managed-event-history example:E8 rules:R3 phase:5.1") {
     "allow at most one of two separately managed concurrent first installers to succeed" in {
-      Given("Spec: docs/spec/managed-event-history.md; Rules: R3; Example: E8; two independent managed hosts on one fresh database")
-      val path = _first_install_path
-      val ready = new CountDownLatch(2)
-      val start = new CountDownLatch(1)
-      val pool = Executors.newFixedThreadPool(2)
-      given scala.concurrent.ExecutionContext = scala.concurrent.ExecutionContext.fromExecutor(pool)
-      try {
-        val attempts = Vector.fill(2)(Future {
-          var result = Option.empty[Consequence[EventCursorRecordV1]]
-          _with_host(path) { (subsystem, _) =>
-            _with_install_store(subsystem) { (store, _) =>
-              ready.countDown()
-              start.await(10, TimeUnit.SECONDS) shouldBe true
-              result = Some(store._initialize_event_storage_c(declaration))
+      (0 until 16).foreach { iteration =>
+        Given("Spec: docs/spec/managed-event-history.md; Rules: R3; Example: E8; two independent managed hosts on one fresh database")
+        val originalpath = _first_install_path
+        val path = if (iteration % 4 == 2) originalpath.resolveSibling("events #日本語%.sqlite") else originalpath
+        val configuredpath = iteration % 4 match {
+          case 1 => Some(Path.of("").toAbsolutePath.normalize.relativize(path).toString)
+          case 3 => Some(path.toUri.toASCIIString)
+          case _ => None
+        }
+        val ready = new CountDownLatch(2)
+        val start = new CountDownLatch(1)
+        val pool = Executors.newFixedThreadPool(2)
+        given scala.concurrent.ExecutionContext = scala.concurrent.ExecutionContext.fromExecutor(pool)
+        try {
+          val attempts = Vector.fill(2)(Future {
+            var result = Option.empty[Consequence[EventCursorRecordV1]]
+            _with_host(path, configuredpath) { (subsystem, _) =>
+              _with_install_store(subsystem) { (store, _) =>
+                ready.countDown()
+                start.await(10, TimeUnit.SECONDS) shouldBe true
+                result = Some(store._initialize_event_storage_c(declaration))
+              }
             }
+            result.get
+          })
+          ready.await(10, TimeUnit.SECONDS) shouldBe true
+          When("both admitted hosts enter SQLite first installation without an application-wide lock")
+          start.countDown()
+          val results = Await.result(Future.sequence(attempts), 20.seconds)
+          val contents = _first_install_contents(path)
+          Then("one installation succeeds, the competitor is refused, and no extra cursor/event/index row appears")
+          withClue(s"first installation trial $iteration: $results: ") {
+            results.count(_.isSuccess) shouldBe 1
+            contents.count(_.startsWith("CREATE TABLE")) shouldBe 3
+            contents.count(value => !value.startsWith("CREATE TABLE")) shouldBe 1
           }
-          result.get
-        })
-        ready.await(10, TimeUnit.SECONDS) shouldBe true
-        When("both admitted hosts enter SQLite first installation without an application-wide lock")
-        start.countDown()
-        val results = Await.result(Future.sequence(attempts), 20.seconds)
-        Then("one installation succeeds, the competitor is refused, and no extra cursor/event/index row appears")
-        results.count(_.isSuccess) shouldBe 1
-        _first_install_contents(path).count(_.startsWith("CREATE TABLE")) shouldBe 3
-        _first_install_contents(path).count(value => !value.startsWith("CREATE TABLE")) shouldBe 1
-      } finally {
-        start.countDown()
-        pool.shutdown()
-        pool.awaitTermination(30, TimeUnit.SECONDS) shouldBe true
+        } finally {
+          start.countDown()
+          pool.shutdown()
+          pool.awaitTermination(30, TimeUnit.SECONDS) shouldBe true
+        }
       }
     }
   }
