@@ -109,6 +109,7 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
     val base = Json.obj(
         "target" -> Json.fromString(x.target.print), "operation" -> Json.fromString(x.operation match {
           case SbtOperation.Compile => "compile"
+          case SbtOperation.TestCompile => "test-compile"
           case SbtOperation.Test => "test"
           case SbtOperation.TestOnly => "test-only"
           case SbtOperation.FixCheck => "fix-check"
@@ -153,6 +154,7 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
     target <- _valid(WorkspaceId.parseC(targettext))
     operation <- operationtext match {
       case "compile" => Right(SbtOperation.Compile)
+      case "test-compile" => Right(SbtOperation.TestCompile)
       case "test" => Right(SbtOperation.Test)
       case "test-only" => Right(SbtOperation.TestOnly)
       case "fix-check" => Right(SbtOperation.FixCheck)

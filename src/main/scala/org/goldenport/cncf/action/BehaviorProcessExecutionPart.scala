@@ -290,6 +290,9 @@ trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.
   protected final def sbt_compile(target: SbtTarget): ExecUowM[SbtExecutionResult] =
     _sbt_exec(target, SbtOperation.Compile)
 
+  protected final def sbt_test_compile(target: SbtTarget): ExecUowM[SbtExecutionResult] =
+    _sbt_exec(target, SbtOperation.TestCompile)
+
   protected final def sbt_test(target: SbtTarget): ExecUowM[SbtExecutionResult] =
     _sbt_exec(target, SbtOperation.Test)
 
@@ -307,6 +310,9 @@ trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.
 
   protected final def sbt_compile_attempt(target: SbtTarget): ExecUowM[SbtExecutionAttempt] =
     _sbt_exec_attempt(target, SbtOperation.Compile)
+
+  protected final def sbt_test_compile_attempt(target: SbtTarget): ExecUowM[SbtExecutionAttempt] =
+    _sbt_exec_attempt(target, SbtOperation.TestCompile)
 
   protected final def sbt_test_attempt(target: SbtTarget): ExecUowM[SbtExecutionAttempt] =
     _sbt_exec_attempt(target, SbtOperation.Test)

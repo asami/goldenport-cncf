@@ -809,6 +809,23 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
       results.mkString should not include "/runtime/selected"
     }
 
+    "round-trip a fixed TestCompile host declaration without acquiring TestOnly authority" in {
+      Given("a normal V2 workspace with a separately granted test-compile operation")
+      val wire = _changed_entry(_v2_root(_directory()), "sbtPrograms", _.mapObject(
+        _.add("operation", Json.fromString("test-compile"))))
+      When("the standard host codec decodes, encodes and decodes it")
+      val first = _take(_decode(wire))
+      val restored = _take(RuntimeProcessExecutionPlanCodec.decode(_take(RuntimeProcessExecutionPlanCodec.encode(first))))
+      Then("the operation remains TestCompile with no selected test classes")
+      restored.sbtDeclarations.head.operation shouldBe SbtOperation.TestCompile
+      restored.sbtDeclarations.head.testClasses shouldBe empty
+      val declaration = restored.sbtDeclarations.head
+      val binding = _take(restored.workspaceAdmissionOption.get.bindingC(declaration.target))
+      val program = _take(SbtProgramDefinition.createC(binding, declaration.operation, declaration.capability,
+        declaration.identity, declaration.sbtExecutable, declaration.limits, declaration.environment))
+      program.fixedArguments.last shouldBe "Test / compile"
+    }
+
     "round-trip V2 generic programs separately from typed SBT declarations using one shared binding" in {
       Given("a selected real checkout with one generic template and one typed Test declaration")
       val root = _directory()

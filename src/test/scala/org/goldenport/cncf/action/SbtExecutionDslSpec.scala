@@ -43,6 +43,79 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
   )
 
   "Typed SBT internal DSL" should {
+    "compile test classes through one admitted UoW intent without running test bodies" in {
+      Given("a host declaration for the fixed TestCompile operation")
+      val fixture = _fixture(_result(ProcessExecutionTermination.Exited(0)), compileoperation = SbtOperation.TestCompile)
+      val uow = new UnitOfWork(fixture.context)
+      try {
+        val behavior = new SbtDslBehavior(Behavior.Core(fixture.context, None, None))
+        When("the owning UoW evaluates the thin TestCompile DSL")
+        val actual = new UnitOfWorkInterpreter(uow).run(behavior.testCompileAttempt(fixture.target))
+        Then("the existing driver receives only normal Test / compile with empty request arguments")
+        actual.toOption.get shouldBe a[SbtExecutionAttempt.Observed]
+        fixture.profile.driver.executions.size shouldBe 1
+        val execution = fixture.profile.driver.executions.head
+        execution.effectiveArguments.last shouldBe "Test / compile"
+        execution.request.arguments shouldBe empty
+        execution.effectiveLimits shouldBe _limits
+      } finally { uow.dispose(); _close(fixture.root) }
+    }
+
+    "apply one selected-leaf deadline inside the UoW and reject a mismatched selection before execution" in {
+      Given("seven actual selected leaf estimates, once-only overhead and an explicit host ceiling")
+      val fixture = _fixture(_selection_process(Vector("org.example.SelectedSpec")))
+      val uow = new UnitOfWork(fixture.context)
+      val estimate = SbtValidationEstimate("changed adapter", "working-source-1",
+        (1 to 7).map(i => SbtValidationEstimate.Leaf("org.example.SelectedSpec", "leaf " + i, 100000000L, false)).toVector,
+        SbtValidationEstimate.Preparation(100000000L, 0L, 0L, 0L), BigDecimal("1.5"))
+      try {
+        When("the actual interpreter admits and executes the estimated TestOnly intent")
+        val actual = new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.SbtExec(
+          fixture.target.copy(validationEstimate = Some(estimate)), SbtOperation.TestOnly))
+        Then("the process deadline is 1200 ms, other limits and typed success remain intact")
+        actual.toOption.get.outcome shouldBe SbtExecutionOutcome.Succeeded
+        fixture.profile.driver.executions.head.effectiveLimits shouldBe _limits.copy(executionTimeoutMillis = Some(1200L))
+        val wrong = estimate.copy(leaves = estimate.leaves.map(_.copy(suiteClassName = "org.example.OtherSpec")))
+        val denied = new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.SbtExecAttempt(
+          fixture.target.copy(validationEstimate = Some(wrong)), SbtOperation.TestOnly))
+        denied.toOption.get shouldBe a[SbtExecutionAttempt.AdmissionRejected]
+        fixture.profile.driver.executions.size shouldBe 1
+      } finally { uow.dispose(); _close(fixture.root) }
+    }
+
+    "reject TestCompile in the current UoW when workspace or process authority is missing" in {
+      Given("a fixed TestCompile declaration and independently missing current grants")
+      val fixtures = Vector(
+        _fixture(_result(ProcessExecutionTermination.Exited(0)), workspacegranted = false,
+          compileoperation = SbtOperation.TestCompile),
+        _fixture(_result(ProcessExecutionTermination.Exited(0)), capabilitygranted = false,
+          compileoperation = SbtOperation.TestCompile))
+      fixtures.foreach { fixture =>
+        val uow = new UnitOfWork(fixture.context)
+        try {
+          When("the thin TestCompile attempt is interpreted with that current authority")
+          val actual = new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.SbtExecAttempt(
+            fixture.target, SbtOperation.TestCompile))
+          Then("admission is rejected and no driver execution is allocated")
+          actual.toOption.get shouldBe a[SbtExecutionAttempt.AdmissionRejected]
+          fixture.profile.driver.executions shouldBe empty
+        } finally { uow.dispose(); _close(fixture.root) }
+      }
+    }
+
+    "retain an observed successful process as unverified when its leaf count differs from the estimate" in {
+      val fixture = _fixture(_selection_process(Vector("org.example.SelectedSpec")))
+      val uow = new UnitOfWork(fixture.context)
+      val estimate = SbtValidationEstimate("one selected leaf", "source-1",
+        Vector(SbtValidationEstimate.Leaf("org.example.SelectedSpec", "leaf", 1000000000L, true)),
+        SbtValidationEstimate.Preparation(0, 0, 0, 0), BigDecimal("1.5"))
+      try {
+        val actual = new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.SbtExec(
+          fixture.target.copy(validationEstimate = Some(estimate)), SbtOperation.TestOnly)).toOption.get
+        actual.processResult.termination shouldBe ProcessExecutionTermination.Exited(0)
+        actual.outcome shouldBe SbtExecutionOutcome.UnverifiedTests(SbtTestSelectionFailure.InventoryMismatch)
+      } finally { uow.dispose(); _close(fixture.root) }
+    }
     "record local publication as one External intent and admit it only inside the executing UoW" in {
       Given("a publication DSL built without workspace admission or a driver")
       val fixture = _fixture(_result(ProcessExecutionTermination.Exited(0)),
@@ -1064,7 +1137,8 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
     testclasses: Vector[String] = Vector("org.example.SelectedSpec"),
     driver: Option[ProcessExecutionDriver] = None,
     workspaceid: WorkspaceId = _workspace_id,
-    limits: ProcessExecutionLimits = _limits
+    limits: ProcessExecutionLimits = _limits,
+    compileoperation: SbtOperation = SbtOperation.Compile
   ): Fixture = {
     val base = Files.createDirectories(Paths.get("target", "sbt-execution-dsl-spec").toAbsolutePath)
     val root = Files.createTempDirectory(base, "case-")
@@ -1073,7 +1147,7 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
     val workspace = WorkspaceExecutionAdmission.createC(Vector(workspaceid -> checkout), workspacegrants).toOption.get
     val binding = workspace.bindingC(workspaceid).toOption.get
     val definitions = Vector(
-      SbtOperation.Compile -> _compile_capability, SbtOperation.Test -> _test_capability,
+      compileoperation -> _compile_capability, SbtOperation.Test -> _test_capability,
       SbtOperation.FixCheck -> _fix_check_capability,
       SbtOperation.TestOnly -> _test_only_capability
     ).map { case (operation, capability) =>
@@ -1142,6 +1216,7 @@ object SbtExecutionDslSpec {
 }
 
 private final class SbtDslBehavior(val behaviorCore: Behavior.Core) extends Behavior {
+  def testCompileAttempt(target: SbtTarget) = sbt_test_compile_attempt(target)
   def publishLocalAttempt(target: SbtTarget) = sbt_publish_local_attempt(target)
   def compile(target: SbtTarget) = sbt_compile(target)
   def test(target: SbtTarget) = sbt_test(target)

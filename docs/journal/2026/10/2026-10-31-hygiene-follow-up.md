@@ -2,9 +2,9 @@
 
 Date: 2026-10-31
 
-These pre-existing items were identified during the independent focused review
-of the managed SQLite opening-race repair. They do not block that repair and
-must be handled separately without changing its initialization contract.
+These pre-existing items were identified during the independent reviews of the
+managed SQLite opening-race repair and its main integration. They do not block
+that work and must be handled separately without changing accepted behavior.
 
 ## HYG-FIRST-INSTALL-SPEC-NAMING-01
 
@@ -35,3 +35,55 @@ must be handled separately without changing its initialization contract.
 The existing source-size item remains
 [HYG-PH697-SQL-SIZE-01](2026-10-01-phase-69.7-hygiene-follow-up.md#hyg-ph697-sql-size-01--bounded-fix-and-inherited-debt).
 No duplicate item or provider decomposition is introduced here.
+
+## HYG-SYNC-SBT-ESTIMATE-NAMING-01
+
+- Status: OPEN
+- Discovered: 2026-10-31, independent integration review.
+- Repository / owner: goldenport-cncf; the existing SBT contract or Phase 99 maintainer.
+- Category: Naming conformance; priority P3.
+- Location: `src/main/scala/org/goldenport/cncf/processexecution/SbtValidationEstimate.scala:84` and `src/test/scala/org/goldenport/cncf/processexecution/SbtValidationEstimateSpec.scala:12`.
+- Evidence: The incoming parent retains private text/invalid helpers and unprefixed private specification fields.
+- Risk: Inconsistent declaration conventions make maintenance less predictable.
+- Boundary: inherited from the incoming parent, outside the limited SQLite repair; no implementation or historical Phase-status change is admitted by this record.
+- Proposed task: Rename private declarations and callers without changing public fields or behavior.
+- Task / commit: not scheduled.
+
+## HYG-SYNC-SBT-ESTIMATE-GWT-01
+
+- Status: OPEN
+- Discovered: 2026-10-31, independent integration review.
+- Repository / owner: goldenport-cncf; the existing SBT contract or Phase 99 maintainer.
+- Category: Executable specification presentation; priority P3.
+- Location: `src/test/scala/org/goldenport/cncf/processexecution/SbtValidationEstimateSpec.scala:21` and `src/test/scala/org/goldenport/cncf/action/SbtExecutionDslSpec.scala:106`.
+- Evidence: Five estimate scenarios and the inventory-mismatch DSL scenario in the incoming parent lack semantic Given / When / Then clauses.
+- Risk: The documented setup/action/expectation boundaries are less explicit.
+- Boundary: inherited from the incoming parent, outside the limited SQLite repair; no implementation or historical Phase-status change is admitted by this record.
+- Proposed task: Add clauses at existing semantic boundaries while preserving execution and expectations.
+- Task / commit: not scheduled.
+
+## HYG-SYNC-SBT-CONTRACT-PROSE-01
+
+- Status: OPEN
+- Discovered: 2026-10-31, independent integration review.
+- Repository / owner: goldenport-cncf; the existing SBT contract or Phase 99 maintainer.
+- Category: Specification overview consistency; priority P3.
+- Location: `docs/spec/typed-sbt-execution.md:104`.
+- Evidence: The incoming overview enumerates four operations and extractor arity two while the existing contract has additional operations and a three-field SbtTarget.
+- Risk: Readers may infer an obsolete operation inventory or extractor shape.
+- Boundary: inherited from the incoming parent, outside the limited SQLite repair; no implementation or historical Phase-status change is admitted by this record.
+- Proposed task: Reconcile the overview with the existing public contract without changing its semantics.
+- Task / commit: not scheduled.
+
+## HYG-SYNC-PH99-METADATA-01
+
+- Status: OPEN
+- Discovered: 2026-10-31, independent integration review.
+- Repository / owner: goldenport-cncf; the existing SBT contract or Phase 99 maintainer.
+- Category: Historical Phase status projection; priority P3.
+- Location: `docs/phase/phase-99.md:3`, `docs/phase/phase-99.md:86` and `docs/phase/phase-99-checklist.md:29`.
+- Evidence: Inherited in-progress and closure-required text coexists with the appended native acceptance marker.
+- Risk: Historical metadata gives conflicting progress projections. The current repair and synchronization do not depend on Phase 99 being closed.
+- Boundary: inherited from the incoming parent, outside the limited SQLite repair; no implementation or historical Phase-status change is admitted by this record.
+- Proposed task: The Phase 99 owner should reconcile metadata against native closure evidence when separately selected; this integration neither closes nor reopens Phase 99.
+- Task / commit: not scheduled.

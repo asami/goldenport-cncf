@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 24, 2026
+ * @version Oct. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SbtTestSelectionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -222,14 +222,18 @@ final class SbtTestSelectionSpec extends AnyWordSpec with Matchers with GivenWhe
     "preserve three-argument callers while requiring a verified TestOnly selection for zero exit" in {
       Given("one complete raw zero-exit process result and the existing three-argument result constructor")
       val raw = _process(_report(_classes, 7L, false))
-      When("Compile, Test, TestOnly, FixCheck and PublishLocal interpret the same unmodified process result")
-      val results = SbtOperation.values.toVector.map(SbtExecutionResult(_target, _, raw))
+      When("Compile, TestCompile, Test, TestOnly, FixCheck and PublishLocal interpret the same unmodified process result")
+      val results = SbtOperation.values.toVector.map(operation => operation -> SbtExecutionResult(_target, operation, raw))
       Then("Class-free operations retain success while TestOnly without a supplied selection is unverified")
-      results.map(_.outcome) shouldBe Vector(SbtExecutionOutcome.Succeeded, SbtExecutionOutcome.Succeeded,
-        SbtExecutionOutcome.UnverifiedTests(SbtTestSelectionFailure.MissingSelection), SbtExecutionOutcome.Succeeded,
-        SbtExecutionOutcome.Succeeded)
-      results.foreach(_.processResult shouldBe raw)
-      results.foreach(_.testSelection shouldBe None)
+      results.map { case (operation, result) => operation -> result.outcome } shouldBe Vector(
+        SbtOperation.Compile -> SbtExecutionOutcome.Succeeded,
+        SbtOperation.TestCompile -> SbtExecutionOutcome.Succeeded,
+        SbtOperation.Test -> SbtExecutionOutcome.Succeeded,
+        SbtOperation.TestOnly -> SbtExecutionOutcome.UnverifiedTests(SbtTestSelectionFailure.MissingSelection),
+        SbtOperation.FixCheck -> SbtExecutionOutcome.Succeeded,
+        SbtOperation.PublishLocal -> SbtExecutionOutcome.Succeeded)
+      results.foreach { case (_, result) => result.processResult shouldBe raw }
+      results.foreach { case (_, result) => result.testSelection shouldBe None }
     }
   }
 

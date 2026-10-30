@@ -13,10 +13,11 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
  * @version Oct. 24, 2026
  * @author  ASAMI, Tomoharu
  */
-final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection] = None)
+final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection] = None,
+  validationEstimate: Option[SbtValidationEstimate] = None)
 
 enum SbtOperation {
-  case Compile, Test, TestOnly, FixCheck, PublishLocal
+  case Compile, TestCompile, Test, TestOnly, FixCheck, PublishLocal
 }
 
 /** Admission failure carries no process receipt; admitted failures never imply safe replay. */
@@ -88,6 +89,7 @@ private[cncf] object SbtProgramDefinition {
         "-Dsbt.color=false",
         operation match {
           case SbtOperation.Compile => "compile"
+          case SbtOperation.TestCompile => "Test / compile"
           case SbtOperation.Test => "test"
           case SbtOperation.TestOnly => "testOnly " + testClasses.mkString(" ")
           case SbtOperation.FixCheck => "fixCheck"
@@ -121,7 +123,7 @@ private[cncf] object SbtProgramDefinition {
     )
 
   private def _invalid_operation_c: Consequence[Unit] =
-    Consequence.argumentPolicyViolation("operation", "sbt.execution.operation", "Compile, Test, TestOnly, FixCheck or PublishLocal", "unknown")
+    Consequence.argumentPolicyViolation("operation", "sbt.execution.operation", "Compile, TestCompile, Test, TestOnly, FixCheck or PublishLocal", "unknown")
 }
 
 private[cncf] object SbtExecutionAdmission {
@@ -134,7 +136,12 @@ private[cncf] object SbtExecutionAdmission {
     val metadata = execution.definition._sbt_metadata
     val selection = if (operation == SbtOperation.TestOnly && result.termination == ProcessExecutionTermination.Exited(0))
       Some(SbtTestSelectionDecoder.decode(metadata.map(_.testClasses).getOrElse(Vector.empty), result,
-        metadata.flatMap(_.scenario)))
+        metadata.flatMap(_.scenario)) match {
+          case verified @ SbtTestSelectionResult.Verified(_, _, count) =>
+            if (target.validationEstimate.forall(_.leaves.size.toLong == count)) verified
+            else SbtTestSelectionResult.Rejected(SbtTestSelectionFailure.InventoryMismatch)
+          case rejected => rejected
+        })
     else None
     SbtExecutionResult(target, operation, result, selection)
   }
@@ -190,7 +197,9 @@ private[cncf] object SbtExecutionAdmission {
       }
       jvm <- SbtJvmParameters.applyC(context.resolvedParameters, bound)
       limits <- SbtTestOutputParameters.applyC(context.resolvedParameters, operation, jvm.effectiveLimits)
-    } yield jvm.copy(effectiveLimits = limits)
+      estimated <- SbtValidationEstimate.applyC(target, operation,
+        jvm.definition._sbt_metadata.map(_.testClasses).getOrElse(Vector.empty), limits)
+    } yield jvm.copy(effectiveLimits = estimated)
 
   /** Tagged executions have no WorkArea projections or caller-provided process input. */
   def validateRequestC(request: ProcessExecutionRequest): Consequence[Unit] =
