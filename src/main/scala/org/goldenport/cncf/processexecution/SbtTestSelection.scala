@@ -10,7 +10,7 @@ import org.goldenport.Consequence
  * @author  ASAMI, Tomoharu
  */
 enum SbtTestSelectionFailure {
-  case MissingSelection, IncompleteCapture, InvalidReport, ZeroTests, SuiteMismatch, FailedTests, ScenarioMismatch
+  case MissingSelection, IncompleteCapture, InvalidReport, ZeroTests, SuiteMismatch, FailedTests, ScenarioMismatch, InventoryMismatch
 }
 
 enum SbtTestSelectionResult {
@@ -29,7 +29,7 @@ private[cncf] object SbtTestSelectionPolicy {
 
   def validateC(operation: SbtOperation, testClasses: Vector[String]): Consequence[Unit] =
     if ((operation == SbtOperation.TestOnly && validClasses(testClasses)) ||
-      ((operation == SbtOperation.Compile || operation == SbtOperation.Test || operation == SbtOperation.FixCheck ||
+      ((operation == SbtOperation.Compile || operation == SbtOperation.TestCompile || operation == SbtOperation.Test || operation == SbtOperation.FixCheck ||
           operation == SbtOperation.PublishLocal) &&
         testClasses != null && testClasses.isEmpty))
       Consequence.unit

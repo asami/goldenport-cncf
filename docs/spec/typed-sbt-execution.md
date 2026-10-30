@@ -483,3 +483,28 @@ authors `NotStarted` to `NotExecuted` while retaining one External `SbtExec` and
 actual receipt in the owning UnitOfWork. This producer fact alone does not implement
 workflow continuation, consume Human authority, qualify actual installed SBT or
 establish Phase acceptance.
+
+## Test compilation and estimated test execution
+
+`sbt_test_compile` and `sbt_test_compile_attempt` are thin typed UoW intents.
+An independently declared `test-compile` host program runs normal SBT
+`Test / compile`, without executing test bodies or accepting caller argv.
+Current workspace/process grants and lifecycle policy are evaluated in the UoW.
+
+`SbtTarget.validationEstimate` optionally carries the selected TestOnly leaf
+inventory, source revision, reason, resolved per-leaf estimates/default markers,
+once-only preparation costs and multiplier. The executing UoW recomputes
+`ceil((multiplier * (sum(leaves) + preparation) - completedPreparation) / 1ms)` and applies that deadline
+to the existing driver. It does not install individual leaf timers. Already
+completed TestCompile preparation is included once in the aggregate and its
+observed consumed duration is subtracted before starting TestOnly. The retained
+typed estimate includes that duration; waiting between operations is not process
+execution time. A nonpositive remainder refuses without restarting preparation.
+Empty, duplicated, nonpositive, overflowing or crossed selections refuse before
+process execution. The admitted fixed suite set must match the estimate; an exact
+scenario must match its sole leaf. The explicit host execution ceiling remains
+authoritative: an estimate above it refuses, rather than silently increasing it.
+A complete successful report with a different executed leaf count is unverified
+(`InventoryMismatch`), while its actual process exit remains retained.
+Cancellation, termination grace, capture limits and uncertain effects retain
+their existing meanings. No generic ProcessExecutionRequest route is granted.

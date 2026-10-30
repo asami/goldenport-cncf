@@ -47,6 +47,7 @@ object ProcessExecutionProgress {
     val fields = Vector(
       "operation" -> Json.fromString(event.operation match {
         case SbtOperation.Compile => "compile"
+        case SbtOperation.TestCompile => "test-compile"
         case SbtOperation.Test => "test"
         case SbtOperation.TestOnly => "test-only"
         case SbtOperation.FixCheck => "fix-check"
