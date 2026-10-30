@@ -51,7 +51,7 @@ import cats.~>
  *  version May. 31, 2026
  *  version Jul. 31, 2026
  *  version Aug. 12, 2026
- * @version Oct. 22, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -88,10 +88,62 @@ abstract class ExecutionContext
       .map(global => Consequence.success(global.config.resourceReadLimits))
       .getOrElse(Consequence.serviceUnavailable("Runtime resource read limits are unavailable"))
 
+  def resourceTextPreflightScopeC: Consequence[org.goldenport.cncf.resource.ResourceTextPreflightScope] =
+    resourceReadLimitsC.map(org.goldenport.cncf.resource.ResourceTextPreflight.scope)
+
+  def preflightResourceTextC(text: String): Consequence[org.goldenport.cncf.resource.ResourceTextPreflight] =
+    resourceTextPreflightScopeC.flatMap(_.checkC(text))
+
+  /** Pure preview of this admitted formatted call's actual transport bytes. */
+  def checkedDataJsonTextC(response: org.goldenport.protocol.operation.OperationResponse): Consequence[String] =
+    this match {
+      case instance: ExecutionContext.Instance => instance.checkedDataJsonScope match {
+        case Some(scope) =>
+          val state = ExecutionContext.currentExecutionResponseState(this)
+          val actual = runtime.executionMetadata
+          val metadata = actual.copy(responseJobId = state.responseJobId.orElse(actual.responseJobId),
+            debugJobId = state.debugJobId.orElse(actual.debugJobId))
+          scope.textC(response, metadata, ExecutionContext.currentExecutionResponse(this))
+        case None => Consequence.serviceUnavailable("Checked JSON output scope is unavailable")
+      }
+      case _ => Consequence.serviceUnavailable("Checked JSON output scope is unavailable")
+    }
+
   lazy val transactionContext = TransactionContext(runtime)
 }
 
 object ExecutionContext {
+  /** An immutable serializer selection only; never an execution or storage context. */
+  private[cncf] final case class CheckedDataJsonScope(
+    request: org.goldenport.protocol.Request,
+    mode: org.goldenport.cncf.cli.RunMode,
+    recordContext: RuntimeContext.Context,
+    selection: org.goldenport.cncf.protocol.OperationResponseFormatter.DataJsonSelection,
+    resourceScope: org.goldenport.cncf.resource.ResourceTextPreflightScope,
+    lineSeparator: String
+  ) {
+    def prepareC(response: org.goldenport.protocol.operation.OperationResponse,
+      metadata: RuntimeContext.ExecutionMetadata,
+      executionResponse: Option[RuntimeContext.ExecutionResponseMetadata]): Consequence[org.goldenport.protocol.Response] =
+      org.goldenport.cncf.protocol.OperationResponseFormatter.prepareDataJsonC(request, response, mode,
+        metadata, executionResponse, recordContext, selection, resourceScope, lineSeparator)
+
+    def textC(response: org.goldenport.protocol.operation.OperationResponse,
+      metadata: RuntimeContext.ExecutionMetadata,
+      executionResponse: Option[RuntimeContext.ExecutionResponseMetadata]): Consequence[String] =
+      prepareC(response, metadata, executionResponse).flatMap {
+        case org.goldenport.protocol.Response.Json(body) => Consequence.success(body + lineSeparator)
+        case _ => Consequence.operationInvalid("checked-output-response-unsupported")
+      }
+  }
+
+  private[cncf] def withCheckedDataJsonScopeC(context: ExecutionContext,
+    scope: Option[CheckedDataJsonScope]): Consequence[ExecutionContext] = context match {
+    case instance: Instance if scope.isEmpty && instance.checkedDataJsonScope.isEmpty => Consequence.success(instance)
+    case instance: Instance => Consequence.success(instance.copy(checkedDataJsonScope = scope))
+    case _ if scope.isEmpty => Consequence.success(context)
+    case _ => Consequence.serviceUnavailable("Checked JSON output context is unavailable")
+  }
   /**
     * Runtime namespace for CNCF-only extensions.
     */
@@ -181,10 +233,12 @@ object ExecutionContext {
     *
     * Used by Engine, servers, CLI, and tests inside CNCF.
     */
-  final class Instance(
+  final class Instance private[ExecutionContext] (
     val core: CoreExecutionContext.Core,
-    private[cncf] val cncfCore: CncfCore
+    private[cncf] val cncfCore: CncfCore,
+    private[cncf] val checkedDataJsonScope: Option[CheckedDataJsonScope]
   ) extends ExecutionContext {
+    def this(core: CoreExecutionContext.Core, cncfCore: CncfCore) = this(core, cncfCore, None)
     private[cncf] var executionResponseCell: ExecutionResponseCell =
       ExecutionResponseCell.empty
 
@@ -194,9 +248,10 @@ object ExecutionContext {
 
     private[cncf] def copy(
       core: CoreExecutionContext.Core = this.core,
-      cncfCore: CncfCore = this.cncfCore
+      cncfCore: CncfCore = this.cncfCore,
+      checkedDataJsonScope: Option[CheckedDataJsonScope] = this.checkedDataJsonScope
     ): Instance = {
-      val copied = new Instance(core, cncfCore)
+      val copied = new Instance(core, cncfCore, checkedDataJsonScope)
       copied.executionResponseCell = executionResponseCell
       copied
     }

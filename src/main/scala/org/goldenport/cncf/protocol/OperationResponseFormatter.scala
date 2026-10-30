@@ -10,6 +10,9 @@ import org.goldenport.cncf.config.RuntimeDefaults
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.RuntimeContext
 import io.circe.{Json, Printer}
+import org.goldenport.Consequence
+import org.goldenport.cncf.config.ResolvedParameters
+import org.goldenport.cncf.resource.{ResourceTextPreflight, ResourceTextPreflightScope}
 
 /*
  * @since   Mar. 13, 2026
@@ -18,12 +21,89 @@ import io.circe.{Json, Printer}
  *  version May. 31, 2026
  *  version Jun. 29, 2026
  *  version Aug. 12, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationResponseFormatter {
   private val _supported_formats = Set("json", "yaml", "xml", "text")
   private val _supported_shapes = Set("data", "envelope")
+
+  /** Only this owner can admit the finite checked transport selection. */
+  final class DataJsonSelection private[OperationResponseFormatter] (
+    private[OperationResponseFormatter] val mode: RunMode,
+    private[OperationResponseFormatter] val requestSelection: Vector[(String, String)]
+  )
+
+  private def _checked_request_selection(request: Request): Vector[(String, String)] =
+    request.properties.iterator.filter(p => Set("textus.format", "textus.output.format", "cncf.format",
+      "cncf.output.format", "textus.output.shape", "cncf.output.shape", RuntimeConfig.debugCallTreeKey,
+      RuntimeConfig.runtimeDebugCallTreeKey, "cncf.debug.calltree", "cncf.runtime.debug.calltree")
+      .contains(p.name.toLowerCase(java.util.Locale.ROOT)))
+      .map(p => p.name -> Option(p.value).fold("")(_.toString)).toVector
+
+  def selectDataJsonC(
+    request: Request,
+    mode: RunMode,
+    resolvedParameters: ResolvedParameters
+  ): Consequence[DataJsonSelection] = {
+    if (request == null || mode == null || resolvedParameters == null)
+      return Consequence.operationInvalid("checked-output-selection-invalid")
+    def configured(keys: Vector[String]): Option[String] = keys.iterator.flatMap { key =>
+      resolvedParameters.get(key).map(p => org.goldenport.cncf.config.ResolvedParameter.format_value(p.value)
+        .trim.toLowerCase(java.util.Locale.ROOT)).filter(_.nonEmpty)
+    }.nextOption()
+    def explicit(keys: Set[String]): Option[String] = request.properties.reverseIterator.collectFirst {
+      case property if keys.contains(property.name.toLowerCase(java.util.Locale.ROOT)) =>
+        Option(property.value).fold("")(_.toString.trim.toLowerCase(java.util.Locale.ROOT))
+    }.filter(_.nonEmpty)
+    val formatkeys = Vector("textus.format", "textus.output.format", "cncf.format", "cncf.output.format")
+    val shapekeys = Vector("textus.output.shape", "cncf.output.shape")
+    val format = explicit(formatkeys.toSet).orElse(_http_suffix_format(request)).orElse(configured(formatkeys))
+    val shape = explicit(shapekeys.toSet).orElse(configured(shapekeys)).getOrElse("data")
+    val debugkeys = Vector(RuntimeConfig.debugCallTreeKey, RuntimeConfig.runtimeDebugCallTreeKey,
+      "cncf.debug.calltree", "cncf.runtime.debug.calltree")
+    val debug = explicit(debugkeys.toSet).orElse(configured(debugkeys))
+      .exists(value => !Set("false", "0", "no", "off").contains(value))
+    if (format.contains("json") && shape == "data" && !debug &&
+      (mode == RunMode.Command || mode == RunMode.Client || mode == RunMode.Script))
+      Consequence.success(new DataJsonSelection(mode, _checked_request_selection(request)))
+    else Consequence.operationInvalid("checked-output-selection-unsupported")
+  }
+
+  /** Encode once, using only the admitted context and checked selection. */
+  def prepareDataJsonC(
+    request: Request,
+    response: OperationResponse,
+    mode: RunMode,
+    metadata: RuntimeContext.ExecutionMetadata,
+    executionResponse: Option[RuntimeContext.ExecutionResponseMetadata],
+    actualRecordContext: RuntimeContext.Context,
+    actualOutputSelection: DataJsonSelection,
+    preflightScope: ResourceTextPreflightScope,
+    lineSeparator: String
+  ): Consequence[Response] = {
+    def invalid = Consequence.operationInvalid[Response]("checked-output-encoding-failed")
+    if (request == null || response == null || metadata == null || actualRecordContext == null ||
+      actualOutputSelection == null || preflightScope == null || lineSeparator == null ||
+      mode != actualOutputSelection.mode || metadata.inlineCallTree.isDefined ||
+      _checked_request_selection(request) != actualOutputSelection.requestSelection ||
+      executionResponse.exists(_.responseKind == RuntimeContext.ExecutionResponseKind.AcceptedJob)) invalid
+    else {
+      val body = Consequence.run { response match {
+        case OperationResponse.RecordResponse(record) =>
+          Consequence(actualRecordContext.transformRecord(record)).flatMap(RecordEncoder.jsonC)
+        case OperationResponse.Json(json) =>
+          Consequence.success(Printer.noSpaces.copy(escapeNonAscii = true).print(json))
+        case _ => Consequence.operationInvalid[String]("checked-output-response-unsupported")
+      }}
+      body.flatMap { text =>
+        preflightScope.checkC(text + lineSeparator).flatMap {
+          case _: ResourceTextPreflight.Accepted => Consequence.success(Response.Json(text))
+          case _ => Consequence.resourceInvalid[Response]("checked-output-resource-rejected")
+        }
+      }.recoverWith(_ => invalid)
+    }
+  }
 
   def toResponse(
     request: Request,

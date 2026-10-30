@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  1, 2026
- * @version Oct.  8, 2026
+ * @version Oct. 31, 2026
  */
 final class ComponentRecordStorageHostSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _context = ExecutionContext.create()
@@ -41,6 +41,79 @@ final class ComponentRecordStorageHostSpec extends AnyWordSpec with Matchers wit
     subsystem.bindComponentRecordStorageC(_owner, "workflow", _collection, _id, _context)
 
   "Managed component record storage" should {
+    "allow one create owner across two actual JVMs and retain a committed intent when its acknowledgement is lost" in {
+      Given("two independent managed SQLite runtimes sharing only their declared native collection")
+      val root = Files.createTempDirectory("record-two-process-")
+      val file = root.resolve("shared.sqlite")
+      val first = new ComponentRecordStorageCrossProcessProbe.Child(root, file, "race", "first", false)
+      try {
+        val second = new ComponentRecordStorageCrossProcessProbe.Child(root, file, "race", "second", false)
+        try {
+          first.ready(); second.ready()
+          When("both ready JVMs independently attempt the same create-only key")
+          first.release(); second.release()
+          val a = first.result(); val b = second.result()
+          Then("only one acknowledged INSERT can own effects, and both observe its immutable value")
+          Vector(a, b).count(_.committed) shouldBe 1
+          Vector(a, b).count(_.acknowledged) shouldBe 1
+          a.owner shouldBe b.owner
+          Set("first", "second") should contain(a.owner)
+          first.pid should not be second.pid
+        } finally second.close()
+      } finally first.close()
+      Given("a fault injected only after a real successful managed INSERT")
+      val lost = new ComponentRecordStorageCrossProcessProbe.Child(root, file, "uncertain", "original", true)
+      try {
+        lost.ready(); lost.release()
+        val written = lost.result()
+        written.committed shouldBe true
+        written.acknowledged shouldBe false
+      } finally lost.close()
+      When("a different JVM later encounters that retained uncertain intent")
+      val observer = new ComponentRecordStorageCrossProcessProbe.Child(root, file, "uncertain", "late", false)
+      try {
+        observer.ready(); observer.release()
+        val retained = observer.result()
+        Then("it cannot create or reclaim ownership, although the original native row is readable")
+        retained.committed shouldBe false
+        retained.acknowledged shouldBe false
+        retained.owner shouldBe "original"
+      } finally observer.close()
+    }
+
+    "persist native terminal rows larger than File limits and retain intent after a rejected duplicate save" in {
+      Given("ordinary managed SQLite with separate create-only intent and terminal identities")
+      val file = Files.createTempDirectory("record-large-native-").resolve("shared.sqlite")
+      val nativeText = "n" * (16777216 + 1)
+      val intentId = DataStore.StringEntryId("large:intent")
+      val terminalId = DataStore.StringEntryId("large:terminal")
+      ComponentRecordStorageConstruction.withDeclaration(_declaration) {
+        TestComponentFactory.withEmptySubsystem(configuration = _configuration(file.toString)) { subsystem =>
+          _take(subsystem._with_managed_datastore_lease_c { _ =>
+            for {
+              intent <- subsystem.bindComponentRecordStorageC(_owner, "workflow", _collection, intentId, _context)
+              terminal <- subsystem.bindComponentRecordStorageC(_owner, "workflow", _collection, terminalId, _context)
+              _ <- intent.createC(Record.data("status" -> "UNKNOWN"))
+              _ = When("a complete native result exceeds the sixteen-MiB File boundary")
+              _ <- terminal.createC(Record.data("status" -> "completed", "payload" -> nativeText))
+              loaded <- terminal.loadC()
+              _ = Then("SQL preserves the native result without applying a File acquisition quota")
+              _ = loaded.flatMap(_.getString("payload")) shouldBe Some(nativeText)
+              _ = When("another save to the same create-only terminal identity is rejected")
+              duplicate = terminal.createC(Record.data("status" -> "failed"))
+              retained <- intent.loadC()
+              original <- terminal.loadC()
+            } yield {
+              Then("the failed save cannot turn the old UNKNOWN intent into success or replace its result")
+              duplicate.isSuccess shouldBe false
+              retained.flatMap(_.getString("status")) shouldBe Some("UNKNOWN")
+              original.flatMap(_.getString("status")) shouldBe Some("completed")
+            }
+          })
+        }
+      }
+    }
+
     "freeze declarative Creates without writing and refuse expired or foreign staging" in {
       Given("a fixed record capability and an aliased nested payload inside a native lease")
       val file = Files.createTempDirectory("record-stage-").resolve("shared.sqlite")
@@ -227,6 +300,109 @@ final class ComponentRecordStorageHostSpec extends AnyWordSpec with Matchers wit
           subsystem.systemNode.managedDataStoreCount shouldBe 0
           Files.exists(file) shouldBe false
         }
+      }
+    }
+  }
+}
+
+/** Test-only child entry: actual managed storage, with post-commit acknowledgement
+  * loss explicitly injected at the transport boundary. Never a product launcher.
+  */
+object ComponentRecordStorageCrossProcessProbe {
+  import java.io.{BufferedReader, InputStreamReader, PrintWriter}
+  import java.nio.charset.StandardCharsets.UTF_8
+  import java.nio.file.Path
+  import java.util.concurrent.{Callable, Executors, TimeUnit}
+
+  final case class Result(committed: Boolean, acknowledged: Boolean, owner: String)
+  private def take[A](result: Consequence[A]): A = result match {
+    case Consequence.Success(value) => value
+    case failure => throw new IllegalStateException("Managed record probe rejected: " + failure)
+  }
+  private def classpath: String = {
+    def files(url: java.net.URL): Vector[String] =
+      if (url.getProtocol == "file") Vector(Path.of(url.toURI).toAbsolutePath.normalize.toString) else Vector.empty
+    val property = Option(System.getProperty("java.class.path")).toVector
+      .flatMap(_.split(java.util.regex.Pattern.quote(java.io.File.pathSeparator)).toVector).filter(_.nonEmpty)
+    var loader = Option(getClass.getClassLoader)
+    var entries = Vector.empty[String]
+    while (loader.nonEmpty) {
+      loader.foreach {
+        case urls: java.net.URLClassLoader => entries ++= urls.getURLs.toVector.flatMap(files)
+        case _ => ()
+      }
+      loader = loader.flatMap(x => Option(x.getParent))
+    }
+    val sources = Vector(getClass, classOf[Subsystem]).flatMap(c =>
+      Option(c.getProtectionDomain).flatMap(d => Option(d.getCodeSource)).toVector.flatMap(s => files(s.getLocation)))
+    val paths = (sources ++ entries ++ property).distinct
+    require(sources.size == 2 && paths.forall(p => Files.exists(Path.of(p))), "Actual test runtime classpath required")
+    paths.mkString(java.io.File.pathSeparator)
+  }
+  final class Child(root: Path, database: Path, key: String, owner: String, loseAck: Boolean) extends AutoCloseable {
+    private val process = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin/java").toString,
+      "-cp", classpath, "org.goldenport.cncf.subsystem.ComponentRecordStorageCrossProcessProbe",
+      database.toString, key, owner, loseAck.toString)
+      .directory(root.toFile).redirectError(root.resolve(key + "-" + owner + ".stderr.log").toFile).start()
+    private val reads = Executors.newSingleThreadExecutor()
+    private val reader = new BufferedReader(new InputStreamReader(process.getInputStream, UTF_8))
+    private val writer = new PrintWriter(process.getOutputStream, true, UTF_8)
+    val pid: Long = process.pid()
+    private def line(prefix: String): String = reads.submit(new Callable[String] {
+      def call(): String = {
+        var next = reader.readLine()
+        while (next != null && !next.startsWith(prefix)) next = reader.readLine()
+        require(next != null, "Probe ended before " + prefix + "; retained logs at " + root)
+        next.substring(prefix.length)
+      }
+    }).get(45L, TimeUnit.SECONDS)
+    def ready(): Unit = require(line("RECORD_READY ") == pid.toString, "Actual child readiness required")
+    def release(): Unit = writer.println("create")
+    def result(): Result = {
+      val fields = line("RECORD_RESULT ").split(" ", -1)
+      require(fields.length == 3, "Bounded probe result required")
+      require(process.waitFor(45L, TimeUnit.SECONDS) && process.exitValue() == 0, "Actual probe termination required")
+      Result(fields(0).toBoolean, fields(1).toBoolean, fields(2))
+    }
+    def close(): Unit = {
+      try {
+        if (process.isAlive) {
+          process.destroy()
+          if (!process.waitFor(5L, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            require(process.waitFor(5L, TimeUnit.SECONDS), "Owned test child did not terminate")
+          }
+        }
+      } finally {
+        writer.close(); reader.close(); reads.shutdownNow()
+      }
+    }
+  }
+  def main(args: Array[String]): Unit = {
+    require(args.length == 4 && Set("first", "second", "original", "late")(args(2)))
+    val configuration = ResolvedConfiguration(Configuration(Map(
+      "textus.datastore.kind" -> ConfigurationValue.StringValue("sqlite"),
+      "textus.datastore.path" -> ConfigurationValue.StringValue(args(0)))), ConfigurationTrace.empty)
+    val owner = ComponentId("org.example.RecordWorkflow")
+    val collection = DataStore.CollectionId.EntityStore(EntityCollectionId("test", "records", "registrations"))
+    val declaration = take(ComponentRecordStorageDeclaration.createC(Vector(
+      ComponentRecordStorageDeclaration.CreateGrant(owner, "workflow", collection))))
+    ComponentRecordStorageConstruction.withDeclaration(declaration) {
+      TestComponentFactory.withEmptySubsystem(configuration = configuration) { subsystem =>
+        take(subsystem._with_managed_datastore_lease_c { _ => for {
+          storage <- subsystem.bindComponentRecordStorageC(owner, "workflow", collection,
+            DataStore.StringEntryId(args(1)), ExecutionContext.create())
+          _ = println("RECORD_READY " + ProcessHandle.current().pid())
+          _ = require(scala.io.StdIn.readLine() == "create", "Only the fixture create operation is accepted")
+          committed = storage.createC(Record.data("status" -> "UNKNOWN", "owner" -> args(2)))
+          // Inject lost acknowledgement after genuine SQL commit; never infer
+          // a right to effects from the row being observable afterward.
+          acknowledged = committed.isSuccess && !args(3).toBoolean
+          retained <- storage.loadC()
+          actual <- retained.flatMap(_.getString("owner")).map(Consequence.success)
+            .getOrElse(Consequence.stateConflict("Original native owner is unavailable"))
+          _ = println("RECORD_RESULT " + committed.isSuccess + " " + acknowledged + " " + actual)
+        } yield () })
       }
     }
   }

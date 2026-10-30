@@ -80,7 +80,7 @@ import org.goldenport.bag.Bag
  *  version Apr. 30, 2026
  *  version Aug. 15, 2026
  *  version Sep.  8, 2026
- * @version Oct. 27, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -1162,14 +1162,31 @@ final class Subsystem(
 
   def executeResponseWithExecutionResponse(
     request: Request
-  ): Consequence[FormattedExecutionEnvelope] =
-    executeWithExecutionResponse(request).map { result =>
-      FormattedExecutionEnvelope(
-        _to_response(request, result.response, result.metadata, result.executionResponse),
-        result.metadata,
-        result.executionResponse
-      )
+  ): Consequence[FormattedExecutionEnvelope] = {
+    val outcome = _execute_standard(request, None, Origin.Canonical, checkedoutput = true)
+    val formatted = outcome.result.flatMap { response =>
+      val prepared = outcome.checkedoutput match {
+        case Subsystem.CheckedOutput.Enabled(scope) =>
+          scope.prepareC(response, outcome.metadata, outcome.executionresponse)
+        case Subsystem.CheckedOutput.EnabledRejected(failure) => failure.map(_ => Response.Void())
+        case Subsystem.CheckedOutput.Disabled =>
+          Consequence.success(_to_response(request, response, outcome.metadata, outcome.executionresponse))
+      }
+      prepared.map(FormattedExecutionEnvelope(_, outcome.metadata, outcome.executionresponse))
     }
+    outcome.checkedoutput match {
+      case Subsystem.CheckedOutput.Disabled => formatted
+      case Subsystem.CheckedOutput.Enabled(scope) => formatted.recoverWith { _ =>
+        // This finite representation is checked exactly once. A typed failure remains
+        // nonzero even if it fits; no success JSON or second component call is invented.
+        scope.prepareC(OperationResponse.RecordResponse(Record.data("code" -> "checked-output-failed",
+          "message" -> "Checked operation output is unavailable")), outcome.metadata, outcome.executionresponse)
+        Consequence.operationInvalid("checked-output-failed")
+      }
+      case Subsystem.CheckedOutput.EnabledRejected(_) =>
+        formatted.recoverWith(_ => Consequence.operationInvalid("checked-output-admission-rejected"))
+    }
+  }
 
   def executeOperationResponse(request: Request): Consequence[OperationResponse] = {
     executeWithExecutionResponse(request).map(_.response)
@@ -1265,7 +1282,8 @@ final class Subsystem(
   private def _execute_standard(
     request: Request,
     httprequest: Option[HttpRequest],
-    origin: Origin
+    origin: Origin,
+    checkedoutput: Boolean = false
   ): Subsystem.ExecutionOutcome = {
     val requestwithhttpproperties =
       httprequest
@@ -1275,6 +1293,37 @@ final class Subsystem(
     var lastexecutionresponse = Option.empty[RuntimeContext.ExecutionResponseMetadata]
     var lastcontext = Option.empty[ExecutionContext]
     var lastroute = Option.empty[(Component, ServiceDefinition, OperationDefinition)]
+    var outputscope: Subsystem.CheckedOutput = Subsystem.CheckedOutput.Disabled
+    def captureoutput(context: ExecutionContext): Consequence[ExecutionContext] = {
+      lastcontext = Some(context)
+      if (!checkedoutput) ExecutionContext.withCheckedDataJsonScopeC(context, None)
+      else {
+        val enabled = context.resolvedParameters.get(CncfConfigurationParameterCatalog.OUTPUT_RESOURCE_PREFLIGHT_KEY)
+          .map(p => CncfConfigurationParameterCatalog.outputResourcePreflight.codec.decode(p.value))
+          .getOrElse(Consequence.success(false))
+        enabled.flatMap {
+          case false => ExecutionContext.withCheckedDataJsonScopeC(context, None)
+          case true if context.framework.inlineCallTree =>
+            Consequence.operationInvalid("checked-output-selection-unsupported")
+          case true => for {
+            selection <- OperationResponseFormatter.selectDataJsonC(requestwithhttpproperties,
+              _http_run_mode, context.resolvedParameters)
+            resource <- context.resourceTextPreflightScopeC
+            scope = ExecutionContext.CheckedDataJsonScope(requestwithhttpproperties, _http_run_mode,
+              context.runtime.context, selection, resource, System.lineSeparator())
+            admitted <- ExecutionContext.withCheckedDataJsonScopeC(context, Some(scope))
+          } yield {
+            outputscope = Subsystem.CheckedOutput.Enabled(scope)
+            lastcontext = Some(admitted)
+            admitted
+          }
+        }.recoverWith { _ =>
+          val failure = Consequence.operationInvalid[Unit]("checked-output-admission-rejected")
+          outputscope = Subsystem.CheckedOutput.EnabledRejected(failure)
+          failure.flatMap(_ => Consequence.success(context))
+        }
+      }
+    }
     val r: Consequence[OperationResponse] = for {
       route <- _resolve_route(requestwithhttpproperties) match {
         case Some(r) =>
@@ -1305,20 +1354,21 @@ final class Subsystem(
             _with_http_runtime_parameters(security.executionContext, httprequest)
           lastcontext = Some(executioncontext)
           _execute_resolved_operation(route, normalizedrequest, executioncontext,
-            presentationorigin = origin, presentationhttp = httprequest).map { result =>
-            lastexecutionmetadata = _execution_metadata(executioncontext)
-            lastexecutionresponse = ExecutionContext.currentExecutionResponse(executioncontext)
+            presentationorigin = origin, presentationhttp = httprequest,
+            beforeinvoke = captureoutput).map { result =>
+            lastexecutionmetadata = _execution_metadata(lastcontext.getOrElse(executioncontext))
+            lastexecutionresponse = ExecutionContext.currentExecutionResponse(lastcontext.getOrElse(executioncontext))
             result
           }.recoverWith { conclusion =>
-            lastexecutionmetadata = _execution_metadata(executioncontext)
-            lastexecutionresponse = ExecutionContext.currentExecutionResponse(executioncontext)
+            lastexecutionmetadata = _execution_metadata(lastcontext.getOrElse(executioncontext))
+            lastexecutionresponse = ExecutionContext.currentExecutionResponse(lastcontext.getOrElse(executioncontext))
             Consequence.Failure(conclusion)
           }
         }
       }
     } yield response
     _observe_execute_failure(requestwithhttpproperties, r, httprequest, lastroute, lastcontext)
-    Subsystem.ExecutionOutcome(r, lastexecutionmetadata, lastexecutionresponse, lastroute)
+    Subsystem.ExecutionOutcome(r, lastexecutionmetadata, lastexecutionresponse, lastroute, outputscope)
   }
 
   private def _execute_resolved_operation(
@@ -1327,7 +1377,9 @@ final class Subsystem(
     executioncontext: ExecutionContext,
     queryonly: Boolean = false,
     presentationorigin: Origin = Origin.Canonical,
-    presentationhttp: Option[HttpRequest] = None
+    presentationhttp: Option[HttpRequest] = None,
+    beforeinvoke: ExecutionContext => Consequence[ExecutionContext] = context =>
+      ExecutionContext.withCheckedDataJsonScopeC(context, None)
   ): Consequence[OperationResponse] = {
     _with_managed_datastore_lease_c { _ =>
       val (component, _, _) = route
@@ -1344,25 +1396,25 @@ final class Subsystem(
         val attemptcapture = _operation_evaluation_attempt_capture(route)
         val operationdomainrequest = _operation_business_request(route, domainrequest)
         val admittedcontext = _resolve_operation_evaluation_admission(route, preparedcontext)
-        val result = admittedcontext.flatMap { activecontext =>
+        val result = admittedcontext.flatMap { activecontext => beforeinvoke(activecontext).flatMap { actioncontext =>
           val operationrequest = component.logic.makeOperationRequest(operationdomainrequest)
           _observe_operation_request_validation_failure(
             route,
             operationdomainrequest,
             operationrequest,
-            activecontext
+            actioncontext
           )
           operationrequest.flatMap {
             case action: QueryAction =>
               component.logic._execute_action(
                 action,
-                activecontext,
+                actioncontext,
                 _operation_evaluation_task_decorator(route, domainrequest, attemptcapture)
               )
             case action: Action if !queryonly =>
               component.logic._execute_action(
                 action,
-                activecontext,
+                actioncontext,
                 _operation_evaluation_task_decorator(route, domainrequest, attemptcapture)
               )
             case action: Action =>
@@ -1370,7 +1422,7 @@ final class Subsystem(
             case _ =>
               Consequence.argumentInvalid("OperationRequest must be Action")
           }
-        }
+        }}
         result match {
           case Consequence.Failure(conclusion) =>
             attemptcapture._record_admission_failure(conclusion, preparedcontext)
@@ -2898,11 +2950,19 @@ object Subsystem {
   import org.goldenport.configuration.ResolvedConfiguration
   import org.goldenport.cncf.cli.RunMode
 
+  private sealed trait CheckedOutput
+  private object CheckedOutput {
+    case object Disabled extends CheckedOutput
+    final case class Enabled(scope: ExecutionContext.CheckedDataJsonScope) extends CheckedOutput
+    final case class EnabledRejected(failure: Consequence[Unit]) extends CheckedOutput
+  }
+
   private final case class ExecutionOutcome(
     result: Consequence[OperationResponse],
     metadata: RuntimeContext.ExecutionMetadata,
     executionresponse: Option[RuntimeContext.ExecutionResponseMetadata],
-    route: Option[(Component, ServiceDefinition, OperationDefinition)]
+    route: Option[(Component, ServiceDefinition, OperationDefinition)],
+    checkedoutput: CheckedOutput = CheckedOutput.Disabled
   )
 
   final case class WiredExecutionResult(

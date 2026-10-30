@@ -16,7 +16,7 @@ import org.goldenport.cncf.resource.{ResourceReadAcquisition, ResourceReadLimits
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 21, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class FileTarget(workspaceId: WorkspaceId)
@@ -437,9 +437,13 @@ private[cncf] object WorkspaceFileExecution {
 
   private def _text_bytes_c(text: String, limits: ResourceReadLimits): Consequence[Vector[Byte]] =
     if (text == null) _invalid_intent_c
-    else ResourceReadAcquisition.utf8C(text, limits).flatMap { bytes =>
-      if (StandardCharsets.UTF_8.newEncoder().canEncode(text)) Consequence.success(bytes)
-      else Consequence.resourceInvalid("workspace file is not valid UTF-8 text")
+    else org.goldenport.cncf.resource.ResourceTextPreflight.inspect(text, limits) match {
+      case _: org.goldenport.cncf.resource.ResourceTextPreflight.Accepted =>
+        Consequence.success(text.getBytes(StandardCharsets.UTF_8).toVector)
+      case _: org.goldenport.cncf.resource.ResourceTextPreflight.SizeExceeded =>
+        Consequence.resourceInvalid("resource exceeds the runtime byte limit")
+      case _: org.goldenport.cncf.resource.ResourceTextPreflight.InvalidText =>
+        Consequence.resourceInvalid("workspace file is not valid UTF-8 text")
     }
 
   private def _conflict(current: Option[String], expected: String): Option[FileWriteConflict] = current match {

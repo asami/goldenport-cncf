@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Aug.  3, 2026
  *  version Aug. 11, 2026
- * @version Oct. 29, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfConfigurationParameterCatalogSpec
@@ -53,6 +53,24 @@ final class CncfConfigurationParameterCatalogSpec
   )
 
   "CNCF configuration parameter catalog" should {
+    "admit the canonical checked-output Boolean with catalog provenance and no aliases" in {
+      Given("the canonical Subsystem parameter and an actual configuration document")
+      val key = CncfConfigurationParameterCatalog.OUTPUT_RESOURCE_PREFLIGHT_KEY
+      val definition = _take(CncfConfigurationParameterCatalog.closed.schema.definition(key))
+      val parameter = CncfConfigurationParameterCatalog.outputResourcePreflight
+      When("Boolean spellings pass through the existing codec and catalog decoder")
+      val candidate = _take(CncfConfigurationCandidateDecoder.decodeCatalog(
+        Vector(_batch(key, "true", _subsystem_target, "checked-output"))))
+      Then("the exact witness and input provenance survive without another configuration parser")
+      definition.decodeOnlyAliases shouldBe empty
+      definition.allowedTargetKinds shouldBe Set(CncfConfigurationTargetKind.SubsystemInstance)
+      candidate.bindings.head.provenance.inputSpelling shouldBe Some(key)
+      (candidate.bindings.head.parameter.asInstanceOf[AnyRef] eq parameter.asInstanceOf[AnyRef]) shouldBe true
+      parameter.codec.decode(ConfigurationValue.BooleanValue(true)).toOption shouldBe Some(true)
+      parameter.codec.decode(ConfigurationValue.StringValue("false")).toOption shouldBe Some(false)
+      parameter.codec.decode(ConfigurationValue.StringValue("perhaps")).isSuccess shouldBe false
+    }
+
     "register authoritative Subsystem-scoped catalog witnesses" which {
       "E1 expose the canonical identity and strict Phase 53 enum codec" must _e1 {
         "when the closed catalog is inspected" in {

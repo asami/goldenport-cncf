@@ -24,7 +24,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 21, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkspaceFileExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -591,6 +591,27 @@ final class WorkspaceFileExecutionSpec extends AnyWordSpec with Matchers with Gi
         }
         Files.readString(path, StandardCharsets.UTF_8) shouldBe "old\n"
         _names(root) shouldBe Set("edit")
+      }
+    }
+
+    "apply the same actual-context preflight predicate to File text without granting a write" in {
+      Given("a four-byte File workspace and an independent pure policy scope")
+      _with_root { root =>
+        val context = _context(root, cap = 4)
+        val scope = context.resourceTextPreflightScopeC.toOption.get
+        val cases = Vector("éé", "😀", "abcde", "\uD800", "abcde\uD800")
+        When("each text is inspected and then submitted once to its distinct CreateNew path")
+        val outcomes = cases.zipWithIndex.map { case (text, ordinal) =>
+          val decision = scope.checkC(text).toOption.get
+          val result = WorkspaceFileExecution.writeTextC(context, _target, _path(s"value-$ordinal"), text, FileWriteMode.CreateNew)
+          (decision, result)
+        }
+        Then("actual File admission agrees on every encoding boundary and rejected text leaves no file")
+        outcomes.foreach { case (decision, result) =>
+          result.isSuccess shouldBe decision.isInstanceOf[org.goldenport.cncf.resource.ResourceTextPreflight.Accepted]
+        }
+        _names(root) shouldBe Set("value-0", "value-1")
+        Files.readString(root.resolve("value-0"), StandardCharsets.UTF_8) shouldBe "éé"
       }
     }
 
