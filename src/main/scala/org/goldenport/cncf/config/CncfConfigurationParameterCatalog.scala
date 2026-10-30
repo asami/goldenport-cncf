@@ -16,7 +16,7 @@ import org.goldenport.configuration.{CanonicalParameterId, ConfigurationParamete
 /*
  * @since   Aug.  3, 2026
  *  version Aug.  4, 2026
- * @version Oct. 26, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfConfigurationParameterCatalog private[config] (
@@ -58,6 +58,7 @@ object CncfConfigurationParameterCatalog {
   val COLLABORATOR_REPOSITORIES_KEY = "textus.collaborator.repositories"
   val FORCE_EXIT_KEY = "textus.force-exit"
   val NO_EXIT_KEY = "textus.no-exit"
+  val OUTPUT_RESOURCE_PREFLIGHT_KEY = "textus.output.resource-preflight"
   val WEB_DESCRIPTOR_KEY = "textus.web.descriptor"
   val SERVICE_CONTAINER_DRIVER_KEY = "textus.service-container.driver"
   val SERVICE_CONTAINER_DOCKER_EXECUTABLE_KEY = "textus.service-container.docker.executable"
@@ -416,6 +417,7 @@ object CncfConfigurationParameterCatalog {
   ))
   private val _force_exit_parameter = _boolean_parameter(FORCE_EXIT_KEY)
   private val _no_exit_parameter = _boolean_parameter(NO_EXIT_KEY)
+  private val _output_resource_preflight_parameter = _boolean_parameter(OUTPUT_RESOURCE_PREFLIGHT_KEY)
   private val _web_descriptor_parameter = _profile_string_parameter(WEB_DESCRIPTOR_KEY)
   private val _service_container_driver_parameter = _profile_string_parameter(SERVICE_CONTAINER_DRIVER_KEY)
   private val _service_container_docker_executable_parameter = _profile_string_parameter(SERVICE_CONTAINER_DOCKER_EXECUTABLE_KEY)
@@ -535,6 +537,14 @@ object CncfConfigurationParameterCatalog {
         Vector("runtime-owned read-only operational observations"), isConfidential = true,
         Set(CncfConfigurationTargetKind.SubsystemInstance))),
       _web_definition(_web_execution_locale_parameter),
+      _take(CncfConfigurationParameterDefinition.registered(
+        OUTPUT_RESOURCE_PREFLIGHT_KEY,
+        Vector.empty,
+        _output_resource_preflight_parameter,
+        Vector("checked resource-bounded output"),
+        isConfidential = false,
+        Set(CncfConfigurationTargetKind.SubsystemInstance)
+      )),
       _web_definition(_web_execution_timezone_parameter),
       _web_definition(_web_execution_date_format_parameter),
       _web_definition(_web_execution_date_time_format_parameter),
@@ -606,6 +616,7 @@ object CncfConfigurationParameterCatalog {
       ConfigurationParameter[org.goldenport.cncf.operationalobservation.OperationalObservationPlan] =
     _subsystem_operational_observation_plan_parameter
   val fixedUserId: ConfigurationParameter[String] = _fixed_user_id_parameter
+  val outputResourcePreflight: ConfigurationParameter[Boolean] = _output_resource_preflight_parameter
   val fixedUserDisplayName: ConfigurationParameter[String] = _fixed_user_display_name_parameter
   val fixedUserLocale: ConfigurationParameter[Locale] = _fixed_user_locale_parameter
   val fixedUserTimezone: ConfigurationParameter[ZoneId] = _fixed_user_timezone_parameter

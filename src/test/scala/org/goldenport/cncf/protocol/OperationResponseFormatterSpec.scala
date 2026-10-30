@@ -34,7 +34,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 28, 2026
  *  version May. 31, 2026
  *  version Jun. 29, 2026
- * @version Aug. 12, 2026
+ *  version Aug. 12, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationResponseFormatterSpec
@@ -46,6 +47,51 @@ final class OperationResponseFormatterSpec
   )
 
   "OperationResponseFormatter response contracts" should {
+    "check the actual transformed Record, real JSON escaping and print separator once" in {
+      Given("JSON/data selection and a context that emits camelCase rather than the legacy default")
+      val request = _request("domain.sample", format = "json")
+      val selection = OperationResponseFormatter.selectDataJsonC(request, RunMode.Command,
+        org.goldenport.cncf.config.ResolvedParameters.empty()).toOption.get
+      val context = RuntimeContext.Context.default.copy(propertyName = RuntimeContext.PropertyNameContext.default.copy(
+        outputStyle = RuntimeContext.PropertyNameStyle.CamelCase))
+      val record = Record.data("source_name" -> "日本\n\"\\😀")
+      val actual = org.goldenport.record.io.RecordEncoder.jsonC(context.transformRecord(record)).toOption.get
+      val cap = (actual + "\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+      def prepared(maximum: Int, value: OperationResponse = OperationResponse.RecordResponse(record)) =
+        OperationResponseFormatter.prepareDataJsonC(request, value, RunMode.Command,
+          RuntimeContext.ExecutionMetadata.empty, None, context, selection,
+          org.goldenport.cncf.resource.ResourceTextPreflight.scope(org.goldenport.cncf.resource.ResourceReadLimits(maximum)), "\r\n")
+      When("the exact encoded output and one-byte-smaller cap are checked")
+      val exact = prepared(cap)
+      val tooSmall = prepared(cap - 1)
+      Then("the accepted body is reused unchanged and newline overflow is a typed failure")
+      exact.toOption shouldBe Some(Response.Json(actual))
+      actual should include("sourceName")
+      actual should include("\\n")
+      tooSmall.isSuccess shouldBe false
+      prepared(1024, OperationResponse.RecordResponse(Record.dataAuto("opaque" -> new Object))).isSuccess shouldBe false
+    }
+
+    "reject checked envelope, debug, absent format and mismatched selections without legacy fallback" in {
+      Given("explicit unsupported selections and no actual resolved output defaults")
+      val empty = org.goldenport.cncf.config.ResolvedParameters.empty()
+      val valid = _request("domain.sample", format = "json")
+      val selection = OperationResponseFormatter.selectDataJsonC(valid, RunMode.Command, empty).toOption.get
+      val debug = valid.copy(properties = valid.properties :+ Property(RuntimeConfig.debugCallTreeKey, "true", None))
+      When("the checked owner admits selections and a caller tries changing the request after admission")
+      val rejected = Vector(_request("domain.sample", format = "yaml"),
+        _request("domain.sample", shape = "envelope", format = "json"), debug, Request.ofOperation("domain.sample"))
+        .map(OperationResponseFormatter.selectDataJsonC(_, RunMode.Command, empty))
+      val changed = OperationResponseFormatter.prepareDataJsonC(debug,
+        OperationResponse.RecordResponse(Record.data("value" -> "private")), RunMode.Command,
+        RuntimeContext.ExecutionMetadata.empty, None, RuntimeContext.Context.default, selection,
+        org.goldenport.cncf.resource.ResourceTextPreflight.scope(org.goldenport.cncf.resource.ResourceReadLimits(1024)), "\n")
+      Then("all failures remain typed and never become a legacy error-shaped JSON success")
+      rejected.foreach(_.isSuccess shouldBe false)
+      changed.isSuccess shouldBe false
+      changed.toString should not include "private"
+    }
+
     "format structured responses" which {
       "render a YAML RecordResponse without replacing Unicode characters" in {
         Given("a record response with Japanese text and yaml request format")

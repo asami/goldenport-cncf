@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Dec. 23, 2025
  *  version May.  5, 2026
  *  version Aug.  8, 2026
- * @version Oct. 15, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 class ExecutionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -24,6 +24,41 @@ class ExecutionContextSpec extends AnyWordSpec with Matchers with GivenWhenThen 
   )
 
   "ExecutionContext" should {
+    "refuse checked transport preview from unadmitted and policy-only contexts" in {
+      Given("an ordinary context with no formatted-call admission")
+      val context = ExecutionContext.create()
+      val response = org.goldenport.protocol.operation.OperationResponse.RecordResponse(
+        org.goldenport.record.Record.data("value" -> "private"))
+      When("an application asks for exact CLI transport text without its owning scope")
+      val rejected = context.checkedDataJsonTextC(response)
+      Then("a typed unavailable result never uses a default context or unchecked serializer")
+      rejected.isSuccess shouldBe false
+      rejected.toString should not include "private"
+    }
+
+    "capture its own admitted resource policy once without consulting the current global" in {
+      Given("an admitted three-byte runtime and a different unrelated current runtime")
+      val base = ExecutionContext.create()
+      val global = GlobalRuntimeContext.create("preflight-actual", RuntimeConfig.default.copy(
+        resourceReadLimits = org.goldenport.cncf.resource.ResourceReadLimits(3)),
+        ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty), base.observability, AliasResolver.empty)
+      val runtime = new RuntimeContext(
+        core = RuntimeContext.core(name = "preflight-actual", parent = Some(global), observabilitycontext = base.observability),
+        unitofworksupplier = () => base.unitOfWork, unitofworkinterpreterfn = base.runtime.unitOfWorkInterpreter,
+        commitaction = _ => (), abortaction = _ => (), disposeaction = _ => (), token = "preflight-actual")
+      val context = ExecutionContext.create(runtime)
+      When("the public scope is captured and another global is constructed")
+      val scope = context.resourceTextPreflightScopeC.toOption.get
+      GlobalRuntimeContext.create("preflight-other", RuntimeConfig.default,
+        ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty), base.observability, AliasResolver.empty)
+      Then("the immutable captured scope and direct operation retain the actual three-byte boundary")
+      scope.checkC("éa").toOption.get shouldBe org.goldenport.cncf.resource.ResourceTextPreflight.Accepted(3, 3)
+      scope.checkC("éab").toOption.get shouldBe org.goldenport.cncf.resource.ResourceTextPreflight.SizeExceeded(4, 3)
+      context.preflightResourceTextC("éab").toOption shouldBe scope.checkC("éab").toOption
+      context.checkedDataJsonTextC(org.goldenport.protocol.operation.OperationResponse.Json(io.circe.Json.obj()))
+        .isSuccess shouldBe false
+      ExecutionContext.create().resourceTextPreflightScopeC.isSuccess shouldBe false
+    }
 
     "satisfy basic properties" in {
       pending

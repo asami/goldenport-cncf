@@ -325,3 +325,67 @@ NSS, configured root, provider settings, or resource content. A normal
 framework-generated resource failure likewise remains a structured
 `Consequence` and does not render the requested logical reference. A custom
 provider remains responsible for the safety of its own failure messages.
+
+## Actual-context text preflight and checked CLI output
+
+`ExecutionContext.preflightResourceTextC(text)` is a pure check of the admitted
+runtime's resource policy. `resourceTextPreflightScopeC` captures that same
+immutable policy once for several exact serializer surfaces. Neither grants
+File/storage authority, performs I/O, accepts a caller maximum, nor falls back
+to the process's current global/default context. Missing admitted policy is a
+typed unavailable failure.
+
+`ResourceTextPreflight.Accepted(byteSize, maximumBytes)` reports an exact UTF-8
+size. `SizeExceeded(observedBytesAtLeast, maximumBytes)` reports the bounded
+prefix at the first overflow, not an exact rejected payload size. Null returns
+`InvalidText`; malformed surrogate text within the cap is invalid. File text
+writes use this same predicate for replacement and expected text: replacement
+byte counting comes first, overflow wins over later invalid Unicode, and only
+accepted text is encoded. Existing test-resource replacement semantics and the
+ordinary resource limits above remain unchanged. Preflight success does not
+replace File path, owner, expected-value, current-state or write admission.
+
+The canonical Subsystem Boolean `textus.output.resource-preflight` has no new
+aliases. Absent/false retains legacy formatting. When enabled on the normal
+formatted CLI API, its value is decoded with the catalog Boolean codec from
+the actual admitted `ExecutionContext.resolvedParameters`, retaining normal
+provenance. JSON/data/no-inline-debug must be explicitly selected by request
+or actual resolved parameters; unsupported selection, malformed Boolean or
+missing policy fails before the component is invoked. No global/default
+format/shape resolver is used by this checked route.
+
+`OperationResponseFormatter.selectDataJsonC` creates the owner-only typed
+selection. `prepareDataJsonC` uses the captured actual runtime Record context,
+checked `RecordEncoder.jsonC`, and the exact final body plus platform print
+separator. It returns that same `Response.Json` body for the existing printer,
+without another formatting pass. Raw unformatted operation APIs remain raw;
+they are not a checked transport. HTTP, envelope, inline debugging and scalar
+responses are outside this finite checked output contract.
+
+Known selection failure is pre-effect. Later encoder, metadata or output-limit
+failure may follow a real acknowledged native effect: it does not roll back,
+relabel or replay that effect. The API returns a bounded typed failure/nonzero
+transport result. A fixed small error Record is checked once through the same
+formatter; if it cannot fit, no valid-JSON-success claim is made. Oversized
+response bodies, captures, findings and bindings are not copied into errors.
+
+Native SQL Records belong to managed datastore admission, not File acquisition.
+An actual terminal SQL row may exceed the selected File cap. Failed or
+uncertain terminal persistence leaves its prior intent/UNKNOWN intact; output
+inspection, collection or a missing result does not authorize another effect.
+
+`ExecutionContext.checkedDataJsonTextC(response)` exposes a pure exact transport
+preview to an application already admitted through the normal formatted-call
+route. It returns the actual final JSON body plus the captured platform print
+separator. The caller supplies only its real `OperationResponse`, never a mode,
+request, formatting context, metadata, policy limit or replacement scope.
+Raw/nonformatted, disabled and unadmitted contexts return typed unavailable.
+
+At normal checked admission CNCF attaches an immutable private serializer scope
+and passes that returned context into the component. The scope retains only the
+actual request/mode, runtime Record context, typed selection, resource policy
+and separator; it owns no reusable ExecutionContext, storage lease or process.
+Preview reads actual current runtime execution/response metadata internally.
+Final formatting uses that same serializer scope with actual completed metadata.
+Later metadata changes may therefore reject a previously valid preview; a preview
+does not certify future completion or permit replay after a post-effect failure.

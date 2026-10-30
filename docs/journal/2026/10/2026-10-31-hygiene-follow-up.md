@@ -87,3 +87,42 @@ No duplicate item or provider decomposition is introduced here.
 - Boundary: inherited from the incoming parent, outside the limited SQLite repair; no implementation or historical Phase-status change is admitted by this record.
 - Proposed task: The Phase 99 owner should reconcile metadata against native closure evidence when separately selected; this integration neither closes nor reopens Phase 99.
 - Task / commit: not scheduled.
+
+## HYG-SYNC-CHECKED-TYPE-OWNER-01
+
+- Status: OPEN
+- Discovered: 2026-10-31, independent incremental integration review.
+- Repository / owner: goldenport-cncf; Checked-output specification maintainer.
+- Category: Instance-independent fixture data ownership; priority P3.
+- Location: `src/test/scala/org/goldenport/cncf/subsystem/SubsystemExecutionProfileSpec.scala:178`, `:184` and `:187`.
+- Evidence: The incoming parent declares CheckedOperation, CheckedAction and CheckedCall inside the specification class. The local compile repair adds only the missing override modifier.
+- Risk: Fixture data types unnecessarily depend on a specification instance.
+- Boundary: inherited from the incoming resource/checked-output parent, outside the current compile repair; no relocation or incidental cleanup is admitted.
+- Proposed task: Move fixture data declarations to a stable companion or package owner, preserving behavior and names required by overrides.
+- Task / commit: not scheduled.
+
+## HYG-SYNC-CHECKED-NAMING-01
+
+- Status: OPEN
+- Discovered: 2026-10-31, independent incremental integration review.
+- Repository / owner: goldenport-cncf; Resource / checked-output maintainer.
+- Category: Naming conformance; priority P3.
+- Location: `src/main/scala/org/goldenport/cncf/protocol/OperationResponseFormatter.scala:51`, `:55`, `:85`; `src/main/scala/org/goldenport/cncf/subsystem/Subsystem.scala:1297`; `src/test/scala/org/goldenport/cncf/subsystem/ComponentRecordStorageHostSpec.scala:87`, `:318`, `:322`, `:343`; `src/test/scala/org/goldenport/cncf/subsystem/SubsystemExecutionProfileSpec.scala:207`.
+- Evidence: Incoming internal helpers, private probe members, camelCase locals and the private lateDebug parameter retain noncanonical naming.
+- Risk: Inconsistent internal conventions increase maintenance cost.
+- Boundary: inherited from the incoming resource/checked-output parent, outside the current compile repair; no relocation or incidental cleanup is admitted.
+- Proposed task: Rename internal declarations and callers separately, retaining public/override contracts and all assertions.
+- Task / commit: not scheduled.
+
+## HYG-SYNC-CHECKED-SPEC-GWT-01
+
+- Status: OPEN
+- Discovered: 2026-10-31, independent incremental integration review.
+- Repository / owner: goldenport-cncf; Managed-record specification maintainer.
+- Category: Executable specification presentation; priority P3.
+- Location: `src/test/scala/org/goldenport/cncf/subsystem/ComponentRecordStorageHostSpec.scala:64-70`, lost-acknowledgement subsection of the two-JVM create-owner scenario.
+- Evidence: The incoming subsection executes an action and expectations without adjacent When / Then clauses.
+- Risk: The action and observation boundaries are less explicit as behavioral documentation.
+- Boundary: inherited from the incoming resource/checked-output parent, outside the current compile repair; no relocation or incidental cleanup is admitted.
+- Proposed task: Add clauses at the existing semantic boundaries without changing execution or expectations.
+- Task / commit: not scheduled.

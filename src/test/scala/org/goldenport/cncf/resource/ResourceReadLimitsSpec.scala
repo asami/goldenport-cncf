@@ -10,11 +10,27 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 23, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ResourceReadLimitsSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Runtime resource read limits" should {
+    "preflight strict UTF-8 with the File cap-first precedence and a bounded overflow count" in {
+      Given("a four-byte policy without a File or storage capability")
+      val scope = ResourceTextPreflight.scope(ResourceReadLimits(4))
+      When("complete text, malformed small text and an oversized malformed tail are inspected")
+      val accepted = Vector("", "abcd", "éé", "😀").map(scope.checkC(_).toOption.get)
+      val invalid = scope.checkC("\uD800").toOption.get
+      val overflow = scope.checkC("abcde" + "x" * 1000 + "\uD800").toOption.get
+      Then("only admitted text has an exact size and overflow is the first observed prefix")
+      accepted shouldBe Vector(ResourceTextPreflight.Accepted(0, 4),
+        ResourceTextPreflight.Accepted(4, 4), ResourceTextPreflight.Accepted(4, 4),
+        ResourceTextPreflight.Accepted(4, 4))
+      invalid shouldBe ResourceTextPreflight.InvalidText(4)
+      scope.checkC(null).toOption.get shouldBe ResourceTextPreflight.InvalidText(4)
+      overflow shouldBe ResourceTextPreflight.SizeExceeded(5, 4)
+    }
+
     "default to one MiB and reject every out-of-range construction" in {
       Given("the default policy, both admitted endpoints and invalid integer limits")
       val invalid = Vector(Int.MinValue, -1, 0, 268435457, Int.MaxValue)
