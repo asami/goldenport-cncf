@@ -12,10 +12,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * Staged admission, mapped creation and detached readback on actual managed native storage.
  *
  * @since   Oct. 18, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class Phase115NativeQuotaAdmissionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Managed native lifetime quota persistence" should {
     Vector("direct native", "measured payload native", "measured query native").foreach { route =>

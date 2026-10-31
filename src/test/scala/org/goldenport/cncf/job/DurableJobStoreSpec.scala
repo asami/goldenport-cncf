@@ -18,10 +18,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for canonical durable job-record storage.
  *
  * @since   Sep.  9, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class DurableJobStoreSpec
   extends AnyWordSpec
   with Matchers

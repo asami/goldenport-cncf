@@ -42,43 +42,19 @@ import org.testcontainers.utility.DockerImageName
  * @since   Jul. 26, 2026
  *  version Jul. 30, 2026
  *  version Sep. 17, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-final class UnitOfWorkPlainMutationProviderParitySpec
+abstract class PlainMutationProviderParitySpecification
     extends AnyWordSpec
     with Matchers
     with GivenWhenThen {
-  import UnitOfWorkPlainMutationProviderParitySpec.*
+  import PlainMutationProviderParitySpecification.*
 
-  "UnitOfWork plain mutation provider parity" should {
-    "preserve revision stale-writer and cache coherence with in-memory storage" in {
-      Given("one None-concurrency SimpleEntity on the in-memory provider")
-      val store = DataStore.inMemorySearchable()
+  protected final def verifyProvider(providerName: String, store: DataStore): Unit =
+    _exercise_provider(providerName, store) shouldBe _expected_evidence
 
-      When("ordinary direct and explicit observed mutations run through UnitOfWork")
-      val evidence = _exercise_provider("memory", store)
-
-      Then("provider state and the resident Entity projection remain coherent")
-      evidence shouldBe _expected_evidence
-    }
-
-    "preserve revision stale-writer and cache coherence with SQLite storage" in {
-      Given("one None-concurrency SimpleEntity on a file-backed SQLite provider")
-      val path = java.nio.file.Files.createTempFile(
-        "cncf-pc02-provider-parity-",
-        ".db"
-      )
-      val store = SqlDataStore.sqlite(path.toString)
-
-      When("ordinary direct and explicit observed mutations run through UnitOfWork")
-      val evidence = _exercise_provider("sqlite", store)
-
-      Then("provider state and the resident Entity projection remain coherent")
-      evidence shouldBe _expected_evidence
-    }
-
-    "preserve revision stale-writer and cache coherence with MySQL storage" taggedAs org.scalatest.tagobjects.Slow in {
+  protected final def verifyMysqlProvider(): Unit = {
       _with_live_mysql { database =>
         Given("one None-concurrency SimpleEntity on the live MySQL provider")
         val datasource = new MysqlDataSource()
@@ -96,7 +72,6 @@ final class UnitOfWorkPlainMutationProviderParitySpec
         Then("provider state and the resident Entity projection remain coherent")
         evidence shouldBe _expected_evidence
       }
-    }
   }
 
   private def _exercise_provider(
@@ -325,7 +300,7 @@ final class UnitOfWorkPlainMutationProviderParitySpec
     )
 }
 
-object UnitOfWorkPlainMutationProviderParitySpec {
+object PlainMutationProviderParitySpecification {
   final val LIVE_MYSQL_ENV = "CNCF_LIVE_MYSQL_TEST"
 
   private val _live_mysql_enabled =
@@ -498,6 +473,52 @@ object UnitOfWorkPlainMutationProviderParitySpec {
       val (next, result) = state.run(_value).value
       _value = next
       Some(result)
+    }
+  }
+}
+
+/** Ordinary provider coverage does not acquire a Docker or external DB environment.
+ * @since   Oct. 31, 2026
+ * @version Oct. 31, 2026
+ */
+final class UnitOfWorkPlainMutationProviderParitySpec extends PlainMutationProviderParitySpecification {
+  "UnitOfWork plain mutation provider parity" should {
+    "preserve revision stale-writer and cache coherence with in-memory storage" in {
+      Given("one None-concurrency SimpleEntity on the in-memory provider")
+      val store = DataStore.inMemorySearchable()
+
+      When("ordinary direct and explicit observed mutations run through UnitOfWork")
+      verifyProvider("memory", store)
+
+      Then("provider state and the resident Entity projection remain coherent")
+    }
+
+    "preserve revision stale-writer and cache coherence with SQLite storage" in {
+      Given("one None-concurrency SimpleEntity on a file-backed SQLite provider")
+      val path = java.nio.file.Files.createTempFile(
+        "cncf-pc02-provider-parity-",
+        ".db"
+      )
+      val store = SqlDataStore.sqlite(path.toString)
+
+      When("ordinary direct and explicit observed mutations run through UnitOfWork")
+      verifyProvider("sqlite", store)
+
+      Then("provider state and the resident Entity projection remain coherent")
+    }
+
+  }
+}
+
+/** The live MySQL environment remains an explicit prerequisite, not a duration tag.
+ * @since   Oct. 31, 2026
+ * @version Oct. 31, 2026
+ */
+@org.scalatest.DoNotDiscover
+final class MysqlUnitOfWorkPlainMutationProviderParitySpec extends PlainMutationProviderParitySpecification {
+  "UnitOfWork plain mutation provider parity" should {
+    "preserve revision stale-writer and cache coherence with MySQL storage" in {
+      verifyMysqlProvider()
     }
   }
 }

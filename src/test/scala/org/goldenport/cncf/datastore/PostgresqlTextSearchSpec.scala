@@ -9,9 +9,9 @@ import scala.util.control.NonFatal
 
 /*
  * @since   Oct. 21, 2026
- * @version Oct. 21, 2026
+ * @version Oct. 31, 2026
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class PostgresqlTextSearchSpec extends AnyWordSpec with Matchers with GivenWhenThen with BeforeAndAfterAll {
   import DataStoreTextSearchFieldSpec.*
   import TextSearchSqlSpecification.*

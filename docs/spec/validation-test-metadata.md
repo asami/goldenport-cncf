@@ -536,21 +536,19 @@ application implementation remains outside producer acceptance.
 No pass/fail, actual runtime, Candidate state, hashes, executor arguments, KPI,
 suite registry or sm-workflow time-budget policy belongs to this ABI.
 
-## ON_DEMAND selection
+## Explicit-only suites and duration
 
-`ON_DEMAND` is the canonical purpose for discoverable low-frequency checks.
-The CML boundary uses exact uppercase purpose labels, including `ON_DEMAND`;
-`on_demand` in discussion is not a second parser label. Existing declaration
-inheritance/replacement and metadata provenance remain unchanged.
+The canonical purposes remain SMOKE, FOCUSED, ADMISSION, FULL and HEAVY.
+Use ScalaTest `@DoNotDiscover` for suites requiring explicit selection, including
+special external environments. Use `@Slow` only for long-running work; combine
+it with `@DoNotDiscover` when both apply. No custom explicit-only purpose or alias
+is accepted at the CML boundary.
 
-Ordinary discovery queries (including empty/default, FOCUSED, feature-only,
-ADMISSION, FULL and HEAVY) exclude operations with ON_DEMAND membership even
-when other purposes are also inherited or declared. An explicit ON_DEMAND query
-selects them, still applying any feature constraint. Exact supplemental
-`resolveC` references remain available with their original metadata, requirements
-and provenance. Consumer named focused execution can use that exact resolution;
-a suite wildcard or broad query is not explicit operation consent.
-
-These checks remain available on demand or for separately selected unattended
-execution. No continuous qualification or scheduler is implied. Reserve
-`scripted` for the actual sbt scripted mechanism, not a ScalaTest purpose.
+Canonical metadata inventory and exact reference resolution preserve annotated
+operations, requirements and provenance. Inventory presence is not execution
+selection. Automatic execution adapters exclude `@DoNotDiscover` before lifecycle
+setup, including FULL, ADMISSION and HEAVY. Standard explicit suite selection can
+run the annotated suite after the caller supplies its documented prerequisites.
+Explicitly selecting a harmless fixture verifies the path without running live
+DB tests. Mixed ordinary/external suites are split so embedded providers stay
+ordinary. Reserve `scripted` for the actual sbt mechanism.

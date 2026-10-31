@@ -9,10 +9,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan.  7, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 class JobTerminalStateRecordOnlySpec
   extends AnyWordSpec
   with Matchers

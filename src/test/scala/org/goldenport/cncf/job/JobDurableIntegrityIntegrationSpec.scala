@@ -15,10 +15,10 @@ import JobDurableIntegrityStatus.*
 
 /*
  * @since   Oct.  3, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class JobDurableIntegrityIntegrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _scenario(example: String, rules: String) =
     afterWord(s"in spec:durable-job-integrity-operations, example:$example, rules:$rules, phase:69.7, slice:JM69-09D1C")

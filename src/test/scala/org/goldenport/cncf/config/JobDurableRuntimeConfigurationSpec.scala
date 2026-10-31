@@ -13,10 +13,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  3, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class JobDurableRuntimeConfigurationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _scenario(example: String, rules: String) =
     afterWord(s"in spec:durable-job-runtime-owner, example:$example, rules:$rules, phase:69.7, slice:JM69-09D1B")

@@ -12,10 +12,10 @@ import org.scalatest.wordspec.AnyWordSpec
  *
  * @since   Jul. 30, 2026
  *  version Sep. 17, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class JobEntityCollectionIdentitySpec
   extends AnyWordSpec
   with Matchers

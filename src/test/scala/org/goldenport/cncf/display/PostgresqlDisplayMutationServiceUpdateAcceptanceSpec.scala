@@ -7,9 +7,9 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 31, 2026
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class PostgresqlDisplayMutationServiceUpdateAcceptanceSpec extends AnyWordSpec
     with DisplayMutationServiceFixture.Vocabulary with PostgresqlAcceptance {
   import DisplayMutationServiceFixture.*

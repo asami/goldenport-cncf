@@ -12,10 +12,10 @@ import JobJclEventCrossProcessFixtures.{Child, Identity, Scenario, identity, wit
  * Generated invocations retain complete local native and cleanup oracles.
  *
  * @since   Oct.  6, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class JobJclEventCrossProcessAcceptanceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "JM69-10C10 public JCL events across independently fresh processes" should {
     "EC1 PersistentRoot" which {

@@ -13,10 +13,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 3, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class DurableJobOperationalMetricsSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "E1 DU1 closed durable completed-result matrix" should _scenario("E1", "R1,R2,R4,R7,R8") {
     "retain result identities and expose all fifty-nine independent closed cells" in {

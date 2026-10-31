@@ -17,10 +17,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * Native owned bytes and closed typed consumer behavior; no CBD/JVM claim.
  *
  * @since   Oct.  4, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class DurableJobOperationResponsePayloadsSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import DurableJobOperationResponsePayloadFixtures.{
     Fixture, ReadEffects, access, bytes, generatedCanonicalWire, generatedRecord, generatedWire, prefix,

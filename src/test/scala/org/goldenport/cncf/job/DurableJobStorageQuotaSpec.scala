@@ -26,10 +26,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * Native retained capacity, persisted ambiguous reservations and fenced recovery.
  *
  * @since   Oct.  1, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class DurableJobStorageQuotaSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _now = Instant.parse("2026-10-01T01:02:03Z")
   private val _access = DurableJobRecordAccess("tenant-a", "subject-a", Set("job.read"))

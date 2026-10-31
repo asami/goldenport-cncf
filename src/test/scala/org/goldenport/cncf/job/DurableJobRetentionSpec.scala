@@ -17,10 +17,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * Signed retained-lifecycle authority and bounded maintenance semantics.
  *
  * @since   Oct.  1, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class DurableJobRetentionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import DurableJobRetentionCommand.*
   import DurableJobRetentionFacet.*

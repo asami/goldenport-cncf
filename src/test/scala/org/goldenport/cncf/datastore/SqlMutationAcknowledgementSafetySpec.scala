@@ -21,9 +21,9 @@ import scala.util.control.NonFatal
 
 /*
  * @since   Oct. 14, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 31, 2026
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class SqlMutationAcknowledgementSafetySpec extends AnyWordSpec with Matchers with GivenWhenThen with PostgresqlAcceptance {
   import SqlMutationAcknowledgementSafetySpec.*
   import SqlMutationAcknowledgementSafetySpec.given

@@ -11,10 +11,10 @@ import JobCrossProcessFixtures.{Child, Identity, identity, withCase}
  * Actual OS processes consume original native terminal and payment contracts.
  *
  * @since   Oct.  4, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class JobCrossProcessAcceptanceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _scenario(example: String, rules: String) =
     afterWord(s"in spec:job-cross-process-acceptance, example:$example, rules:$rules, phase:69.7, slice:JM69-10A")

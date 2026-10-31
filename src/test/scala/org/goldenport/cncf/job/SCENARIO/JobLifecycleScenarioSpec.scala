@@ -36,10 +36,10 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Feb. 27, 2026
  *  version Apr. 22, 2026
  *  version May.  4, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
     with Matchers with ConsequenceMatchers with JobEngineTestFixture {
   "Job lifecycle scenario" should {

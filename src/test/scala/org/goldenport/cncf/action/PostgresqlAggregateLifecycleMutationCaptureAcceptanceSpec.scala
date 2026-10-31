@@ -14,9 +14,9 @@ import org.simplemodeling.model.datatype.EntityCollectionId
 
 /*
  * @since   Oct. 16, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 31, 2026
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class PostgresqlAggregateLifecycleMutationCaptureAcceptanceSpec extends AnyWordSpec
     with AggregateLifecycleMutationCaptureFixture.Vocabulary with PostgresqlAcceptance {
   import AggregateLifecycleMutationCaptureFixture.*

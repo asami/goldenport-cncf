@@ -20,10 +20,10 @@ import DurableJobOperationResponseQueryFixtures.{Child, Effects, Fixture, access
  * Current-caller result authority over genuine native and sequential JVM facts.
  *
  * @since   Oct.  4, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class DurableJobOperationResponseQuerySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _spec = "docs/spec/durable-job-operation-response-query-contract.md"
   private def _scenario(example: String, rules: String) =

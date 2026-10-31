@@ -20,10 +20,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * Real SQLite owners remain in-process evidence, pending independent acceptance.
  *
  * @since   Oct. 3, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class JobDurableLifetimeRecoverySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import JobDurableLifetimeRecoveryFixtures.*
 

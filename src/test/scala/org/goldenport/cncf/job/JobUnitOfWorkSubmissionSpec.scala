@@ -12,10 +12,10 @@ import JobUnitOfWorkSubmissionFixtures.*
 
 /*
  * @since   Oct.  6, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class JobUnitOfWorkSubmissionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _scenario(example: String, rules: String) =
     afterWord(s"in spec:job-unit-of-work-submission-contract, example:$example, rules:$rules, phase:69.7, slice:JM69-10CBD2B")

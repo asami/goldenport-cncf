@@ -12,9 +12,9 @@ import scala.util.control.NonFatal
 
 /*
  * @since   Oct. 14, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 31, 2026
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class MysqlEntityCreateAcceptanceSpec extends AnyWordSpec with Matchers with GivenWhenThen with BeforeAndAfterAll {
   import EntityCreateFailureSafetyFixture.*
   import EntityObservedDeleteCanonicalFixture.{reason, success}

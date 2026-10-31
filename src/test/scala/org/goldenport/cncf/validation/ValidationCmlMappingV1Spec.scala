@@ -13,7 +13,7 @@ import ValidationMetadataV1.*
 
 /** CML-normalized properties and Scala declarations have one semantic interpreter.
  * @since   Oct. 18, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ValidationCmlMappingV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -46,16 +46,13 @@ final class ValidationCmlMappingV1Spec extends AnyWordSpec with Matchers with Gi
       properties.declarationC.toOption shouldBe admitted.toOption
     }
 
-    "parse canonical ON_DEMAND without adding casing aliases or losing inherited metadata" in {
-      val defaults = Properties(purposes = Some(Set("ON_DEMAND", "FULL")), features = Set(_feature_a))
-      val resolved = _resolve(Some(defaults), Some(Properties()))
-      resolved.purposes shouldBe Set(Purpose.ON_DEMAND, Purpose.FULL)
-      resolved.features shouldBe Set(_feature_a)
-      resolved.origins shouldBe Origins(true, true)
-      defaults.declarationC.toOption.get.purposes shouldBe Some(Set(Purpose.ON_DEMAND, Purpose.FULL))
-      Vector("on_demand", "ON-DEMAND", "ON_DEMAND ").foreach { label =>
-        Properties(purposes = Some(Set(label))).declarationC shouldBe a[Consequence.Failure[?]]
-      }
+    "reject the retired purpose without accepting compatibility aliases" in {
+      Given("a removed purpose or a spelling variant")
+      val labels = Vector("ON_DEMAND", "on_demand", "ON-DEMAND", "ON_DEMAND ")
+      When("CML properties are normalized")
+      val results = labels.map(label => Properties(purposes = Some(Set(label))).declarationC)
+      Then("each unsupported purpose is rejected")
+      results.foreach(_ shouldBe a[Consequence.Failure[?]])
     }
 
     "preserve absent, explicit empty and field-specific override semantics" in {

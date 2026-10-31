@@ -6,13 +6,13 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.ExecutionRequirement
 
 /** Source declarations and normalized operation metadata, independent of discovery.
  * @since   Oct. 18, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 31, 2026
  */
 object ValidationMetadataV1 {
   val ABI_VERSION: Int = 1
 
   enum Purpose {
-    case SMOKE, FOCUSED, ADMISSION, FULL, HEAVY, ON_DEMAND
+    case SMOKE, FOCUSED, ADMISSION, FULL, HEAVY
   }
 
   enum DurationClass {

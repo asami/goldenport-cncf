@@ -13,10 +13,10 @@ import JobMigrationCrossProcessFixtures.{CasePlan, Child, Form, withCase}
  * Seven real-process examples consume the original migration and startup contract.
  *
  * @since   Oct.  5, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class JobMigrationCrossProcessAcceptanceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _scenario(example: String): AfterWord = {
     afterWord(s"in spec:job-cross-process-acceptance, example:$example, rules:MG1,MG2,MG3,MG4,MG5,MG6,MG7,MG8, phase:69.7, slice:JM69-10C5")

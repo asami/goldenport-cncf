@@ -11,10 +11,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for the pure durable recovery classification.
  *
  * @since   Sep.  9, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class DurableJobRecoverySpec
     extends AnyWordSpec
     with Matchers

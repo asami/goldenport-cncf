@@ -12,7 +12,7 @@ import ValidationMetadataV1.*
 
 /** Pure consumer queries and exact supplemental reference behavior over real inventory.
  * @since   Oct. 18, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 31, 2026
  */
 @annotation.ValidationSpecification(declaration = classOf[AdmissionTestDeclaration])
 class ValidationDiscoverySelectionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -25,8 +25,7 @@ class ValidationDiscoverySelectionSpec extends AnyWordSpec with Matchers with Gi
         Purpose.FOCUSED -> Set("focused union", "parameter case 1", "word behavior should inherit its anchor", "focused feature a", "focused feature b"),
         Purpose.ADMISSION -> Set("inherits defaults", "explicit empty provider", "word behavior should use an unannotated override"),
         Purpose.FULL -> Set("inherits defaults", "explicit empty provider", "word behavior should use an unannotated override"),
-        Purpose.HEAVY -> Set("heavy replacement", "parameter case 2"),
-        Purpose.ON_DEMAND -> Set.empty[String])
+        Purpose.HEAVY -> Set("heavy replacement", "parameter case 2"))
       When("each public purpose is used independently")
       val selections = expected.map { case (purpose, names) =>
         (purpose, names, _select(inventory, SelectionQuery(purposes = Set(purpose))))
@@ -39,30 +38,44 @@ class ValidationDiscoverySelectionSpec extends AnyWordSpec with Matchers with Gi
       }
     }
 
-    "keep inherited mixed ON_DEMAND discoverable but require explicit selection" in {
+    "exclude DoNotDiscover during ordinary discovery and execute it only by explicit suite selection" in {
+      Given("one ordinary and one explicit-only harmless fixture with inherited canonical metadata")
       val root = Path.of(getClass.getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath()
-      val artifact = ArtifactScope("component:fixture", "artifact:on-demand", "artifact-1", "source-1", root,
-        "org.goldenport.cncf.validation.fixtures.phase103.ondemand")
-      val inventory = discoverC(DiscoveryScope("on-demand-scope", "scope-1", Vector(artifact)),
+      val prefix = "org.goldenport.cncf.validation.fixtures.phase103.explicit"
+      val hidden = prefix + ".ExplicitSelectionFixtureSpec"
+      val ordinary = prefix + ".OrdinarySelectionFixtureSpec"
+      val artifact = ArtifactScope("component:fixture", "artifact:explicit", "artifact-1", "source-1", root, prefix)
+      val inventory = discoverC(DiscoveryScope("explicit-scope", "scope-1", Vector(artifact)),
         getClass.getClassLoader).toOption.get
       inventory.completeness shouldBe Completeness.COMPLETE
       inventory.diagnostics shouldBe empty
-      inventory.operations.size shouldBe 2
-      inventory.operations.foreach(_.metadata.get.purposes should contain (Purpose.ON_DEMAND))
-      val queries = Vector(SelectionQuery(), SelectionQuery(features = Set(
-        FeatureReference("component:fixture", "low-frequency")))) ++
-        Purpose.values.filter(_ != Purpose.ON_DEMAND).map(p => SelectionQuery(purposes = Set(p)))
-      queries.foreach(query => _select(inventory, query) shouldBe empty)
-      val selected = _select(inventory, SelectionQuery(purposes = Set(Purpose.ON_DEMAND)))
-      selected shouldBe inventory.operations
-      selected.foreach { operation =>
-        ValidationDiscoveryV1.resolveC(inventory, operation.reference).toOption shouldBe Some(operation)
-        operation.provenance.sourceRevision shouldBe "source-1"
-      }
-      val inherited = selected.find(_.selector.testName == "operation inherits low-frequency registration").get
-      inherited.reference.operation shouldBe "inherited-operation"
+      inventory.operations.size shouldBe 3
+      val inherited = inventory.operations.find(_.reference.operation == "inherited-operation").get
+      ValidationDiscoveryV1.resolveC(inventory, inherited.reference).toOption shouldBe Some(inherited)
+      inherited.provenance.sourceRevision shouldBe "source-1"
       inherited.provenance.operationRevision shouldBe "operation-2"
       inherited.metadata.get.origins shouldBe Origins(true, true)
+      When("ordinary ADMISSION and actual ScalaTest discovery are used")
+      val admission = RepositoryAdmissionSelection.select(root.toString, "test", Array(hidden, ordinary))
+      admission.map(_(0)).toSet shouldBe Set(ordinary)
+      def run(arguments: Vector[String]): String = {
+        val report = java.nio.file.Files.createTempFile("cncf-discovery-", ".txt")
+        try {
+          org.scalatest.tools.Runner.run((Vector("-R", root.toString, "-f", report.toString) ++ arguments).toArray) shouldBe true
+          java.nio.file.Files.readString(report)
+        } finally java.nio.file.Files.deleteIfExists(report)
+      }
+      val automatic = run(Vector("-w", prefix))
+      Then("a real ordinary control executes while the explicit-only suite is absent")
+      automatic should include ("ordinary fixture control leaf")
+      automatic should not include "explicit fixture first leaf"
+      automatic should not include "explicit fixture inherited leaf"
+      When("the annotated suite is named explicitly through ScalaTest")
+      val explicit = run(Vector("-s", hidden))
+      Then("its two actual leaves execute without changing metadata or preparing an external environment")
+      explicit should include ("explicit fixture first leaf")
+      explicit should include ("explicit fixture inherited leaf")
+      explicit should not include "ordinary fixture control leaf"
     }
 
     "apply purpose OR and feature OR with AND between dimensions" in {

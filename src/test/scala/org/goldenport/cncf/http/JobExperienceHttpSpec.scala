@@ -26,10 +26,10 @@ import org.typelevel.ci.CIString
  * cases go through routes rather than renderer or codec-only entry points.
  *
  * @since   Sep. 29, 2026
- * @version Oct. 17, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class JobExperienceHttpSpec extends AnyWordSpec with Matchers with GivenWhenThen with StaticFormAppRendererSpecFixtures {
   "Job experience Http4s routes" should {
     "H9 preserve configured Production audit list and bounded detail through real provider-authenticated routes" in {

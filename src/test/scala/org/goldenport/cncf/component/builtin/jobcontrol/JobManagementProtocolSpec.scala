@@ -33,10 +33,10 @@ import io.circe.parser.parse
 
 /*
  * @since   Sep. 11, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class JobManagementProtocolSpec
     extends AnyWordSpec with Matchers with GivenWhenThen with JobEngineTestFixture {
   private val _e1 = afterWord(

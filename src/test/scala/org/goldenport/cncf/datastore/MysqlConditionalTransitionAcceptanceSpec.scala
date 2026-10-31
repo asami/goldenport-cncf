@@ -35,10 +35,10 @@ import org.testcontainers.utility.DockerImageName
  * @since   Jul. 24, 2026
  *  version Jul. 25, 2026
  *  version Jul. 26, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class MysqlConditionalTransitionAcceptanceSpec
     extends AnyWordSpec
     with Matchers

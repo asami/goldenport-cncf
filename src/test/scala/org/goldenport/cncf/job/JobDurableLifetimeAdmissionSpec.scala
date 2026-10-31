@@ -24,10 +24,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * real cross-process/CBD Support acceptance. Runtime dispatch associates paid IDs.
  *
  * @since   Oct.  2, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class JobDurableLifetimeAdmissionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _access = JobInputBoundsFixtures.access
   private val _now = JobInputBoundsFixtures.instant

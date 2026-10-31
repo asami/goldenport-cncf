@@ -161,7 +161,7 @@ metadata and should be removed from the semantic comparison. Reusing one
 mutable runtime is not sufficient replay evidence.
 
 ----------------------------------------------------------------------
-5. Normal FULL and opt-in HEAVY (updated 2026-10-19)
+5. Normal FULL and opt-in HEAVY (updated 2026-10-31)
 ----------------------------------------------------------------------
 
 Normal repository `test` is FULL for its declared selection, not exhaustive Job
@@ -175,14 +175,21 @@ tests using fake providers remain FULL even when they mention an external DB.
 This execution policy does not exclude HEAVY sources from Test compilation or
 claim that normal build dependency resolution is offline.
 
-External-service and Docker acceptance uses the existing ScalaTest Slow tag,
-in addition to any existing explicit live-environment opt-in. Whole external
-suites must be excluded before lifecycle setup, not canceled after contacting
-the service. In mixed suites, tag only the live cases and acquire their external
-resources inside those cases: a suite-wide beforeAll must not start Docker for
-the remaining SQLite/in-memory cases. Tests whose one scenario compares several
-real database providers remain HEAVY as a whole; standalone SQLite coverage stays
-FULL. Preserve real-provider assertions and report unexecuted coverage as NOT RUN.
+External-service and Docker dependencies are environment requirements, not
+execution-time classifications. Suites that require a special external-service
+or Docker environment must use ScalaTest's `@DoNotDiscover` and run only when
+explicitly selected. Declare their environment prerequisites separately and
+retain any existing explicit live-environment opt-in; `@DoNotDiscover` does not
+prepare or verify those prerequisites. Use `@Slow` for long-running tests only:
+an external database or Docker dependency alone does not require it. Combine
+`@DoNotDiscover` and `@Slow` when both conditions apply.
+
+Exclude whole environment-dependent suites before lifecycle setup, not after
+contacting the service. Separate live cases from ordinary SQLite/in-memory cases
+into an explicitly selected suite so its `beforeAll` cannot start Docker during
+ordinary validation. A scenario comparing several real database providers stays
+explicit-only as a whole; standalone SQLite coverage stays FULL. Preserve
+real-provider assertions and report unexecuted coverage as NOT RUN.
 
 Job management uses
 five representative suites: InMemoryJobEngineSpec, JobPrimaryResultSpec,
@@ -190,24 +197,19 @@ JobQueryReadModelSpec, DurableJobLifecycleWriteBridgeSpec and JobControlComponen
 These cover submission/completion, primary versus async results, queries, durable
 lifecycle writes and the public control component.
 
-HEAVY uses ScalaTest's built-in `org.scalatest.tags.Slow` tag. Detailed Job suites
-carry `@org.scalatest.tags.Slow`; mixed suites use
-`taggedAs org.scalatest.tagobjects.Slow` on individual expensive cases. In
-DurableJobRecordSpec and DurableJobTerminalProjectionSpec only the 5,000-level
-and 2,048-level cases are HEAVY; their ordinary cases remain in FULL alongside
-the five representatives. Other detailed Job suites, including integrations
-outside the job package, are opt-in. This is a coverage/budget distinction, not
-a claim that every individual case is slow. Keep assertions, depths and property
-counts intact. New tests declare their category at the test definition; there is
-no classification registry, package-name filter or custom FULL/HEAVY selection
-command. The additive ADMISSION entry below uses canonical metadata.
+Detailed Job suites that were previously opt-in solely for coverage/budget reasons
+use `@DoNotDiscover`; this does not claim that their cases are long-running.
+Retain the five ordinary representatives. Use `@Slow` only where execution cost
+is long, including the existing 5,000-level and 2,048-level individual cases in
+DurableJobRecordSpec and DurableJobTerminalProjectionSpec. Keep all assertions,
+depths and property counts intact. No manual suite registry is introduced.
 
 Use the standard SBT commands below through the repository's prescribed SBT
 execution route:
 
 ```text
 test
-testOnly * -- -n org.scalatest.tags.Slow
+testOnly org.goldenport.cncf.job.DurableJobStoreSpec
 testOnly org.goldenport.cncf.job.DurableJobRecordSpec
 testOnly org.goldenport.cncf.job.DurableJobRecordSpec -- -n org.scalatest.tags.Slow
 ```
@@ -217,8 +219,10 @@ testOnly org.goldenport.cncf.job.DurableJobRecordSpec -- -n org.scalatest.tags.S
 without tag arguments runs all its cases, including HEAVY. `-n` selects tagged
 cases; `-l` excludes them. A tag selection may match zero tests, so report actual
 executed counts rather than treating a zero-test success as HEAVY coverage.
+Selecting Slow/HEAVY does not by itself select environment-dependent suites
+annotated with `@DoNotDiscover`.
 
-Run affected suites for Job contract changes and the explicit HEAVY selection
+Run explicitly named affected suites for Job contract changes and the selected detailed Job suites
 for Job-wide acceptance or changes spanning engine/durability/recovery/process
 boundaries. HEAVY is never an automatic follow-up after FULL or every repair.
 Unrelated routine FULL checks need not run it. Report omitted HEAVY as NOT RUN,

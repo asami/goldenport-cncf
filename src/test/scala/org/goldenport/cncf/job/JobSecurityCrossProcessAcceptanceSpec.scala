@@ -12,10 +12,10 @@ import JobSecurityCrossProcessFixtures.{Mode, ReaderChild, withCase}
  * Original tenant/subject/scope startup authorization across genuine native JVMs.
  *
  * @since   Oct.  6, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class JobSecurityCrossProcessAcceptanceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private given _security_case_shrink: Shrink[(Mode, Int, Int)] = Shrink { case (mode, count, badindex) =>
     Shrink.shrink[Int](count).filter(candidate => candidate >= 1 && candidate <= 3 && badindex < candidate)

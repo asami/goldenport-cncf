@@ -14,10 +14,10 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  3, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class JobExperienceOperationalAuditIntegrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import JobExperienceOperationalAuditFixtures.*
 

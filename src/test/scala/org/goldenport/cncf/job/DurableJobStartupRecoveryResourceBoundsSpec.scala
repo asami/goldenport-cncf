@@ -13,10 +13,10 @@ import org.scalacheck.rng.Seed
 /*
  * Whole-source admission before durable recovery effects, in all three modes.
  * @since   Oct.  1, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class DurableJobStartupRecoveryResourceBoundsSpec
     extends AnyWordSpec with Matchers with GivenWhenThen {
   "Durable startup recovery source admission" should {

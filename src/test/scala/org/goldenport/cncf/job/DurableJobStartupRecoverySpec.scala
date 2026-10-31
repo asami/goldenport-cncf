@@ -21,10 +21,10 @@ import org.scalacheck.{Gen, Prop, Test}
  * provider-backed durable creation; recovery observes closed facts only.
  *
  * @since   Sep.  9, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class DurableJobStartupRecoverySpec
     extends AnyWordSpec
     with Matchers

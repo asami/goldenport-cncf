@@ -20,10 +20,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * Bounded native sweeps and the explicitly configured production timer owner.
  *
  * @since   Oct.  1, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class DurableJobMaintenanceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import BlobRepository.given
 

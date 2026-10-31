@@ -8,7 +8,7 @@ import ValidationDiscovery.{failure, ordered}
 
 /** Pure admission, purpose/feature queries and exact supplemental references.
  * @since   Oct. 18, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 31, 2026
  */
 private[validation] object ValidationDiscoverySelection {
   def selectC(inventory: Inventory, query: SelectionQuery): Consequence[Vector[Operation]] =
@@ -19,7 +19,6 @@ private[validation] object ValidationDiscoverySelection {
         }.toSet
         ordered(inventory.operations.filter { operation =>
           !ambiguous.contains(operation.reference) && operation.metadata.exists { metadata =>
-            (!metadata.purposes.contains(Purpose.ON_DEMAND) || query.purposes.contains(Purpose.ON_DEMAND)) &&
               (query.purposes.isEmpty || metadata.purposes.exists(query.purposes.contains)) &&
               (query.features.isEmpty || metadata.features.exists(query.features.contains))
           }

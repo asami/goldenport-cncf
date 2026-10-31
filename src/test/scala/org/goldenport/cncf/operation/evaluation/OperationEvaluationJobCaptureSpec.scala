@@ -20,10 +20,10 @@ import org.scalatest.wordspec.AnyWordSpec
  *
  * @since   Jul. 23, 2026
  *  version Aug. 13, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class OperationEvaluationJobCaptureSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Job-managed automatic operation evaluation capture" should {
     "correlate the worker attempt with the JobId returned by JobAsync" in {

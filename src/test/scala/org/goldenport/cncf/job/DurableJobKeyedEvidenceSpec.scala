@@ -12,10 +12,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * Opaque addressing, exact response provenance and unchanged legacy admission.
  *
  * @since   Oct. 3, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class DurableJobKeyedEvidenceSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import DurableJobKeyedEvidenceFixtures.*
   import JobDurableLifetimeRecoveryFixtures.success

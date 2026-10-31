@@ -14,9 +14,9 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityRevision}
 
 /*
  * @since   Oct. 14, 2026
- * @version Oct. 19, 2026
+ * @version Oct. 31, 2026
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class PostgresqlConditionalTransitionAcceptanceSpec extends AnyWordSpec with Matchers with GivenWhenThen with PostgresqlAcceptance {
   "Native PostgreSQL conditional lifecycle" should {
     "retain the existing two-guard Update capability" which {

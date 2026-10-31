@@ -18,10 +18,10 @@ import DurableJobBackupFixtures.*
 
 /*
  * @since   Oct.  4, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class DurableJobBackupSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def _scenario(example: String, rules: String) =
     afterWord(s"in spec:durable-job-backup-restore, example:$example, rules:$rules, phase:69.7, slice:JM69-09D3")

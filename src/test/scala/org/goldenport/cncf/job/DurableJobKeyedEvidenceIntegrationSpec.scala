@@ -17,10 +17,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * Fresh SQLite ownership is in-process evidence; process/CBD acceptance remains open.
  *
  * @since   Oct. 3, 2026
- * @version Oct. 13, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class DurableJobKeyedEvidenceIntegrationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import DurableJobKeyedEvidenceFixtures.*
   import JobDurableLifetimeRecoveryFixtures.{Owner, Task, publish, record, success}

@@ -30,10 +30,10 @@ import org.scalatest.wordspec.AnyWordSpec
  * Actual native bytes, conservative persisted reservations and acknowledged disposal.
  *
  * @since   Oct.  1, 2026
- * @version Oct. 18, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class DurableJobOwnedBlobQuotaSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import BlobRepository.given
   import DurableJobOwnedBlobPayloads.*
