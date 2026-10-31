@@ -194,3 +194,33 @@ sm-workflow retains a Slice validation management file for acceptance conditions
 metadata queries, supplemental operation references and typed parameters. Phase
 103 supports stable operation discovery/reference resolution; it neither bans
 that plan nor duplicates its policy or test declarations in another registry.
+
+## Follow-up: standard annotations and ADMISSION only — 2026-10-31
+
+This is a new bounded follow-up, not a reopening of closed Phase 103 or its
+accepted checklist. Owner: sm-workflow development, with CNCF producer work first.
+Contract: [standard annotations](../spec/test-selection-standard-annotations.md).
+Do not make it a new gate for unrelated ongoing work.
+
+1. Inventory actual declarations/query consumers, CML mapping and framework tags;
+   retain existing checks/evidence and document the precise mapping per test.
+2. Establish ordinary discovery -> ADMISSION/Slow/exact-suite selection -> final
+   prerequisite preparation -> harmless dispatch/result through the existing ABI.
+3. Remove obsolete active purpose values (SMOKE/FOCUSED/FULL/HEAVY/ON_DEMAND) and
+   migrate producer fixtures/mappings. Retain feature/duration/requirements and
+   provenance. No custom HEAVY normalization or compatibility aliases.
+4. Connect sm-workflow selection/config/CML/generated inventory and packaged
+   callers; migrate declarations without losing assertions or prior work.
+5. Run bounded changed-contract checks and one harmless dispatch, deliver through
+   runtime-owned validation/commit and only needed publication. Preserve ongoing
+   Sessions/history/counters/results; no catalogue replay or automatic consumer
+   activation. Phase 103's prior success remains historical acceptance.
+
+- [ ] TA-C1: Only ADMISSION remains as an active custom classification.
+- [ ] TA-C2: Class/per-test Slow, DoNotDiscover, both together, normal and explicit
+      selection have correct positive/negative behavior before setup.
+- [ ] TA-C3: CML/metadata and consumer selection agree; obsolete active declarations
+      are removed with call sites, not silently aliased.
+- [ ] TA-C4: Feature, duration, prerequisites and exact result attribution survive.
+- [ ] TA-C5: New actual evidence is separated from prior accepted results; owner
+      returns adoption instructions and remaining limitations without polling.

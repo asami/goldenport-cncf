@@ -214,3 +214,9 @@ implementation is outside producer acceptance.
       metadata-selected and explicitly referenced supplemental operations, without
       modifying purpose membership or weakening execution requirements. The Slice
       plan/file lifecycle remains sm-workflow-owned.
+
+## Separately tracked follow-up (not part of closed acceptance)
+
+The [standard-annotation follow-up](phase-103.md#follow-up-standard-annotations-and-admission-only--2026-10-31)
+tracks TA-C1–5 independently. Keep all existing checked items and their original
+meaning; their multi-purpose terminology is historical, not the current target.

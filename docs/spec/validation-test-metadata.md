@@ -1,3 +1,10 @@
+> Migration target (2026-10-31): [standard test annotations](test-selection-standard-annotations.md)
+> adopts ADMISSION as the sole custom classification. The current implementation
+> has completed the first ON_DEMAND-removal increment; removal of the other legacy
+> purpose values and coordinated consumer adoption remain pending. Existing ABI
+> examples below describe that retained implementation, not new authoring guidance
+> or acceptance of TA-C1–5.
+
 # Validation/Test Metadata V1
 
 This specification defines declaration admission, normalized operation-level

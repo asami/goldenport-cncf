@@ -1,3 +1,10 @@
+Current classification policy (2026-10-31):
+[ADMISSION plus standard annotations](test-selection-standard-annotations.md).
+ADMISSION is the sole custom label. FULL/focused are selection modes; "heavy"
+means standard Slow-tag selection, never a second HEAVY metadata membership.
+Existing framework behavior below is retained while producer/consumer metadata
+migrates. Standard DoNotDiscover explicit-suite operation remains supported.
+
 ======================================================================
 Test Specification — Cloud Native Component Framework (CNCF)
 ======================================================================
@@ -237,7 +244,8 @@ an implementation of CNCF Phase 103 discovery.
 ADMISSION uses canonical Validation/Test Metadata at the executable specification,
 not a class-name registry or an inference from measured duration. Initial local
 specifications cover metadata interpretation, discovery selection and exact
-operation binding. Their declaration includes ADMISSION, FOCUSED and FULL.
+operation binding. The target declaration includes only ADMISSION; existing FOCUSED/FULL
+memberships are removed by the coordinated metadata migration.
 This additive classification does not change existing FULL/HEAVY tags, exclusions,
 fixtures, assertions or default `test`/explicit `testOnly` behavior.
 
