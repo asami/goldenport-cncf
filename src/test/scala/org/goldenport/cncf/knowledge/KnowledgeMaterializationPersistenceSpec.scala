@@ -12,10 +12,10 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * Required real PostgreSQL, native Entity persistence and independently reconstructed UoWs.
  * @since   Oct. 29, 2026
- * @version Oct. 29, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
-@org.scalatest.tags.Slow
+@org.scalatest.DoNotDiscover
 final class KnowledgeMaterializationPersistenceSpec extends AnyWordSpec with Matchers with GivenWhenThen
     with PostgresqlAcceptance {
   import KnowledgeMaterializationFixture.*
