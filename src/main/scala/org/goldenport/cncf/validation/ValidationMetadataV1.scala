@@ -12,7 +12,7 @@ object ValidationMetadataV1 {
   val ABI_VERSION: Int = 1
 
   enum Purpose {
-    case SMOKE, FOCUSED, ADMISSION, FULL, HEAVY
+    case SMOKE, FOCUSED, ADMISSION, FULL, HEAVY, ON_DEMAND
   }
 
   enum DurationClass {

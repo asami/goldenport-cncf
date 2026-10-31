@@ -19,7 +19,8 @@ private[validation] object ValidationDiscoverySelection {
         }.toSet
         ordered(inventory.operations.filter { operation =>
           !ambiguous.contains(operation.reference) && operation.metadata.exists { metadata =>
-            (query.purposes.isEmpty || metadata.purposes.exists(query.purposes.contains)) &&
+            (!metadata.purposes.contains(Purpose.ON_DEMAND) || query.purposes.contains(Purpose.ON_DEMAND)) &&
+              (query.purposes.isEmpty || metadata.purposes.exists(query.purposes.contains)) &&
               (query.features.isEmpty || metadata.features.exists(query.features.contains))
           }
         })

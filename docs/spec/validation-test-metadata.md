@@ -535,3 +535,22 @@ application implementation remains outside producer acceptance.
 
 No pass/fail, actual runtime, Candidate state, hashes, executor arguments, KPI,
 suite registry or sm-workflow time-budget policy belongs to this ABI.
+
+## ON_DEMAND selection
+
+`ON_DEMAND` is the canonical purpose for discoverable low-frequency checks.
+The CML boundary uses exact uppercase purpose labels, including `ON_DEMAND`;
+`on_demand` in discussion is not a second parser label. Existing declaration
+inheritance/replacement and metadata provenance remain unchanged.
+
+Ordinary discovery queries (including empty/default, FOCUSED, feature-only,
+ADMISSION, FULL and HEAVY) exclude operations with ON_DEMAND membership even
+when other purposes are also inherited or declared. An explicit ON_DEMAND query
+selects them, still applying any feature constraint. Exact supplemental
+`resolveC` references remain available with their original metadata, requirements
+and provenance. Consumer named focused execution can use that exact resolution;
+a suite wildcard or broad query is not explicit operation consent.
+
+These checks remain available on demand or for separately selected unattended
+execution. No continuous qualification or scheduler is implied. Reserve
+`scripted` for the actual sbt scripted mechanism, not a ScalaTest purpose.

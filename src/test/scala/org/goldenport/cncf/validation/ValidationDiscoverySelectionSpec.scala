@@ -25,7 +25,8 @@ class ValidationDiscoverySelectionSpec extends AnyWordSpec with Matchers with Gi
         Purpose.FOCUSED -> Set("focused union", "parameter case 1", "word behavior should inherit its anchor", "focused feature a", "focused feature b"),
         Purpose.ADMISSION -> Set("inherits defaults", "explicit empty provider", "word behavior should use an unannotated override"),
         Purpose.FULL -> Set("inherits defaults", "explicit empty provider", "word behavior should use an unannotated override"),
-        Purpose.HEAVY -> Set("heavy replacement", "parameter case 2"))
+        Purpose.HEAVY -> Set("heavy replacement", "parameter case 2"),
+        Purpose.ON_DEMAND -> Set.empty[String])
       When("each public purpose is used independently")
       val selections = expected.map { case (purpose, names) =>
         (purpose, names, _select(inventory, SelectionQuery(purposes = Set(purpose))))
@@ -36,6 +37,32 @@ class ValidationDiscoverySelectionSpec extends AnyWordSpec with Matchers with Gi
       selections.find(_._1 == Purpose.HEAVY).get._3.foreach { operation =>
         operation.metadata.get.purposes shouldBe Set(Purpose.HEAVY)
       }
+    }
+
+    "keep inherited mixed ON_DEMAND discoverable but require explicit selection" in {
+      val root = Path.of(getClass.getProtectionDomain.getCodeSource.getLocation.toURI).toRealPath()
+      val artifact = ArtifactScope("component:fixture", "artifact:on-demand", "artifact-1", "source-1", root,
+        "org.goldenport.cncf.validation.fixtures.phase103.ondemand")
+      val inventory = discoverC(DiscoveryScope("on-demand-scope", "scope-1", Vector(artifact)),
+        getClass.getClassLoader).toOption.get
+      inventory.completeness shouldBe Completeness.COMPLETE
+      inventory.diagnostics shouldBe empty
+      inventory.operations.size shouldBe 2
+      inventory.operations.foreach(_.metadata.get.purposes should contain (Purpose.ON_DEMAND))
+      val queries = Vector(SelectionQuery(), SelectionQuery(features = Set(
+        FeatureReference("component:fixture", "low-frequency")))) ++
+        Purpose.values.filter(_ != Purpose.ON_DEMAND).map(p => SelectionQuery(purposes = Set(p)))
+      queries.foreach(query => _select(inventory, query) shouldBe empty)
+      val selected = _select(inventory, SelectionQuery(purposes = Set(Purpose.ON_DEMAND)))
+      selected shouldBe inventory.operations
+      selected.foreach { operation =>
+        ValidationDiscoveryV1.resolveC(inventory, operation.reference).toOption shouldBe Some(operation)
+        operation.provenance.sourceRevision shouldBe "source-1"
+      }
+      val inherited = selected.find(_.selector.testName == "operation inherits low-frequency registration").get
+      inherited.reference.operation shouldBe "inherited-operation"
+      inherited.provenance.operationRevision shouldBe "operation-2"
+      inherited.metadata.get.origins shouldBe Origins(true, true)
     }
 
     "apply purpose OR and feature OR with AND between dimensions" in {

@@ -46,6 +46,18 @@ final class ValidationCmlMappingV1Spec extends AnyWordSpec with Matchers with Gi
       properties.declarationC.toOption shouldBe admitted.toOption
     }
 
+    "parse canonical ON_DEMAND without adding casing aliases or losing inherited metadata" in {
+      val defaults = Properties(purposes = Some(Set("ON_DEMAND", "FULL")), features = Set(_feature_a))
+      val resolved = _resolve(Some(defaults), Some(Properties()))
+      resolved.purposes shouldBe Set(Purpose.ON_DEMAND, Purpose.FULL)
+      resolved.features shouldBe Set(_feature_a)
+      resolved.origins shouldBe Origins(true, true)
+      defaults.declarationC.toOption.get.purposes shouldBe Some(Set(Purpose.ON_DEMAND, Purpose.FULL))
+      Vector("on_demand", "ON-DEMAND", "ON_DEMAND ").foreach { label =>
+        Properties(purposes = Some(Set(label))).declarationC shouldBe a[Consequence.Failure[?]]
+      }
+    }
+
     "preserve absent, explicit empty and field-specific override semantics" in {
       Given("all-field defaults and an operation replacing purposes, duration and duration class")
       val defaults = Properties(purposes = Some(Set("ADMISSION", "FULL")), features = Set(_feature_a),
