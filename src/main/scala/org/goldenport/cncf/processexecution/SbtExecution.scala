@@ -4,7 +4,6 @@ import java.nio.file.{Files, Path}
 import scala.util.control.NonFatal
 import org.goldenport.{Consequence, Conclusion}
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.effect.{ExternalEffect, ExternalEffectKind}
 import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePermission}
 
@@ -171,31 +170,7 @@ private[cncf] object SbtExecutionAdmission {
         Consequence.serviceUnavailable("Process Execution admission is not configured")
       )
       execution <- admission.admitSbtForScopeC(context.cncfCore.scope, binding, operation, target.scenario)
-      mode <- RuntimeConfig.sbtRuntimeBindingC(context.resolvedParameters, target.workspaceId)
-      bound <- mode match {
-        case RuntimeConfig.SbtRuntimeBinding.Project => Consequence.success(execution)
-        case RuntimeConfig.SbtRuntimeBinding.Installed =>
-          RuntimeConfig.installedRuntimeDistributionC(context.resolvedParameters).flatMap {
-            case None => Consequence.resourceInvalid("Installed SBT runtime binding requires an installed runtime manifest")
-            case Some(distribution) =>
-              val definition = execution.definition
-              definition._sbt_metadata match {
-                case Some(metadata) =>
-                  val arguments = definition.fixedArguments.dropRight(1) ++ Vector(
-                    s"-D${RuntimeConfig.installedRuntimeManifestKey}=${distribution.manifest}",
-                    "-Dcncf.installed-runtime.required=true",
-                    "cozyCheckInstalledRuntime",
-                    definition.fixedArguments.last
-                  )
-                  ProcessProgramDefinition.fromSbtRuntimeC(
-                    definition.capability, definition.safeProgramIdentity, definition._executable_location,
-                    arguments, definition.maximumLimits, definition._environment.values, metadata
-                  ).map(bound => execution.copy(definition = bound))
-                case None => Consequence.serviceUnavailable("Typed SBT program metadata is unavailable")
-              }
-          }
-      }
-      jvm <- SbtJvmParameters.applyC(context.resolvedParameters, bound)
+      jvm <- SbtJvmParameters.applyC(context.resolvedParameters, execution)
       limits <- SbtTestOutputParameters.applyC(context.resolvedParameters, operation, jvm.effectiveLimits)
       estimated <- SbtValidationEstimate.applyC(target, operation,
         jvm.definition._sbt_metadata.map(_.testClasses).getOrElse(Vector.empty), limits)

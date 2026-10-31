@@ -184,7 +184,7 @@ final class SubsystemExecutionProfileSpec extends AnyWordSpec with Matchers with
   private final case class CheckedAction(request: Request, state: CheckedState) extends QueryAction {
     def createCall(core: ActionCall.Core): ActionCall = CheckedCall(core, request, state)
   }
-  private final case class CheckedCall(core: ActionCall.Core, request: Request, state: CheckedState) extends ProcedureActionCall {
+  private final case class CheckedCall(core: ActionCall.Core, override val request: Request, state: CheckedState) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] = {
       if (request.operation == "collect") Consequence.success(OperationResponse.RecordResponse(
         Record.data("status" -> state.retained.getOrElse("absent"))))

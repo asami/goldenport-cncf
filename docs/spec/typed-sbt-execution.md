@@ -402,7 +402,7 @@ existing controlled local-probe coverage remains applicable.
 FixCheck coverage in `SbtExecutionDslSpec`, `RuntimeProcessExecutionPlanCodecSpec`,
 `LocalProcessExecutionDriverSpec`, `SbtTestSelectionSpec`,
 `UnitOfWorkProgramPlanningSpec` and `ExternalEffectUsageSpec` specifies inert
-normal/attempt recording, current independent authority, installed binding,
+normal/attempt recording, current independent authority, ordinary project resolution,
 fixed argv and closed wire shapes, selector/override denial, Build effects and
 actual controlled zero/nonzero results with absent test selection. Lifecycle
 events spell this operation `fix-check`; existing termination and capture facts
