@@ -7,7 +7,8 @@ import org.goldenport.cncf.context.ExecutionContext
 /*
  * @since   May. 17, 2026
  *  version May. 18, 2026
- * @version Jul. 16, 2026
+ *  version Jul. 16, 2026
+ * @version Oct. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class KnowledgeWorkingSetSnapshot(
@@ -179,8 +180,8 @@ object KnowledgeWorkingSet {
     )
   }
 
-  def load(snapshot: KnowledgeWorkingSetSnapshot)(using ctx: ExecutionContext): Consequence[KnowledgeWorkingSet] = {
-    val now = ctx.clock.instant()
+  /** Validate canonical graph references without changing the submitted graph. */
+  def validateSnapshot(snapshot: KnowledgeWorkingSetSnapshot): Consequence[Unit] = {
     for {
       _ <- _validate_unique("knowledge node", snapshot.nodes.map(_.id.print))
       _ <- _validate_unique("knowledge relationship", snapshot.relationships.map(_.id.print))
@@ -200,6 +201,17 @@ object KnowledgeWorkingSet {
       _ <- _validate_evidence_provenance(snapshot.evidence, provenance)
       _ <- _validate_fact_references(snapshot.facts, basenodes, relationships, evidence, provenance)
       _ <- _validate_frame_references(snapshot.frames, basenodes, relationships, facts, evidence, provenance)
+    } yield ()
+  }
+
+  def load(snapshot: KnowledgeWorkingSetSnapshot)(using ctx: ExecutionContext): Consequence[KnowledgeWorkingSet] = {
+    val now = ctx.clock.instant()
+    for {
+      _ <- validateSnapshot(snapshot)
+      relationships = snapshot.relationships.map(x => x.id -> x).toMap
+      evidence = snapshot.evidence.map(x => x.id -> x).toMap
+      provenance = snapshot.provenance.map(x => x.id -> x).toMap
+      facts = snapshot.facts.map(x => x.id -> x).toMap
     } yield {
       val projected = _materialize_nodes(snapshot)
       val nodes = projected.map(x => x.id -> x).toMap

@@ -87,7 +87,7 @@ import org.simplemodeling.model.directive.Update
  *  version May. 26, 2026
  *  version Jul. 26, 2026
  *  version Sep. 29, 2026
- * @version Oct. 27, 2026
+ * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -3632,11 +3632,18 @@ object SqlDataStore {
   private[cncf] def managedSqliteResourceC(
     path: String
   ): Consequence[ManagedSqlDataStoreResource] =
-    managedJdbcResourceC(
-      jdbcUrl = if (path == ":memory:") "jdbc:sqlite::memory:" else s"jdbc:sqlite:$path",
-      dialect = Sqlite,
-      driverClassName = Some("org.sqlite.JDBC")
-    )
+    Consequence {
+      // File URIs bypass Xerial's create/delete preflight race on first open:
+      // https://github.com/xerial/sqlite-jdbc/blob/3.45.2.0/src/main/java/org/sqlite/SQLiteConnection.java#L245-L249
+      if (path == ":memory:" || path.startsWith("file:")) s"jdbc:sqlite:$path"
+      else s"jdbc:sqlite:${java.nio.file.Path.of(path).toAbsolutePath.normalize.toUri.toASCIIString}"
+    }.flatMap { jdbcurl =>
+      managedJdbcResourceC(
+        jdbcUrl = jdbcurl,
+        dialect = Sqlite,
+        driverClassName = Some("org.sqlite.JDBC")
+      )
+    }
 
   private[cncf] def managedView(
     resource: ManagedSqlDataStoreResource,
