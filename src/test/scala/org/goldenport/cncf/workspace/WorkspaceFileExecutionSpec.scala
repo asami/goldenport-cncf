@@ -27,7 +27,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Oct. 15, 2026
  *  version Oct. 21, 2026
  *  version Oct. 29, 2026
- * @version Oct. 31, 2026
+ *  version Oct. 31, 2026
+ * @version Nov.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkspaceFileExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -716,9 +717,9 @@ final class WorkspaceFileExecutionSpec extends AnyWordSpec with Matchers with Gi
         val path = Files.writeString(root.resolve("edit"), "old\n", StandardCharsets.UTF_8)
         val context = _context(root, cap = 4)
         val cases = Vector(
-          ("large", FileWriteMode.CreateNew), ("\uD800", FileWriteMode.CreateNew),
+          ("large", FileWriteMode.CreateNew), (0xd800.toChar.toString, FileWriteMode.CreateNew),
           (null, FileWriteMode.CreateNew), ("new", FileWriteMode.UpdateExisting("large")),
-          ("new", FileWriteMode.UpdateExisting("\uDC00")), ("new", FileWriteMode.UpdateExisting(null)),
+          ("new", FileWriteMode.UpdateExisting(0xdc00.toChar.toString)), ("new", FileWriteMode.UpdateExisting(null)),
           ("new", null)
         )
         When("the adapter validates each invalid typed write under that runtime policy")
@@ -739,7 +740,7 @@ final class WorkspaceFileExecutionSpec extends AnyWordSpec with Matchers with Gi
       _with_root { root =>
         val context = _context(root, cap = 4)
         val scope = context.resourceTextPreflightScopeC.toOption.get
-        val cases = Vector("éé", "😀", "abcde", "\uD800", "abcde\uD800")
+        val cases = Vector("éé", "😀", "abcde", 0xd800.toChar.toString, "abcde" + 0xd800.toChar)
         When("each text is inspected and then submitted once to its distinct CreateNew path")
         val outcomes = cases.zipWithIndex.map { case (text, ordinal) =>
           val decision = scope.checkC(text).toOption.get

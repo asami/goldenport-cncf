@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 17, 2026
- * @version Oct. 17, 2026
+ * @version Nov.  2, 2026
  */
 final class PresentationContextCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import DisplayProtocolSpecFixture.{success, sample, source}
@@ -66,7 +66,7 @@ final class PresentationContextCodecSpec extends AnyWordSpec with Matchers with 
     "C2 strict values and envelopes" which {
       "reject unsafe values and malformed Option shapes with redacted typed factory failures" in {
         Given("R1: empty trimmed/control/unpaired-Unicode and over-byte-limit values, including nullable Java callers")
-        val unsafe = Vector("", " x", "x ", "\u00a0x", "x\u2003", "x\u0000", "x\u0085", "\ud800", "\udfff", "a" * 129, "é" * 65)
+        val unsafe = Vector("", " x", "x ", "\u00a0x", "x\u2003", "x\u0000", "x\u0085", 0xd800.toChar.toString, 0xdfff.toChar.toString, "a" * 129, "é" * 65)
         When("validated factories interpret all defective values and null container entries")
         val variants = unsafe.map(value => PresentationContext.createC(variant = Some(value)))
         val locales = Vector("en-us", "EN", "en_US", " en-US", "i-klingon", "en-", "a" * 129)

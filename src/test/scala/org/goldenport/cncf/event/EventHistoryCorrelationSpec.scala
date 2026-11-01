@@ -11,7 +11,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /** Generic producers share metadata without sharing payload semantics.
   * @since   Oct. 25, 2026
-  * @version Oct. 26, 2026
+  *  version Oct. 26, 2026
+  * @version Nov.  2, 2026
   */
 final class EventHistoryCorrelationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _time = Instant.parse("2026-10-25T00:00:00Z")
@@ -62,7 +63,7 @@ final class EventHistoryCorrelationSpec extends AnyWordSpec with Matchers with G
         Map("history.namespace" -> "one", "history.key" -> null),
         Map("history.namespace" -> ("あ" * 43), "history.key" -> "key"),
         Map("history.namespace" -> "one", "history.key" -> ("あ" * 86)),
-        Map("history.namespace" -> "one", "history.key" -> "\uD800"))
+        Map("history.namespace" -> "one", "history.key" -> 0xd800.toChar.toString))
       When("both existing Create paths prepare legacy and invalid inputs")
       val legacyrows = Vector(_take(EventRecordJsonV1.createSideEffectC(_collection, legacy)).record,
         _take(EventRecordJsonV2.createSideEffectC(_collection, legacy)).record)

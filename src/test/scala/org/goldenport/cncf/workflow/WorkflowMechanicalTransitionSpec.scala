@@ -22,7 +22,8 @@ import org.scalacheck.{Gen, Prop, Test}
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct. 25, 2026
+ *  version Oct. 25, 2026
+ * @version Nov.  2, 2026
  */
 final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private given ExecutionContext = ExecutionContext.create()
@@ -268,7 +269,7 @@ final class WorkflowMechanicalTransitionSpec extends AnyWordSpec with Matchers w
       keys.distinct.size shouldBe refs.size
       Given("control, surrogate and oversized reference variants")
       Vector(Reference("", "1"), Reference(" leading", "1"), Reference("a\u0000b", "1"),
-        Reference("\uD800", "1"), Reference("x" * 1024, "1"), null)
+        Reference(0xd800.toChar.toString, "1"), Reference("x" * 1024, "1"), null)
         .foreach { reference =>
           When("a key is requested for the invalid actual reference")
           val rejected = keyC(reference)

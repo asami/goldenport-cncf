@@ -8,7 +8,8 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceExecutionAdmiss
 /*
  * @since   Jul. 17, 2026
  *  version Jul. 22, 2026
- * @version Oct. 28, 2026
+ *  version Oct. 28, 2026
+ * @version Nov.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ProcessCapabilityId private (value: String) {
@@ -791,7 +792,7 @@ final class ProcessExecutionAdmission private (
     admission <- componentadmissions.flatMap(_.get(owner)).map(Consequence.success).getOrElse(
       Consequence.argumentPolicyViolation("git", "git.execution.component-grant", "actual component Git capability grant", "unapproved"))
     definition <- if (selection.isEmpty) policy.gitDefinitionC(binding, operation.kind, operation.selectionIdOption)
-      else policy.gitDefinitionC(binding, GitProgramDefinition.selectedBaseKind(operation.kind), None)
+      else policy.gitSelectionDefinitionC(binding, operation.kind, operation.selectionIdOption)
     grant <- admission._grant_c(definition.capability)
     installLimits <- if (selection.nonEmpty && (operation.kind == GitOperationKind.CommitSelected || GitPurposeCandidateExecution.isPurpose(operation.kind))) for {
       install <- policy.gitDefinitionC(binding, GitOperationKind.InstallCheckpoint, None)
@@ -1069,6 +1070,21 @@ final class ProcessExecutionPolicy private (
       case _ => Consequence.argumentPolicyViolation("git", "git.execution.program-definition",
         "one definition for the same admitted binding, operation and selection", "unavailable")
     }
+  }
+
+  /** An existing fixed stage definition is authoritative even when admission
+    * refuses it. Only absence permits the established repository-wide route.
+    */
+  private[processexecution] def gitSelectionDefinitionC(
+    binding: WorkspaceBinding,
+    kind: GitOperationKind,
+    selectionId: Option[GitSelectionId]
+  ): Consequence[ProcessProgramDefinition] = {
+    val fixedstage = (kind == GitOperationKind.StageSelected || kind == GitOperationKind.StageSelectedAll) &&
+      _definitions.values.exists(_._git_metadata.exists(x =>
+        x.binding.workspaceId == binding.workspaceId && x.kind == kind && x.selectionId == selectionId))
+    if (fixedstage) gitDefinitionC(binding, kind, selectionId)
+    else gitDefinitionC(binding, GitProgramDefinition.selectedBaseKind(kind), None)
   }
 
   private[processexecution] def resolveGitC(

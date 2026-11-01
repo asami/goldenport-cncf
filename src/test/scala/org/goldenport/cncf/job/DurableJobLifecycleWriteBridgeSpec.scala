@@ -18,7 +18,8 @@ import org.scalacheck.{Gen, Prop, Test}
  * checkpointing, and refusal closure.
  *
  * @since   Sep.  9, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Nov.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DurableJobLifecycleWriteBridgeSpec
@@ -1393,10 +1394,8 @@ final class DurableJobLifecycleWriteBridgeSpec
     admission: Consequence[DurableJobLifecycleWriteEvidence],
     startintent: Consequence[DurableJobLifecycleWriteEvidence],
     runningintent: Consequence[DurableJobLifecycleWriteEvidence],
-    taskstart: Option[DurableJobLifecycleWriteRequest.TaskStartIntent =>
-      Consequence[DurableJobLifecycleWriteEvidence]] = None,
-    taskoutcome: Option[DurableJobLifecycleWriteRequest.TaskOutcomeCheckpoint =>
-      Consequence[DurableJobLifecycleWriteEvidence]] = None,
+    taskstart: Option[DurableJobLifecycleWriteRequest.TaskStartIntent => Consequence[DurableJobLifecycleWriteEvidence]] = None,
+    taskoutcome: Option[DurableJobLifecycleWriteRequest.TaskOutcomeCheckpoint => Consequence[DurableJobLifecycleWriteEvidence]] = None,
     terminalresult: DurableResultOutcome = DurableResultOutcome.Succeeded(DurableValue.Absent)
   ) extends (DurableJobLifecycleWriteRequest => Consequence[DurableJobLifecycleWriteEvidence]) {
     private var _requests = Vector.empty[DurableJobLifecycleWriteRequest]

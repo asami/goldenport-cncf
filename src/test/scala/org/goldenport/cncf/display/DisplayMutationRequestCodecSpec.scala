@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct.  5, 2026
+ * @version Nov.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DisplayMutationRequestCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -54,7 +54,7 @@ final class DisplayMutationRequestCodecSpec extends AnyWordSpec with Matchers wi
     "native scalars RQ2" which {
       "retain every UTF16 code unit exact decimal coefficient and full scale boundaries timestamp nanos and Missing" in {
         Given("docs/spec/display-mutation.md R1,R2,R3,R5 E9 R5 RQ2: all five native values including text escapes isolated surrogates and decimal scale endpoints")
-        val text = "\u0000\b\f\n\r\t\"\\日本Ωe\u0301\ud83d\ude00\ud800x\udfff"
+        val text = "\u0000\b\f\n\r\t\"\\日本Ωe\u0301" + 0xd83d.toChar + 0xde00.toChar + 0xd800.toChar + "x" + 0xdfff.toChar
         val decimals = Vector(("12345000", 5), ("-7", -3), ("1", Int.MinValue), ("1", Int.MaxValue),
           ("0", Int.MinValue), ("0", Int.MaxValue), ("0", 7))
         decimals.foreach { case (coefficient, scale) => Vector(Instant.MIN, Instant.MAX, Instant.ofEpochSecond(-1, 123456789)).foreach { instant =>

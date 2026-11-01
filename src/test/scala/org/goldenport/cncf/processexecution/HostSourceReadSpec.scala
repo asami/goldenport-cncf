@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 23, 2026
- * @version Oct. 23, 2026
+ * @version Nov.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class HostSourceReadSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -46,7 +46,7 @@ final class HostSourceReadSpec extends AnyWordSpec with Matchers with GivenWhenT
       val property = Prop.forAll(text)(value => HostSourcePayload.fromUtf8C(value).toOption
         .exists(_.bytes == value.getBytes("UTF-8").toVector))
       val accepted = Vector("", "a" * 65536, "あ" * 21845).map(HostSourcePayload.fromUtf8C)
-      val rejected = Vector(null, "a" * 65537, "あ" * 21846, "\uD800", "\uDC00").map(HostSourcePayload.fromUtf8C)
+      val rejected = Vector(null, "a" * 65537, "あ" * 21846, 0xd800.toChar.toString, 0xdc00.toChar.toString).map(HostSourcePayload.fromUtf8C)
       Then("valid content is exact, the 64 KiB boundary is inclusive and malformed or excessive content fails")
       Test.check(Test.Parameters.default.withMinSuccessfulTests(32), property).passed shouldBe true
       accepted.foreach(_.isSuccess shouldBe true)

@@ -14,7 +14,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /**
  * @since   Oct.  2, 2026
- * @version Oct.  8, 2026
+ *  version Oct.  8, 2026
+ * @version Nov.  2, 2026
  */
 final class SubsystemStoragePlanCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private def take[A](result: Consequence[A]): A = result match {
@@ -111,7 +112,7 @@ final class SubsystemStoragePlanCodecSpec extends AnyWordSpec with Matchers with
       val badText = Vector(" " * (SubsystemStoragePlanCodec.MAX_BYTES + 1) + document.noSpaces,
         "[" * (SubsystemStoragePlanCodec.MAX_DEPTH + 1) + "0" +
           "]" * (SubsystemStoragePlanCodec.MAX_DEPTH + 1),
-        "\uFEFF" + document.noSpaces, "\uD800", "{not-json")
+        "\uFEFF" + document.noSpaces, 0xd800.toChar.toString, "{not-json")
       val excessive = change(document, "records")(x => Json.fromValues(
         Vector.fill(ComponentRecordStorageDeclaration.MAX_GRANTS + 1)(x.asArray.get.head)))
       When("the bounded decoder receives them")

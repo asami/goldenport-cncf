@@ -43,7 +43,8 @@ import org.simplemodeling.model.value.SecurityAttributes
 /*
  * @since   Jul. 24, 2026
  *  version Jul. 30, 2026
- * @version Sep. 17, 2026
+ *  version Sep. 17, 2026
+ * @version Nov.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkConditionalTransitionSpec
@@ -224,8 +225,7 @@ final class UnitOfWorkConditionalTransitionSpec
         create.collectionCount shouldBe 1
         create.idCount shouldBe 1
         val generatedid = result.map {
-          case transitioned:
-              EntityConditionalTransitionResult.Transitioned[?, ?] =>
+          case transitioned: EntityConditionalTransitionResult.Transitioned[?, ?] =>
             _successor_persistent.id(
               transitioned.successor.entity.asInstanceOf[Successor]
             )

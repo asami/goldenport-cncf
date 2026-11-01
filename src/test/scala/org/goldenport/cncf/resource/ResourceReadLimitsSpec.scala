@@ -10,7 +10,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 31, 2026
+ *  version Oct. 31, 2026
+ * @version Nov.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ResourceReadLimitsSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -20,8 +21,8 @@ final class ResourceReadLimitsSpec extends AnyWordSpec with Matchers with GivenW
       val scope = ResourceTextPreflight.scope(ResourceReadLimits(4))
       When("complete text, malformed small text and an oversized malformed tail are inspected")
       val accepted = Vector("", "abcd", "éé", "😀").map(scope.checkC(_).toOption.get)
-      val invalid = scope.checkC("\uD800").toOption.get
-      val overflow = scope.checkC("abcde" + "x" * 1000 + "\uD800").toOption.get
+      val invalid = scope.checkC(0xd800.toChar.toString).toOption.get
+      val overflow = scope.checkC("abcde" + "x" * 1000 + 0xd800.toChar.toString).toOption.get
       Then("only admitted text has an exact size and overflow is the first observed prefix")
       accepted shouldBe Vector(ResourceTextPreflight.Accepted(0, 4),
         ResourceTextPreflight.Accepted(4, 4), ResourceTextPreflight.Accepted(4, 4),
@@ -185,7 +186,7 @@ final class ResourceReadLimitsSpec extends AnyWordSpec with Matchers with GivenW
 
     "encode preowned Unicode only when its complete UTF-8 bytes fit" in {
       Given("finite generated Unicode texts including supplementary and malformed surrogate tokens")
-      val texts = Gen.listOfN(12, Gen.oneOf("a", "日", "—", "\uD83D\uDE80", "\uD800", "\n")).map(_.mkString)
+      val texts = Gen.listOfN(12, Gen.oneOf("a", "日", "—", 0xd83d.toChar.toString + 0xde80.toChar, 0xd800.toChar.toString, "\n")).map(_.mkString)
       val property = Prop.forAll(texts) { text =>
         val expected = text.getBytes(StandardCharsets.UTF_8).toVector
         val exact = ResourceReadAcquisition.utf8C(text, ResourceReadLimits(expected.size))

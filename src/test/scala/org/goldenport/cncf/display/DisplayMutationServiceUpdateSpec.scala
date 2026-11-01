@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 16, 2026
+ *  version Oct. 16, 2026
+ * @version Nov.  2, 2026
  */
 final class DisplayMutationServiceUpdateSpec extends AnyWordSpec with DisplayMutationServiceFixture.Vocabulary {
   import DisplayMutationServiceFixture.*
@@ -199,7 +200,7 @@ final class DisplayMutationServiceUpdateSpec extends AnyWordSpec with DisplayMut
           try {
             val changes = Vector(field("nullable", DisplayValue.Missing), field("instant", DisplayValue.Timestamp(java.time.Instant.parse("2026-10-15T02:03:04.987654321Z"))),
               field("flag", DisplayValue.Boolean(false)), field("number", DisplayValue.Number(BigDecimal("123456789.0012300"))),
-              field("description", DisplayValue.Text("")), field("title", DisplayValue.Text("  日本 Ω\ud800  ")))
+              field("description", DisplayValue.Text("")), field("title", DisplayValue.Text("  日本 Ω" + 0xd800.toChar + "  ")))
             val before = session.rows()
             val tables = session.physical()
             val wanted = session.expected(before, tables, changes, true, 2L)

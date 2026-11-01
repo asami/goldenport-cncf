@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 21, 2026
- * @version Oct. 21, 2026
+ * @version Nov.  2, 2026
  */
 final class DataStoreTextSearchFieldSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import DataStoreTextSearchFieldSpec.*
@@ -22,7 +22,7 @@ final class DataStoreTextSearchFieldSpec extends AnyWordSpec with Matchers with 
       "retain empty, NUL and individual surrogate units in ASCII" in {
         Given("docs/spec/datastore-text-search.md R2 E1: a sensitive declared search column")
         val field = DataStoreTextSearchField("search_text")
-        val inputs = Vector("", "A", "\u0000", "\ud800", "\udc00", "\ud83d\ude00", " \t")
+        val inputs = Vector("", "A", "\u0000", 0xd800.toChar.toString, 0xdc00.toChar.toString, 0xd83d.toChar.toString + 0xde00.toChar, " \t")
         When("each admitted String is projected")
         val stored = inputs.map(field.toStoreValue)
         Then("version 1 preserves each UTF16 unit without a charset conversion")
@@ -62,8 +62,8 @@ final class DataStoreTextSearchFieldSpec extends AnyWordSpec with Matchers with 
 
       "match empty, control, surrogate, combining, non-BMP and contextual-case examples" in {
         Given("docs/spec/datastore-text-search.md R2,R3 E2: original JVM Strings under both policies")
-        val pairs = fixedSources.flatMap(source => Vector("", source, source.take(1), "\u0000", "\ud800",
-          "\udc00", "\u0301", "\ude00", "\u03a3", "i", "\u0130").map(source -> _)) :+
+        val pairs = fixedSources.flatMap(source => Vector("", source, source.take(1), "\u0000", 0xd800.toChar.toString,
+          0xdc00.toChar.toString, "\u0301", 0xde00.toChar.toString, "\u03a3", "i", "\u0130").map(source -> _)) :+
           ("\u1234\u5678" -> "\u2345")
         pairs.foreach { case (source, needle) =>
           Vector(false, true).foreach { policy =>
@@ -118,8 +118,8 @@ private[datastore] object DataStoreTextSearchFieldSpec {
     needle <- text
   } yield Sample(source, source.substring(start, end), needle)
 
-  val fixedSources: Vector[String] = Vector("", " \t\n", "a\u0000b", "\ud800", "\udc00",
-    "\ud800A\udc00", "\ud83d\ude00", "e\u0301", "\u00e9", "\u039f\u03a3", "\u03a3\u03bf\u03a3",
+  val fixedSources: Vector[String] = Vector("", " \t\n", "a\u0000b", 0xd800.toChar.toString, 0xdc00.toChar.toString,
+    0xd800.toChar.toString + "A" + 0xdc00.toChar, 0xd83d.toChar.toString + 0xde00.toChar, "e\u0301", "\u00e9", "\u039f\u03a3", "\u03a3\u03bf\u03a3",
     "\u0130I\u0131i", "\u1234\u5678", "u16x1:x0000%_!\\'")
 
   def normalized(value: String, caseInsensitive: Boolean): String =

@@ -22,7 +22,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 28, 2026
+ *  version Oct. 28, 2026
+ * @version Nov.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -363,6 +364,97 @@ final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThe
   }
 
   "Read-only typed Git preflight" should {
+    "admit fixed directory narrowing without a broad stage program and with zero native effects" in {
+      Given("only fixed selected stage authority, a dirty child and an untracked sibling")
+      val fixture = create(selectedPath = "owned", excludedOperations = Set(GitOperationKind.StageFullState))
+      try {
+        initialize(fixture, Map("owned/child.txt" -> "initial\n"))
+        Files.writeString(fixture.checkout.resolve("owned/child.txt"), "changed\n")
+        Files.writeString(fixture.checkout.resolve("owned/sibling.txt"), "excluded\n")
+        val index = Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector
+        val head = Files.readAllBytes(fixture.checkout.resolve(".git/refs/heads/main")).toVector
+        val child = Files.readAllBytes(fixture.checkout.resolve("owned/child.txt")).toVector
+        val sibling = Files.readAllBytes(fixture.checkout.resolve("owned/sibling.txt")).toVector
+        val target = GitTarget(workspaceId, Some(GitSelectionParameters(selectionId,
+          Vector(GitPath.parseC("owned/child.txt").toOption.get))))
+        When("public preflight checks each fixed stage operation with the concrete child selection")
+        val admitted = Vector(GitOperation.StageSelected(selectionId), GitOperation.StageSelectedAll(selectionId))
+          .map(GitExecutionPreflight.validateC(fixture.context, target, _))
+        Then("both admit without launching a process or changing HEAD, index, selected or excluded bytes")
+        admitted.foreach(_.toOption shouldBe Some(()))
+        fixture.definitions.exists(_._git_metadata.exists(_.kind == GitOperationKind.StageFullState)) shouldBe false
+        fixture.profile.driver.executions shouldBe empty
+        Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector shouldBe index
+        Files.readAllBytes(fixture.checkout.resolve(".git/refs/heads/main")).toVector shouldBe head
+        Files.readAllBytes(fixture.checkout.resolve("owned/child.txt")).toVector shouldBe child
+        Files.readAllBytes(fixture.checkout.resolve("owned/sibling.txt")).toVector shouldBe sibling
+      } finally fixture.close()
+    }
+
+    "never bypass fixed path or grant refusals through a simultaneously registered broad stage" in {
+      Given("both fixed and broad stage programs and component grants varied only for the fixed capability")
+      val fixture = create(selectedPath = "owned")
+      val operation = GitOperation.StageSelectedAll(selectionId)
+      val fixedcapability = capability(operation.kind)
+      val target = GitTarget(workspaceId, Some(GitSelectionParameters(selectionId,
+        Vector(GitPath.parseC("owned/child.txt").toOption.get))))
+      val deniedgrants = fixture.definitions.filterNot(_.capability == fixedcapability).map(x => ProcessExecutionGrant(x.capability))
+      val incompatiblegrants = fixture.definitions.map(x => ProcessExecutionGrant(x.capability,
+        if (x.capability == fixedcapability) limits.copy(argumentCount = Some(limits.argumentCount.get + 1L)) else ProcessExecutionLimits.empty))
+      try {
+        When("preflight and UoW encounter absent or incompatible fixed grants while the base remains granted")
+        val grantrefusals = Vector(deniedgrants, incompatiblegrants).map { grants =>
+          val admission = ProcessExecutionAdmission.forComponentsC(fixture.policy, Map(owner -> grants)).toOption.get
+          val context = contextFor(fixture.root, Some(fixture.workspace), Some(admission), fixture.profile.driver)
+          val preflight = GitExecutionPreflight.validateC(context, target, operation)
+          val executed = GitExecutionSpecSupport.execute(fixture.copy(context = context, target = target), operation)
+          preflight.isFaillure && executed.isFaillure
+        }
+        val outside = Vector("owned-other/child.txt", "outside.txt").map { name =>
+          val crossed = GitTarget(workspaceId, Some(GitSelectionParameters(selectionId, Vector(GitPath.parseC(name).toOption.get))))
+          GitExecutionPreflight.validateC(fixture.context, crossed, operation).isFaillure &&
+            GitExecutionSpecSupport.execute(fixture.copy(target = crossed), operation).isFaillure
+        }
+        Then("the fixed denial is final for both routes and no driver invocation uses the broader authority")
+        grantrefusals shouldBe Vector(true, true)
+        outside shouldBe Vector(true, true)
+        fixture.profile.driver.executions shouldBe empty
+      } finally fixture.close()
+    }
+
+    "retain current workspace and component authority when fixed stage selection data is supplied" in {
+      Given("fixed directory programs under missing grants, read-only workspaces and a foreign component")
+      val fixtures = Vector(() => create(selectedPath = "owned", capabilityGranted = false),
+        () => create(selectedPath = "owned", workspaceGranted = false),
+        () => create(selectedPath = "owned", permission = WorkspacePermission.ReadOnly),
+        () => create(selectedPath = "owned", component = ComponentId("org.goldenport.spec.OtherGitOwner")))
+      fixtures.foreach { make =>
+        val fixture = make()
+        val target = GitTarget(workspaceId, Some(GitSelectionParameters(selectionId,
+          Vector(GitPath.parseC("owned/child.txt").toOption.get))))
+        try {
+          When("the fixed child intent enters public preflight and the actual UoW")
+          val preflight = GitExecutionPreflight.validateC(fixture.context, target, GitOperation.StageSelectedAll(selectionId))
+          val executed = GitExecutionSpecSupport.execute(fixture.copy(target = target), GitOperation.StageSelectedAll(selectionId))
+          Then("per-call data carries no workspace, write or component authority")
+          preflight.isFaillure shouldBe true
+          executed.isFaillure shouldBe true
+          fixture.profile.driver.executions shouldBe empty
+        } finally fixture.close()
+      }
+      Given("an admitted owning workspace and a target for a foreign workspace")
+      val fixture = create(selectedPath = "owned")
+      try {
+        val target = GitTarget(WorkspaceId.parseC("foreign-project").toOption.get,
+          Some(GitSelectionParameters(selectionId, Vector(GitPath.parseC("owned/child.txt").toOption.get))))
+        When("the selected child is addressed through another workspace")
+        val refused = GitExecutionPreflight.validateC(fixture.context, target, GitOperation.StageSelectedAll(selectionId))
+        Then("the workspace crossing refuses before any process")
+        refused.isFaillure shouldBe true
+        fixture.profile.driver.executions shouldBe empty
+      } finally fixture.close()
+    }
+
     "admit the current selection without executing or changing native source state" in {
       Given("an ordinary local fixture with an admitted component, workspace and selected Git program")
       val fixture = create()
@@ -1186,7 +1278,7 @@ final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThe
       val receipts = Vector((0, diagnostic, ""), (0, "", "warning"), (2, "", ""),
         (2, "+context\n\n+more\n", ""), (2, diagnostic, "warning")) ++
         Vector(1, 7, 128, -1).map(code => (code, diagnostic, "")) ++
-        Vector(null, "\u0000", "\ud800", "\udc00").flatMap(text => Vector((2, text, ""), (2, diagnostic, text)))
+        Vector(null, "\u0000", 0xd800.toChar.toString, 0xdc00.toChar.toString).flatMap(text => Vector((2, text, ""), (2, diagnostic, text)))
       When("only the pure historical receipt codec interprets those stored fields")
       val decoded = receipts.map { case (code, out, err) => GitIndexCheck.parseStoredC(code, out, err) }
       Then("no contradictory or invalid historical receipt yields typed findings or a clean check")
@@ -1599,7 +1691,8 @@ private[cncf] object GitExecutionSpecSupport {
     diffStdoutBytes: Long = limits.stdoutBytes.get,
     selectedScopes: Vector[String] = Vector.empty,
     treeStdoutBytes: Long = limits.stdoutBytes.get,
-    validationWorkspace: Boolean = false
+    validationWorkspace: Boolean = false,
+    excludedOperations: Set[GitOperationKind] = Set.empty
   ): GitSpecFixture = {
     val base = Files.createDirectories(Paths.get("target", "git-execution-spec").toAbsolutePath)
     val root = Files.createTempDirectory(base, "case-")
@@ -1611,7 +1704,7 @@ private[cncf] object GitExecutionSpecSupport {
       if (workspaceGranted) Vector(WorkspaceGrant(owner, workspaceId, permission)) ++
         validation.map(pair => WorkspaceGrant(owner, pair._1, WorkspacePermission.Manage)) else Vector.empty).toOption.get
     val binding = workspace.bindingC(workspaceId).toOption.get
-    val definitions = GitOperationKind.values.toVector.map { kind =>
+    val definitions = GitOperationKind.values.toVector.filterNot(excludedOperations).map { kind =>
       val declared = declaration(kind, endpoint)
       val selected = declared.copy(
         limits = if (kind == GitOperationKind.PendingDiff) declared.limits.copy(stdoutBytes = Some(diffStdoutBytes))

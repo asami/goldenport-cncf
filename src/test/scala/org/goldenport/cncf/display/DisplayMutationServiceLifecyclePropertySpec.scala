@@ -11,7 +11,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 16, 2026
- * @version Oct. 22, 2026
+ *  version Oct. 22, 2026
+ * @version Nov.  2, 2026
  */
 object DisplayMutationServiceLifecyclePropertySpec {
   import DisplayMutationServiceFixture.*
@@ -19,7 +20,7 @@ object DisplayMutationServiceLifecyclePropertySpec {
     seconds: Long, nanos: Int, nullable: Option[String], reversed: Boolean, omitnullable: Boolean,
     target: Target, representation: EntityRevisionRepresentation, supplied: Boolean, bodymode: BodyMode,
     version: Long, stale: Boolean, logical: Boolean)
-  private val _characters = Vector('a', 'Z', '0', '日', '本', 'Ω', 'λ', '\ud800', '\udfff', '\n')
+  private val _characters = Vector('a', 'Z', '0', '日', '本', 'Ω', 'λ', 0xd800.toChar, 0xdfff.toChar, '\n')
   private val _text = for { size <- Gen.chooseNum(0, 20); values <- Gen.listOfN(size, Gen.oneOf(_characters)) } yield values.mkString
   val samples: Gen[Sample] = for {
     text <- _text; description <- _text; coefficient <- Gen.chooseNum(-1000000L, 1000000L)
@@ -184,7 +185,7 @@ final class DisplayMutationServiceLifecyclePropertySpec extends AnyWordSpec
     "E1 retain malformed UTF-16 counterexamples in UTF-8 XML failure diagnostics" must afterWord("in spec:display-mutation-service, example:E1, rules:DLC-10,DLC-11,DLC-12, phase:116") {
       "preserve the actual counterexample through XML-safe failure clues" in {
         Given("Spec: docs/spec/display-mutation-service.md; Rules: DLC-10,DLC-11,DLC-12; Example: E1; a failing generated sample containing unpaired high and low surrogates")
-        val sample = "日\ud800x\udfff"
+        val sample = "日" + 0xd800.toChar + "x" + 0xdfff.toChar
         val result = Test.check(parameters, Prop.forAll(Gen.const(sample))(_ => false))
         When("the actual ScalaCheck counterexample is rendered as a JUnit failure clue")
         val diagnostic = _diagnostic_text(result.status.toString)
@@ -196,8 +197,8 @@ final class DisplayMutationServiceLifecyclePropertySpec extends AnyWordSpec
           diagnostic should include("\\ud800")
           diagnostic should include("\\udfff")
           (scala.xml.XML.loadFile(report.toFile) \ "failure").text shouldBe diagnostic
-          sample.charAt(1) shouldBe '\ud800'
-          sample.charAt(3) shouldBe '\udfff'
+          sample.charAt(1) shouldBe 0xd800.toChar
+          sample.charAt(3) shouldBe 0xdfff.toChar
         } finally Files.deleteIfExists(report)
       }
     }
