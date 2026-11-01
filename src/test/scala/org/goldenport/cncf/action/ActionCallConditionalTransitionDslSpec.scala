@@ -62,7 +62,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId, EntityRe
 /*
  * @since   Jul. 24, 2026
  *  version Aug. 11, 2026
- * @version Sep. 17, 2026
+ *  version Sep. 17, 2026
+ * @version Nov.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallConditionalTransitionDslSpec
@@ -506,8 +507,7 @@ final class ActionCallConditionalTransitionDslSpec
       new (UnitOfWorkOp ~> Consequence) {
         def apply[A](operation: UnitOfWorkOp[A]): Consequence[A] = {
           operation match {
-            case transition:
-                UnitOfWorkOp.EntityStoreConditionalTransition[?, ?, ?] =>
+            case transition: UnitOfWorkOp.EntityStoreConditionalTransition[?, ?, ?] =>
               _transition = Some(transition)
             case snapshotload: UnitOfWorkOp.EntityStoreLoadDetached[?] =>
               _snapshotload = Some(snapshotload)

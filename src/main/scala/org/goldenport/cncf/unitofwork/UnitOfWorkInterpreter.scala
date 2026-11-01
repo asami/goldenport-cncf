@@ -61,7 +61,9 @@ import org.simplemodeling.model.directive.Update
  *  version May. 11, 2026
  *  version Aug.  1, 2026
  *  version Sep. 19, 2026
- * @version Oct. 27, 2026
+ *  version Oct. 27, 2026
+ *  version Oct. 29, 2026
+ * @version Nov.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -1077,8 +1079,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
             )
           )
           response <- execution match {
-            case transitioned:
-                EntityConditionalTransitionExecutionResult.Transitioned[r, s] @unchecked =>
+            case transitioned: EntityConditionalTransitionExecutionResult.Transitioned[r, s] @unchecked =>
               _entity_space_evict(rootid)
               _entity_space_evict(
                 successorintent.persisted.id(
@@ -1095,8 +1096,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
               )
               _view_space_invalidate_all()
               Consequence.success(transitioned.result)
-            case notmatched:
-                EntityConditionalTransitionExecutionResult.NotMatched[r] @unchecked =>
+            case notmatched: EntityConditionalTransitionExecutionResult.NotMatched[r] @unchecked =>
               _entity_space_evict(rootid)
               _authorize(
                 m.rootReadAuthorization,
@@ -1365,6 +1365,11 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         _with_process_execution_calltree(execution) {
           _execute_process_c(execution)
         }
+      }
+
+    case UnitOfWorkOp.FileReadSnapshot(target, selection, limits) =>
+      _with_calltree("uow:file:read-snapshot") {
+        org.goldenport.cncf.workspace.WorkspaceFileExecution.readSnapshotC(uow.executionContext, target, selection, limits)
       }
 
     case UnitOfWorkOp.FilePrepareDirectory(target, path) =>

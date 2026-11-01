@@ -7,13 +7,14 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 31, 2026
+ *  version Oct. 31, 2026
+ * @version Nov.  2, 2026
  */
 @org.scalatest.DoNotDiscover
 final class PostgresqlDisplayMutationServiceUpdateAcceptanceSpec extends AnyWordSpec
     with DisplayMutationServiceFixture.Vocabulary with PostgresqlAcceptance {
   import DisplayMutationServiceFixture.*
-  private val _changes = Vector(field("title", DisplayValue.Text("Native committed 日本 Ω\ud800")), field("description", DisplayValue.Text("")),
+  private val _changes = Vector(field("title", DisplayValue.Text("Native committed 日本 Ω" + 0xd800.toChar)), field("description", DisplayValue.Text("")),
     field("number", DisplayValue.Number(BigDecimal("12345678901234567890.0012300"))), field("flag", DisplayValue.Boolean(false)),
     field("instant", DisplayValue.Timestamp(java.time.Instant.parse("2026-10-15T02:03:04.987654321Z"))), field("nullable", DisplayValue.Missing))
 

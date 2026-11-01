@@ -5,7 +5,8 @@ package org.goldenport.cncf.unitofwork
  *
  * @since   Sep.  8, 2026
  *  version Sep. 28, 2026
- * @version Oct. 27, 2026
+ *  version Oct. 27, 2026
+ * @version Oct. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] enum UnitOfWorkEffectClass {
@@ -33,6 +34,7 @@ private[cncf] object UnitOfWorkOperationClassifier {
           UnitOfWorkOp.SbtExec(_, _) |
           UnitOfWorkOp.SbtExecAttempt(_, _) |
           UnitOfWorkOp.GitExec(_, _) |
+          UnitOfWorkOp.FileReadSnapshot(_, _, _) |
           UnitOfWorkOp.FilePrepareDirectory(_, _) |
           UnitOfWorkOp.FileReadBytes(_, _, _) |
           UnitOfWorkOp.FileWriteBytes(_, _, _, _) |

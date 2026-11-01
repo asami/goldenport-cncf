@@ -242,3 +242,87 @@ Executable contracts:
 [`UnitOfWorkProgramPlanningSpec`](../../src/test/scala/org/goldenport/cncf/unitofwork/UnitOfWorkProgramPlanningSpec.scala).
 Existing shared binding and acquisition lifetime contracts remain in
 `WorkspaceExecutionSpec` and `ResourceReadLimitsSpec`.
+
+## Selected workspace byte snapshots
+
+The additional logical operation is:
+
+```scala
+protected final def file_read_snapshot(
+  target: FileTarget,
+  selection: ResourceTreeSelection,
+  limits: ResourceTreeQueryLimits = FileSnapshotLimits.default
+): ExecUowM[FileReadSnapshotResult]
+```
+
+The corresponding `UnitOfWorkOp.FileReadSnapshot(target, selection, limits)`
+is interpreted by the current owning UoW, classified External and observed as
+`uow:file:read-snapshot`. It requires the existing target workspace ReadOnly
+grant and current runtime resource-read policy. Building or recording the
+program does not acquire a workspace, grant authority or read a file. There is
+no process execution, new root configuration or independent snapshot store.
+
+`ResourceTreeSelection(includes, excludes = Vector.empty, suffixes = Vector.empty)`
+is a reusable rule, rather than an inventory of files observed at a prior time.
+Includes and excludes are literal relative file-or-subtree prefixes matched at
+path-segment boundaries; a sole `"."` include selects the root. An include such
+as `"src"` recursively selects its current descendants. Excludes take precedence
+and prune directories before descent, attributes, bytes and selected-entry
+limits. Optional suffixes restrict files only, without pruning ancestor
+directories. Empty suffixes select all files under included prefixes. For example:
+
+```scala
+ResourceTreeSelection(
+  Vector("src", "project", "build.sbt"),
+  Vector("src/main/scala-generated", "project/target"),
+  Vector(".scala", ".sbt", ".cml")
+)
+```
+
+Rules contain at most 128 unique members per vector. Prefixes use the existing
+strict resource-tree relative-path grammar (no traversal, absolute path,
+backslash, controls or surrounding whitespace), at most 4096 characters per
+prefix. Suffixes are nonempty bare suffixes of at most 128 characters without
+path separators or controls. Interpretation validates all members again,
+including values created with case-class `copy`. A discovered relevant name
+unsupported by that grammar fails acquisition; it is never silently omitted.
+This stricter tree grammar does not change ordinary `WorkspaceFilePath`.
+
+Requested bounds must tighten `FileSnapshotLimits.maximum`; no request
+widens admission. `FileSnapshotLimits.default` uses the same finite bounds:
+64 path segments, 100000 directories, 65536 selected files, 16 MiB per file and
+128 MiB aggregate. The existing generic `ResourceTreeQueryLimits` defaults are
+unchanged. The effective `maxEntryBytes` is additionally narrowed by the
+current runtime `ResourceReadLimits.maximumBytes`. Depth counts relative path
+segments. The directory cap includes the root; the entry cap counts selected
+regular files. Discovery of nonexcluded prefix-relevant entries, including
+suffix-rejected files, is bounded by `maxVisitedDirectories + maxEntries`.
+Directory iteration is streamed; selected inventories and acquired bytes are
+bounded. Per-file and aggregate byte caps apply before acquisition and again
+to actual returned bytes. A zero byte cap permits empty selected files.
+
+A successful `FileReadSnapshotResult` associates the exact admitted logical
+`target`, validated `selection`, effective `limits` and sorted immutable
+`entries: Vector[ResourceTreeEntry]`. Each entry holds an exact relative path
+and `Vector[Byte]`, with no encoding or line-ending conversion; mediaType is
+absent. `totalByteSize` sums those bytes. Its effect is FileRead; generic displays
+omit selected paths, bytes and physical root locations. A selected absent path
+is simply absent from a newly discovered complete inventory; additions,
+deletions and renames are reflected in the next acquisition under the same rule.
+
+The producer rechecks the same trusted root binding and compares complete
+before/after inventories of relevant directories and files, including native
+file identity, size, modification and creation metadata. Missing/unreadable
+files, unsupported selected file kinds, relevant symbolic links, failed
+listing, bounds and detected membership/identity/metadata changes return a
+failed `Consequence`, never a truncated or partially successful result. Excluded
+symlinks are pruned; relevant symlinks are refused rather than followed.
+
+This is bounded observational coherence, not a transactional OS snapshot or a
+promise to detect an adversarial mutation that restores every observable native
+identity and timestamp between checks. No new lock or metric-only hash is used.
+Consumers requiring stronger atomic snapshot isolation must use an existing
+stronger source snapshot owner. Workflow metrics can retain this immutable result
+once at each intended endpoint, convert acquisition failure to unavailable, and
+reuse their retained payload without repeating acquisition. This producer does
+not count lines, acquire usage or prescribe workflow closure policy.

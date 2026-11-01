@@ -14,7 +14,8 @@ import scala.util.control.NonFatal
 
 /*
  * @since   Jul. 24, 2026
- * @version Jul. 25, 2026
+ *  version Jul. 25, 2026
+ * @version Nov.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object EntityConditionalTransitionObservation {
@@ -154,8 +155,7 @@ private[cncf] object EntityConditionalTransitionObservation {
     val revisions =
       result match {
         case Consequence.Success(
-              transitioned:
-                EntityConditionalTransitionResult.Transitioned[?, ?]
+              transitioned: EntityConditionalTransitionResult.Transitioned[?, ?]
             ) =>
           Record.dataAuto(
             "root-revision" -> transitioned.root.revision.value,
@@ -194,8 +194,7 @@ private[cncf] object EntityConditionalTransitionObservation {
   ): Option[EntityId] =
     result match {
       case Consequence.Success(
-            transitioned:
-              EntityConditionalTransitionResult.Transitioned[?, S] @unchecked
+            transitioned: EntityConditionalTransitionResult.Transitioned[?, S] @unchecked
           ) =>
         try
           Some(successor.persisted.id(transitioned.successor.entity))

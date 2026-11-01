@@ -14,7 +14,8 @@ import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.effect.ExternalEffectKind
 import org.goldenport.cncf.path.AliasResolver
-import org.goldenport.cncf.resource.ResourceReadLimits
+import org.goldenport.Consequence
+import org.goldenport.cncf.resource.{ResourceReadLimits, ResourceTreeAccess, ResourceTreeQueryLimits, ResourceTreeSelection}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.protocol.Protocol
 import org.scalacheck.{Gen, Prop, Test}
@@ -24,13 +25,153 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 31, 2026
+ *  version Oct. 21, 2026
+ *  version Oct. 29, 2026
+ *  version Oct. 31, 2026
+ * @version Nov.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkspaceFileExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _id = WorkspaceId.parseC("project").toOption.get
   private val _target = FileTarget(_id)
   private val _owner = ComponentId("org.goldenport.spec.FileOwner")
+
+  "Managed selected workspace snapshots" should {
+    "rediscover additions deletions and renames under the same rule while retaining immutable prior bytes" in {
+      Given("a reusable authored-source rule and generated content excluded before acquisition")
+      _with_root { root =>
+        Files.createDirectories(root.resolve("src/generated"))
+        Files.writeString(root.resolve("src/a.scala"), "// comment\n\nlast")
+        Files.write(root.resolve("src/generated/huge.scala"), Array.fill[Byte](512)(1))
+        Files.writeString(root.resolve("src/readme.txt"), "outside suffix")
+        val rule = ResourceTreeSelection(Vector("src"), Vector("src/generated"), Vector(".scala"))
+        val context = _context(root, permission = WorkspacePermission.ReadOnly)
+        val first = WorkspaceFileExecution.readSnapshotC(context, _target, rule, ResourceTreeQueryLimits.default).toOption.get
+        When("one selected file is renamed and a new selected file is added")
+        Files.move(root.resolve("src/a.scala"), root.resolve("src/b.scala"))
+        Files.writeString(root.resolve("src/new.scala"), "new\n")
+        val second = WorkspaceFileExecution.readSnapshotC(context, _target, rule, ResourceTreeQueryLimits.default).toOption.get
+        Files.delete(root.resolve("src/b.scala"))
+        val third = WorkspaceFileExecution.readSnapshotC(context, _target, rule, ResourceTreeQueryLimits.default).toOption.get
+        Then("each complete inventory reflects current selected files and the first snapshot remains unchanged")
+        first.entries.map(_.relativePath) shouldBe Vector("src/a.scala")
+        first.entries.head.bytes shouldBe "// comment\n\nlast".getBytes(StandardCharsets.UTF_8).toVector
+        second.entries.map(_.relativePath) shouldBe Vector("src/b.scala", "src/new.scala")
+        third.entries.map(_.relativePath) shouldBe Vector("src/new.scala")
+        first.target shouldBe _target
+        first.selection shouldBe rule
+        first.effect.kind shouldBe ExternalEffectKind.FileRead
+        first.totalByteSize shouldBe first.entries.head.bytes.size.toLong
+        first.toString should not include root.toString
+        first.toString should not include "comment"
+      }
+    }
+
+    "reject invalid rules crossed targets and absent authority before reporting any complete snapshot" in {
+      Given("one source file in a workspace bound to one component")
+      _with_root { root =>
+        Files.writeString(root.resolve("a.scala"), "a")
+        val rule = ResourceTreeSelection(Vector("."))
+        When("requests contain traversal, a different target, the wrong owner or no byte policy")
+        val cases = Vector(
+          WorkspaceFileExecution.readSnapshotC(_context(root), _target, ResourceTreeSelection(Vector("../escape")), ResourceTreeQueryLimits.default),
+          WorkspaceFileExecution.readSnapshotC(_context(root), FileTarget(WorkspaceId.parseC("other").toOption.get), rule, ResourceTreeQueryLimits.default),
+          WorkspaceFileExecution.readSnapshotC(_context(root, owner = ComponentId("org.goldenport.spec.Other")), _target, rule, ResourceTreeQueryLimits.default),
+          WorkspaceFileExecution.readSnapshotC(_context(root, global = false), _target, rule, ResourceTreeQueryLimits.default))
+        Then("none is mistaken for an empty or partial successful snapshot")
+        cases.foreach(_.isFaillure shouldBe true)
+        Vector(ResourceTreeSelection(Vector.empty), ResourceTreeSelection(Vector("src"), Vector("../target")),
+          ResourceTreeSelection(Vector("."), suffixes = Vector("bad/name"))).foreach(_.validateC.isFaillure shouldBe true)
+      }
+    }
+
+    "apply entry depth directory and byte caps without successful truncation" in {
+      Given("two source files including a nested file")
+      _with_root { root =>
+        Files.createDirectories(root.resolve("src/nested"))
+        Files.writeString(root.resolve("src/a.scala"), "abc")
+        Files.writeString(root.resolve("src/nested/b.scala"), "def")
+        val rule = ResourceTreeSelection(Vector("src"))
+        val defaults = ResourceTreeQueryLimits.default
+        When("each finite bound is too small or exceeds the admitted defaults")
+        val bounds = Vector(defaults.copy(maxEntries = 1), defaults.copy(maxDepth = 2),
+          defaults.copy(maxVisitedDirectories = 1), defaults.copy(maxEntryBytes = 2),
+          defaults.copy(maxTotalBytes = 5), defaults.copy(maxEntries = FileSnapshotLimits.maximum.maxEntries + 1))
+        val failures = bounds.map(WorkspaceFileExecution.readSnapshotC(_context(root), _target, rule, _))
+        val runtimecap = WorkspaceFileExecution.readSnapshotC(_context(root, cap = 2), _target, rule, defaults)
+        Then("every failed bound returns a failed Consequence, never the first few entries")
+        failures.foreach(_.isFaillure shouldBe true)
+        runtimecap.isFaillure shouldBe true
+        val empty = WorkspaceFileExecution.readSnapshotC(_context(root), _target,
+          ResourceTreeSelection(Vector("absent")), defaults).toOption.get
+        empty.entries shouldBe Vector.empty
+      }
+    }
+
+    "bound discovery of suffix-rejected entries and retain genuinely empty selected files" in {
+      Given("an empty authored source and several unrelated ordinary leaf names")
+      _with_root { root =>
+        Files.write(root.resolve("empty.scala"), Array.emptyByteArray)
+        val defaults = ResourceTreeQueryLimits.default
+        val empty = WorkspaceFileExecution.readSnapshotC(_context(root), _target,
+          ResourceTreeSelection(Vector("empty.scala")), defaults.copy(maxEntryBytes = 0, maxTotalBytes = 0)).toOption.get
+        empty.entries.map(_.bytes) shouldBe Vector(Vector.empty[Byte])
+        When("nonexcluded suffix-rejected candidates exceed the bounded discovery allowance")
+        (1 to 4).foreach(n => Files.writeString(root.resolve(s"unselected-$n.txt"), "not selected"))
+        val exhausted = WorkspaceFileExecution.readSnapshotC(_context(root), _target,
+          ResourceTreeSelection(Vector("."), suffixes = Vector(".scala")),
+          defaults.copy(maxVisitedDirectories = 1, maxEntries = 1))
+        Then("discovery fails instead of silently skipping the remainder or allocating an unbounded inventory")
+        exhausted.isFaillure shouldBe true
+      }
+    }
+
+    "prune excluded symbolic links but refuse selected symlink escape and changed root identity" in {
+      Given("a selected directory and a symbolic link to a separately owned root")
+      _with_root { root => _with_root { outside =>
+        Files.writeString(outside.resolve("private.scala"), "outside")
+        Files.createSymbolicLink(root.resolve("linked"), outside)
+        val context = _context(root)
+        val defaults = ResourceTreeQueryLimits.default
+        When("a root rule excludes the link and another root rule selects it")
+        val excluded = WorkspaceFileExecution.readSnapshotC(context, _target,
+          ResourceTreeSelection(Vector("."), Vector("linked")), defaults)
+        val selected = WorkspaceFileExecution.readSnapshotC(context, _target, ResourceTreeSelection(Vector(".")), defaults)
+        Then("excluded content is untouched while a selected link cannot produce a complete snapshot")
+        excluded.toOption.get.entries shouldBe Vector.empty
+        selected.isFaillure shouldBe true
+        Files.delete(root.resolve("linked"))
+        val relocated = root.resolveSibling(root.getFileName.toString + "-relocated")
+        Files.move(root, relocated)
+        try {
+          Files.createDirectory(root)
+          WorkspaceFileExecution.readSnapshotC(context, _target, ResourceTreeSelection(Vector(".")), defaults).isFaillure shouldBe true
+        } finally {
+          Files.delete(root)
+          Files.move(relocated, root)
+        }
+      } }
+    }
+
+    "reject a detected mutation or unreadable acquisition rather than return previously read entries" in {
+      Given("the resource acquisition owner's deterministic read seam and one selected source file")
+      _with_root { root =>
+        Files.writeString(root.resolve("a.scala"), "one")
+        val rule = ResourceTreeSelection(Vector("."))
+        When("a read callback changes directory membership after the first inventory or cannot read a file")
+        val changed = ResourceTreeAccess.selectedSnapshotC(root, rule, ResourceTreeQueryLimits.default, (relative, _) => {
+          val bytes = Files.readAllBytes(root.resolve(relative)).toVector
+          Files.writeString(root.resolve("new.scala"), "new")
+          Consequence.success(bytes)
+        })
+        val unreadable = ResourceTreeAccess.selectedSnapshotC(root, rule, ResourceTreeQueryLimits.default,
+          (_, _) => Consequence.resourceInvalid("source is unreadable"))
+        Then("neither observation is exposed as a complete immutable snapshot")
+        changed.isFaillure shouldBe true
+        unreadable.isFaillure shouldBe true
+      }
+    }
+  }
 
   "Managed directory preparation" should {
     "prepare nested literal directories and report actual ordinary directory and file outcomes" in {
@@ -576,9 +717,9 @@ final class WorkspaceFileExecutionSpec extends AnyWordSpec with Matchers with Gi
         val path = Files.writeString(root.resolve("edit"), "old\n", StandardCharsets.UTF_8)
         val context = _context(root, cap = 4)
         val cases = Vector(
-          ("large", FileWriteMode.CreateNew), ("\uD800", FileWriteMode.CreateNew),
+          ("large", FileWriteMode.CreateNew), (0xd800.toChar.toString, FileWriteMode.CreateNew),
           (null, FileWriteMode.CreateNew), ("new", FileWriteMode.UpdateExisting("large")),
-          ("new", FileWriteMode.UpdateExisting("\uDC00")), ("new", FileWriteMode.UpdateExisting(null)),
+          ("new", FileWriteMode.UpdateExisting(0xdc00.toChar.toString)), ("new", FileWriteMode.UpdateExisting(null)),
           ("new", null)
         )
         When("the adapter validates each invalid typed write under that runtime policy")
@@ -599,7 +740,7 @@ final class WorkspaceFileExecutionSpec extends AnyWordSpec with Matchers with Gi
       _with_root { root =>
         val context = _context(root, cap = 4)
         val scope = context.resourceTextPreflightScopeC.toOption.get
-        val cases = Vector("éé", "😀", "abcde", "\uD800", "abcde\uD800")
+        val cases = Vector("éé", "😀", "abcde", 0xd800.toChar.toString, "abcde" + 0xd800.toChar)
         When("each text is inspected and then submitted once to its distinct CreateNew path")
         val outcomes = cases.zipWithIndex.map { case (text, ordinal) =>
           val decision = scope.checkC(text).toOption.get

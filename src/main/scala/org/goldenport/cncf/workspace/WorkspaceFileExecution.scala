@@ -12,14 +12,34 @@ import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.effect.{ExternalEffect, ExternalEffectKind}
-import org.goldenport.cncf.resource.{ResourceReadAcquisition, ResourceReadLimits}
+import org.goldenport.cncf.resource.{ResourceReadAcquisition, ResourceReadLimits, ResourceTreeAccess, ResourceTreeEntry, ResourceTreeSelection, ResourceTreeQueryLimits}
 
 /*
  * @since   Oct. 15, 2026
+ *  version Oct. 21, 2026
+ *  version Oct. 29, 2026
  * @version Oct. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class FileTarget(workspaceId: WorkspaceId)
+
+/** Finite File snapshot admission; generic resource-tree defaults stay unchanged. */
+object FileSnapshotLimits {
+  val maximum: ResourceTreeQueryLimits = ResourceTreeQueryLimits(
+    maxDepth = 64, maxVisitedDirectories = 100000, maxEntries = 65536,
+    maxEntryBytes = 16L * 1024L * 1024L, maxTotalBytes = 128L * 1024L * 1024L)
+  val default: ResourceTreeQueryLimits = maximum
+}
+
+/** Complete immutable selected bytes from one admitted workspace root.
+  * The target is the authority-bound logical root, never a physical host path.
+  */
+final case class FileReadSnapshotResult(target: FileTarget, selection: ResourceTreeSelection,
+  limits: ResourceTreeQueryLimits, entries: Vector[ResourceTreeEntry]) {
+  def totalByteSize: Long = entries.foldLeft(0L)(_ + _.byteSize)
+  def effect: ExternalEffect = ExternalEffect(ExternalEffectKind.FileRead, target.workspaceId)
+  override def toString: String = s"FileReadSnapshotResult($target,FileRead)"
+}
 
 enum FileRepresentation {
   case Identity, Gzip
@@ -102,6 +122,30 @@ final case class FileWriteTextResult(target: FileTarget, path: WorkspaceFilePath
 
 /** Direct adapter owned by the current UoW, using the shared trusted workspace binding. */
 private[cncf] object WorkspaceFileExecution {
+  def readSnapshotC(context: ExecutionContext, target: FileTarget,
+    selection: ResourceTreeSelection, requested: ResourceTreeQueryLimits): Consequence[FileReadSnapshotResult] =
+    if (target == null || selection == null || requested == null)
+      _invalid_intent_c
+    else for {
+      _ <- WorkspaceId.parseC(target.workspaceId.value)
+      _ <- selection.validateC
+      _ <- FileSnapshotLimits.maximum.tightenC(requested)
+      admission <- Option(context).flatMap(_.workspaceExecutionAdmissionOption)
+        .map(Consequence.success).getOrElse(Consequence.serviceUnavailable("Workspace execution service is unavailable"))
+      binding <- admission.admitC(context.cncfCore.scope, target.workspaceId, WorkspacePermission.ReadOnly)
+      readlimits <- context.resourceReadLimitsC
+      effective = requested.copy(maxEntryBytes = math.min(requested.maxEntryBytes, readlimits.maximumBytes.toLong))
+      root <- binding.workingDirectoryC
+      entries <- ResourceTreeAccess.selectedSnapshotC(root, selection, effective, (relative, maximum) => for {
+        path <- WorkspaceFilePath.parseC(relative)
+        resolved <- binding.resolveFileC(path)
+        bytes <- _guard_c(_read_bytes_c(resolved, ResourceReadLimits(math.max(1, maximum))))
+        present <- bytes.map(Consequence.success).getOrElse(Consequence.resourceInvalid("selected resource tree file disappeared"))
+      } yield present)
+      after <- binding.workingDirectoryC
+      _ <- if (root == after) Consequence.unit else _unavailable_c
+    } yield FileReadSnapshotResult(target, selection, effective, entries)
+
   def prepareDirectoryC(context: ExecutionContext, target: FileTarget, path: WorkspaceFilePath): Consequence[FilePrepareDirectoryResult] =
     _admit_c(context, target, path, WorkspacePermission.Manage).flatMap { case (binding, _, validpath) =>
       binding.synchronized {

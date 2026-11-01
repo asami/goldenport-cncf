@@ -2,6 +2,7 @@ package org.goldenport.cncf.resource
 
 import java.nio.file.{Files, LinkOption, Path}
 import java.util.Locale
+import java.nio.file.attribute.{BasicFileAttributes, FileTime}
 import scala.jdk.CollectionConverters.*
 import scala.util.Try
 import scala.util.control.NonFatal
@@ -9,7 +10,8 @@ import org.goldenport.Consequence
 
 /*
  * @since   Jul. 17, 2026
- * @version Jul. 20, 2026
+ *  version Jul. 20, 2026
+ * @version Oct. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResourceTreeReference private[resource] (name: String)
@@ -402,6 +404,36 @@ object ResourceTreeSnapshot {
     }
 }
 
+/** Literal file-or-directory prefixes; suffixes restrict files, never traversal.
+  * A sole "." include selects the admitted root. Excludes always prune first.
+  */
+final case class ResourceTreeSelection(
+  includes: Vector[String], excludes: Vector[String] = Vector.empty,
+  suffixes: Vector[String] = Vector.empty
+) {
+  def validateC: Consequence[ResourceTreeSelection] = {
+    def paths(values: Vector[String], root: Boolean): Boolean = values != null &&
+      values.size <= 128 && values.distinct.size == values.size && values.forall(value =>
+        value != null && value.length <= 4096 && ((root && value == ".") ||
+          ResourceTreeEntry.relativePathC(value).toOption.contains(value)))
+    if (!paths(includes, true) || includes.isEmpty ||
+        (includes.contains(".") && includes != Vector(".")) || !paths(excludes, false) ||
+        suffixes == null || suffixes.size > 128 || suffixes.distinct.size != suffixes.size ||
+        !suffixes.forall(s => s != null && s.nonEmpty && s.length <= 128 &&
+          !s.exists(c => c.isControl || c == '/' || c == '\\')))
+      Consequence.resourceInvalid("selected resource tree rule is invalid")
+    else Consequence.success(this)
+  }
+  private def under(path: String, prefix: String): Boolean =
+    prefix == "." || path == prefix || path.startsWith(prefix + "/")
+  private[cncf] def traverses(path: String): Boolean =
+    !excludes.exists(under(path, _)) && includes.exists(p => under(path, p) || p.startsWith(path + "/"))
+  private[cncf] def selects(path: String): Boolean =
+    traverses(path) && includes.exists(under(path, _)) &&
+      (suffixes.isEmpty || suffixes.exists(path.endsWith))
+  override def toString: String = "ResourceTreeSelection"
+}
+
 final case class ResourceTreeProviderMetadata(
   family: String,
   identity: String,
@@ -434,6 +466,88 @@ trait ResourceTreeAccess {
 }
 
 object ResourceTreeAccess {
+  private final case class SelectedStamp(path: String, directory: Boolean,
+    key: Option[AnyRef], size: Long, modified: FileTime, created: FileTime)
+  private final class SelectedFailure(val reason: String) extends RuntimeException
+
+  /** Existing resource acquisition owner, invoked only by managed workspace File.
+    * No root lookup, configuration, persistence or effect authority is added here.
+    */
+  private[cncf] def selectedSnapshotC(root: Path, selection: ResourceTreeSelection,
+    limits: ResourceTreeQueryLimits,
+    read: (String, Int) => Consequence[Vector[Byte]]): Consequence[Vector[ResourceTreeEntry]] = {
+    def fail(reason: String): Nothing = throw new SelectedFailure(reason)
+    def inventory(): Vector[SelectedStamp] = {
+      var stamps = Vector.empty[SelectedStamp]
+      var directories = 0
+      var examined = 0L
+      var files = 0
+      var total = 0L
+      def walk(path: Path, relative: String): Unit = {
+        val attr = Files.readAttributes(path, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS)
+        if (attr.isSymbolicLink) fail("selected resource tree contains a symbolic link")
+        if (attr.isDirectory) {
+          directories += 1
+          if (directories > limits.maxVisitedDirectories)
+            fail("selected resource tree exceeds the directory visit limit")
+          stamps :+= SelectedStamp(relative, true, Option(attr.fileKey()), 0L, attr.lastModifiedTime(), attr.creationTime())
+          val children = Files.newDirectoryStream(path)
+          try {
+            val iterator = children.iterator()
+            while (iterator.hasNext) {
+              val child = iterator.next()
+              val name = child.getFileName.toString
+              val next = if (relative.isEmpty) name else relative + "/" + name
+              // Excluded/unrelated prefixes are not opened or acquired.
+              if (selection.traverses(next)) {
+                examined += 1
+                if (examined > limits.maxVisitedDirectories.toLong + limits.maxEntries.toLong)
+                  fail("selected resource tree exceeds the discovery entry limit")
+                if (!ResourceTreeEntry.relativePathC(next).toOption.contains(next))
+                  fail("selected resource tree contains an unsupported relative path")
+                if (next.split("/").length > limits.maxDepth)
+                  fail("selected resource tree exceeds the depth limit")
+                walk(child, next)
+              }
+            }
+          } finally children.close()
+        } else if (selection.selects(relative)) {
+          if (!attr.isRegularFile) fail("selected resource tree contains a non-regular file")
+          files += 1
+          if (files > limits.maxEntries) fail("selected resource tree exceeds the file entry limit")
+          if (attr.size() > limits.maxEntryBytes) fail("selected resource tree exceeds the file byte limit")
+          total = Math.addExact(total, attr.size())
+          if (total > limits.maxTotalBytes) fail("selected resource tree exceeds the aggregate byte limit")
+          stamps :+= SelectedStamp(relative, false, Option(attr.fileKey()), attr.size(), attr.lastModifiedTime(), attr.creationTime())
+        }
+      }
+      if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(root))
+        fail("selected resource tree root is not an ordinary directory")
+      walk(root, "")
+      stamps.sortBy(_.path)
+    }
+    try {
+      for {
+        _ <- selection.validateC
+        _ <- limits.validateC
+        before = inventory()
+        entries <- before.filterNot(_.directory).foldLeft(Consequence.success(Vector.empty[ResourceTreeEntry])) { (prior, stamp) => for {
+          accumulated <- prior
+          bytes <- read(stamp.path, math.min(limits.maxEntryBytes, Int.MaxValue.toLong).toInt)
+          _ <- if (bytes != null && bytes.size.toLong == stamp.size && bytes.size.toLong <= limits.maxEntryBytes)
+            Consequence.unit else Consequence.resourceInvalid("selected resource tree changed during byte acquisition")
+          entry <- ResourceTreeEntry.createC(stamp.path, bytes, None)
+        } yield accumulated :+ entry }
+        after = inventory()
+        _ <- if (before == after) Consequence.unit
+          else Consequence.resourceInvalid("selected resource tree changed during acquisition")
+      } yield entries
+    } catch {
+      case failure: SelectedFailure => Consequence.resourceInvalid(failure.reason)
+      case NonFatal(_) => Consequence.resourceInvalid("selected resource tree cannot be completely acquired")
+    }
+  }
+
   val unavailable: ResourceTreeAccess = new ResourceTreeAccess {
     def snapshot(
       reference: ResourceTreeReference,

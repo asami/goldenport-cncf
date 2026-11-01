@@ -1278,7 +1278,7 @@ final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThe
       val receipts = Vector((0, diagnostic, ""), (0, "", "warning"), (2, "", ""),
         (2, "+context\n\n+more\n", ""), (2, diagnostic, "warning")) ++
         Vector(1, 7, 128, -1).map(code => (code, diagnostic, "")) ++
-        Vector(null, "\u0000", "\ud800", "\udc00").flatMap(text => Vector((2, text, ""), (2, diagnostic, text)))
+        Vector(null, "\u0000", 0xd800.toChar.toString, 0xdc00.toChar.toString).flatMap(text => Vector((2, text, ""), (2, diagnostic, text)))
       When("only the pure historical receipt codec interprets those stored fields")
       val decoded = receipts.map { case (code, out, err) => GitIndexCheck.parseStoredC(code, out, err) }
       Then("no contradictory or invalid historical receipt yields typed findings or a clean check")

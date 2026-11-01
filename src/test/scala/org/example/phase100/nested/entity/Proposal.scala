@@ -469,7 +469,6 @@ object Proposal {
       copy(payload = Vector(payload), _failures = _failures)
     }
     @scala.annotation.targetName("withPayloadCollection")
-
     def withPayload(payload: Vector[Vector[Json]]): Proposal.Builder = {
       copy(payload = payload, _failures = _failures)
     }
@@ -479,7 +478,6 @@ object Proposal {
       copy(evidence = List(evidence), _failures = _failures)
     }
     @scala.annotation.targetName("withEvidenceCollection")
-
     def withEvidence(evidence: List[Vector[Record]]): Proposal.Builder = {
       copy(evidence = evidence, _failures = _failures)
     }
@@ -489,7 +487,6 @@ object Proposal {
       copy(nonempty = Some(NonEmptyVector.one(nonempty)), _failures = _failures)
     }
     @scala.annotation.targetName("withNonemptyCollection")
-
     def withNonempty(nonempty: NonEmptyVector[Vector[Json]]): Proposal.Builder = {
       copy(nonempty = Some(nonempty), _failures = _failures)
     }

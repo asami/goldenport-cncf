@@ -151,3 +151,38 @@ owns the five File purposes, selected business compare/edit, durable intent and
 no replay. Generic File Request retirement and all eight remaining original
 main/launcher retirements remain mandatory. This slice introduces no new
 Phase, authority, checklist stage or security review stage.
+
+## Managed selected snapshots (P610 producer)
+
+`file_read_snapshot` adds one read-only typed external intent to the existing
+File family. `WorkspaceFileExecution.readSnapshotC` admits the actual current
+UoW's FileTarget binding, checks the selection and finite FileSnapshotLimits bounds, narrows
+the per-entry cap with the current resource policy, obtains the canonical trusted
+root and rechecks that binding after acquisition. A program built under another
+execution context therefore observes only its interpreting UoW's selected root.
+
+`ResourceTreeAccess.selectedSnapshotC` is an internal acquisition helper; it
+accepts the already admitted root and the managed owner's bounded reader. It
+adds no provider lookup or host configuration. It reuses the resource-tree
+relative path and immutable entry types, resource query bounds and managed
+File's `ResourceReadAcquisition` reader. A streamed traversal prunes excluded and
+unrelated prefix branches, bounds directory visits/discovery/selected entries,
+rejects relevant links and nonregular entries, and builds sorted native metadata
+inventories before and after reading selected bytes. Success exposes only the
+complete immutable selected bytes; any detected change or failed acquisition
+fails the whole read. Internal traversal is in the producer's existing resource
+and workspace owners, never the consumer component.
+
+`UnitOfWorkOp.FileReadSnapshot` retains the original intent, classifier External
+and normal interpreter call-tree. `FileReadSnapshotResult` associates the exact
+target and selection with effective limits and immutable relative-path entries.
+The API leaves retention, metric arithmetic, failure-to-unavailable conversion
+and resume policy to the workflow consumer. There is no snapshot store, counting
+service, generic process route, new lock or metric hash. Existing File intents,
+constructors and behavior remain source-compatible.
+
+Native metadata checks detect concurrent mutations visible across acquisition;
+they do not provide kernel-level atomic isolation against changes that restore
+all metadata between checks. This limitation is explicit in the producer
+contract. Source qualification, independent review and local delivery remain
+runtime-owned and are not established by these source changes or specifications.

@@ -17,7 +17,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  4, 2026
- * @version Oct. 31, 2026
+ *  version Oct. 31, 2026
+ * @version Nov.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 @org.scalatest.DoNotDiscover
@@ -171,9 +172,9 @@ final class DurableJobOperationResponseCodecSpec extends AnyWordSpec with Matche
         """{"kind":"record","fields":[null]}""", """{"kind":"record","fields":[{"key":null,"value":{"type":"int","value":1}}]}""",
         """{"kind":"record","fields":[{"key":"x","value":null}]}""",
         """{"kind":"record","fields":[{"key":"x","value":{}}]}""",
-        """{"kind":"json","value":{"k":"\ud800"}}""", """{"kind":"json","value":{"\udc00":0}}""",
-        """{"kind":"yaml","value":"\ud800"}""", """{"kind":"yaml","value":"\u0061"}""",
-        """{"kind":"yaml","value":"""" + '\ud800' + "\"}",
+        "{\"kind\":\"json\",\"value\":{\"k\":\"\\ud800\"}}", "{\"kind\":\"json\",\"value\":{\"\\udc00\":0}}",
+        "{\"kind\":\"yaml\",\"value\":\"\\ud800\"}", """{"kind":"yaml","value":"\u0061"}""",
+        """{"kind":"yaml","value":"""" + 0xd800.toChar + "\"}",
         """{"kind":"record","fields":[{"key":"x","value":{"type":"bigint","value":"""" + ("9" * 1025) + "\"}}]}")
       val texts = bodies.map(body => _prefix + body + "}") ++ Vector(null, "", valid.dropRight(1), " " + valid,
         valid.replace("\"version\":1", "\"version\":2"), valid.replace("\"schemaId\":", "\"unknown\":"),
@@ -361,7 +362,7 @@ final class DurableJobOperationResponseCodecSpec extends AnyWordSpec with Matche
   "Closed numeric capability refusal" should _scenario("ORC12") {
     "reject malformed stored lexemes and raw JDK subclasses before codec-time callbacks" in {
       Given("ORC12: malformed unsafe-factory lexemes and hostile raw decimals and a positive 128-bit integer, with counters captured after Scala wrapper construction")
-      val tokens = Vector("01", "+1", "-", "1.", "1e", "1e+", "1true", "NaN", "Infinity", "\ud800", null)
+      val tokens = Vector("01", "+1", "-", "1.", "1e", "1e+", "1true", "NaN", "Infinity", 0xd800.toChar.toString, null)
       val malformed = tokens.map(text => OperationResponse.Json(Json.fromJsonNumber(JsonNumber.fromDecimalStringUnsafe(text))))
       val decimalcounter = new Counter
       val rawdecimal = new java.math.BigDecimal(java.math.BigInteger.ONE, 0) {

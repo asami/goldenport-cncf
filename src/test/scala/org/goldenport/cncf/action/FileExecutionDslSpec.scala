@@ -17,6 +17,7 @@ import org.goldenport.cncf.processexecution.{RuntimeProcessExecutionPlan, Runtim
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkEffectClass, UnitOfWorkInterpreter, UnitOfWorkOp, UnitOfWorkProgramRecorder, UnitOfWorkProgramStubProvider}
 import org.goldenport.cncf.workspace.*
+import org.goldenport.cncf.resource.{ResourceTreeSelection, ResourceTreeQueryLimits}
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.protocol.Protocol
 import org.scalatest.GivenWhenThen
@@ -25,7 +26,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 21, 2026
+ *  version Oct. 21, 2026
+ * @version Oct. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class FileExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -37,6 +39,55 @@ final class FileExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhe
   private val _path = WorkspaceFilePath.parseC("message\n\\.txt").toOption.get
 
   "Typed File DSL under the owning UoW" should {
+    "read selected snapshot bytes from the actual interpreting UoW rather than the construction workspace" in {
+      Given("a File program built under A and a read-only interpreting workspace B")
+      val contexta = _fixture()
+      val contextb = _fixture(permission = WorkspacePermission.ReadOnly, cap = 32)
+      try {
+        Files.writeString(contexta.checkout.resolve("source.scala"), "construction")
+        Files.writeString(contextb.checkout.resolve("source.scala"), "owning\nlast")
+        val rule = ResourceTreeSelection(Vector("."), suffixes = Vector(".scala"))
+        val behavior = new FileDslBehavior(Behavior.Core(contexta.context, None, None))
+        val program = behavior.snapshot(_target, rule)
+        When("B's UoW interprets the already built typed snapshot intent")
+        val result = new UnitOfWorkInterpreter(new UnitOfWork(contextb.context)).run(program).toOption.get
+        Then("the result associates B's complete immutable bytes with the exact target and rule")
+        result.entries.map(_.relativePath) shouldBe Vector("source.scala")
+        result.entries.head.bytes shouldBe "owning\nlast".getBytes(StandardCharsets.UTF_8).toVector
+        result.target shouldBe _target
+        result.selection shouldBe rule
+        result.limits.maxEntryBytes shouldBe 32L
+        result.effect.kind shouldBe ExternalEffectKind.FileRead
+        val crossed = behavior.snapshot(FileTarget(WorkspaceId.parseC("unbound").toOption.get), rule)
+        new UnitOfWorkInterpreter(new UnitOfWork(contextb.context)).run(crossed).isFaillure shouldBe true
+      } finally { _close(contextb); _close(contexta) }
+    }
+
+    "retain repeated snapshot reads as payload-safe external occurrences without construction effects" in {
+      Given("an unconfigured construction context and an explicitly supplied snapshot stub")
+      val context = ExecutionContext.create()
+      val behavior = new FileDslBehavior(Behavior.Core(context, None, None))
+      val rule = ResourceTreeSelection(Vector("private-source"))
+      val result = FileReadSnapshotResult(_target, rule, ResourceTreeQueryLimits.default, Vector.empty)
+      val provider = new UnitOfWorkProgramStubProvider {
+        def resultFor[A](ordinal: Int, operation: UnitOfWorkOp[A]): Consequence[A] = operation match {
+          case UnitOfWorkOp.FileReadSnapshot(_, _, _) => Consequence.success(result)
+          case _ => Consequence.notImplemented("unexpected snapshot operation")
+        }
+      }
+      When("the recorder consumes two equal typed reads without a workspace service")
+      val recording = UnitOfWorkProgramRecorder.record(for {
+        first <- behavior.snapshot(_target, rule)
+        second <- behavior.snapshot(_target, rule)
+      } yield (first, second), provider)
+      Then("both original external boundaries survive and generic displays omit selected source paths")
+      recording.result.toOption shouldBe Some((result, result))
+      recording.occurrences.map(_.effectClass) shouldBe Vector.fill(2)(UnitOfWorkEffectClass.External)
+      recording.occurrences.map(_.ordinal) shouldBe Vector(0, 1)
+      recording.occurrences.mkString should not include "private-source"
+      result.toString should not include "private-source"
+    }
+
     "prepare and store exact-name gzip using B's root and byte policy for a program constructed under A" in {
       Given("independent normally assembled A and B workspaces with different current limits")
       val contexta = _fixture(cap = 128)
@@ -387,6 +438,8 @@ object FileExecutionDslSpec {
 }
 
 private final class FileDslBehavior(val behaviorCore: Behavior.Core) extends Behavior {
+  def snapshot(target: FileTarget, selection: ResourceTreeSelection,
+    limits: ResourceTreeQueryLimits = FileSnapshotLimits.default) = file_read_snapshot(target, selection, limits)
   def prepare(target: FileTarget, path: WorkspaceFilePath) = file_prepare_directory(target, path)
   def writeBytes(target: FileTarget, path: WorkspaceFilePath, bytes: Vector[Byte], representation: FileRepresentation) =
     file_write_bytes(target, path, bytes, representation)

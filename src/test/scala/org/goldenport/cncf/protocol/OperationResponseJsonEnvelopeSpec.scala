@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct.  5, 2026
- * @version Oct.  5, 2026
+ * @version Nov.  2, 2026
  */
 final class OperationResponseJsonEnvelopeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "E1 Typed JSON envelope and existing selection" should afterWord("in spec:display-model-protocol, example:E1, rules:R7,R9, phase:96, slice:P96-05A") {
@@ -139,7 +139,7 @@ final class OperationResponseJsonEnvelopeSpec extends AnyWordSpec with Matchers 
   "E3 Exact typed JSON UTF8 boundary" should afterWord("in spec:display-model-protocol, example:E3, rules:R3,R4,R7,R9, phase:96, slice:P96-05A") {
     "preserve every UTF16 unit nested primitive empty container null and opaque numeric string without locale conversion" in {
       Given("nested JSON containing controls paired/lone surrogates Unicode exact numeric strings and empty values under Japanese/Tokyo assumptions")
-      val text = " \t\n\r\b\f\u0000日本 Ω e\u0301\ud83d\ude00\ud800\udfff "
+      val text = " \t\n\r\b\f\u0000日本 Ω e\u0301" + 0xd83d.toChar + 0xde00.toChar + 0xd800.toChar + 0xdfff.toChar + " "
       val data = Json.obj("camelCaseOpaque" -> Json.fromString(text), "values" -> Json.arr(
         Json.fromBoolean(true), Json.arr(), Json.Null,
         Json.obj("number" -> Json.fromString("123456789012345678901234567890.00000"),
@@ -171,7 +171,7 @@ final class OperationResponseJsonEnvelopeSpec extends AnyWordSpec with Matchers 
       Given("docs/spec/display-model-protocol.md R7/R9 E4 with configured XML and exact typed business JSON")
       val configuration = ResolvedConfiguration(Configuration(Map(
         "textus.output.format" -> ConfigurationValue.StringValue("xml"))), ConfigurationTrace.empty)
-      val data = Json.obj("opaqueValue" -> Json.fromString("日本 Ω \ud800 12345678901234567890.00000"),
+      val data = Json.obj("opaqueValue" -> Json.fromString("日本 Ω " + 0xd800.toChar + " 12345678901234567890.00000"),
         "values" -> Json.arr(Json.Null, Json.arr(), Json.fromBoolean(true)))
       val business = OperationResponse.Json(data)
       val record = Record.data("title" -> "original", "count" -> 7)

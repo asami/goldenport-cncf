@@ -25,7 +25,9 @@ import org.goldenport.cncf.operation.evaluation.OperationEvaluationSupplementalI
 import org.goldenport.cncf.oauth.OAuthConnectionRequest
 import org.goldenport.cncf.workflow.{ActionExecution, ProviderExecutionRequest, StateMachineProvidedApiRequest}
 import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
-import org.goldenport.cncf.workspace.{FilePrepareDirectoryResult, FileReadBytesResult, FileReadTextResult, FileRepresentation, FileTarget, FileWriteBytesResult, FileWriteMode, FileWriteTextResult, WorkspaceFilePath}
+import org.goldenport.cncf.workspace.{FileSnapshotLimits, FileReadSnapshotResult, FilePrepareDirectoryResult, FileReadBytesResult, FileReadTextResult, FileRepresentation, FileTarget, FileWriteBytesResult, FileWriteMode, FileWriteTextResult, WorkspaceFilePath}
+
+import org.goldenport.cncf.resource.{ResourceTreeSelection, ResourceTreeQueryLimits}
 
 /*
  * UnitOfWork operation algebra.
@@ -42,7 +44,8 @@ import org.goldenport.cncf.workspace.{FilePrepareDirectoryResult, FileReadBytesR
  *  version Apr. 29, 2026
  *  version May.  4, 2026
  *  version Jul. 26, 2026
- * @version Oct. 27, 2026
+ *  version Oct. 27, 2026
+ * @version Oct. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -159,6 +162,11 @@ object UnitOfWorkOp {
     target: GitTarget,
     operation: GitOperation[A]
   ) extends UnitOfWorkOp[GitExecutionResult[A]]
+
+  final case class FileReadSnapshot(target: FileTarget, selection: ResourceTreeSelection,
+    limits: ResourceTreeQueryLimits = FileSnapshotLimits.default) extends UnitOfWorkOp[FileReadSnapshotResult] {
+    override def toString: String = s"FileReadSnapshot($target,FileRead)"
+  }
 
   final case class FilePrepareDirectory(
     target: FileTarget,

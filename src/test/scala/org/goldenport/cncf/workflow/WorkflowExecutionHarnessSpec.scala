@@ -12,7 +12,7 @@ import WorkflowExecutionHarness as H
 
 /** Host observations here are specification-owned, never real provider evidence.
   * @since   Oct. 16, 2026
-  * @version Oct. 16, 2026
+  * @version Nov.  2, 2026
   * @author  ASAMI, Tomoharu
   */
 final class WorkflowExecutionHarnessSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -44,12 +44,12 @@ final class WorkflowExecutionHarnessSpec extends AnyWordSpec with Matchers with 
   "Finite host execution" should afterWord("in spec:workflow-execution-disposition, examples:E1,E2,E3,E4,E5,E6,E7,E8, rules:R9,R10,R11,R12,R13, phase:80") {
     "E1 consume issued INLINE and DELEGATED without re-resolving disposition" in {
       Given("R9: issued dispositions and the original mapping, including forced INLINE with a class absent from that snapshot")
-      val inline = _requirement(review = false, inline = true).copy(reasoningClass = Some(ReasoningClassReference("OldClass")))
+      val inlinerequirement = _requirement(review = false, inline = true).copy(reasoningClass = Some(ReasoningClassReference("OldClass")))
       When("the pure handoff prepares the actual issued work")
-      val local = _take(H.prepareIssuedC(_work, inline, _origin, _mapping()))
+      val local = _take(H.prepareIssuedC(_work, inlinerequirement, _origin, _mapping()))
       val delegated = _session()
       Then("selection retains the exact issued contract and inline current profile without mandatory child or alternate")
-      local.requirement shouldBe inline
+      local.requirement shouldBe inlinerequirement
       local.primary shouldBe _origin.profile
       local.alternate shouldBe None
       local.nextSelection.get.attempt shouldBe 1

@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 17, 2026
- * @version Oct. 17, 2026
+ * @version Nov.  2, 2026
  */
 final class PresentationContextCodecPropertySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import DisplayProtocolSpecFixture.{success, sample, source}
@@ -131,7 +131,7 @@ object PresentationContextCodecPropertySpec {
           "MEMBER_INVALID", "$.families[0].data")
         case 5 => (wire(Vector(family("cncf.presentation", Json.obj("variant" -> Json.Null)))),
           "MEMBER_INVALID", "$.families[0].data.variant")
-        case 6 => (wire(Vector(family("cncf.presentation", Json.obj("variant" -> Json.fromString(text + "\ud800"))))),
+        case 6 => (wire(Vector(family("cncf.presentation", Json.obj("variant" -> Json.fromString(text + 0xd800.toChar.toString))))),
           "VALUE_INVALID", "$.families[0].data.variant")
         case 7 => (wire(Vector(family("cncf.presentation", Json.obj("variant" -> Json.fromString(text)), Json.fromDoubleOrNull(1.5)))),
           "MEMBER_INVALID", "$.families[0].version")

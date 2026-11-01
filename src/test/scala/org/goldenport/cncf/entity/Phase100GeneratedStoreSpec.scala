@@ -21,7 +21,7 @@ import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Oct. 18, 2026
- * @version Oct. 18, 2026
+ * @version Nov.  2, 2026
  */
 final class Phase100GeneratedStoreSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   Vector("memory", "sqlite").foreach { backend =>
@@ -158,7 +158,7 @@ final class Phase100GeneratedStoreSpec extends AnyWordSpec with Matchers with Gi
 
   "Native generated nested collection fixtures" should {
     "compile and preserve nested Json/Record reads, Updates and empty children through SQL" in {
-      Given("unchanged producer-generated Scala fixture products from the documented semantic AST")
+      Given("producer-generated Scala fixture products from the documented semantic AST with annotation whitespace normalized for parser compatibility")
       val provider = _sql(_database())
       given ExecutionContext = _context(provider)
       val entityid = org.goldenport.cncf.EntityIdFixtureBridge.fromParts("test", "nested",

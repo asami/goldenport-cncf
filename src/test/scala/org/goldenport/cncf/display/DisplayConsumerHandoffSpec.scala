@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 17, 2026
- * @version Oct. 17, 2026
+ * @version Nov.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 /** Consumer inputs consolidate existing contracts; supplied receipts are not commit evidence. */
@@ -337,7 +337,7 @@ object DisplayConsumerHandoffSpec {
     seconds: Long, nanos: Int, contextual: Boolean)
 
   private val _text = Gen.frequency(
-    3 -> Gen.oneOf("", "é", "e\u0301", "日本 Ω", "\u0000", "\ud800", "\udfff", "\ud83d\ude00"),
+    3 -> Gen.oneOf("", "é", "e\u0301", "日本 Ω", "\u0000", 0xd800.toChar.toString, 0xdfff.toChar.toString, 0xd83d.toChar.toString + 0xde00.toChar),
     7 -> (for {
       size <- Gen.choose(0, 32)
       units <- Gen.listOfN(size, Gen.choose(0, 65535).map(_.toChar))
