@@ -17,12 +17,133 @@ import org.scalatest.wordspec.AnyWordSpec
  * and runtime-owned program-policy models.
  *
  * @since   Jul. 17, 2026
- * @version Jul. 22, 2026
+ *  version Jul. 22, 2026
+ * @version Nov.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ProcessExecutionModelSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _capabilities =
     Gen.nonEmptyListOf(Gen.alphaLowerChar).map(_.mkString.take(24))
+
+  "Fixed selected Git stage programs" should {
+    "apply the fixed capability's actual grant while the broader capability is also granted" in {
+      Given("both fixed and broad programs with a tighter stdout limit on the fixed capability grant")
+      val fixture = GitExecutionSpecSupport.create(selectedPath = "owned")
+      val identity = GitExecutionSpecSupport.selectionId
+      val operation = GitOperation.StageSelectedAll(identity)
+      val original = fixture.definitions.find(_._git_metadata.exists(_.kind == operation.kind)).get
+      val grantlimits = ProcessExecutionLimits.empty.copy(stdoutBytes = Some(128L))
+      val grants = fixture.definitions.map(x => ProcessExecutionGrant(x.capability,
+        if (x.capability == original.capability) grantlimits else ProcessExecutionLimits.empty))
+      val admission = ProcessExecutionAdmission.forComponentsC(fixture.policy,
+        Map(GitExecutionSpecSupport.owner -> grants)).toOption.get
+      val binding = fixture.workspace.bindingC(GitExecutionSpecSupport.workspaceId).toOption.get
+      val selection = GitSelectionParameters(identity, Vector(GitPath.parseC("owned/child.txt").toOption.get))
+      try {
+        When("the owning component admits the concrete child against its fixed program")
+        val admitted = admission.admitGitForScopeC(fixture.context.cncfCore.scope, binding,
+          operation, Some(selection)).toOption.get
+        Then("the original fixed capability and identity retain the actual grant restriction and binding")
+        admitted.request.capability shouldBe original.capability
+        admitted.definition.safeProgramIdentity shouldBe original.safeProgramIdentity
+        admitted.definition._git_metadata.get.binding should be theSameInstanceAs binding
+        admitted.definition._git_metadata.get.selectionId shouldBe Some(identity)
+        admitted.definition.maximumLimits shouldBe original.maximumLimits
+        admitted.effectiveLimits shouldBe original.maximumLimits.copy(stdoutBytes = Some(128L))
+        admitted.definition._environment.values shouldBe original._environment.values
+        fixture.profile.driver.executions shouldBe empty
+      } finally fixture.close()
+    }
+
+    "narrow only the literal path while preserving the complete registered authority" in {
+      Given("fixed directory stage definitions and generated safe descendants")
+      val fixture = GitExecutionSpecSupport.create(selectedPath = "owned")
+      val operations = Vector(GitOperation.StageSelected(GitExecutionSpecSupport.selectionId),
+        GitOperation.StageSelectedAll(GitExecutionSpecSupport.selectionId))
+      val paths = Gen.oneOf(Gen.const("owned"), Gen.nonEmptyListOf(Gen.alphaLowerChar)
+        .map(chars => "owned/" + chars.mkString.take(24) + "/[literal]:file.txt"))
+      try {
+        When("each operation narrows its own fixed selection to one exact path")
+        val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(32), Prop.forAll(paths) { name =>
+          operations.forall { operation =>
+            val original = fixture.definitions.find(_._git_metadata.exists(_.kind == operation.kind)).get
+            val path = GitPath.parseC(name).toOption.get
+            val selected = GitProgramDefinition.selectC(original, operation,
+              GitSelectionParameters(GitExecutionSpecSupport.selectionId, Vector(path))).toOption.get
+            selected.capability == original.capability && selected.safeProgramIdentity == original.safeProgramIdentity &&
+              selected._executable_location == original._executable_location && selected._environment.values == original._environment.values &&
+              selected.maximumLimits == original.maximumLimits &&
+              selected._git_metadata.get == original._git_metadata.get.copy(selectedPath = Some(path)) &&
+              (selected._git_metadata.get.binding eq original._git_metadata.get.binding) &&
+              selected.fixedArguments.last == name && selected.fixedArguments.contains("--literal-pathspecs")
+          }
+        })
+        Then("binding, operation, selection, capability, identity, executable, environment, limits and host settings are unchanged")
+        withClue(checked.toString) { checked.passed shouldBe true }
+        fixture.profile.driver.executions shouldBe empty
+      } finally fixture.close()
+    }
+
+    "refuse scope expansion, malformed paths, selection changes and operation crossing" in {
+      Given("one fixed selected stage scope and otherwise valid typed selection data")
+      val fixture = GitExecutionSpecSupport.create(selectedPath = "owned")
+      val identity = GitExecutionSpecSupport.selectionId
+      val operation = GitOperation.StageSelectedAll(identity)
+      val original = fixture.definitions.find(_._git_metadata.exists(_.kind == operation.kind)).get
+      val path = GitPath.parseC("owned/child.txt").toOption.get
+      val selection = GitSelectionParameters(identity, Vector(path))
+      val invalidpaths = Vector("owned/../outside", "/owned/file",
+        "owned//file", "owned/./file", "owned/.git/config", "owned/", "", "owned/zero\u0000", null)
+      val invalid = Vector("owned-other/file", "outside").map(name =>
+        selection.copy(paths = Vector(GitPath.parseC(name).toOption.get))) ++
+        Vector(null, selection.copy(identity = null), selection.copy(paths = null), selection.copy(message = null),
+          selection.copy(paths = Vector(null)), selection.copy(paths = Vector.empty),
+          selection.copy(paths = Vector(path, GitPath.parseC("owned/second.txt").toOption.get)),
+          selection.copy(identity = GitSelectionId.parseC("other").toOption.get))
+      try {
+        When("invalid narrowing or another stage or selected operation uses that definition")
+        val rejectedpaths = invalidpaths.map(GitPath.parseC)
+        val refusals = invalid.map(GitProgramDefinition.selectC(original, operation, _)) ++ Vector(
+          GitProgramDefinition.selectC(original, GitOperation.StageSelected(identity), selection),
+          GitProgramDefinition.selectC(original, GitOperation.CommitSelected(identity), selection))
+        Then("none can widen the host path, change its selection or borrow another operation")
+        rejectedpaths.foreach(_.isFaillure shouldBe true)
+        refusals.foreach(_.isFaillure shouldBe true)
+        fixture.profile.driver.executions shouldBe empty
+      } finally fixture.close()
+    }
+
+    "distinguish absent fixed definitions from wrong binding identity and duplicate definitions" in {
+      Given("both a fixed stage and its broader base, plus another admission for the same workspace ID")
+      val fixture = GitExecutionSpecSupport.create(selectedPath = "owned")
+      val binding = fixture.workspace.bindingC(GitExecutionSpecSupport.workspaceId).toOption.get
+      val foreign = org.goldenport.cncf.workspace.WorkspaceExecutionAdmission.createC(
+        Vector(GitExecutionSpecSupport.workspaceId -> fixture.checkout), Vector.empty).toOption.get
+        .bindingC(GitExecutionSpecSupport.workspaceId).toOption.get
+      val kind = GitOperationKind.StageSelectedAll
+      val fixed = fixture.definitions.find(_._git_metadata.exists(_.kind == kind)).get
+      val base = fixture.definitions.find(_._git_metadata.exists(_.kind == GitOperationKind.StageFullState)).get
+      val absent = ProcessExecutionPolicy.createC(Vector(base)).toOption.get
+      val crossed = GitExecutionSpecSupport.definition(foreign,
+        GitExecutionSpecSupport.declaration(kind, fixture.endpoint)).toOption.get
+      val wrongbinding = ProcessExecutionPolicy.createC(Vector(base, crossed)).toOption.get
+      val duplicate = GitExecutionSpecSupport.definition(binding,
+        GitExecutionSpecSupport.declaration(kind, fixture.endpoint).copy(
+          capability = ProcessCapabilityId.parseC("duplicate-stage").toOption.get, identity = "duplicate-stage")).toOption.get
+      try {
+        When("selection lookup sees a present definition, true absence, a crossed binding or ambiguity")
+        val present = fixture.policy.gitSelectionDefinitionC(binding, kind, Some(GitExecutionSpecSupport.selectionId))
+        val fallback = absent.gitSelectionDefinitionC(binding, kind, Some(GitExecutionSpecSupport.selectionId))
+        val refused = wrongbinding.gitSelectionDefinitionC(binding, kind, Some(GitExecutionSpecSupport.selectionId))
+        val ambiguous = ProcessExecutionPolicy.createC(Vector(base, fixed, duplicate))
+        Then("only true absence returns the old base and binding refusal or ambiguity remains a failure")
+        present.toOption.get should be theSameInstanceAs fixed
+        fallback.toOption.get should be theSameInstanceAs base
+        refused.isFaillure shouldBe true
+        ambiguous.isFaillure shouldBe true
+      } finally fixture.close()
+    }
+  }
 
   "Process Execution capability model" should {
     "identify capabilities and resolve runtime policy" which {

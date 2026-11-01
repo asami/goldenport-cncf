@@ -14,11 +14,65 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 28, 2026
+ *  version Oct. 28, 2026
+ * @version Nov.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "Protected typed Git DSL" should {
+    "stage one concrete child of a fixed directory through real Git while its sibling stays untracked" in {
+      Given("fixed selected directory programs with no StageFullState definition or grant")
+      Vector(GitOperation.StageSelected(selectionId), GitOperation.StageSelectedAll(selectionId)).foreach { operation =>
+        val driver = new LocalProcessExecutionDriver()
+        val fixture = create(driver = Some(driver), selectedPath = "owned",
+          excludedOperations = Set(GitOperationKind.StageFullState))
+        try {
+          initialize(fixture, Map("owned/base.txt" -> "initial\n"))
+          Files.writeString(fixture.checkout.resolve("owned/chosen.txt"), "chosen\n")
+          Files.writeString(fixture.checkout.resolve("owned/sibling.txt"), "unrelated\n")
+          val head = Files.readAllBytes(fixture.checkout.resolve(".git/refs/heads/main")).toVector
+          val target = GitTarget(workspaceId, Some(GitSelectionParameters(selectionId,
+            Vector(GitPath.parseC("owned/chosen.txt").toOption.get))))
+          When("the owning typed UoW stages exactly the supplied child using its fixed selected operation")
+          val staged = GitExecutionSpecSupport.execute(fixture.copy(target = target), operation)
+          val status = GitExecutionSpecSupport.execute(fixture, GitOperation.Status).toOption.get.valueC.toOption.get
+          Then("only the child enters the index and no sibling or history is changed")
+          staged.toOption.get.outcome shouldBe GitExecutionOutcome.Succeeded
+          status.map(_.path.value).toSet shouldBe Set("owned/chosen.txt", "owned/sibling.txt")
+          status.find(_.path.value == "owned/chosen.txt").map(_.indexCode) shouldBe Some('A')
+          status.find(_.path.value == "owned/sibling.txt").map(x => (x.indexCode, x.worktreeCode)) shouldBe Some(('?', '?'))
+          Files.readAllBytes(fixture.checkout.resolve(".git/refs/heads/main")).toVector shouldBe head
+          Files.readString(fixture.checkout.resolve("owned/chosen.txt")) shouldBe "chosen\n"
+          Files.readString(fixture.checkout.resolve("owned/sibling.txt")) shouldBe "unrelated\n"
+          fixture.definitions.map(_.capability) should not contain capability(GitOperationKind.StageFullState)
+        } finally { driver.close(); fixture.close() }
+      }
+    }
+
+    "keep narrowing the granted repository-wide stage only when the fixed selected program is absent" in {
+      Given("the previously supported base program and grant without either fixed selected stage definition")
+      val fixture = create(excludedOperations = Set(GitOperationKind.StageSelected, GitOperationKind.StageSelectedAll))
+      val path = GitPath.parseC("owned/child.txt").toOption.get
+      val target = GitTarget(workspaceId, Some(GitSelectionParameters(selectionId, Vector(path))))
+      try {
+        When("both selected stage operations use the old invocation-selection route")
+        val operations = Vector(GitOperation.StageSelected(selectionId), GitOperation.StageSelectedAll(selectionId))
+        val results = operations.map(GitExecutionSpecSupport.execute(fixture.copy(target = target), _))
+        Then("the same base capability is narrowed into single literal-path operations without broad staging")
+        results.foreach(_.toOption.get.outcome shouldBe GitExecutionOutcome.Succeeded)
+        fixture.profile.driver.executions.map(_.request.capability) shouldBe Vector.fill(2)(capability(GitOperationKind.StageFullState))
+        fixture.profile.driver.executions.zip(operations).foreach { case (execution, operation) =>
+          execution.effectiveArguments.last shouldBe path.value
+          execution.effectiveArguments should contain("--literal-pathspecs")
+          execution.definition.safeProgramIdentity shouldBe "git-stage-full-state"
+          val suffix = if (operation.kind == GitOperationKind.StageSelectedAll)
+            Vector("--literal-pathspecs", "add", "--all", "--", path.value)
+          else Vector("--literal-pathspecs", "add", "--", path.value)
+          execution.effectiveArguments.takeRight(suffix.size) shouldBe suffix
+        }
+      } finally fixture.close()
+    }
+
     "record purpose preparation separately from accepted installation without executing either" in {
       Given("a construction context with no workspace or execution installation")
       val fixture = create(workspaceInstalled = false, processInstalled = false)

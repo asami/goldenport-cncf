@@ -10,10 +10,11 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 28, 2026
+ *  version Oct. 28, 2026
+ * @version Nov.  2, 2026
  * @author  ASAMI, Tomoharu
  */
-/** Per-call selected data within an already granted whole-repository program.
+/** Per-call selected data within an already granted program's fixed scope.
   * It supplies no executable, environment, capability, workspace or authority.
   */
 final case class GitSelectionParameters(identity: GitSelectionId, paths: Vector[GitPath], message: Option[String] = None)
@@ -443,8 +444,8 @@ private[cncf] object GitProgramDefinition {
       minimum(left.workAreaBytes, right.workAreaBytes))
   }
 
-  /** Narrow a granted repository-wide intent; never turn a read grant into a
-    * write grant or a configured selected-only program into broader ownership.
+  /** Narrow a granted repository-wide intent or one fixed stage scope; never
+    * change its operation, selection identity or granted ownership.
     */
   private[processexecution] def selectC(definition: ProcessProgramDefinition,
     operation: GitOperation[?], selection: GitSelectionParameters): Consequence[ProcessProgramDefinition] = for {
@@ -452,10 +453,15 @@ private[cncf] object GitProgramDefinition {
     _ <- if (selection != null && operation.kind.selected && operation.selectionIdOption.contains(selection.identity) &&
         selection.paths != null && selection.paths.nonEmpty && selection.paths.size <= 256 &&
         selection.paths.distinct.size == selection.paths.size && selection.paths.forall(path => path != null && GitPath.parseC(path.value).isSuccess) &&
-        selection.message != null && metadata.kind == selectedBaseKind(operation.kind) && metadata.selectionId.isEmpty)
+        selection.message != null)
       Consequence.unit else invalidC
     stage = Set(GitOperationKind.StageSelected, GitOperationKind.StageSelectedAll)(operation.kind)
     _ <- if (!stage || selection.paths.size == 1) Consequence.unit else invalidC
+    base = metadata.kind == selectedBaseKind(operation.kind) && metadata.selectionId.isEmpty
+    fixedstage = stage && metadata.kind == operation.kind && metadata.selectionId.contains(selection.identity) &&
+      metadata.selectedPath.exists(scope => selection.paths.forall(path =>
+        path.value == scope.value || path.value.startsWith(scope.value + "/")))
+    _ <- if (base || fixedstage) Consequence.unit else invalidC
     selected <- createC(metadata.binding, operation.kind, definition.capability, definition.safeProgramIdentity,
       Paths.get(definition._executable_location), metadata.localBranch, metadata.remote, metadata.remoteBranch, metadata.endpoint,
       if (operation.kind.requiresIdentity) metadata.commitIdentity else None, Some(selection.identity),
