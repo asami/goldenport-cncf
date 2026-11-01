@@ -3,6 +3,7 @@ package org.goldenport.cncf.unitofwork
 import org.scalacheck.{Gen, Prop, Test}
 import org.goldenport.cncf.processexecution.{GitOperation, GitTarget, SbtOperation, SbtTarget}
 import org.goldenport.cncf.workspace.{FileRepresentation, FileTarget, FileWriteMode, WorkspaceFilePath, WorkspaceId}
+import org.goldenport.cncf.resource.ResourceTreeSelection
 import org.goldenport.cncf.workflow.{CompletionContract, ContextBundle, ContextContract, ContextSnapshot, EvidenceContract, ProviderExecutionRequest, StateMachineOperationIdentity, StateMachineProvidedApiRequest, StateMachineRequiredOperation, StateMachineRequiredOperationIdentity, StateMachineRequiredOperationMetadata, StateMachineRunIdentity}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -13,7 +14,8 @@ import org.scalatest.wordspec.AnyWordSpec
  *
  * @since   Sep.  8, 2026
  *  version Sep. 28, 2026
- * @version Oct. 27, 2026
+ *  version Oct. 27, 2026
+ * @version Oct. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkProgramPlanningSpec
@@ -73,6 +75,22 @@ final class UnitOfWorkProgramPlanningSpec
   )
 
   "UnitOfWorkProgramPlanner" should {
+    "classify each selected workspace snapshot as an external File read boundary" in {
+      Given("equal typed snapshot intents surrounded by local work")
+      val target = FileTarget(WorkspaceId.parseC("snapshot-planning").toOption.get)
+      val snapshot = UnitOfWorkOp.FileReadSnapshot(target, ResourceTreeSelection(Vector("src")))
+      val operations = Vector(_local, snapshot, snapshot, _local)
+      When("the planner classifies the original intent sequence")
+      val plan = UnitOfWorkProgramPlanner.plan(operations)
+      Then("each snapshot retains its ordinal and separate external boundary")
+      plan.occurrences.map(_.operation) shouldBe operations
+      plan.occurrences.map(_.effectClass) shouldBe Vector(UnitOfWorkEffectClass.Local,
+        UnitOfWorkEffectClass.External, UnitOfWorkEffectClass.External, UnitOfWorkEffectClass.Local)
+      plan.segments shouldBe Vector(UnitOfWorkPlanSegment.LocalAtomic(plan.occurrences.take(1))) ++
+        plan.occurrences.slice(1, 3).map(UnitOfWorkPlanSegment.ExternalBoundary.apply) ++
+        Vector(UnitOfWorkPlanSegment.LocalAtomic(plan.occurrences.drop(3)))
+    }
+
     "retain repeated FixCheck and attempt intents as individual External boundaries" in {
       Given("fixed check and attempt intents between local operations, without runtime services")
       val attempt = UnitOfWorkOp.SbtExecAttempt(_sbt_target, SbtOperation.FixCheck)
