@@ -116,3 +116,39 @@ update/list/search its authorized Material, changing only the target identity to
 another subject's Material is denied/not visible, and internal-service
 delegation does not widen the external caller's effective result unless an
 explicit bounded proxy operation authorizes it.
+
+## Material consumer acceptance — 2026-11-02
+
+The [UC-01..04 contract](../spec/untrusted-client-material-acceptance.md) is
+a concrete consumer profile, not another authorization framework.
+P107-05 owns the common UC-02/04 enforcement and bounded internal delegation;
+P107-04 covers untrusted authority-bearing input. UC-01 credential distribution
+and UC-03 Material admission retain their Core/TKL owners.
+
+- [ ] P107-05 consumer acceptance: public Operation denial prevents protected
+  execution; allowed Operation plus forbidden Entity denies disclosure/mutation;
+  read/update/list/search/original-access paths preserve caller scope through
+  service delegation. Include authorized controls and downstream state checks.
+- [ ] Hand actual common capability/evidence and any gaps to Studio Phase 5,
+  App 6.10/7 and TKL. Those consumers need not wait for unrelated Phase 107 work;
+  no application-local replacement authorization engine is introduced.
+
+Existing implementation and prior evidence remain reusable at their actual
+scope. These additions claim no completed tests or new Phase acceptance.
+
+## Small-business baseline allocation — 2026-11-02
+
+Deliver the [standard/configurable/external contract](../spec/small-business-security-baseline-and-options.md)
+through P107-01..06 and existing consumer work, not a separate security engine.
+
+- [ ] SB-01: the selected standard application/deployment path enables required
+  authentication, Operation/resource and safe input/output boundaries without
+  customer-written guards or expert settings; reuse applicable UC evidence.
+- [ ] SB-02: supported policy choices consistently strengthen the baseline;
+  missing capabilities/prerequisites cannot masquerade as active protection.
+- [ ] SB-03: document actual defaults, deployment/operator duties and external
+  equipment limits in business terms; standard-use acceptance does not require
+  every optional strong-authentication or physical-isolation feature.
+
+Preserve existing Step IDs and acceptance. Shared policy contracts belong in
+CNCF; domain policy, identity and physical deployment remain with their owners.

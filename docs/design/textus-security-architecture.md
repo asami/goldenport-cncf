@@ -2,7 +2,7 @@
 
 status=initial
 authority=canonical
-updated_at=2026-10-14
+updated_at=2026-11-02
 
 ## Purpose
 
@@ -15,6 +15,18 @@ The working principle is:
 
 > Trust explicit contracts and admitted authority, not network location,
 > credentials alone, a running process, or the identity of a developer or AI.
+
+## Small-business standard deployment
+
+Textus targets ordinary small and medium-sized business use without expert
+security configuration. The [baseline and options contract](../spec/small-business-security-baseline-and-options.md)
+separates STANDARD protection, CONFIGURABLE strengthening and EXTERNAL
+equipment/services/operations. Common authorization, safe data boundaries and
+private-by-default storage are baseline invariants, not optional hardening.
+Users choose business roles/sharing and supported policy, while shared producers
+and the deployment offering provide coherent technical defaults and clear
+operator responsibilities. Optional physical protection must not become a
+requirement for ordinary use or a claim of implemented protection.
 
 ## Threat Model
 

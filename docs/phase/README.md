@@ -1,5 +1,14 @@
 # docs/phase — Engineering Work Management
 
+External component execution allocated 2026-11-02:
+[Phase 118](phase-118.md) / [checklist](phase-118-checklist.md) is PLANNED for
+generic controlled external execution consumed by EAI Phase 2 and TKL Phase 2.
+Reuse Phase 110 admission/sandbox and existing process/UoW lifecycle; deliver a
+bounded Docker route first, then qualified direct-CAR selection and operational
+acceptance. Phase 108 rotation and broad provider distribution are not first-route
+gates. Phase 117, active corrections and accepted history retain their scope;
+this allocation starts no Session or implementation.
+
 Flutter execution delivery allocated 2026-10-28:
 [Phase 117](phase-117.md) / [checklist](phase-117-checklist.md) is PLANNED as the
 next numbered producer delivery after closed Phase 116. It adds typed
