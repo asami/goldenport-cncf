@@ -375,3 +375,11 @@ context, resolves the authoritative ExecutionContext, and then invokes the
 ordinary CNCF Operation path. Domain business Operations do not gain
 Function-specific authentication parameters.
 
+## Shared runtime-mode policy — 2026-11-02
+
+[Runtime-mode defaults](../spec/runtime-mode-security-defaults.md) specialize the
+standard baseline for dev/test/demo/production. Common configuration and identity
+adapters provide convenient development fixtures while the same Operation and
+Entity/resource authorization enforce declared grants. Public participant demos
+retain production-equivalent protections for their actual data/exposure.
+Application handlers and UI modes are not alternative policy authorities.

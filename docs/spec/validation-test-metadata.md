@@ -7,6 +7,13 @@
 
 # Validation/Test Metadata V1
 
+Planned extension (2026-11-02): [per-test execution modes](test-execution-mode-declarations.md)
+adds required mode declarations, shared SBT/build wiring and per-test/mode
+attribution through the [producer follow-up](../phase/test-execution-mode-plan.md).
+The V1 implementation below does not yet provide this field; this note neither
+changes its wire schema nor reopens closed Phase 103. Mode is independent of
+ADMISSION and standard framework annotations.
+
 This specification defines declaration admission, normalized operation-level
 interpretation and scoped real ScalaTest discovery. The declaration API is
 [`ValidationMetadataV1`](../../src/main/scala/org/goldenport/cncf/validation/ValidationMetadataV1.scala);

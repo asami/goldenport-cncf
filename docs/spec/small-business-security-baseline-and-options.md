@@ -118,3 +118,12 @@ identity/session capability. The
 [decision journal](../journal/2026/11/2026-11-02-small-business-security-defaults-and-options.md)
 maps their existing workstreams. No closed Phase is reopened, and current demo
 work accepts its supported scope without waiting for every optional feature.
+
+## Runtime-mode defaults — 2026-11-02
+
+The [shared mode contract](runtime-mode-security-defaults.md) defines dev/test/
+demo/production defaults under this baseline. Development convenience uses
+scoped fixture identities and isolated resources; the same Operation/resource
+authorization remains active. Participant demo is protected according to its
+exposure and real data, not treated as a low-security environment. Common
+foundations own the defaults; applications do not duplicate mode/auth logic.

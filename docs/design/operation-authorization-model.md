@@ -70,11 +70,18 @@ The rule source order is:
 Operation implementations should not inspect `production` / `develop` mode or
 anonymous-user settings for ordinary admission control.
 
-The built-in admin component uses the shared
-admin authorization policy. In `develop` and `test`, this preserves the
-`OperationAuthorizationRule.developAnonymousAdmin` behavior. In `production`,
-admin operations are denied by default; when explicitly enabled, access still
-requires both a sufficient privilege ceiling and the configured admin roles.
+The built-in admin component uses the shared admin authorization policy.
+The existing implementation supplies `OperationAuthorizationRule.developAnonymousAdmin`
+for non-production modes, with anonymous admission restricted to develop/test.
+In production, admin operations are denied by default; when explicitly enabled,
+access still requires both a sufficient privilege ceiling and configured roles.
+
+The adopted [runtime-mode contract](../spec/runtime-mode-security-defaults.md)
+requires P107-05 to reconcile this legacy development convenience and demo
+debug-auth behavior with explicitly scoped fixture identities and the common
+authorization evaluator. A participant demo must have production-equivalent
+identity/admin protection; selecting a non-production branch is not acceptance.
+This is a planned migration, not a claim that current code has been changed.
 
 `privilege` is not a replacement for roles. It is the CNCF runtime/system guard
 and should remain coarse-grained. Role, scope, and capability carry the

@@ -224,3 +224,13 @@ Do not make it a new gate for unrelated ongoing work.
 - [ ] TA-C4: Feature, duration, prerequisites and exact result attribution survive.
 - [ ] TA-C5: New actual evidence is separated from prior accepted results; owner
       returns adoption instructions and remaining limitations without polling.
+
+## Follow-up: per-test execution-mode declarations — 2026-11-02
+
+The [TM-01..04 producer plan](test-execution-mode-plan.md) adds normalized
+per-test/class mode requirements and exact SBT/build binding under the
+[new contract](../spec/test-execution-mode-declarations.md). Coordinate with the
+standard-annotation follow-up above; execution modes are independent of
+classification. sm-workflow VM-07 owns consumer selection/invocation/results.
+This is planned successor work, not a reopening of Phase 103 or evidence that
+its accepted V1 already contains the new field.

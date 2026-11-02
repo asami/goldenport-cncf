@@ -508,3 +508,14 @@ A complete successful report with a different executed leaf count is unverified
 (`InventoryMismatch`), while its actual process exit remains retained.
 Cancellation, termination grace, capture limits and uncertain effects retain
 their existing meanings. No generic ProcessExecutionRequest route is granted.
+
+## Planned per-test operation-mode binding — 2026-11-02
+
+The [mode declaration contract](test-execution-mode-declarations.md) extends
+metadata binding to exact test/parameter/mode variants. Shared SBT integration,
+wired by build.sbt, passes the admitted mode to the actual selected test and
+forked target process; sm-workflow owns selection, invocation and result collection.
+Preserve typed execution, final selection before setup, effect authority,
+process limits and SBT locking. No arbitrary argv/environment input or duplicate
+per-test table. The current implementation is not claimed to support this
+extension; [TM-01..04](../phase/test-execution-mode-plan.md) owns delivery.

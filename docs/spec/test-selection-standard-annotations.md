@@ -85,3 +85,13 @@ preparation after final selection, a harmless real dispatch and accurate results
 Use the existing execution owner. Do not run external services or expensive
 self-update catalogues just to prove exclusion. Previously passed 22/13 and
 7/77/16 tests retain their original scopes, not proof of this replacement contract.
+
+## Independent per-test execution modes — 2026-11-02
+
+[Mode declarations](test-execution-mode-declarations.md) are required execution
+variants, not custom classifications or replacements for Slow/DoNotDiscover.
+Source metadata owns class/per-test requirements; build.sbt wires shared
+execution and sm-workflow selects/collects variants. Excluded or explicit-only
+tests are not re-enrolled merely because a requested mode matches.
+Coordinate [TM-01..04](../phase/test-execution-mode-plan.md) with TA-C1..5
+without restoring retired purpose labels or claiming either migration complete.

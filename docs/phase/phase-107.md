@@ -152,3 +152,33 @@ through P107-01..06 and existing consumer work, not a separate security engine.
 
 Preserve existing Step IDs and acceptance. Shared policy contracts belong in
 CNCF; domain policy, identity and physical deployment remain with their owners.
+
+## Shared runtime-mode allocation — 2026-11-02
+
+Apply [MODE-01..08](../spec/runtime-mode-security-defaults.md) within P107-03/04/05
+and their existing integrated acceptance.
+
+- [ ] P107-05 / MODE-01..03: inventory existing OperationMode, policy resolution,
+  anonymous-admin and debug-auth paths. Supply dev/test fixture identities via
+  the common identity boundary; preserve shared Operation and Entity enforcement.
+  Explicitly qualify demo as well as production instead of treating all
+  non-production modes as equivalent. Remote callers cannot choose a weaker mode.
+- [ ] P107-03/04/05 / MODE-03..05: hand the bounded participant-demo capability
+  to ESS5-01/02 before phone/Web acceptance. Missing authentication/configuration
+  cannot fall back to a development identity or broader rights. Reuse UC/SB cases.
+- [ ] MODE-06 handoff: expose effective mode through existing configuration/
+  result facilities for sm-workflow; no new per-Operation comparison parameters.
+- [ ] P107-04/05 / MODE-07: inventory supported mode-dependent behavior and
+  resolve policies/adapters through the common foundation. Declare enabled modes,
+  destinations/effect scope and disabled/missing-binding outcomes. Test can use
+  selected real integrations with common authorization. Qualify positive/denied
+  calls, intended selection and exclusion from other modes with focused specs;
+  hand test-specific references to sm-workflow for targeted/nightly regression.
+- [ ] MODE-08: consume the [per-test mode producer follow-up](test-execution-mode-plan.md)
+  for those scenarios. CNCF metadata owns required mode declarations, shared SBT/
+  build.sbt owns actual target binding, and sm-workflow selects/runs/collects
+  test-plus-mode variants. Do not duplicate declaration tables in this Phase.
+
+Keep Phase 107 planned and all existing history. Consumers need only the accepted
+subset they actually use, not the whole Phase. No duplicate full-suite run per
+mode or per-helper review cycle is added.

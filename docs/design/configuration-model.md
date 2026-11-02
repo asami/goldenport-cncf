@@ -1096,3 +1096,18 @@ The dedicated Phase 55 binding contract is maintained in the normative
 [`config-resolution.md`](../spec/config-resolution.md) specification. This
 legacy configuration-model document remains draft platform-compilation context;
 its historical material must not be read as the typed binding authority.
+
+## Operation-mode security defaults — 2026-11-02
+
+The [shared runtime-mode contract](../spec/runtime-mode-security-defaults.md)
+governs dev/test/demo/production identity, exposure, provider and diagnostic
+defaults. Reuse existing OperationMode and common configuration resolution;
+dev is an alias of develop. This is separate from RunMode and command execution
+mode. Resolve policy in trusted host configuration, not client requests or
+per-application parsers. The adopted profile migration and P107-05 acceptance
+remain pending; existing demo/debug switches do not establish qualification.
+Modes also select declared runtime behavior through shared policies/adapters;
+settings specify affected capabilities, permitted destinations and limits.
+Test can enable selected real external integrations alongside substitutes.
+Common authorization applies to every selected path. MODE-07 qualifies selection,
+disabled paths and missing configuration without another authorization engine.
