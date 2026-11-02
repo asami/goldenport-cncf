@@ -6,13 +6,15 @@ import io.circe.{Json, JsonObject}
 import io.circe.jawn.JawnParser
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.ComponentId
+import org.goldenport.cncf.config.IoDefaultParameters
 import org.goldenport.cncf.workspace.*
 import org.goldenport.configuration.{ConfigurationValue, ConfigurationValueCodec}
 
 /** Host wire contract: complete literal/lower-hex vectors only, never arbitrary shell text. */
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 28, 2026
+ *  version Oct. 28, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValueCodec[RuntimeProcessExecutionPlan] {
@@ -23,6 +25,8 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
   private val _parser = JawnParser(allowDuplicateKeys = false)
   private val _limit_names = Vector("launchTimeoutMillis", "executionTimeoutMillis", "terminationGraceMillis",
     "stdinBytes", "stdoutBytes", "stderrBytes", "argumentCount", "argumentBytes", "artifactCount", "artifactBytes", "workAreaBytes")
+  private val _io_limit_names = Set("stdinBytes", "stdoutBytes", "stderrBytes")
+  private val _io_program_names = Vector("programs", "sbtPrograms", "gitPrograms", "gitRepositories")
 
   def decode(value: ConfigurationValue): Consequence[RuntimeProcessExecutionPlan] = value match {
     case ConfigurationValue.StringValue(text) =>
@@ -61,7 +65,7 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
               RuntimeProcessExecutionPlan.createV3C(programs, grants.toMap, workspaces, workspacegrants, sbt, git)
               else RuntimeProcessExecutionPlan.createV2C(programs, grants.toMap, workspaces, workspacegrants, sbt))
           } yield value
-      } yield plan
+      } yield plan._with_io_default_omissions(_io_omissions(json))
       result.fold(Consequence.configurationInvalid, Consequence.success)
     case _ => Consequence.configurationInvalid("Runtime process plan requires a JSON string")
   }
@@ -101,9 +105,48 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
       semantic.mapObject(_.add("gitPrograms", Json.fromValues(plan.gitDeclarations.map(_git_json)))) else semantic
     val root = if (plan.schemaVersion == SCHEMA_V5)
       gitroot.mapObject(_.add("gitRepositories", Json.fromValues(plan.gitRepositoryDeclarations.map(_git_repository_json)))) else gitroot
-    val encoded = ConfigurationValue.StringValue(root.noSpaces)
+    val declared = _map_io_limits(root, (name, index, limits) =>
+      plan._io_default_omissions.getOrElse(name -> index, Set.empty).foldLeft(limits)((obj, field) => obj.remove(field)))
+    val encoded = ConfigurationValue.StringValue(declared.noSpaces)
     Consequence.success(encoded)
   }
+
+  def resolveIoDefaultsC(plan: RuntimeProcessExecutionPlan, commonBytes: Long): Consequence[RuntimeProcessExecutionPlan] =
+    IoDefaultParameters.codec.encode(commonBytes).flatMap { _ =>
+      encode(plan).flatMap {
+        case ConfigurationValue.StringValue(text) =>
+          val parsed = _parser.parse(text).left.map(_ => "Invalid runtime process JSON")
+          parsed.fold(Consequence.configurationInvalid, json => {
+            val resolved = _map_io_limits(json, (_, _, limits) =>
+              _io_limit_names.foldLeft(limits) { (obj, name) =>
+                if (obj.contains(name)) obj else obj.add(name, Json.fromLong(commonBytes))
+              })
+            decode(ConfigurationValue.StringValue(resolved.noSpaces))
+          })
+        case _ => Consequence.configurationInvalid("Runtime process plan requires a JSON string")
+      }
+    }
+
+  private def _io_omissions(json: Json): Map[(String, Int), Set[String]] =
+    _io_program_names.flatMap { name =>
+      json.hcursor.downField(name).focus.flatMap(_.asArray).toVector.flatten.zipWithIndex.flatMap {
+        case (entry, index) => entry.hcursor.downField("limits").focus.flatMap(_.asObject).flatMap { limits =>
+          val omitted = _io_limit_names -- limits.keys.toSet
+          Option.when(omitted.nonEmpty)((name -> index) -> omitted)
+        }
+      }
+    }.toMap
+
+  private def _map_io_limits(json: Json, transform: (String, Int, JsonObject) => JsonObject): Json =
+    _io_program_names.foldLeft(json) { (root, name) =>
+      root.asObject.flatMap(_(name)).flatMap(_.asArray).fold(root) { entries =>
+        root.mapObject(_.add(name, Json.fromValues(entries.zipWithIndex.map { case (entry, index) =>
+          entry.mapObject { obj => obj("limits").flatMap(_.asObject).fold(obj) { limits =>
+            obj.add("limits", Json.fromJsonObject(transform(name, index, limits)))
+          } }
+        })))
+      }
+    }
 
   private def _sbt_json(x: SbtRuntimeDeclaration): Json = {
     val base = Json.obj(
@@ -325,8 +368,12 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
     _ <- Either.cond(capabilities.distinct.size == capabilities.size, (), "Duplicate process grant")
   } yield owner -> capabilities.map(ProcessExecutionGrant(_))
   private def _decode_limits(json: Json): Either[String, ProcessExecutionLimits] = for {
-    obj <- _fields(json, _limit_names.toSet)
-    values <- _sequence(_limit_names.map(name => obj(name).flatMap(_.asNumber).flatMap(_.toLong)
+    obj <- json.asObject.filter(_.keys.toSet.subsetOf(_limit_names.toSet))
+      .toRight("Invalid runtime process object fields")
+    values <- _sequence(_limit_names.map(name => obj(name).orElse(
+      Option.when(_io_limit_names.contains(name))(
+        Json.fromLong(IoDefaultParameters.BUILTIN_MAXIMUM_BYTES.toLong)))
+      .flatMap(_.asNumber).flatMap(_.toLong)
       .filter(_ > 0L).toRight("Process limits require finite positive integers")))
   } yield ProcessExecutionLimits(Some(values(0)), Some(values(1)), Some(values(2)), Some(values(3)), Some(values(4)),
     Some(values(5)), Some(values(6)), Some(values(7)), Some(values(8)), Some(values(9)), Some(values(10)))

@@ -8,10 +8,11 @@ import org.goldenport.Consequence
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 31, 2026
+ *  version Oct. 31, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
-final case class ResourceReadLimits(maximumBytes: Int = 1048576) {
+final case class ResourceReadLimits(maximumBytes: Int = org.goldenport.cncf.config.IoDefaultParameters.BUILTIN_MAXIMUM_BYTES) {
   require(maximumBytes >= 1 && maximumBytes <= 268435456,
     "resource read maximumBytes must be between 1 and 268435456")
 }

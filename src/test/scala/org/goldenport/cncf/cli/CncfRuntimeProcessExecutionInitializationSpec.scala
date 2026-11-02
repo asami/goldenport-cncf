@@ -2,10 +2,11 @@ package org.goldenport.cncf.cli
 
 import java.nio.file.{Files, Path, Paths}
 import io.circe.Json
+import io.circe.parser.parse
 import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId, ComponentOrigin}
-import org.goldenport.cncf.config.{CncfConfigurationParameterCatalog, CncfConfigurationTarget, SubsystemInstanceId}
+import org.goldenport.cncf.config.{CncfConfigurationParameterCatalog, CncfConfigurationTarget, IoDefaultParameters, SubsystemInstanceId}
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.action.Behavior
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter}
@@ -20,7 +21,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /** Owning-runtime SPI specs. These are not workflow semantic acceptance or a product SBT bridge. */
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 26, 2026
+ *  version Oct. 26, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfRuntimeProcessExecutionInitializationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -92,6 +94,59 @@ final class CncfRuntimeProcessExecutionInitializationSpec extends AnyWordSpec wi
   }
 
   "Canonical Process Execution bootstrap" should {
+    "resolve the same common byte policy from ordinary and consolidated files without widening grants" in {
+      Given("normal and consolidated Textus files with a common byte policy and precisely omitted host streams")
+      for (consolidated <- Vector(false, true)) {
+        val cwd = _host_directory(configured = false)
+        val identity = _take(SubsystemInstanceId.default(org.goldenport.cncf.subsystem.DefaultSubsystemFactory.subsystemName))
+        val source = parse(_v2_text(cwd)).toOption.get
+        val wire = source.mapObject { obj =>
+          val programs = obj("programs").get.asArray.get.map(_.mapObject(fields => fields.add("limits",
+            fields("limits").get.mapObject(_.remove("stdoutBytes").remove("stderrBytes")
+              .add("stdinBytes", Json.fromLong(1048576L))))))
+          val sbt = obj("sbtPrograms").get.asArray.get.map(_.mapObject(fields => fields.add("limits",
+            fields("limits").get.mapObject(_.remove("stdinBytes").remove("stdoutBytes").remove("stderrBytes")))))
+          obj.add("programs", Json.fromValues(programs)).add("sbtPrograms", Json.fromValues(sbt))
+        }
+        val values = Json.obj(IoDefaultParameters.KEY -> Json.fromLong(37L), _key -> Json.fromString(wire.noSpaces))
+        val subsystemconfig = Json.obj("config" -> Json.obj(_key -> Json.fromString(wire.noSpaces)))
+        val instances = Json.obj(identity.instance -> subsystemconfig)
+        val subsystems = Json.obj(identity.subsystem -> Json.obj("instances" -> instances))
+        val document = if (consolidated) Json.obj(
+          "global" -> Json.obj("config" -> Json.obj(IoDefaultParameters.KEY -> Json.fromLong(37L))),
+          "subsystems" -> subsystems
+        ) else values
+        Files.writeString(cwd.resolve(".textus/config.json"), document.noSpaces)
+        val runtime = new CncfRuntime()
+        val id = _take(WorkspaceId.parseC("runtime-checkout"))
+        var admitted = Option.empty[ResolvedProcessExecution]
+        var samebinding = false
+        var denied = Vector.empty[Boolean]
+        When("public initializeForEmbedding activates the typed preflight plan before Component construction")
+        val subsystem = _take(runtime.initializeForEmbedding(cwd, _controlled_arguments(cwd), extraComponents = s => {
+          val root = s.globalRuntimeContext
+          val scope = _action_scope(root, _owner)
+          admitted = ProcessExecutionAdmission.resolveC(scope, ProcessExecutionRequest(_capability)).toOption
+          samebinding = root.workspaceExecutionAdmissionOption.get.bindingC(id).toOption.get eq
+            scope.workspaceExecutionAdmissionOption.get.bindingC(id).toOption.get
+          denied = Vector(_action_scope(root, _other), root.createChildScope(ScopeKind.Component, _owner.name)).map(wrong =>
+            ProcessExecutionAdmission.resolveC(wrong, ProcessExecutionRequest(_capability)).isFaillure)
+          Vector.empty
+        }))
+        try {
+          Then("omitted streams and both file defaults use the common value while explicit streams and authority remain selected")
+          val config = subsystem.globalRuntimeContext.config
+          config.ioDefaultMaximumBytes shouldBe 37L
+          config.resourceReadLimits.maximumBytes shouldBe 37
+          config.resourceWriteLimits.maximumBytes shouldBe 37
+          admitted.get.effectiveLimits shouldBe _limits.copy(stdinBytes = Some(1048576L), stdoutBytes = Some(37L), stderrBytes = Some(37L))
+          samebinding shouldBe true
+          denied shouldBe Vector(true, true)
+          _take(subsystem.globalRuntimeContext.workspaceExecutionAdmissionOption.get.bindingC(id).flatMap(_.workingDirectoryC)) shouldBe cwd.toRealPath()
+        } finally { Subsystem.shutdownOwned(subsystem); runtime.closeEmbedding() }
+      }
+    }
+
     "install one V3 workspace binding for protected Git results and existing SBT metadata with independent owner grants" in {
       Given("a selected V3 Subsystem file, an actual local Git checkout and separate SBT and Git capabilities")
       val cwd = _host_directory(configured = false)

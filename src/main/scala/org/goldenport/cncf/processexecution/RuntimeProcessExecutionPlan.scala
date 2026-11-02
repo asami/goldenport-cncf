@@ -9,7 +9,8 @@ import org.goldenport.cncf.workspace.*
 /** Immutable host configuration. Parsing does not install a driver or grant caller authority. */
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 28, 2026
+ *  version Oct. 28, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] final case class WorkspaceRuntimeDeclaration(identity: WorkspaceId, root: Path)
@@ -68,8 +69,16 @@ private[cncf] final class RuntimeProcessExecutionPlan private (
   val sbtDeclarations: Vector[SbtRuntimeDeclaration],
   val gitDeclarations: Vector[GitRuntimeDeclaration],
   val gitRepositoryDeclarations: Vector[GitRepositoryRuntimeDeclaration],
-  val workspaceAdmissionOption: Option[WorkspaceExecutionAdmission]
-)
+  val workspaceAdmissionOption: Option[WorkspaceExecutionAdmission],
+  private[cncf] val _io_default_omissions: Map[(String, Int), Set[String]] = Map.empty
+) {
+  private[cncf] def _with_io_default_omissions(
+    omissions: Map[(String, Int), Set[String]]
+  ): RuntimeProcessExecutionPlan =
+    new RuntimeProcessExecutionPlan(programs, grants, admission, schemaVersion,
+      workspaceDeclarations, workspaceGrants, sbtDeclarations, gitDeclarations,
+      gitRepositoryDeclarations, workspaceAdmissionOption, omissions)
+}
 
 private[cncf] object RuntimeProcessExecutionPlan {
   // Deliberately closed: a future Git kind requires an explicit family contract update.

@@ -15,7 +15,8 @@ import org.scalacheck.{Gen, Prop, Test}
 
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 29, 2026
+ *  version Oct. 29, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -98,6 +99,131 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
       .add("identity", Json.fromString(identity))))
     _changed_entry(changed, "grants", grant => grant.mapObject(_.add("capabilities",
       _json_strings(grant.hcursor.get[Vector[String]]("capabilities").toOption.get.map(x => if (x == "repository") capability else x)))))
+  }
+
+  private def _without_stream_limits(entry: Json): Json = entry.mapObject(fields => fields.add("limits",
+    fields("limits").get.mapObject(_.remove("stdinBytes").remove("stdoutBytes").remove("stderrBytes"))))
+
+  "E4 Omitted host stream limits" should afterWord(
+    "in spec:process-execution-runtime, example:E4, rules:R5, phase:sync-runtime-20261103-01") {
+    "retain generic and typed stream omissions until activation resolves the common default" in {
+      Given("docs/spec/process-execution-runtime.md R5 E4: generic, SBT, Git and V5 repository declarations omit all three streams")
+      val genericwire = _changed_program(_without_stream_limits)
+      val repositorywire = _changed_entry(_v5_root(_directory()), "gitRepositories", _without_stream_limits)
+      val sbtwire = _changed_entry(_v2_root(_directory()), "sbtPrograms", _without_stream_limits)
+      val gitwire = _v3_root(_directory()).mapObject(obj => obj.add("gitPrograms",
+        Json.fromValues(obj("gitPrograms").get.asArray.get.map(_without_stream_limits))))
+      When("the ordinary host codec decodes both plans")
+      val generic = _take(_decode(genericwire))
+      val repository = _take(_decode(repositorywire))
+      val sbt = _take(_decode(sbtwire))
+      val git = _take(_decode(gitwire))
+      val defaultbytes = org.goldenport.cncf.config.IoDefaultParameters.BUILTIN_MAXIMUM_BYTES.toLong
+      val limits = Vector(generic.programs.head.maximumLimits, repository.gitRepositoryDeclarations.head.limits,
+        sbt.sbtDeclarations.head.limits, git.gitDeclarations.head.limits)
+      Then("only the omitted stream quantities acquire the finite one MiB default")
+      defaultbytes shouldBe 1048576L
+      limits.foreach { value =>
+        value.stdinBytes shouldBe Some(defaultbytes)
+        value.stdoutBytes shouldBe Some(defaultbytes)
+        value.stderrBytes shouldBe Some(defaultbytes)
+        value.requireFiniteC.isSuccess shouldBe true
+      }
+      generic.programs.head.maximumLimits shouldBe _limits.copy(stdinBytes = Some(defaultbytes), stdoutBytes = Some(defaultbytes),
+        stderrBytes = Some(defaultbytes))
+      for ((plan, field) <- Vector(generic -> "programs", repository -> "gitRepositories", sbt -> "sbtPrograms", git -> "gitPrograms")) {
+        When("the unresolved declaration round-trips before the runtime supplies its common value")
+        val encoded = _take(RuntimeProcessExecutionPlanCodec.encode(plan))
+        val wire = parse(encoded.asInstanceOf[ConfigurationValue.StringValue].value).toOption.get
+        val encodedlimits = wire.hcursor.downField(field).downArray.downField("limits").focus.get
+        val restored = _take(RuntimeProcessExecutionPlanCodec.decode(encoded))
+        Then("the wire preserves precisely the three omissions and keeps the finite provisional meaning")
+        encodedlimits.asObject.get.size shouldBe 8
+        Set("stdinBytes", "stdoutBytes", "stderrBytes").foreach(name => encodedlimits.asObject.get.contains(name) shouldBe false)
+        restored.programs.map(_.maximumLimits) shouldBe plan.programs.map(_.maximumLimits)
+        restored.gitRepositoryDeclarations shouldBe plan.gitRepositoryDeclarations
+        When("activation resolves the common byte policy")
+        val activated = _take(RuntimeProcessExecutionPlanCodec.resolveIoDefaultsC(restored, 23L))
+        val activatedwire = parse(_take(RuntimeProcessExecutionPlanCodec.encode(activated))
+          .asInstanceOf[ConfigurationValue.StringValue].value).toOption.get
+        val activatedlimits = activatedwire.hcursor.downField(field).downArray.downField("limits").focus.get
+        Then("all three streams become explicit finite values and authority remains unchanged")
+        activatedlimits.asObject.get.size shouldBe 11
+        Set("stdinBytes", "stdoutBytes", "stderrBytes").foreach(name =>
+          activatedlimits.hcursor.get[Long](name).toOption shouldBe Some(23L))
+        activated._io_default_omissions shouldBe empty
+        activated.grants shouldBe plan.grants
+        activated.workspaceDeclarations shouldBe plan.workspaceDeclarations
+        activated.workspaceGrants shouldBe plan.workspaceGrants
+      }
+    }
+  }
+
+  "E5 Explicit host stream limits" should afterWord(
+    "in spec:process-execution-runtime, example:E5, rules:R5, phase:sync-runtime-20261103-01") {
+    "honor smaller and larger explicit limits independently of omitted peer streams" in {
+      Given("docs/spec/process-execution-runtime.md R5 E5: finite explicit stream overrides above and below one MiB")
+      val repositorywire = _v5_root(_directory())
+      for (field <- Vector("stdinBytes", "stdoutBytes", "stderrBytes"); size <- Vector(32L, 1048576L, 2097152L)) {
+        def _override_(entry: Json): Json = _without_stream_limits(entry).mapObject(fields => fields.add("limits",
+          fields("limits").get.mapObject(_.add(field, Json.fromLong(size)))))
+        When("each generic or normal V5 declaration supplies one explicit stream and omits the other")
+        val generic = _take(RuntimeProcessExecutionPlanCodec.resolveIoDefaultsC(
+          _take(_decode(_changed_program(_override_))), 17L)).programs.head.maximumLimits
+        val repository = _take(RuntimeProcessExecutionPlanCodec.resolveIoDefaultsC(
+          _take(_decode(_changed_entry(repositorywire, "gitRepositories", _override_))), 17L))
+          .gitRepositoryDeclarations.head.limits
+        Then("the explicit quantity survives and its omitted peer alone uses the CNCF default")
+        Vector(generic, repository).foreach { value =>
+          value.stdinBytes shouldBe Some(if (field == "stdinBytes") size else 17L)
+          value.stdoutBytes shouldBe Some(if (field == "stdoutBytes") size else 17L)
+          value.stderrBytes shouldBe Some(if (field == "stderrBytes") size else 17L)
+        }
+      }
+    }
+  }
+
+  "E6 Host stream default strictness" should afterWord(
+    "in spec:process-execution-runtime, example:E6, rules:R5, phase:sync-runtime-20261103-01") {
+    "reject missing other limits, unknown fields and every malformed explicit quantity" in {
+      Given("docs/spec/process-execution-runtime.md R5 E6: all eleven limits retain strict finite integer validation")
+      val source = _root.hcursor.downField("programs").downArray.downField("limits").focus.get
+      val names = source.asObject.get.keys.toVector
+      val malformed = Vector(Json.Null, Json.True, Json.fromString("1024"), Json.fromDoubleOrNull(1.5),
+        Json.fromLong(0L), Json.fromLong(-1L), Json.fromBigInt(BigInt(Long.MaxValue) + 1))
+      val missing = names.filterNot(Set("stdinBytes", "stdoutBytes", "stderrBytes")).map(name => source.mapObject(_.remove(name)))
+      val invalid = missing ++ names.flatMap(name => malformed.map(value => source.mapObject(_.add(name, value)))) ++
+        Vector(source.mapObject(_.add("unknown", Json.fromLong(1L))), Json.Null, Json.True, Json.arr())
+      val repositorywire = _v5_root(_directory())
+      When("the ordinary generic and normal V5 host paths decode each invalid limit object")
+      val results = invalid.flatMap { limits =>
+        def _replace_(entry: Json): Json = entry.mapObject(_.add("limits", limits))
+        Vector(_decode(_changed_program(_replace_)), _decode(_changed_entry(repositorywire, "gitRepositories", _replace_)))
+      }
+      Then("omission defaults do not admit unknown fields, missing mandatory quantities or invalid explicit streams")
+      results.foreach(_.isFaillure shouldBe true)
+    }
+  }
+
+  "E7 Stream defaults preserve limit tightening" should afterWord(
+    "in spec:process-execution-runtime, example:E7, rules:R5, phase:sync-runtime-20261103-01") {
+    "leave empty overrides absent and retain grant and request narrowing" in {
+      Given("docs/spec/process-execution-runtime.md R5 E7: a normalized host maximum and independently optional grants")
+      val maximum = _take(_decode(_changed_program(_without_stream_limits))).programs.head.maximumLimits
+      val grant = ProcessExecutionLimits(stdinBytes = Some(128L), stdoutBytes = Some(256L))
+      val request = ProcessExecutionLimits(stdoutBytes = Some(64L))
+      When("the existing finite-limit algebra resolves empty overrides and explicit tightening")
+      val unchanged = _take(ProcessExecutionLimits.effectiveC(maximum, ProcessExecutionLimits.empty, ProcessExecutionLimits.empty))
+      val narrowed = _take(ProcessExecutionLimits.effectiveC(maximum, grant, request))
+      Then("wire defaults never become implicit grant or request overrides and widening still fails")
+      ProcessExecutionLimits().stdinBytes shouldBe None
+      ProcessExecutionLimits.empty.stdoutBytes shouldBe None
+      unchanged shouldBe maximum
+      narrowed shouldBe maximum.copy(stdinBytes = Some(128L), stdoutBytes = Some(64L))
+      ProcessExecutionLimits.effectiveC(maximum, grant, ProcessExecutionLimits(stdinBytes = Some(129L))).isFaillure shouldBe true
+      ProcessExecutionLimits.effectiveC(maximum, ProcessExecutionLimits(stdoutBytes = Some(2097152L)),
+        ProcessExecutionLimits.empty).isFaillure shouldBe true
+    }
   }
 
   "Explicit selected committed-tree authority" should {

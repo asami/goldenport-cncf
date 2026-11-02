@@ -26,7 +26,8 @@ import org.goldenport.cncf.resource.{ResourceReadLimits, ResourceTreePolicy, Res
  *  version Apr. 30, 2026
  *  version Jun. 19, 2026
  *  version Jul. 30, 2026
- * @version Oct. 23, 2026
+ *  version Oct. 23, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -65,7 +66,9 @@ final case class RuntimeConfig(
   urnResourceProviders: Vector[UrnResourceProvider] = Vector.empty,
   resourceTreePolicy: ResourceTreePolicy = ResourceTreePolicy(),
   mcpClientPolicyPath: Option[Path] = None,
-  operationToolPolicyPath: Option[Path] = None
+  operationToolPolicyPath: Option[Path] = None,
+  ioDefaultMaximumBytes: Long = IoDefaultParameters.BUILTIN_MAXIMUM_BYTES.toLong,
+  resourceWriteLimits: ResourceReadLimits = ResourceReadLimits.default
 ) {
   def executionClock: RuntimeClock = executionProfile.runtimeClock
 }
@@ -102,7 +105,9 @@ object RuntimeConfig {
     urnResourceProviders: Vector[UrnResourceProvider],
     resourceTreePolicy: ResourceTreePolicy,
     mcpClientPolicyPath: Option[Path],
-    operationToolPolicyPath: Option[Path]
+    operationToolPolicyPath: Option[Path],
+    ioDefaultMaximumBytes: Long,
+    resourceWriteLimits: ResourceReadLimits
   ) {
     private[config] def withStores(
       dataStoreSpace: DataStoreSpace,
@@ -139,7 +144,9 @@ object RuntimeConfig {
       urnResourceProviders = urnResourceProviders,
       resourceTreePolicy = resourceTreePolicy,
       mcpClientPolicyPath = mcpClientPolicyPath,
-      operationToolPolicyPath = operationToolPolicyPath
+      operationToolPolicyPath = operationToolPolicyPath,
+      ioDefaultMaximumBytes = ioDefaultMaximumBytes,
+      resourceWriteLimits = resourceWriteLimits
     )
   }
 
@@ -392,6 +399,7 @@ object RuntimeConfig {
   val blobMaxByteSizeKey = "textus.blob.max-byte-size"
   val runtimeBlobMaxByteSizeKey = "textus.runtime.blob.max-byte-size"
   val RESOURCE_READ_MAX_BYTES_KEY = "textus.resource.read.max-bytes"
+  val RESOURCE_WRITE_MAX_BYTES_KEY = "cncf.resource.write.max-bytes"
   val RUNTIME_RESOURCE_READ_MAX_BYTES_KEY = "textus.runtime.resource.read.max-bytes"
   val resourceUrlFileRootsKey = "textus.resource.url.file.roots"
   val runtimeResourceUrlFileRootsKey = "textus.runtime.resource.url.file.roots"
@@ -485,13 +493,25 @@ object RuntimeConfig {
     else
       _from(configuration, modeOverride, Some(executionProfile))
 
+  private[cncf] def from(
+    configuration: ResolvedConfiguration,
+    modeOverride: Option[RunMode],
+    executionProfile: ResolvedExecutionProfile,
+    ioDefaultMaximumBytes: Long
+  ): RuntimeConfig =
+    if (executionProfile == null)
+      throw new IllegalArgumentException("runtime execution profile is required")
+    else
+      _from(configuration, modeOverride, Some(executionProfile), Some(ioDefaultMaximumBytes))
+
   private def _from(
     configuration: ResolvedConfiguration,
     modeoverride: Option[RunMode],
-    profileoverride: Option[ResolvedExecutionProfile]
+    profileoverride: Option[ResolvedExecutionProfile],
+    iodefaultoverride: Option[Long] = None
   ): RuntimeConfig = {
     // Validate settings before acquiring caller-owned physical stores.
-    val settings = _settings(configuration, modeoverride, profileoverride)
+    val settings = _settings(configuration, modeoverride, profileoverride, iodefaultoverride)
     val config = settings.withStores(
       DataStoreSpace.create(configuration),
       EntityStoreSpace.create(configuration)
@@ -509,8 +529,12 @@ object RuntimeConfig {
   private def _settings(
     configuration: ResolvedConfiguration,
     modeoverride: Option[RunMode],
-    profileoverride: Option[ResolvedExecutionProfile]
+    profileoverride: Option[ResolvedExecutionProfile],
+    iodefaultoverride: Option[Long] = None
   ): Settings = {
+    val iodefaultmaximumbytes = iodefaultoverride.fold(IoDefaultParameters.resolveC(configuration))(
+      value => IoDefaultParameters.codec.decode(org.goldenport.configuration.ConfigurationValue.NumberValue(BigDecimal(value)))
+    ).getOrElse(throw new IllegalArgumentException(s"${IoDefaultParameters.KEY} requires a positive integral Long"))
     val baseurl =
       _get_string(configuration, serverEmulatorBaseUrlKey)
         .getOrElse(defaultServerEmulatorBaseUrl)
@@ -568,7 +592,8 @@ object RuntimeConfig {
     val rendererconfig =
       _static_form_app_renderer_config(configuration)
     val blobstoreconfig = BlobStoreConfig.fromConfiguration(configuration)
-    val resourcereadlimits = _resource_read_limits(configuration)
+    val resourcereadlimits = _resource_read_limits(configuration, iodefaultmaximumbytes)
+    val resourcewritelimits = _resource_file_limits(configuration, RESOURCE_WRITE_MAX_BYTES_KEY, iodefaultmaximumbytes)
     val resourceurlpolicy = _resource_url_policy(configuration)
     val textusurnresourcepolicy = _textus_urn_resource_policy(configuration)
     val urnresourceproviders = _urn_resource_providers(configuration)
@@ -648,7 +673,9 @@ object RuntimeConfig {
       urnResourceProviders = urnresourceproviders,
       resourceTreePolicy = resourcetreepolicy,
       mcpClientPolicyPath = mcpclientpolicypath,
-      operationToolPolicyPath = operationtoolpolicypath
+      operationToolPolicyPath = operationtoolpolicypath,
+      ioDefaultMaximumBytes = iodefaultmaximumbytes,
+      resourceWriteLimits = resourcewritelimits
     )
     _validate(config)
     config
@@ -852,14 +879,18 @@ object RuntimeConfig {
     IdGenerationContext.IdNamespace.normalizeOrThrow(major, minor)
   }
 
-  private def _resource_read_limits(configuration: ResolvedConfiguration): ResourceReadLimits =
-    _get_string(configuration, RESOURCE_READ_MAX_BYTES_KEY).fold(ResourceReadLimits.default) { value =>
-      val parsed = if (value.matches("[0-9]+")) scala.util.Try(value.toInt).toOption else None
-      parsed.filter(number => number >= 1 && number <= 268435456)
-        .map(ResourceReadLimits(_)).getOrElse {
-          throw new IllegalArgumentException("textus.resource.read.max-bytes must be an integer between 1 and 268435456")
-        }
+  private def _resource_read_limits(configuration: ResolvedConfiguration, common: Long): ResourceReadLimits =
+    _resource_file_limits(configuration, RESOURCE_READ_MAX_BYTES_KEY, common)
+
+  private def _resource_file_limits(configuration: ResolvedConfiguration, key: String, common: Long): ResourceReadLimits = {
+    val parsed = _get_string(configuration, key).fold(Option(common)) { value =>
+      if (value.matches("[0-9]+")) scala.util.Try(value.toLong).toOption else None
     }
+    parsed.filter(number => number >= 1L && number <= 268435456L)
+      .map(number => ResourceReadLimits(number.toInt)).getOrElse {
+        throw new IllegalArgumentException(s"$key must be an integer between 1 and 268435456")
+      }
+  }
 
   private def _resource_url_policy(
     configuration: ResolvedConfiguration

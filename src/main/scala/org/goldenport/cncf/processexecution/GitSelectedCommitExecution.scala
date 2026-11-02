@@ -5,7 +5,8 @@ import org.goldenport.cncf.context.ExecutionContext
 
 /*
  * @since   Oct. 24, 2026
- * @version Oct. 29, 2026
+ *  version Oct. 29, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object GitSelectedCommitExecution {
@@ -251,16 +252,7 @@ private[cncf] object GitPurposeCandidateExecution {
           !text.contains('\u0000') && UTF_8.newEncoder().canEncode(text)) &&
         metadata.selectedPaths.exists(scope => change.path == scope || change.path.value.startsWith(scope.value + "/"))) &&
       request.changes.map(_.path).distinct.size == request.changes.size
-    if (!valid) GitProgramDefinition.invalidC
-    else {
-      val bytes = request.changes.flatMap(change => change.expectedWorktree.toVector ++ change.content.toVector)
-        .map(_.getBytes(UTF_8).length.toLong).sum
-      if (bytes <= execution.effectiveLimits.workAreaBytes.get / 8 &&
-          bytes <= execution.effectiveLimits.stdinBytes.get && bytes <= execution.effectiveLimits.stdoutBytes.get)
-        Consequence.unit
-      else Consequence.argumentLimitExceeded("purposeContent", execution.effectiveLimits.workAreaBytes.get / 8,
-        bytes, "git.purpose-candidate")
-    }
+    if (!valid) GitProgramDefinition.invalidC else Consequence.unit
   }
 
   private def _message_c(metadata: GitProgramMetadata): Consequence[String] = metadata.commitMessage match {

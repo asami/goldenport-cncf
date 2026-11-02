@@ -10,13 +10,15 @@ import java.util.zip.{CRC32, GZIPOutputStream}
 import scala.jdk.CollectionConverters.*
 import scala.util.Using
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId, ComponentOrigin}
-import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.config.{IoDefaultParameters, RuntimeConfig}
+import org.goldenport.cncf.action.Behavior
+import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork, UnitOfWorkInterpreter}
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.effect.ExternalEffectKind
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.Consequence
 import org.goldenport.cncf.resource.{ResourceReadLimits, ResourceTreeAccess, ResourceTreeQueryLimits, ResourceTreeSelection}
-import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.protocol.Protocol
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
@@ -28,13 +30,72 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Oct. 21, 2026
  *  version Oct. 29, 2026
  *  version Oct. 31, 2026
- * @version Nov.  2, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkspaceFileExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _id = WorkspaceId.parseC("project").toOption.get
   private val _target = FileTarget(_id)
   private val _owner = ComponentId("org.goldenport.spec.FileOwner")
+
+  "Resolved common File byte policy" should {
+    "accept exact read and write quantities and reject excess through the real File UoW" in {
+      Given("a resolved four-byte common default and an admitted real workspace")
+      _with_root { root =>
+        Files.writeString(root.resolve("equal"), "four")
+        Files.writeString(root.resolve("excess"), "extra")
+        val config = RuntimeConfig.from(ResolvedConfiguration(Configuration(Map(
+          IoDefaultParameters.KEY -> ConfigurationValue.StringValue("4")
+        )), ConfigurationTrace.empty))
+        val context = _context(root, configuration = Some(config))
+        val behavior = new FilePolicyBehavior(Behavior.Core(context, None, None))
+        val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(context))
+        When("the protected File programs read and write exact and excessive quantities")
+        val read = interpreter.run(behavior.readText(_target, _path("equal")))
+        val readexcess = interpreter.run(behavior.readText(_target, _path("excess")))
+        val text = interpreter.run(behavior.writeText(_target, _path("text"), "four", FileWriteMode.CreateNew))
+        val textexcess = interpreter.run(behavior.writeText(_target, _path("text-excess"), "extra", FileWriteMode.CreateNew))
+        val bytes = interpreter.run(behavior.writeBytes(_target, _path("bytes"), Vector.fill[Byte](4)(1)))
+        val bytesexcess = interpreter.run(behavior.writeBytes(_target, _path("bytes-excess"), Vector.fill[Byte](5)(1)))
+        Then("equal quantities succeed completely and excess writes leave no destination or staging file")
+        read.toOption.get.text shouldBe Some("four")
+        readexcess.isFaillure shouldBe true
+        text.toOption.get.outcome shouldBe FileWriteOutcome.Created
+        bytes.toOption.get.outcome shouldBe FileWriteOutcome.Created
+        Vector(textexcess.isFaillure, bytesexcess.isFaillure) shouldBe Vector(true, true)
+        _names(root) shouldBe Set("equal", "excess", "text", "bytes")
+      }
+    }
+
+    "permit larger writes independently while retaining read-bounded CAS observations and atomic outcomes" in {
+      Given("a four-byte common read cap, an eight-byte write override and a three-byte existing value")
+      _with_root { root =>
+        Files.writeString(root.resolve("edit"), "old")
+        val config = RuntimeConfig.from(ResolvedConfiguration(Configuration(Map(
+          IoDefaultParameters.KEY -> ConfigurationValue.StringValue("4"),
+          RuntimeConfig.RESOURCE_WRITE_MAX_BYTES_KEY -> ConfigurationValue.StringValue("8")
+        )), ConfigurationTrace.empty))
+        val context = _context(root, configuration = Some(config))
+        val behavior = new FilePolicyBehavior(Behavior.Core(context, None, None))
+        val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(context))
+        When("the protected UoW performs a larger CAS write and a larger binary create")
+        val updated = interpreter.run(behavior.writeText(_target, _path("edit"), "longer", FileWriteMode.UpdateExisting("old")))
+        val created = interpreter.run(behavior.writeBytes(_target, _path("bytes"), Vector.fill[Byte](8)(2)))
+        val unreadable = interpreter.run(behavior.readText(_target, _path("edit")))
+        val refused = interpreter.run(behavior.writeText(_target, _path("edit"), "next", FileWriteMode.UpdateExisting("longer")))
+        val conflict = interpreter.run(behavior.writeText(_target, _path("edit"), "new", FileWriteMode.CreateNew))
+        Then("writes use their own cap while CAS expected text and stored observations retain the read cap")
+        updated.toOption.get.outcome shouldBe FileWriteOutcome.Updated
+        created.toOption.get.outcome shouldBe FileWriteOutcome.Created
+        unreadable.isFaillure shouldBe true
+        refused.isFaillure shouldBe true
+        conflict.toOption.get.outcome shouldBe FileWriteOutcome.Conflict(FileWriteConflict.AlreadyExists)
+        Files.readString(root.resolve("edit")) shouldBe "longer"
+        Files.readAllBytes(root.resolve("bytes")).toVector shouldBe Vector.fill[Byte](8)(2)
+        _names(root) shouldBe Set("edit", "bytes")
+      }
+    }
+  }
 
   "Managed selected workspace snapshots" should {
     "rediscover additions deletions and renames under the same rule while retaining immutable prior bytes" in {
@@ -792,6 +853,15 @@ final class WorkspaceFileExecutionSpec extends AnyWordSpec with Matchers with Gi
     }
   }
 
+  private final class FilePolicyBehavior(val behaviorCore: Behavior.Core) extends Behavior {
+    def readText(target: FileTarget, path: WorkspaceFilePath): ExecUowM[FileReadTextResult] =
+      file_read_text(target, path)
+    def writeText(target: FileTarget, path: WorkspaceFilePath, text: String, mode: FileWriteMode): ExecUowM[FileWriteTextResult] =
+      file_write_text(target, path, text, mode)
+    def writeBytes(target: FileTarget, path: WorkspaceFilePath, bytes: Vector[Byte]): ExecUowM[FileWriteBytesResult] =
+      file_write_bytes(target, path, bytes, FileRepresentation.Identity)
+  }
+
   private def _path(value: String): WorkspaceFilePath = WorkspaceFilePath.parseC(value).toOption.get
 
   private def _gzip(bytes: Vector[Byte]): Vector[Byte] = {
@@ -811,11 +881,13 @@ final class WorkspaceFileExecutionSpec extends AnyWordSpec with Matchers with Gi
     permission: WorkspacePermission = WorkspacePermission.Manage,
     owner: ComponentId = _owner,
     cap: Int = 128,
-    global: Boolean = true
+    global: Boolean = true,
+    configuration: Option[RuntimeConfig] = None
   ): ExecutionContext = {
     val execution = ExecutionContext.create()
     val admission = WorkspaceExecutionAdmission.createC(Vector(_id -> root), Vector(WorkspaceGrant(_owner, _id, permission))).toOption.get
-    val runtime = if (global) GlobalRuntimeContext.create("file-spec", RuntimeConfig.default.copy(resourceReadLimits = ResourceReadLimits(cap)),
+    val runtime = if (global) GlobalRuntimeContext.create("file-spec", configuration.getOrElse(RuntimeConfig.default.copy(
+      resourceReadLimits = ResourceReadLimits(cap), resourceWriteLimits = ResourceReadLimits(cap))),
       ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty), execution.observability, AliasResolver.empty,
       workspaceAdmission = Some(admission))
     else ScopeContext(ScopeKind.Runtime, "no-global", None, execution.observability, workspaceExecutionAdmissionOption = Some(admission))

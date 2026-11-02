@@ -23,11 +23,119 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 28, 2026
- * @version Nov.  2, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import GitExecutionSpecSupport.*
+
+  private val _purpose_limits = limits.copy(executionTimeoutMillis = Some(30000L),
+    stdinBytes = Some(1048576L), stdoutBytes = Some(1048576L),
+    artifactBytes = Some(16777216L), workAreaBytes = Some(67108864L))
+
+  "E1 Purpose content uses distinct actual streams" should afterWord(
+    "in spec:process-execution-runtime, example:E1, rules:R6, phase:sync-runtime-20261103-01") {
+    "prepare and install an ordinary payload whose before and selected sum exceeds either stream budget" in {
+      Given("docs/spec/process-execution-runtime.md R6 E1: a real local Git repository and finite one MiB streams")
+      val driver = new LocalProcessExecutionDriver()
+      val fixture = create(driver = Some(driver), purposeLimits = _purpose_limits)
+      val text = "完全な本文を保持する\n" * 25000
+      val original = "既" + text.drop(1)
+      try {
+        initialize(fixture, Map("selected.txt" -> original))
+        Files.writeString(fixture.checkout.resolve("selected.txt"), text)
+        val parent = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        val index = GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption.get
+        val indexbytes = Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector
+        val request = GitPurposeRequest(parent, index, Vector(GitPurposeChange(
+          GitPath.parseC("selected.txt").toOption.get, Some(text), Some(text))))
+        val payloadbytes = text.getBytes(StandardCharsets.UTF_8).length.toLong
+        payloadbytes shouldBe 775000L
+        payloadbytes should be < _purpose_limits.stdinBytes.get
+        original.getBytes(StandardCharsets.UTF_8).length.toLong should be < _purpose_limits.stdoutBytes.get
+        (payloadbytes * 2L) should be > _purpose_limits.stdinBytes.get
+        (payloadbytes * 2L) should be > _purpose_limits.stdoutBytes.get
+        When("the owning typed Git UoW prepares the selected purpose")
+        val prepared = GitExecutionSpecSupport.execute(fixture, GitOperation.PreparePurposeCandidate(selectionId, request)).toOption.get
+        Then("actual bounded streams admit the candidate while preparation conserves HEAD and index bytes")
+        prepared.outcome shouldBe GitExecutionOutcome.Succeeded
+        val candidate = prepared.valueC.toOption.get
+        GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption shouldBe Some(parent)
+        Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector shouldBe indexbytes
+        When("the owning typed Git UoW separately installs that candidate")
+        val installed = GitExecutionSpecSupport.execute(fixture, GitOperation.CommitPurposeCandidate(selectionId, candidate)).toOption.get
+        Then("the real commit and projected index contain the complete selected content")
+        installed.outcome shouldBe GitExecutionOutcome.Succeeded
+        GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption shouldBe Some(candidate.commit)
+        GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption shouldBe Some(candidate.projectedIndex)
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe text
+      } finally { driver.close(); fixture.close() }
+    }
+  }
+
+  "E2 Purpose input retains its actual stdin ceiling" should afterWord(
+    "in spec:process-execution-runtime, example:E2, rules:R6, phase:sync-runtime-20261103-01") {
+    "reject a selected hash-object input larger than its stream grant while preserving HEAD and index" in {
+      Given("docs/spec/process-execution-runtime.md R6 E2: a real local Git purpose with a smaller finite stdin grant")
+      val driver = new LocalProcessExecutionDriver()
+      val fixture = create(driver = Some(driver), purposeLimits = _purpose_limits.copy(stdinBytes = Some(65536L)))
+      val text = "完全な本文を保持する\n" * 25000
+      try {
+        initialize(fixture, Map("selected.txt" -> "base\n"))
+        Files.writeString(fixture.checkout.resolve("selected.txt"), text)
+        val parent = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        val index = GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption.get
+        val indexbytes = Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector
+        val request = GitPurposeRequest(parent, index, Vector(GitPurposeChange(
+          GitPath.parseC("selected.txt").toOption.get, Some(text), Some(text))))
+        When("the owning typed Git UoW reaches the actual selected blob input")
+        val rejected = GitExecutionSpecSupport.execute(fixture, GitOperation.PreparePurposeCandidate(selectionId, request))
+        Then("actual stdin admission refuses the request without changing source staging or HEAD")
+        rejected.isFaillure shouldBe true
+        rejected match {
+          case Consequence.Failure(conclusion) =>
+            val diagnostic = org.goldenport.cncf.observability.ConclusionDiagnostics.classify(conclusion)
+            diagnostic.policy shouldBe Some("process.execution.stdin")
+            diagnostic.parameter shouldBe Some("input")
+          case _ => fail("Expected actual purpose stdin admission failure")
+        }
+        GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption shouldBe Some(parent)
+        Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector shouldBe indexbytes
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe text
+      } finally { driver.close(); fixture.close() }
+    }
+  }
+
+  "E3 Purpose output retains its actual stdout ceiling" should afterWord(
+    "in spec:process-execution-runtime, example:E3, rules:R6, phase:sync-runtime-20261103-01") {
+    "reject truncated actual cat-file output without producing a candidate or changing HEAD and index" in {
+      Given("docs/spec/process-execution-runtime.md R6 E3: a real large committed blob and a smaller finite stdout grant")
+      val driver = new LocalProcessExecutionDriver()
+      val fixture = create(driver = Some(driver), purposeLimits = _purpose_limits.copy(stdoutBytes = Some(65536L)))
+      val original = "完全な本文を保持する\n" * 25000
+      val text = "既" + original.drop(1)
+      try {
+        initialize(fixture, Map("selected.txt" -> original))
+        Files.writeString(fixture.checkout.resolve("selected.txt"), text)
+        val parent = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        val index = GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption.get
+        val indexbytes = Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector
+        val request = GitPurposeRequest(parent, index, Vector(GitPurposeChange(
+          GitPath.parseC("selected.txt").toOption.get, Some(text), Some(text))))
+        When("the owning typed Git UoW reads the actual committed blob through cat-file")
+        val rejected = GitExecutionSpecSupport.execute(fixture, GitOperation.PreparePurposeCandidate(selectionId, request)).toOption.get
+        Then("the incomplete actual capture cannot become a successful candidate")
+        rejected.outcome should not be GitExecutionOutcome.Succeeded
+        rejected.value shouldBe None
+        rejected.valueC.isFaillure shouldBe true
+        rejected.processResult.stdout.truncated shouldBe true
+        rejected.processResult.stdout.content.size should be <= 65536
+        GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption shouldBe Some(parent)
+        Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector shouldBe indexbytes
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe text
+      } finally { driver.close(); fixture.close() }
+    }
+  }
 
   "Purpose-specific native candidates" should {
     "commit originally unstaged shared-file content before independent staged content without changing excluded work" in {
@@ -1692,7 +1800,8 @@ private[cncf] object GitExecutionSpecSupport {
     selectedScopes: Vector[String] = Vector.empty,
     treeStdoutBytes: Long = limits.stdoutBytes.get,
     validationWorkspace: Boolean = false,
-    excludedOperations: Set[GitOperationKind] = Set.empty
+    excludedOperations: Set[GitOperationKind] = Set.empty,
+    purposeLimits: ProcessExecutionLimits = limits
   ): GitSpecFixture = {
     val base = Files.createDirectories(Paths.get("target", "git-execution-spec").toAbsolutePath)
     val root = Files.createTempDirectory(base, "case-")
@@ -1708,7 +1817,8 @@ private[cncf] object GitExecutionSpecSupport {
       val declared = declaration(kind, endpoint)
       val selected = declared.copy(
         limits = if (kind == GitOperationKind.PendingDiff) declared.limits.copy(stdoutBytes = Some(diffStdoutBytes))
-          else if (kind == GitOperationKind.TreeEntries) declared.limits.copy(stdoutBytes = Some(treeStdoutBytes)) else declared.limits,
+          else if (kind == GitOperationKind.TreeEntries) declared.limits.copy(stdoutBytes = Some(treeStdoutBytes))
+          else if (GitPurposeCandidateExecution.isPurpose(kind)) purposeLimits else declared.limits,
         selectedPath = if (declared.selectedPath.nonEmpty) Some(GitPath.parseC(selectedPath).toOption.get) else None,
         selectedPaths = if (declared.selectedPaths.nonEmpty)
           (if (selectedScopes.isEmpty) Vector(selectedPath) else selectedScopes).map(GitPath.parseC(_).toOption.get)

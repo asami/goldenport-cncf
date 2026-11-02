@@ -16,7 +16,8 @@ import org.goldenport.configuration.{CanonicalParameterId, ConfigurationParamete
 /*
  * @since   Aug.  3, 2026
  *  version Aug.  4, 2026
- * @version Oct. 31, 2026
+ *  version Oct. 31, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfConfigurationParameterCatalog private[config] (
@@ -504,8 +505,16 @@ object CncfConfigurationParameterCatalog {
     _take(CanonicalParameterId.parse(SUBSYSTEM_OPERATIONAL_OBSERVATION_PLAN_KEY)),
     org.goldenport.cncf.operationalobservation.OperationalObservationPlanCodec))
 
+  private val _io_default_maximum_bytes_parameter = _take(ConfigurationParameter.create(
+    _take(CanonicalParameterId.parse(IoDefaultParameters.KEY)), IoDefaultParameters.codec))
+
   private val _definitions =
     Vector(
+      _take(CncfConfigurationParameterDefinition.registered(
+        IoDefaultParameters.KEY, Vector.empty, _io_default_maximum_bytes_parameter,
+        Vector("common finite I/O default"), isConfidential = false,
+        Set(CncfConfigurationTargetKind.Global, CncfConfigurationTargetKind.SubsystemInstance)
+      )),
       _take(
         CncfConfigurationParameterDefinition.registered(
           SubsystemUserMode.CONFIGURATION_KEY,
@@ -603,6 +612,8 @@ object CncfConfigurationParameterCatalog {
         Set(CncfConfigurationTargetKind.SubsystemInstance)
       ))
     ) ++ JobDurableRuntimeConfiguration.definitions
+
+  val ioDefaultMaximumBytes: ConfigurationParameter[Long] = _io_default_maximum_bytes_parameter
 
   val subsystemUserMode: ConfigurationParameter[SubsystemUserMode] =
     _subsystem_user_mode_parameter
