@@ -23,7 +23,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 28, 2026
- * @version Nov.  3, 2026
+ *  version Nov.  3, 2026
+ * @version Nov.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -292,6 +293,156 @@ final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThe
           Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe content
         } finally { driver.close(); fixture.close() }
       }
+    }
+  }
+
+  "E4 Explicit same-hunk Purpose worktree projection" should afterWord(
+    "in spec:typed-git-execution, example:E4, rules:Purpose-specific-candidates, phase:sync-runtime-20261104-08") {
+    "keep the current candidate separate from an explicitly integrated later-purpose worktree" in {
+      Given("a prior candidate and a later-purpose edit overlapping the repaired assertion in the same hunk")
+      val driver = new LocalProcessExecutionDriver()
+      val fixture = create(driver = Some(driver), validationWorkspace = true)
+      val original = "mode=original\nactual shouldBe initial\n"
+      val prior = "mode=current\nactual shouldBe initial\n"
+      val captured = "mode=current\nactual shouldBe initial // independently intended later purpose\n"
+      val corrected = "mode=current\nactual shouldBe expected\n"
+      val integrated = "mode=current\nactual shouldBe expected // independently intended later purpose\n"
+      try {
+        initialize(fixture, Map("selected.txt" -> original, "unrelated.txt" -> "excluded original\n"))
+        Files.writeString(fixture.checkout.resolve("selected.txt"), captured)
+        Files.writeString(fixture.checkout.resolve("unrelated.txt"), "excluded ongoing work\n")
+        val parent = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        val index = GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption.get
+        val indexbytes = Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector
+        val path = GitPath.parseC("selected.txt").toOption.get
+        val baseline = GitExecutionSpecSupport.execute(fixture, GitOperation.PreparePurposeCandidate(selectionId,
+          GitPurposeRequest(parent, index, Vector(GitPurposeChange(path, Some(captured), Some(prior))))))
+          .toOption.get.valueC.toOption.get
+        val change = GitPurposeChange(path, Some(captured), Some(corrected),
+          Some(GitPurposeWorktreeProjection(Some(integrated))))
+        When("the owning UoW prepares and materializes the current correction with its distinct explicit root projection")
+        val candidate = GitExecutionSpecSupport.execute(fixture, GitOperation.PreparePurposeCandidate(selectionId,
+          GitPurposeRequest(parent, index, Vector(change), Some(baseline.tree)))).toOption.get.valueC.toOption.get
+        val materialized = GitExecutionSpecSupport.execute(fixture, GitOperation.MaterializePurposeCandidate(selectionId,
+          candidate, WorkspaceId.parseC("purpose-validation").toOption.get)).toOption.get
+        Then("normal candidate validation sees only the current purpose and the source remains untouched")
+        candidate.request.changes shouldBe Vector(change)
+        materialized.outcome shouldBe GitExecutionOutcome.Succeeded
+        Files.readString(fixture.root.resolve("validation/selected.txt")) shouldBe corrected
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe captured
+        Files.readString(fixture.checkout.resolve("unrelated.txt")) shouldBe "excluded ongoing work\n"
+        Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector shouldBe indexbytes
+        GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption shouldBe Some(parent)
+        When("the separate typed commit installs the exact reconstructed request")
+        val installed = GitExecutionSpecSupport.execute(fixture, GitOperation.CommitPurposeCandidate(selectionId, candidate)).toOption.get
+        Then("HEAD contains the current correction while the original worktree retains the integrated later meaning")
+        installed.outcome shouldBe GitExecutionOutcome.Succeeded
+        GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption shouldBe Some(candidate.commit)
+        GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption shouldBe Some(candidate.projectedIndex)
+        val entry = GitExecutionSpecSupport.execute(fixture, GitOperation.TreeEntries(candidate.tree, selectionId))
+          .toOption.get.valueC.toOption.get.find(_.path == path).get.entry.get
+        GitExecutionSpecSupport.execute(fixture, GitOperation.BlobContent(entry.blob)).toOption.get.valueC.toOption.get.text shouldBe Some(corrected)
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe integrated
+        Files.readString(fixture.checkout.resolve("unrelated.txt")) shouldBe "excluded ongoing work\n"
+        val remaining = GitExecutionSpecSupport.execute(fixture, GitOperation.Status).toOption.get.valueC.toOption.get
+        remaining.find(_.path == path).get.worktreeCode shouldBe 'M'
+      } finally { driver.close(); fixture.close() }
+    }
+
+    "refuse missing baselines and malformed explicit text without changing the observed source" in {
+      Given("a current candidate and malformed explicit projection requests over one admitted path")
+      val driver = new LocalProcessExecutionDriver()
+      val fixture = create(driver = Some(driver))
+      try {
+        initialize(fixture, Map("selected.txt" -> "original\n"))
+        val parent = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        val index = GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption.get
+        val indexbytes = Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector
+        val path = GitPath.parseC("selected.txt").toOption.get
+        Files.writeString(fixture.checkout.resolve("selected.txt"), "captured\n")
+        val change = GitPurposeChange(path, Some("captured\n"), Some("corrected\n"))
+        val malformed = Vector(
+          change.copy(worktreeProjection = null),
+          change.copy(worktreeProjection = Some(null)),
+          change.copy(worktreeProjection = Some(GitPurposeWorktreeProjection(null))),
+          change.copy(worktreeProjection = Some(GitPurposeWorktreeProjection(Some(null)))),
+          change.copy(worktreeProjection = Some(GitPurposeWorktreeProjection(Some("binary\u0000text")))),
+          change.copy(worktreeProjection = Some(GitPurposeWorktreeProjection(Some("\ud800")))))
+        val requests = malformed.map(value => GitPurposeRequest(parent, index, Vector(value), Some(index))) :+
+          GitPurposeRequest(parent, index, Vector(change.copy(worktreeProjection =
+            Some(GitPurposeWorktreeProjection(Some("integrated\n"))))))
+        When("the typed preparation receives each malformed request or an explicit projection without a baseline")
+        requests.foreach { request =>
+          GitExecutionSpecSupport.execute(fixture, GitOperation.PreparePurposeCandidate(selectionId, request)).isSuccess shouldBe false
+        }
+        Then("none can produce a candidate or mutate the actual source observations")
+        GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption shouldBe Some(parent)
+        Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector shouldBe indexbytes
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe "captured\n"
+      } finally { driver.close(); fixture.close() }
+    }
+
+    "refuse actual source drift and preserve a same-hunk staged conflict despite an explicit worktree resolution" in {
+      Given("independent actual drift and staged-conflict scenarios with otherwise valid explicit root projections")
+      Vector("drift", "staged-conflict").foreach { kind =>
+        val driver = new LocalProcessExecutionDriver()
+        val fixture = create(driver = Some(driver))
+        try {
+          initialize(fixture, Map("selected.txt" -> "original\n"))
+          val parent = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+          if (kind == "staged-conflict") {
+            Files.writeString(fixture.checkout.resolve("selected.txt"), "independent staged meaning\n")
+            setup(fixture.checkout, "add", "--", "selected.txt")
+          }
+          val index = GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption.get
+          val indexbytes = Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector
+          val actual = if (kind == "drift") "changed after capture\n" else "captured later meaning\n"
+          Files.writeString(fixture.checkout.resolve("selected.txt"), actual)
+          val change = GitPurposeChange(GitPath.parseC("selected.txt").toOption.get,
+            Some("captured later meaning\n"), Some("current correction\n"),
+            Some(GitPurposeWorktreeProjection(Some("integrated later meaning\n"))))
+          When("normal preparation checks actual source facts and projects the independent staged remainder")
+          val prepared = GitExecutionSpecSupport.execute(fixture, GitOperation.PreparePurposeCandidate(selectionId,
+            GitPurposeRequest(parent, index, Vector(change), Some(index))))
+          Then("an explicit root projection cannot bypass either refusal or modify source work")
+          if (kind == "drift") prepared.isSuccess shouldBe false
+          else {
+            val result = prepared.toOption.get
+            result.outcome shouldBe GitExecutionOutcome.Failed(1)
+            result.processResult.termination shouldBe ProcessExecutionTermination.Exited(1)
+            result.value shouldBe None
+          }
+          GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption shouldBe Some(parent)
+          Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector shouldBe indexbytes
+          Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe actual
+        } finally { driver.close(); fixture.close() }
+      }
+    }
+
+    "distinguish explicit root deletion from an absent projection" in {
+      Given("an existing selected file and an explicitly accepted root deletion after a current-purpose correction")
+      val driver = new LocalProcessExecutionDriver()
+      val fixture = create(driver = Some(driver))
+      try {
+        initialize(fixture, Map("selected.txt" -> "original\n"))
+        val parent = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        val index = GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption.get
+        val path = GitPath.parseC("selected.txt").toOption.get
+        Files.writeString(fixture.checkout.resolve("selected.txt"), "captured\n")
+        val request = GitPurposeRequest(parent, index, Vector(GitPurposeChange(path, Some("captured\n"), Some("corrected\n"),
+          Some(GitPurposeWorktreeProjection(None)))), Some(index))
+        When("the owning UoW prepares and separately installs the explicit deletion")
+        val candidate = GitExecutionSpecSupport.execute(fixture, GitOperation.PreparePurposeCandidate(selectionId, request))
+          .toOption.get.valueC.toOption.get
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe "captured\n"
+        val installed = GitExecutionSpecSupport.execute(fixture, GitOperation.CommitPurposeCandidate(selectionId, candidate)).toOption.get
+        Then("only the installed worktree is deleted while the accepted current candidate still contains its correction")
+        installed.outcome shouldBe GitExecutionOutcome.Succeeded
+        Files.exists(fixture.checkout.resolve("selected.txt")) shouldBe false
+        val entry = GitExecutionSpecSupport.execute(fixture, GitOperation.TreeEntries(candidate.tree, selectionId))
+          .toOption.get.valueC.toOption.get.find(_.path == path).get.entry.get
+        GitExecutionSpecSupport.execute(fixture, GitOperation.BlobContent(entry.blob)).toOption.get.valueC.toOption.get.text shouldBe Some("corrected\n")
+      } finally { driver.close(); fixture.close() }
     }
   }
 

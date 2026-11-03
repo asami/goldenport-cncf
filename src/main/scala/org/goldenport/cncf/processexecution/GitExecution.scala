@@ -238,7 +238,19 @@ enum GitOperation[A] {
   * Preparation never changes the source index, HEAD or worktree. The projected
   * index preserves the original staged delta after the accepted purpose commit.
   */
-final case class GitPurposeChange(path: GitPath, expectedWorktree: Option[String], content: Option[String])
+final case class GitPurposeWorktreeProjection(content: Option[String])
+final case class GitPurposeChange(path: GitPath, expectedWorktree: Option[String], content: Option[String],
+  worktreeProjection: Option[GitPurposeWorktreeProjection] = None) {
+  // Retain the three-argument JVM entry points for already compiled callers.
+  def this(path: GitPath, expectedWorktree: Option[String], content: Option[String]) =
+    this(path, expectedWorktree, content, None)
+  def copy(path: GitPath, expectedWorktree: Option[String], content: Option[String]): GitPurposeChange =
+    new GitPurposeChange(path, expectedWorktree, content, worktreeProjection)
+}
+object GitPurposeChange {
+  def apply(path: GitPath, expectedWorktree: Option[String], content: Option[String]): GitPurposeChange =
+    new GitPurposeChange(path, expectedWorktree, content, None)
+}
 final case class GitPurposeRequest(parent: GitObjectId, index: GitObjectId, changes: Vector[GitPurposeChange], baselineTree: Option[GitObjectId] = None)
 final case class GitPurposeCandidate(request: GitPurposeRequest, commit: GitObjectId, tree: GitObjectId,
   projectedIndex: GitObjectId, message: String, worktreeBefore: Option[GitObjectId] = None, worktreeAfter: Option[GitObjectId] = None)

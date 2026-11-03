@@ -197,6 +197,30 @@ independent staged changes. An optional baseline tree allows a selected repair
 to be projected onto the existing worktree while retaining its other content.
 Candidate values and object IDs express observations, not human acceptance.
 
+When the owning workflow has explicitly resolved an overlapping repair and a
+later purpose in the same hunk, `GitPurposeChange.worktreeProjection` may carry
+`GitPurposeWorktreeProjection(content)`. This requires a `baselineTree` and is
+bound to that change's admitted path. `expectedWorktree` still describes the
+actual source text before installation; `content` still contains only the
+current purpose's candidate text. The explicit projection supplies only the
+complete text for the eventual `worktreeAfter` tree, retaining the separately
+resolved later purpose. A present projection with `content = None` means an
+explicit deletion. An absent projection retains the existing three-way
+projection behavior; no missing projection is inferred from a candidate or
+treated as an explicit deletion.
+
+Explicit projection does not authorize a path or accept a workflow result.
+Ordinary Unicode/NUL, resource, selection and baseline-entry checks apply. It
+does not bypass the independent staged-remainder projection or stale source
+checks. The exact projection remains in the candidate's complete request and
+is reconstructed and checked again for materialization and installation.
+Neither preparation nor materialization installs the projected source text.
+The existing three-argument JVM constructor and companion `apply` remain
+available and create a change with no explicit projection. The three-argument
+`copy` entry point remains available and preserves the source change's explicit
+projection; the new four-argument case-class API remains the canonical complete
+request representation.
+
 Materialization requires a separately admitted Manage workspace that is empty,
 distinct from the source and outside its ancestry in either direction. It
 revalidates the candidate before creating its detached Git worktree. Installation
