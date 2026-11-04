@@ -146,6 +146,7 @@ import org.goldenport.cncf.processexecution.{
   SbtOperation,
   SbtTarget
 }
+import org.goldenport.cncf.processexecution.{ValidationCheckExecutionAttempt, ValidationCheckExecutionResult, ValidationCheckOperation, ValidationCheckTarget}
 
 /*
  * @since   Sep. 28, 2026
@@ -286,6 +287,12 @@ trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.
   private def _git_exec[A](target: GitTarget, operation: GitOperation[A]): ExecUowM[GitExecutionResult[A]] =
     ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.GitExec(target, operation)))
 
+
+  protected final def validation_check(target: ValidationCheckTarget): ExecUowM[ValidationCheckExecutionResult] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.ValidationCheckExec(target, ValidationCheckOperation.Run)))
+
+  protected final def validation_check_attempt(target: ValidationCheckTarget): ExecUowM[ValidationCheckExecutionAttempt] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.ValidationCheckExecAttempt(target, ValidationCheckOperation.Run)))
 
   protected final def sbt_compile(target: SbtTarget): ExecUowM[SbtExecutionResult] =
     _sbt_exec(target, SbtOperation.Compile)

@@ -21,6 +21,7 @@ import org.goldenport.cncf.blob.{
 }
 import org.goldenport.cncf.embedded.{EmbeddedDataStore, EmbeddedStatement, EmbeddedUpdateResult}
 import org.goldenport.cncf.processexecution.{GitExecutionResult, GitOperation, GitTarget, ProcessExecutionResult, ResolvedProcessExecution, SbtExecutionAttempt, SbtExecutionResult, SbtOperation, SbtTarget}
+import org.goldenport.cncf.processexecution.{ValidationCheckExecutionAttempt, ValidationCheckExecutionResult, ValidationCheckOperation, ValidationCheckTarget}
 import org.goldenport.cncf.operation.evaluation.OperationEvaluationSupplementalIntent
 import org.goldenport.cncf.oauth.OAuthConnectionRequest
 import org.goldenport.cncf.workflow.{ActionExecution, ProviderExecutionRequest, StateMachineProvidedApiRequest}
@@ -147,6 +148,16 @@ object UnitOfWorkOp {
   final case class ProcessExec(
     execution: ResolvedProcessExecution
   ) extends UnitOfWorkOp[ProcessExecutionResult]
+
+  final case class ValidationCheckExec(
+    target: ValidationCheckTarget,
+    operation: ValidationCheckOperation
+  ) extends UnitOfWorkOp[ValidationCheckExecutionResult]
+
+  final case class ValidationCheckExecAttempt(
+    target: ValidationCheckTarget,
+    operation: ValidationCheckOperation
+  ) extends UnitOfWorkOp[ValidationCheckExecutionAttempt]
 
   final case class SbtExec(
     target: SbtTarget,

@@ -15,6 +15,19 @@ import org.goldenport.cncf.workspace.*
  */
 private[cncf] final case class WorkspaceRuntimeDeclaration(identity: WorkspaceId, root: Path)
 
+private[cncf] final case class ValidationCheckRuntimeDeclaration(
+  target: WorkspaceId,
+  checkIdentity: ValidationCheckId,
+  purpose: ValidationCheckPurpose,
+  adapter: String,
+  capability: ProcessCapabilityId,
+  identity: String,
+  executable: Path,
+  fixedArguments: Vector[String],
+  limits: ProcessExecutionLimits,
+  environment: Map[String, String]
+)
+
 private[cncf] final case class SbtRuntimeDeclaration(
   target: WorkspaceId,
   operation: SbtOperation,
@@ -70,14 +83,15 @@ private[cncf] final class RuntimeProcessExecutionPlan private (
   val gitDeclarations: Vector[GitRuntimeDeclaration],
   val gitRepositoryDeclarations: Vector[GitRepositoryRuntimeDeclaration],
   val workspaceAdmissionOption: Option[WorkspaceExecutionAdmission],
-  private[cncf] val _io_default_omissions: Map[(String, Int), Set[String]] = Map.empty
+  private[cncf] val _io_default_omissions: Map[(String, Int), Set[String]] = Map.empty,
+  val validationCheckDeclarations: Vector[ValidationCheckRuntimeDeclaration] = Vector.empty
 ) {
   private[cncf] def _with_io_default_omissions(
     omissions: Map[(String, Int), Set[String]]
   ): RuntimeProcessExecutionPlan =
     new RuntimeProcessExecutionPlan(programs, grants, admission, schemaVersion,
       workspaceDeclarations, workspaceGrants, sbtDeclarations, gitDeclarations,
-      gitRepositoryDeclarations, workspaceAdmissionOption, omissions)
+      gitRepositoryDeclarations, workspaceAdmissionOption, omissions, validationCheckDeclarations)
 }
 
 private[cncf] object RuntimeProcessExecutionPlan {
@@ -102,7 +116,7 @@ private[cncf] object RuntimeProcessExecutionPlan {
         prior.flatMap(_ => ProcessExternalEffectPolicy.validateGenericDefinitionC(definition))
       }
       policy <- ProcessExecutionPolicy.createC(programs)
-      _ <- if (programs.forall(p => p._sbt_metadata.isEmpty && p._git_metadata.isEmpty &&
+      _ <- if (programs.forall(p => p._sbt_metadata.isEmpty && p._git_metadata.isEmpty && p._validation_check_metadata.isEmpty &&
           p.argumentPolicy.admission == ProcessArgumentAdmission.Template &&
           p.allowedInputFiles == p.allowedInputFilePaths.keySet && p.allowedResourceTrees.isEmpty) &&
           grants.values.flatten.forall(g => g.maximumLimits == ProcessExecutionLimits.empty && g.resourceTreeLimits.isEmpty))
@@ -148,6 +162,19 @@ private[cncf] object RuntimeProcessExecutionPlan {
     _create_semantic_c(programs, grants, workspaceDeclarations, workspaceGrants, sbtDeclarations,
       gitDeclarations, RuntimeProcessExecutionPlanCodec.SCHEMA_V5, gitRepositoryDeclarations)
 
+  def createV6C(
+    programs: Vector[ProcessProgramDefinition],
+    grants: Map[ComponentId, Vector[ProcessExecutionGrant]],
+    workspaceDeclarations: Vector[WorkspaceRuntimeDeclaration],
+    workspaceGrants: Vector[WorkspaceGrant],
+    sbtDeclarations: Vector[SbtRuntimeDeclaration],
+    gitDeclarations: Vector[GitRuntimeDeclaration],
+    gitRepositoryDeclarations: Vector[GitRepositoryRuntimeDeclaration],
+    validationCheckDeclarations: Vector[ValidationCheckRuntimeDeclaration]
+  ): Consequence[RuntimeProcessExecutionPlan] =
+    _create_semantic_c(programs, grants, workspaceDeclarations, workspaceGrants, sbtDeclarations,
+      gitDeclarations, RuntimeProcessExecutionPlanCodec.SCHEMA_V6, gitRepositoryDeclarations, validationCheckDeclarations)
+
   private def _create_semantic_c(
     programs: Vector[ProcessProgramDefinition],
     grants: Map[ComponentId, Vector[ProcessExecutionGrant]],
@@ -156,12 +183,13 @@ private[cncf] object RuntimeProcessExecutionPlan {
     sbtdeclarations: Vector[SbtRuntimeDeclaration],
     gitdeclarations: Vector[GitRuntimeDeclaration],
     schema: String,
-    gitrepositories: Vector[GitRepositoryRuntimeDeclaration] = Vector.empty
+    gitrepositories: Vector[GitRepositoryRuntimeDeclaration] = Vector.empty,
+    validationchecks: Vector[ValidationCheckRuntimeDeclaration] = Vector.empty
   ): Consequence[RuntimeProcessExecutionPlan] = for {
     // Generic restrictions apply to generic declarations alone, before the
     // semantic tags are combined with the existing process policy.
     _ <- createC(programs, grants.view.mapValues(_.filter(g => programs.exists(_.capability == g.capability))).toMap)
-    expanded <- _expand_repositories_c(programs, grants, sbtdeclarations, gitdeclarations, gitrepositories, workspacegrants)
+    expanded <- _expand_repositories_c(programs, grants, sbtdeclarations, gitdeclarations, gitrepositories, workspacegrants, validationchecks)
     allgit = gitdeclarations ++ expanded
     effectivegrants = grants.map { case (owner, values) => owner -> values.flatMap { grant =>
       gitrepositories.find(_.capability == grant.capability) match {
@@ -169,9 +197,10 @@ private[cncf] object RuntimeProcessExecutionPlan {
         case None => Vector(grant)
       }
     } }
-    _ <- if (programs.forall(p => p._sbt_metadata.isEmpty && p._git_metadata.isEmpty) &&
+    _ <- if (programs.forall(p => p._sbt_metadata.isEmpty && p._git_metadata.isEmpty && p._validation_check_metadata.isEmpty) &&
         sbtdeclarations.map(x => x.target -> x.operation).distinct.size == sbtdeclarations.size &&
         gitdeclarations.map(x => (x.target, x.operation, x.selectionId)).distinct.size == gitdeclarations.size &&
+        validationchecks.map(x => x.target -> x.checkIdentity).distinct.size == validationchecks.size &&
         grants.keys.forall(owner => owner != null && ComponentId.parseC(owner.name).isSuccess) &&
         workspacedeclarations.forall(x => WorkspaceId.parseC(x.identity.value).isSuccess) &&
         workspacegrants.forall(g => g.componentId != null && ComponentId.parseC(g.componentId.name).isSuccess) &&
@@ -210,12 +239,26 @@ private[cncf] object RuntimeProcessExecutionPlan {
         declaration.remoteBranch, declaration.endpoint, declaration.commitIdentity, declaration.selectionId,
         declaration.selectedPath, declaration.commitMessage, declaration.limits, declaration.environment, declaration.selectedPaths)
     } yield values :+ definition }
-    tagged = sbttagged ++ gittagged
+    checktagged <- validationchecks.foldLeft(Consequence.success(Vector.empty[ProcessProgramDefinition])) { (prior, declaration) => for {
+      values <- prior
+      _ <- WorkspaceId.parseC(declaration.target.value)
+      binding <- workspace.bindingC(declaration.target)
+      definition <- ValidationCheckProgramDefinition.createC(binding, declaration.checkIdentity, declaration.purpose, declaration.adapter,
+        declaration.capability, declaration.identity, declaration.executable, declaration.fixedArguments,
+        declaration.limits, declaration.environment)
+    } yield values :+ definition }
+    tagged = sbttagged ++ gittagged ++ checktagged
+    _ <- if (schema != RuntimeProcessExecutionPlanCodec.SCHEMA_V6 ||
+        (programs ++ tagged).map(_.safeProgramIdentity).distinct.size == (programs ++ tagged).size)
+      Consequence.unit else Consequence.configurationInvalid("Runtime process safe identities must be unique across all program families")
     policy <- ProcessExecutionPolicy.createC(programs ++ tagged)
     _ <- if (effectivegrants.values.flatten.forall(g => (programs ++ tagged).exists(_.capability == g.capability)))
       Consequence.unit else Consequence.configurationInvalid("Process grants require declared runtime programs")
     _ <- if (grants.forall { case (owner, values) => values.forall { grant =>
       sbtdeclarations.filter(_.capability == grant.capability).forall { declaration =>
+        workspacegrants.exists(g => g.componentId == owner && g.workspaceId == declaration.target &&
+          g.permission == WorkspacePermission.Manage)
+      } && validationchecks.filter(_.capability == grant.capability).forall { declaration =>
         workspacegrants.exists(g => g.componentId == owner && g.workspaceId == declaration.target &&
           g.permission == WorkspacePermission.Manage)
       } && gitdeclarations.filter(_.capability == grant.capability).forall { declaration =>
@@ -225,7 +268,8 @@ private[cncf] object RuntimeProcessExecutionPlan {
     } }) Consequence.unit else Consequence.configurationInvalid("Build process grants require the same owner's Manage workspace grant")
     admission <- ProcessExecutionAdmission.forComponentsC(policy, effectivegrants)
   } yield new RuntimeProcessExecutionPlan(programs, grants, admission,
-    schema, workspacedeclarations, workspacegrants, sbtdeclarations, gitdeclarations, gitrepositories, Some(workspace))
+    schema, workspacedeclarations, workspacegrants, sbtdeclarations, gitdeclarations, gitrepositories, Some(workspace),
+    validationCheckDeclarations = validationchecks)
 
   private def _expand_repositories_c(
     programs: Vector[ProcessProgramDefinition],
@@ -233,7 +277,8 @@ private[cncf] object RuntimeProcessExecutionPlan {
     sbtdeclarations: Vector[SbtRuntimeDeclaration],
     gitdeclarations: Vector[GitRuntimeDeclaration],
     repositories: Vector[GitRepositoryRuntimeDeclaration],
-    workspacegrants: Vector[WorkspaceGrant]
+    workspacegrants: Vector[WorkspaceGrant],
+    validationchecks: Vector[ValidationCheckRuntimeDeclaration] = Vector.empty
   ): Consequence[Vector[GitRuntimeDeclaration]] = for {
     _ <- if (repositories.forall(x => x.capability != null &&
         x.capability.print.matches("[a-z][a-z0-9-]{0,31}") && x.identity != null &&
@@ -254,11 +299,11 @@ private[cncf] object RuntimeProcessExecutionPlan {
         None, None, None, repository.limits, executable._2) }
     } yield expanded }
     capabilities = programs.map(_.capability) ++ sbtdeclarations.map(_.capability) ++
-      gitdeclarations.map(_.capability) ++ repositories.map(_.capability) ++ expanded.map(_.capability)
+      gitdeclarations.map(_.capability) ++ validationchecks.map(_.capability) ++ repositories.map(_.capability) ++ expanded.map(_.capability)
     identities = programs.map(_.safeProgramIdentity) ++ sbtdeclarations.map(_.identity) ++
-      gitdeclarations.map(_.identity) ++ repositories.map(_.identity) ++ expanded.map(_.identity)
+      gitdeclarations.map(_.identity) ++ validationchecks.map(_.identity) ++ repositories.map(_.identity) ++ expanded.map(_.identity)
     publiccapabilities = (programs.map(_.capability) ++ sbtdeclarations.map(_.capability) ++
-      gitdeclarations.map(_.capability) ++ repositories.map(_.capability)).toSet
+      gitdeclarations.map(_.capability) ++ validationchecks.map(_.capability) ++ repositories.map(_.capability)).toSet
     _ <- if (repositories.isEmpty || (capabilities.distinct.size == capabilities.size && identities.distinct.size == identities.size))
       Consequence.unit else Consequence.configurationInvalid("Git repository capability or identity collision")
     _ <- if (grants.values.flatten.forall(g => publiccapabilities.contains(g.capability))) Consequence.unit

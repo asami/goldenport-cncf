@@ -41,6 +41,8 @@ import org.goldenport.cncf.processexecution.{
   SbtExecutionAdmission,
   SbtExecutionAttempt,
   SbtExecutionResult,
+  ValidationCheckExecutionAdmission,
+  ValidationCheckExecutionAttempt,
   GitExecutionAdmission
 }
 import org.goldenport.configuration.ConfigurationValue
@@ -1361,6 +1363,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     case UnitOfWorkOp.ProcessExec(execution) =>
       SbtExecutionAdmission.validateGenericExecutionC(execution).flatMap(_ =>
         GitExecutionAdmission.validateGenericExecutionC(execution)).flatMap(_ =>
+        ValidationCheckExecutionAdmission.validateGenericExecutionC(execution)).flatMap(_ =>
         ProcessExternalEffectPolicy.validateGenericDefinitionC(execution.definition)).flatMap { _ =>
         _with_process_execution_calltree(execution) {
           _execute_process_c(execution)
@@ -1395,6 +1398,30 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     case UnitOfWorkOp.FileWriteText(target, path, text, mode) =>
       _with_calltree("uow:file:write-text") {
         org.goldenport.cncf.workspace.WorkspaceFileExecution.writeTextC(uow.executionContext, target, path, text, mode)
+      }
+
+    case UnitOfWorkOp.ValidationCheckExec(target, operation) =>
+      _with_calltree("uow:validation-check:execute") {
+        ValidationCheckExecutionAdmission.resolveC(uow.executionContext, target, operation).flatMap { execution =>
+          _with_process_execution_calltree(execution) {
+            _execute_process_c(execution)
+          }.map(result => ValidationCheckExecutionAdmission.decode(target, operation, execution, result))
+        }
+      }
+
+    case UnitOfWorkOp.ValidationCheckExecAttempt(target, operation) =>
+      _with_calltree("uow:validation-check:attempt") {
+        ValidationCheckExecutionAdmission.resolveC(uow.executionContext, target, operation) match {
+          case Consequence.Failure(conclusion) =>
+            Consequence.success[ValidationCheckExecutionAttempt](ValidationCheckExecutionAttempt.AdmissionRejected(target, operation, conclusion))
+          case Consequence.Success(execution) =>
+            _with_process_execution_calltree(execution) {
+              _execute_process_c(execution)
+            }.map[ValidationCheckExecutionAttempt](result =>
+              ValidationCheckExecutionAttempt.Observed(ValidationCheckExecutionAdmission.decode(target, operation, execution, result))
+            ).recoverWith(conclusion =>
+              Consequence.success[ValidationCheckExecutionAttempt](ValidationCheckExecutionAttempt.Uncertain(target, operation, conclusion)))
+        }
       }
 
     case UnitOfWorkOp.SbtExec(target, operation) =>

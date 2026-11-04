@@ -76,7 +76,7 @@ object ProcessExternalEffectPolicy {
 
   /** Only CNCF-owned semantic tags establish the Managed route. */
   def classifyDefinition(definition: ProcessProgramDefinition): ExternalEffectClassification =
-    if (definition._sbt_metadata.nonEmpty)
+    if (definition._sbt_metadata.nonEmpty || definition._validation_check_metadata.nonEmpty)
       ExternalEffectClassification(Set(ExternalEffectKind.Build), ExternalEffectRoute.Managed)
     else definition._git_metadata match {
       case Some(metadata) =>
