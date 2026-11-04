@@ -6,13 +6,15 @@ import io.circe.{Json, JsonObject}
 import io.circe.jawn.JawnParser
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.ComponentId
+import org.goldenport.cncf.config.IoDefaultParameters
 import org.goldenport.cncf.workspace.*
 import org.goldenport.configuration.{ConfigurationValue, ConfigurationValueCodec}
 
 /** Host wire contract: complete literal/lower-hex vectors only, never arbitrary shell text. */
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 28, 2026
+ *  version Oct. 28, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValueCodec[RuntimeProcessExecutionPlan] {
@@ -20,9 +22,12 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
   val SCHEMA_V2 = "cncf.runtime-process-execution.v2"
   val SCHEMA_V3 = "cncf.runtime-process-execution.v3"
   val SCHEMA_V5 = "cncf.runtime-process-execution.v5"
+  val SCHEMA_V6 = "cncf.runtime-process-execution.v6"
   private val _parser = JawnParser(allowDuplicateKeys = false)
   private val _limit_names = Vector("launchTimeoutMillis", "executionTimeoutMillis", "terminationGraceMillis",
     "stdinBytes", "stdoutBytes", "stderrBytes", "argumentCount", "argumentBytes", "artifactCount", "artifactBytes", "workAreaBytes")
+  private val _io_limit_names = Set("stdinBytes", "stdoutBytes", "stderrBytes")
+  private val _io_program_names = Vector("programs", "sbtPrograms", "gitPrograms", "gitRepositories", "validationChecks")
 
   def decode(value: ConfigurationValue): Consequence[RuntimeProcessExecutionPlan] = value match {
     case ConfigurationValue.StringValue(text) =>
@@ -35,6 +40,7 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
           case SCHEMA_V2 => Right(Set("schema", "programs", "grants", "workspaces", "workspaceGrants", "sbtPrograms"))
           case SCHEMA_V3 => Right(Set("schema", "programs", "grants", "workspaces", "workspaceGrants", "sbtPrograms", "gitPrograms"))
           case SCHEMA_V5 => Right(Set("schema", "programs", "grants", "workspaces", "workspaceGrants", "sbtPrograms", "gitPrograms", "gitRepositories"))
+          case SCHEMA_V6 => Right(Set("schema", "programs", "grants", "workspaces", "workspaceGrants", "sbtPrograms", "gitPrograms", "gitRepositories", "validationChecks"))
           case _ => Left("Unsupported runtime process schema")
         }
         root <- _fields(json, names)
@@ -46,22 +52,26 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
         plan <- if (schema == SCHEMA) _valid(RuntimeProcessExecutionPlan.createC(programs, grants.toMap))
           else for {
             workspacevalues <- _array(root, "workspaces")
-            workspaces <- _sequence(workspacevalues.map(x => _workspace(x, schema == SCHEMA_V3 || schema == SCHEMA_V5)))
+            workspaces <- _sequence(workspacevalues.map(x => _workspace(x, schema == SCHEMA_V3 || schema == SCHEMA_V5 || schema == SCHEMA_V6)))
             workspacegrantvalues <- _array(root, "workspaceGrants")
             workspacegrants <- _sequence(workspacegrantvalues.map(_workspace_grant))
             sbtvalues <- _array(root, "sbtPrograms")
             sbt <- _sequence(sbtvalues.map(_sbt_program))
-            git <- if (schema == SCHEMA_V3 || schema == SCHEMA_V5) _array(root, "gitPrograms").flatMap(xs => _sequence(xs.map(_git_program)))
+            git <- if (schema == SCHEMA_V3 || schema == SCHEMA_V5 || schema == SCHEMA_V6) _array(root, "gitPrograms").flatMap(xs => _sequence(xs.map(_git_program)))
               else Right(Vector.empty[GitRuntimeDeclaration])
-            repositories <- if (schema == SCHEMA_V5) _array(root, "gitRepositories").flatMap(xs => _sequence(xs.map(_git_repository)))
+            repositories <- if (schema == SCHEMA_V5 || schema == SCHEMA_V6) _array(root, "gitRepositories").flatMap(xs => _sequence(xs.map(_git_repository)))
               else Right(Vector.empty[GitRepositoryRuntimeDeclaration])
-            value <- if (schema == SCHEMA_V5)
+            checks <- if (schema == SCHEMA_V6) _array(root, "validationChecks").flatMap(xs => _sequence(xs.map(_validation_check)))
+              else Right(Vector.empty[ValidationCheckRuntimeDeclaration])
+            value <- if (schema == SCHEMA_V6)
+              _valid(RuntimeProcessExecutionPlan.createV6C(programs, grants.toMap, workspaces, workspacegrants, sbt, git, repositories, checks))
+              else if (schema == SCHEMA_V5)
               _valid_v5(RuntimeProcessExecutionPlan.createV5C(programs, grants.toMap, workspaces, workspacegrants, sbt, git, repositories))
               else _valid(if (schema == SCHEMA_V3)
               RuntimeProcessExecutionPlan.createV3C(programs, grants.toMap, workspaces, workspacegrants, sbt, git)
               else RuntimeProcessExecutionPlan.createV2C(programs, grants.toMap, workspaces, workspacegrants, sbt))
           } yield value
-      } yield plan
+      } yield plan._with_io_default_omissions(_io_omissions(json))
       result.fold(Consequence.configurationInvalid, Consequence.success)
     case _ => Consequence.configurationInvalid("Runtime process plan requires a JSON string")
   }
@@ -97,13 +107,83 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
           case WorkspacePermission.Manage => "manage"
         })))))
       .add("sbtPrograms", Json.fromValues(plan.sbtDeclarations.map(_sbt_json))))
-    val gitroot = if (plan.schemaVersion == SCHEMA_V3 || plan.schemaVersion == SCHEMA_V5)
+    val gitroot = if (plan.schemaVersion == SCHEMA_V3 || plan.schemaVersion == SCHEMA_V5 || plan.schemaVersion == SCHEMA_V6)
       semantic.mapObject(_.add("gitPrograms", Json.fromValues(plan.gitDeclarations.map(_git_json)))) else semantic
-    val root = if (plan.schemaVersion == SCHEMA_V5)
+    val repositoryroot = if (plan.schemaVersion == SCHEMA_V5 || plan.schemaVersion == SCHEMA_V6)
       gitroot.mapObject(_.add("gitRepositories", Json.fromValues(plan.gitRepositoryDeclarations.map(_git_repository_json)))) else gitroot
-    val encoded = ConfigurationValue.StringValue(root.noSpaces)
+    val root = if (plan.schemaVersion == SCHEMA_V6)
+      repositoryroot.mapObject(_.add("validationChecks", Json.fromValues(plan.validationCheckDeclarations.map(_validation_check_json)))) else repositoryroot
+    val declared = _map_io_limits(root, (name, index, limits) =>
+      plan._io_default_omissions.getOrElse(name -> index, Set.empty).foldLeft(limits)((obj, field) => obj.remove(field)))
+    val encoded = ConfigurationValue.StringValue(declared.noSpaces)
     Consequence.success(encoded)
   }
+
+  def resolveIoDefaultsC(plan: RuntimeProcessExecutionPlan, commonBytes: Long): Consequence[RuntimeProcessExecutionPlan] =
+    IoDefaultParameters.codec.encode(commonBytes).flatMap { _ =>
+      encode(plan).flatMap {
+        case ConfigurationValue.StringValue(text) =>
+          val parsed = _parser.parse(text).left.map(_ => "Invalid runtime process JSON")
+          parsed.fold(Consequence.configurationInvalid, json => {
+            val resolved = _map_io_limits(json, (_, _, limits) =>
+              _io_limit_names.foldLeft(limits) { (obj, name) =>
+                if (obj.contains(name)) obj else obj.add(name, Json.fromLong(commonBytes))
+              })
+            decode(ConfigurationValue.StringValue(resolved.noSpaces))
+          })
+        case _ => Consequence.configurationInvalid("Runtime process plan requires a JSON string")
+      }
+    }
+
+  private def _io_omissions(json: Json): Map[(String, Int), Set[String]] =
+    _io_program_names.flatMap { name =>
+      json.hcursor.downField(name).focus.flatMap(_.asArray).toVector.flatten.zipWithIndex.flatMap {
+        case (entry, index) => entry.hcursor.downField("limits").focus.flatMap(_.asObject).flatMap { limits =>
+          val omitted = _io_limit_names -- limits.keys.toSet
+          Option.when(omitted.nonEmpty)((name -> index) -> omitted)
+        }
+      }
+    }.toMap
+
+  private def _map_io_limits(json: Json, transform: (String, Int, JsonObject) => JsonObject): Json =
+    _io_program_names.foldLeft(json) { (root, name) =>
+      root.asObject.flatMap(_(name)).flatMap(_.asArray).fold(root) { entries =>
+        root.mapObject(_.add(name, Json.fromValues(entries.zipWithIndex.map { case (entry, index) =>
+          entry.mapObject { obj => obj("limits").flatMap(_.asObject).fold(obj) { limits =>
+            obj.add("limits", Json.fromJsonObject(transform(name, index, limits)))
+          } }
+        })))
+      }
+    }
+
+  private def _validation_check(json: Json): Either[String, ValidationCheckRuntimeDeclaration] = for {
+    obj <- _fields(json, Set("target", "checkIdentity", "purpose", "adapter", "capability", "identity", "executable", "fixedArguments", "limits", "environment"))
+    targettext <- _string(obj, "target")
+    target <- _valid(WorkspaceId.parseC(targettext))
+    checktext <- _string(obj, "checkIdentity")
+    check <- _valid(ValidationCheckId.parseC(checktext))
+    purposetext <- _string(obj, "purpose")
+    purpose <- ValidationCheckPurpose.values.find(_.wireName == purposetext).toRight("Unsupported validation check purpose")
+    adapter <- _string(obj, "adapter")
+    _ <- Either.cond(adapter == ValidationCheckProgramDefinition.ADAPTER, (), "Unsupported validation check adapter")
+    capabilitytext <- _string(obj, "capability")
+    capability <- _valid(ProcessCapabilityId.parseC(capabilitytext))
+    _ <- Either.cond(capability.print == capabilitytext, (), "Noncanonical validation check capability")
+    identity <- _string(obj, "identity")
+    executabletext <- _string(obj, "executable")
+    executable <- _absolute_path(executabletext)
+    arguments <- _string_array(obj, "fixedArguments")
+    limits <- _decode_limits(obj("limits").get)
+    environment <- _string_map(obj("environment").get)
+  } yield ValidationCheckRuntimeDeclaration(target, check, purpose, adapter, capability, identity, executable, arguments, limits, environment)
+
+  private def _validation_check_json(x: ValidationCheckRuntimeDeclaration): Json = Json.obj(
+    "target" -> Json.fromString(x.target.print), "checkIdentity" -> Json.fromString(x.checkIdentity.print),
+    "purpose" -> Json.fromString(x.purpose.wireName),
+    "adapter" -> Json.fromString(x.adapter), "capability" -> Json.fromString(x.capability.print),
+    "identity" -> Json.fromString(x.identity), "executable" -> Json.fromString(x.executable.toString),
+    "fixedArguments" -> _strings(x.fixedArguments), "limits" -> _limits_json(x.limits),
+    "environment" -> Json.obj(x.environment.toVector.map { case (k, v) => k -> Json.fromString(v) }*))
 
   private def _sbt_json(x: SbtRuntimeDeclaration): Json = {
     val base = Json.obj(
@@ -325,8 +405,12 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
     _ <- Either.cond(capabilities.distinct.size == capabilities.size, (), "Duplicate process grant")
   } yield owner -> capabilities.map(ProcessExecutionGrant(_))
   private def _decode_limits(json: Json): Either[String, ProcessExecutionLimits] = for {
-    obj <- _fields(json, _limit_names.toSet)
-    values <- _sequence(_limit_names.map(name => obj(name).flatMap(_.asNumber).flatMap(_.toLong)
+    obj <- json.asObject.filter(_.keys.toSet.subsetOf(_limit_names.toSet))
+      .toRight("Invalid runtime process object fields")
+    values <- _sequence(_limit_names.map(name => obj(name).orElse(
+      Option.when(_io_limit_names.contains(name))(
+        Json.fromLong(IoDefaultParameters.BUILTIN_MAXIMUM_BYTES.toLong)))
+      .flatMap(_.asNumber).flatMap(_.toLong)
       .filter(_ > 0L).toRight("Process limits require finite positive integers")))
   } yield ProcessExecutionLimits(Some(values(0)), Some(values(1)), Some(values(2)), Some(values(3)), Some(values(4)),
     Some(values(5)), Some(values(6)), Some(values(7)), Some(values(8)), Some(values(9)), Some(values(10)))

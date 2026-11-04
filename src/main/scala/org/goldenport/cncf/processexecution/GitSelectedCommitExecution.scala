@@ -5,7 +5,8 @@ import org.goldenport.cncf.context.ExecutionContext
 
 /*
  * @since   Oct. 24, 2026
- * @version Oct. 29, 2026
+ *  version Oct. 29, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object GitSelectedCommitExecution {
@@ -209,8 +210,11 @@ private[cncf] object GitPurposeCandidateExecution {
         case None => _success(change.content)
         case Some(tree) => _entry_c(execution, run, tree, change.path).flatMap(_content_c(execution, run, _))
       }
-      after <- if (request.baselineTree.isEmpty) _success(change.expectedWorktree)
-        else _project_c(execution, run, directory, baseline, change.expectedWorktree, change.content)
+      after <- change.worktreeProjection match {
+        case Some(projection) => _success(projection.content)
+        case None if request.baselineTree.isEmpty => _success(change.expectedWorktree)
+        case None => _project_c(execution, run, directory, baseline, change.expectedWorktree, change.content)
+      }
     } yield values :+ Projection(change.path, original.fold("100644")(_.mode), change.expectedWorktree, after) }
     beforeworktree <- _tree_c(execution, run, directory.resolve("worktree-before-index"), request.parent, working, false)
     afterworktree <- _tree_c(execution, run, directory.resolve("worktree-after-index"), request.parent, working, true)
@@ -247,20 +251,13 @@ private[cncf] object GitPurposeCandidateExecution {
       request.changes != null && request.changes.nonEmpty && request.changes.size <= 256 &&
       request.changes.forall(change => change != null && change.path != null &&
         GitPath.parseC(change.path.value).isSuccess && change.expectedWorktree != null && change.content != null &&
-        Vector(change.expectedWorktree, change.content).flatten.forall(text => text != null &&
+        change.worktreeProjection != null && change.worktreeProjection.forall(projection =>
+          projection != null && projection.content != null && request.baselineTree.nonEmpty) &&
+        (Vector(change.expectedWorktree, change.content) ++ change.worktreeProjection.map(_.content)).flatten.forall(text => text != null &&
           !text.contains('\u0000') && UTF_8.newEncoder().canEncode(text)) &&
         metadata.selectedPaths.exists(scope => change.path == scope || change.path.value.startsWith(scope.value + "/"))) &&
       request.changes.map(_.path).distinct.size == request.changes.size
-    if (!valid) GitProgramDefinition.invalidC
-    else {
-      val bytes = request.changes.flatMap(change => change.expectedWorktree.toVector ++ change.content.toVector)
-        .map(_.getBytes(UTF_8).length.toLong).sum
-      if (bytes <= execution.effectiveLimits.workAreaBytes.get / 8 &&
-          bytes <= execution.effectiveLimits.stdinBytes.get && bytes <= execution.effectiveLimits.stdoutBytes.get)
-        Consequence.unit
-      else Consequence.argumentLimitExceeded("purposeContent", execution.effectiveLimits.workAreaBytes.get / 8,
-        bytes, "git.purpose-candidate")
-    }
+    if (!valid) GitProgramDefinition.invalidC else Consequence.unit
   }
 
   private def _message_c(metadata: GitProgramMetadata): Consequence[String] = metadata.commitMessage match {

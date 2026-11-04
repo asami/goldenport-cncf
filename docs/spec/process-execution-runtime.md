@@ -77,6 +77,52 @@ execution has finite limits for launch/total duration, termination interval,
 stdin, stdout, stderr, argument count/size, artifact count/size, and total
 WorkArea size.
 
+### Host stream defaults and actual resource quantities
+
+R5: CNCF owns `cncf.io.default-maximum-bytes`, a strict positive integral Long
+with a built-in value of **1,048,576 bytes (1 MiB)**. Each individual file or
+stream setting takes precedence over the common property, which takes precedence
+over the built-in value. The common value is a default, not a cap over explicit
+settings. Integral configuration numbers and strict digit strings are admitted;
+null, booleans, fractions, zero, negative values and overflow MUST be rejected,
+even when individual file settings are present. The common property is admitted
+for Global and SubsystemInstance targets without aliases.
+
+In the runtime process-plan codec, omitted `stdinBytes`, `stdoutBytes` and
+`stderrBytes` initially acquire the shared built-in finite value while retaining
+their exact declaration omissions. This applies to generic programs, SBT and
+Git programs, and normal V5 Git repository declarations. Unresolved declaration
+encoding MUST retain those omissions through typed configuration normalization.
+Activation MUST fill only those omitted streams from the resolved common value,
+then strictly decode a finite plan with no retained omissions. Explicit finite
+positive integer values, including an explicit 1 MiB, MUST remain authoritative
+under a different common value. Null, booleans, fractions, zero, negative values
+and unknown fields MUST be rejected. The other eight limit fields remain
+mandatory finite positive integers. Resolved encoding emits all eleven limits.
+This wire omission rule MUST NOT populate optional grant/request fields or change
+`ProcessExecutionLimits.empty`; grants and requests retain their existing
+tightening semantics.
+
+R6: CNCF owns resource admission for typed Git purpose execution. A subprocess's
+actual stdin and actual stdout are separate quantities. The sum of a request's
+`expectedWorktree` and proposed `content` MUST NOT be compared against either
+stream ceiling or treated as a synthetic WorkArea quantity. Each actual step
+MUST retain request-input validation, bounded output capture and complete
+termination/capture checks. Truncated output MUST NOT yield a successful
+candidate. Existing shape, selected-path scope, uniqueness, UTF-8 and NUL checks,
+the finite individual worktree-read guard (`workAreaBytes / 8`) and actual final
+WorkArea accounting remain in force. WorkArea aggregate bytes remain a distinct
+resource budget.
+
+`GitExecutionSpec` pairs R6 with E1 (775,000-byte ordinary UTF-8 preparation and
+installation, preserving HEAD/index before installation despite a combined
+1,550,000-byte request), E2 (actual stdin rejection), and E3 (actual `cat-file`
+stdout truncation rejection). `RuntimeProcessExecutionPlanCodecSpec` pairs R5
+with E4 (all three streams across all declaration kinds, omission-preserving round
+trip and activation), E5 (independent
+explicit overrides), E6 (strict invalid/missing-other rejection), and E7
+(unchanged empty/grant/request tightening).
+
 Environment values are runtime-built. A definition may classify names as fixed,
 explicitly inherited, confidential runtime-resolved, caller-overridable with a
 validator, or forbidden. A request can set only explicitly overridable names.

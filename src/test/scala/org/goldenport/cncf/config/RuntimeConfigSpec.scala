@@ -21,7 +21,8 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Apr. 28, 2026
  *  version Jun. 19, 2026
  *  version Jul. 30, 2026
- * @version Oct. 23, 2026
+ *  version Oct. 23, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -36,6 +37,61 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers with GivenWhenTh
       Then("both paths retain the same finite default policy")
       parsed.resourceReadLimits shouldBe ResourceReadLimits(1048576)
       RuntimeConfig.default.resourceReadLimits shouldBe parsed.resourceReadLimits
+      parsed.resourceWriteLimits shouldBe parsed.resourceReadLimits
+      parsed.ioDefaultMaximumBytes shouldBe 1048576L
+      RuntimeConfig.default.resourceWriteLimits shouldBe parsed.resourceWriteLimits
+    }
+
+    "inherit one common file default and independently prefer explicit read and write values" in {
+      Given("a common byte limit and independently selected file overrides above and below it")
+      val configurations = Vector(
+        Map(IoDefaultParameters.KEY -> "7"),
+        Map(IoDefaultParameters.KEY -> "7", RuntimeConfig.RESOURCE_READ_MAX_BYTES_KEY -> "3"),
+        Map(IoDefaultParameters.KEY -> "7", RuntimeConfig.RESOURCE_WRITE_MAX_BYTES_KEY -> "11"),
+        Map(IoDefaultParameters.KEY -> "7", RuntimeConfig.RESOURCE_READ_MAX_BYTES_KEY -> "11",
+          RuntimeConfig.RESOURCE_WRITE_MAX_BYTES_KEY -> "3"),
+        Map(IoDefaultParameters.KEY -> Long.MaxValue.toString, RuntimeConfig.RESOURCE_READ_MAX_BYTES_KEY -> "3",
+          RuntimeConfig.RESOURCE_WRITE_MAX_BYTES_KEY -> "11")
+      )
+      When("normal runtime configuration resolves the individual then common precedence")
+      val configs = configurations.map(values => RuntimeConfig.from(ResolvedConfiguration(
+        Configuration(values.map { case (key, value) => key -> ConfigurationValue.StringValue(value) }), ConfigurationTrace.empty)))
+      Then("read and write remain independent and the common property has the full positive Long range")
+      configs.map(config => config.resourceReadLimits.maximumBytes -> config.resourceWriteLimits.maximumBytes) shouldBe
+        Vector(7 -> 7, 3 -> 7, 7 -> 11, 11 -> 3, 3 -> 11)
+      configs.last.ioDefaultMaximumBytes shouldBe Long.MaxValue
+    }
+
+    "reject every invalid common value even when individual file overrides are present" in {
+      Given("invalid common scalars, fractions and overflowing values with otherwise valid file overrides")
+      val values = Vector(ConfigurationValue.NullValue, ConfigurationValue.BooleanValue(true), ConfigurationValue.NumberValue(BigDecimal("1.5")),
+        ConfigurationValue.NumberValue(BigDecimal(0)), ConfigurationValue.NumberValue(BigDecimal(-1)),
+        ConfigurationValue.NumberValue(BigDecimal(BigInt(Long.MaxValue) + 1)), ConfigurationValue.ObjectValue(Map.empty)) ++
+        Vector("", "0", "-1", "+1", " 1 ", "1.5", "9223372036854775808").map(ConfigurationValue.StringValue(_))
+      When("normal settings validate the common property before constructing stores")
+      val failures = values.map { value => intercept[IllegalArgumentException] {
+        RuntimeConfig.from(ResolvedConfiguration(Configuration(Map(
+          IoDefaultParameters.KEY -> value,
+          RuntimeConfig.RESOURCE_READ_MAX_BYTES_KEY -> ConfigurationValue.StringValue("3"),
+          RuntimeConfig.RESOURCE_WRITE_MAX_BYTES_KEY -> ConfigurationValue.StringValue("4")
+        )), ConfigurationTrace.empty))
+      } }
+      Then("no invalid common value falls back to the built-in default")
+      failures should have size values.size
+      failures.foreach(_.getMessage should include(IoDefaultParameters.KEY))
+    }
+
+    "share strict common decoding between typed and ordinary configuration" in {
+      Given("integral numeric and strict digit string representations of the common property")
+      val values = Vector(ConfigurationValue.NumberValue(BigDecimal(9)), ConfigurationValue.StringValue("9"))
+      When("the shared codec and ordinary configuration resolve each representation")
+      val decoded = values.map(IoDefaultParameters.codec.decode(_).toOption)
+      val configs = values.map(value => RuntimeConfig.from(ResolvedConfiguration(
+        Configuration(Map(IoDefaultParameters.KEY -> value)), ConfigurationTrace.empty)))
+      Then("both routes select the same finite common value")
+      decoded shouldBe Vector(Some(9L), Some(9L))
+      configs.map(_.resourceReadLimits.maximumBytes) shouldBe Vector(9, 9)
+      configs.map(_.resourceWriteLimits.maximumBytes) shouldBe Vector(9, 9)
     }
 
     "resolve canonical runtime and CNCF aliases for ordinary resource limits" in {

@@ -347,7 +347,8 @@ final class ProcessProgramDefinition private (
   private[processexecution] val _environment: ProcessEnvironment,
   private[processexecution] val _sbt_metadata: Option[SbtProgramMetadata] = None,
   private[processexecution] val _git_metadata: Option[GitProgramMetadata] = None,
-  private[processexecution] val _git_purpose_input: Boolean = false
+  private[processexecution] val _git_purpose_input: Boolean = false,
+  private[processexecution] val _validation_check_metadata: Option[ValidationCheckProgramMetadata] = None
 ) {
   def validateRequestC(
     request: ProcessExecutionRequest,
@@ -356,6 +357,7 @@ final class ProcessProgramDefinition private (
     for {
       _ <- limits.requireFiniteC
       _ <- _sbt_metadata.fold(Consequence.unit)(_ => SbtExecutionAdmission.validateRequestC(request))
+      _ <- _validation_check_metadata.fold(Consequence.unit)(_ => ValidationCheckExecutionAdmission.validateRequestC(request))
       _ <- validateGitRequestC(request)
       _ <- argumentPolicy.validateC(request.arguments, limits)
       _ <- _validate_working_directory_c(request)
@@ -670,6 +672,24 @@ object ProcessProgramDefinition {
       )
     }
 
+  private[processexecution] def fromValidationCheckRuntimeC(
+    capability: ProcessCapabilityId,
+    safeProgramIdentity: String,
+    executableLocation: String,
+    fixedArguments: Vector[String],
+    maximumLimits: ProcessExecutionLimits,
+    environment: Map[String, String],
+    metadata: ValidationCheckProgramMetadata
+  ): Consequence[ProcessProgramDefinition] =
+    fromRuntimeC(capability, safeProgramIdentity, executableLocation, fixedArguments,
+      ProcessArgumentPolicy(fixedArguments), maximumLimits, Set.empty, environment = environment).map { definition =>
+      new ProcessProgramDefinition(definition.capability, definition.safeProgramIdentity,
+        definition._executable_location, definition.fixedArguments, definition.argumentPolicy,
+        definition.maximumLimits, definition.allowedArtifacts, definition.allowsWorkingDirectory,
+        definition.allowedInputFiles, definition.allowedInputFilePaths, definition.allowedResourceTrees,
+        definition._environment, _validation_check_metadata = Some(metadata))
+    }
+
   /**
    * Creates a definition during trusted runtime assembly. Component and
    * provider behavior must submit only ProcessExecutionRequest values to an
@@ -782,6 +802,19 @@ final class ProcessExecutionAdmission private (
   grants: Map[ProcessCapabilityId, ProcessExecutionGrant],
   componentadmissions: Option[Map[org.goldenport.cncf.component.ComponentId, ProcessExecutionAdmission]] = None
 ) {
+  private[cncf] def admitValidationCheckForScopeC(
+    scope: ScopeContext,
+    binding: WorkspaceBinding,
+    checkIdentity: ValidationCheckId
+  ): Consequence[ResolvedProcessExecution] = for {
+    owner <- WorkspaceExecutionAdmission.componentIdC(scope)
+    admission <- componentadmissions.flatMap(_.get(owner)).map(Consequence.success).getOrElse(
+      Consequence.argumentPolicyViolation("validationCheck", "validation-check.execution.component-grant", "actual component validation check capability grant", "unapproved"))
+    definition <- policy.validationCheckDefinitionC(binding, checkIdentity)
+    grant <- admission._grant_c(definition.capability)
+    execution <- policy.resolveValidationCheckC(definition, grant)
+  } yield execution
+
   private[cncf] def admitGitForScopeC(
     scope: ScopeContext,
     binding: WorkspaceBinding,
@@ -1033,8 +1066,30 @@ final class ProcessExecutionPolicy private (
       _ <- if (definition._git_metadata.isEmpty) Consequence.unit else
         Consequence.argumentPolicyViolation(
           "capability", "git.execution.semantic-only", "protected typed Git admission", "generic request")
+      _ <- if (definition._validation_check_metadata.isEmpty) Consequence.unit else
+        Consequence.argumentPolicyViolation(
+          "capability", "validation-check.execution.semantic-only", "protected typed validation check admission", "generic request")
       execution <- _resolve_c(request, grant, definition)
     } yield execution
+
+  private[processexecution] def validationCheckDefinitionC(
+    binding: WorkspaceBinding,
+    checkIdentity: ValidationCheckId
+  ): Consequence[ProcessProgramDefinition] = {
+    val definitions = _definitions.values.filter(_._validation_check_metadata.exists(x =>
+      (x.binding eq binding) && x.checkIdentity == checkIdentity)).toVector
+    definitions match {
+      case Vector(definition) => Consequence.success(definition)
+      case _ => Consequence.argumentPolicyViolation("validationCheck", "validation-check.execution.program-definition",
+        "one definition for the same admitted binding and exact check identity", "unavailable")
+    }
+  }
+
+  private[processexecution] def resolveValidationCheckC(
+    definition: ProcessProgramDefinition,
+    grant: ProcessExecutionGrant
+  ): Consequence[ResolvedProcessExecution] =
+    _resolve_c(ProcessExecutionRequest(definition.capability, arguments = Vector.empty), grant, definition)
 
   private[processexecution] def sbtDefinitionC(
     binding: WorkspaceBinding,
@@ -1148,6 +1203,7 @@ object ProcessExecutionPolicy {
     val capabilities = definitions.map(_.capability)
     val sbtkeys = definitions.flatMap(_._sbt_metadata.map(x => x.binding.workspaceId -> x.operation))
     val gitkeys = definitions.flatMap(_._git_metadata.map(x => (x.binding.workspaceId, x.kind, x.selectionId)))
+    val checkkeys = definitions.flatMap(_._validation_check_metadata.map(x => x.binding.workspaceId -> x.checkIdentity))
     if (capabilities.distinct.size != capabilities.size)
       Consequence.argumentPolicyViolation(
         "definitions",
@@ -1162,6 +1218,10 @@ object ProcessExecutionPolicy {
     else if (gitkeys.distinct.size != gitkeys.size || definitions.exists(x => x._sbt_metadata.nonEmpty && x._git_metadata.nonEmpty))
       Consequence.argumentPolicyViolation("definitions", "git.execution.program-definition",
         "unique workspace, operation and selection with one semantic tag", "duplicate")
+    else if (checkkeys.distinct.size != checkkeys.size || definitions.exists(x =>
+        x._validation_check_metadata.nonEmpty && (x._sbt_metadata.nonEmpty || x._git_metadata.nonEmpty)))
+      Consequence.argumentPolicyViolation("definitions", "validation-check.execution.program-definition",
+        "unique workspace and check identity with one semantic tag", "duplicate")
     else
       Consequence.success(new ProcessExecutionPolicy(definitions.map(x => x.capability -> x).toMap))
   }

@@ -31,6 +31,8 @@ private[cncf] object UnitOfWorkOperationClassifier {
           UnitOfWorkOp.HttpPutBag(_, _, _, _) |
           UnitOfWorkOp.ShellCommandExec(_) |
           UnitOfWorkOp.ProcessExec(_) |
+          UnitOfWorkOp.ValidationCheckExec(_, _) |
+          UnitOfWorkOp.ValidationCheckExecAttempt(_, _) |
           UnitOfWorkOp.SbtExec(_, _) |
           UnitOfWorkOp.SbtExecAttempt(_, _) |
           UnitOfWorkOp.GitExec(_, _) |

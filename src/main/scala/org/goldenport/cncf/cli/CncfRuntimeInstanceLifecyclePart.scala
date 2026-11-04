@@ -26,6 +26,7 @@ import org.goldenport.cncf.config.CncfRuntimeConfigurationProjection
 import org.goldenport.cncf.config.RepositoryBootstrapPolicy
 import org.goldenport.cncf.config.ResolvedStandaloneUserProfile
 import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.config.IoDefaultParameters
 import org.goldenport.cncf.config.RuntimeExecutionProfileConfiguration
 import org.goldenport.cncf.config.StandaloneUserProfileBindingProjection
 import org.goldenport.cncf.config.StandaloneUserProfileResolver
@@ -92,7 +93,8 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Jul. 30, 2026
  *  version Aug. 19, 2026
  *  version Sep.  8, 2026
- * @version Oct. 26, 2026
+ *  version Oct. 26, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cli] trait CncfRuntimeInstanceLifecyclePart {
@@ -401,8 +403,11 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
         }
       }.TAKE
     }
+    val iodefaultmaximumbytes = runtimeconfigurationpreflight.flatMap { preflight =>
+      preflight.bindings.value(CncfConfigurationParameterCatalog.ioDefaultMaximumBytes).TAKE
+    }.getOrElse(IoDefaultParameters.resolveC(configuration).TAKE)
     val processplan = runtimeconfigurationpreflight.flatMap { preflight =>
-      SubsystemProcessExecutionConfiguration.admitC(preflight.bindings, preflight.identity).TAKE
+      SubsystemProcessExecutionConfiguration.admitC(preflight.bindings, preflight.identity, iodefaultmaximumbytes).TAKE
     }
     val httpplan = runtimeconfigurationpreflight.flatMap { preflight =>
       SubsystemHttpExecutionConfiguration.admitC(preflight.bindings, preflight.identity).TAKE
@@ -411,7 +416,7 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
       org.goldenport.cncf.config.SubsystemOperationalObservationConfiguration
         .admitC(preflight.bindings, preflight.identity).TAKE
     }
-    val runconfig = RuntimeConfig.from(configuration, runtimehint, executionprofile)
+    val runconfig = RuntimeConfig.from(configuration, runtimehint, executionprofile, iodefaultmaximumbytes)
     val aliasresolver = AliasLoader.load(configuration.configuration)
     LogBackendHolder.install(runconfig.logBackend)
     ObservabilityEngine.updateVisibilityPolicy(VisibilityPolicy(minLevel = runconfig.logLevel))

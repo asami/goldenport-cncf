@@ -18,7 +18,8 @@ import org.goldenport.cncf.resource.{ResourceReadAcquisition, ResourceReadLimits
  * @since   Oct. 15, 2026
  *  version Oct. 21, 2026
  *  version Oct. 29, 2026
- * @version Oct. 31, 2026
+ *  version Oct. 31, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class FileTarget(workspaceId: WorkspaceId)
@@ -188,7 +189,8 @@ private[cncf] object WorkspaceFileExecution {
   ): Consequence[FileWriteBytesResult] =
     for {
       admitted <- _admit_c(context, target, path, WorkspacePermission.Manage)
-      (binding, limits, validpath) = admitted
+      (binding, _, validpath) = admitted
+      limits <- context.resourceWriteLimitsC
       _ <- if (bytes == null || representation == null) _invalid_intent_c[Unit]
         else if (bytes.size > limits.maximumBytes) _overflow_c[Unit]
         else if (representation == FileRepresentation.Gzip && limits.maximumBytes < 20) _overflow_c[Unit]
@@ -230,7 +232,8 @@ private[cncf] object WorkspaceFileExecution {
     for {
       admitted <- _admit_c(context, target, path, WorkspacePermission.Manage)
       (binding, limits, validpath) = admitted
-      bytes <- _text_bytes_c(text, limits)
+      writelimits <- context.resourceWriteLimitsC
+      bytes <- _text_bytes_c(text, writelimits)
       _ <- mode match {
         case FileWriteMode.CreateNew => Consequence.unit
         case FileWriteMode.UpdateExisting(expected) => _text_bytes_c(expected, limits).map(_ => ())

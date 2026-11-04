@@ -51,7 +51,8 @@ import cats.~>
  *  version May. 31, 2026
  *  version Jul. 31, 2026
  *  version Aug. 12, 2026
- * @version Oct. 31, 2026
+ *  version Oct. 31, 2026
+ * @version Nov.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -90,6 +91,11 @@ abstract class ExecutionContext
 
   def resourceTextPreflightScopeC: Consequence[org.goldenport.cncf.resource.ResourceTextPreflightScope] =
     resourceReadLimitsC.map(org.goldenport.cncf.resource.ResourceTextPreflight.scope)
+
+  private[cncf] def resourceWriteLimitsC: Consequence[org.goldenport.cncf.resource.ResourceReadLimits] =
+    ExecutionContext._global_runtime_context(cncfCore.scope)
+      .map(global => Consequence.success(global.config.resourceWriteLimits))
+      .getOrElse(Consequence.serviceUnavailable("Runtime resource write limits are unavailable"))
 
   def preflightResourceTextC(text: String): Consequence[org.goldenport.cncf.resource.ResourceTextPreflight] =
     resourceTextPreflightScopeC.flatMap(_.checkC(text))

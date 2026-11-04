@@ -88,18 +88,23 @@ final class LocalProcessExecutionDriver(
     }
 
   private def _validate_sbt_c(execution: ResolvedProcessExecution): Consequence[Unit] =
+    execution.definition._validation_check_metadata.fold(Consequence.unit)(_ =>
+      ValidationCheckExecutionAdmission.validateRequestC(execution.request)).flatMap { _ =>
     execution.definition._sbt_metadata.fold(Consequence.unit)(_ =>
       SbtExecutionAdmission.validateRequestC(execution.request)).flatMap { _ =>
       execution.definition._git_metadata.fold(Consequence.unit)(_ =>
         execution.definition.validateGitRequestC(execution.request).flatMap(_ =>
           execution.definition.argumentPolicy.validateC(execution.request.arguments, execution.effectiveLimits)))
     }
+    }
 
   private def _working_directory_c(
     execution: ResolvedProcessExecution,
     workarea: Option[ProcessExecutionWorkArea]
   ): Consequence[Option[Path]] =
-    execution.definition._sbt_metadata match {
+    execution.definition._validation_check_metadata match {
+      case Some(metadata) => metadata.binding.workingDirectoryC.map(Some(_))
+      case None => execution.definition._sbt_metadata match {
       case Some(metadata) => metadata.binding.workingDirectoryC.map(Some(_))
       case None => execution.definition._git_metadata match {
         case Some(metadata) => metadata.binding.workingDirectoryC.map(Some(_))
@@ -108,6 +113,7 @@ final class LocalProcessExecutionDriver(
           case None => Consequence.success(None)
         }
       }
+    }
     }
 
   /** Package-visible diagnostic seam for controlled local-driver specifications. */

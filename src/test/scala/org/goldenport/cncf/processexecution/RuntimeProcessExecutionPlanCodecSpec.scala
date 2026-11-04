@@ -3,6 +3,9 @@ package org.goldenport.cncf.processexecution
 import io.circe.Json
 import io.circe.parser.parse
 import java.nio.file.{Files, Path, Paths}
+import java.util.Comparator
+import scala.jdk.CollectionConverters.*
+import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.observability.ConclusionDiagnostics
@@ -15,7 +18,8 @@ import org.scalacheck.{Gen, Prop, Test}
 
 /*
  * @since   Oct.  7, 2026
- * @version Oct. 29, 2026
+ *  version Oct. 29, 2026
+ * @version Nov.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -98,6 +102,299 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
       .add("identity", Json.fromString(identity))))
     _changed_entry(changed, "grants", grant => grant.mapObject(_.add("capabilities",
       _json_strings(grant.hcursor.get[Vector[String]]("capabilities").toOption.get.map(x => if (x == "repository") capability else x)))))
+  }
+
+  private def _without_stream_limits(entry: Json): Json = entry.mapObject(fields => fields.add("limits",
+    fields("limits").get.mapObject(_.remove("stdinBytes").remove("stdoutBytes").remove("stderrBytes"))))
+
+  private def _with_v6_root(body: Json => Unit): Unit = {
+    val root = _directory()
+    try {
+      val v5 = _v5_root(root)
+      val target = v5.hcursor.downField("workspaces").downArray.get[String]("identity").toOption.get
+      val limits = v5.hcursor.downField("sbtPrograms").downArray.downField("limits").focus.get
+      val check = Json.obj("target" -> Json.fromString(target), "checkIdentity" -> Json.fromString("exact content"),
+        "purpose" -> Json.fromString("behavior"),
+        "adapter" -> Json.fromString("fixed-process"), "capability" -> Json.fromString("selected-check"),
+        "identity" -> Json.fromString("selected-check"), "executable" -> Json.fromString("/usr/bin/grep"),
+        "fixedArguments" -> Json.arr(Json.fromString("-Fx"), Json.fromString("expected"), Json.fromString("value.txt")),
+        "limits" -> limits, "environment" -> Json.obj("CHECK_PROFILE" -> Json.fromString("declared")))
+      val wire = v5.mapObject(_.add("schema", Json.fromString(RuntimeProcessExecutionPlanCodec.SCHEMA_V6))
+        .add("validationChecks", Json.arr(check)))
+      body(_changed_entry(wire, "grants", grant => grant.mapObject(_.add("capabilities",
+        _json_strings(grant.hcursor.get[Vector[String]]("capabilities").toOption.get :+ "selected-check")))))
+    } finally Using.resource(Files.walk(root)) { stream =>
+      stream.sorted(Comparator.reverseOrder[Path]()).iterator().asScala.foreach(path => Files.deleteIfExists(path))
+    }
+  }
+
+  private def _check_only_v6(wire: Json): Json =
+    _changed_entry(wire.mapObject(_.add("programs", Json.arr()).add("sbtPrograms", Json.arr())
+      .add("gitPrograms", Json.arr()).add("gitRepositories", Json.arr())), "grants", grant =>
+      grant.mapObject(_.add("capabilities", Json.arr(Json.fromString("selected-check")))))
+
+  "V6 declared validation check host schema" should {
+    "round-trip exact fixed checks with all V5 families and workspace admission" in _with_v6_root { wire =>
+      Given("an additive V6 declaration with generic, SBT, selected Git, repository and validation check entries")
+      When("the strict host codec decodes, encodes and decodes it")
+      val first = _take(_decode(wire))
+      val encoded = _take(RuntimeProcessExecutionPlanCodec.encode(first))
+      val restored = _take(RuntimeProcessExecutionPlanCodec.decode(encoded))
+      val declaration = restored.validationCheckDeclarations.head
+      val binding = _take(restored.workspaceAdmissionOption.get.bindingC(declaration.target))
+      Then("all prior declaration forms survive and the check remains exact fixed-process host configuration")
+      restored.schemaVersion shouldBe RuntimeProcessExecutionPlanCodec.SCHEMA_V6
+      restored.programs.map(_.capability) shouldBe first.programs.map(_.capability)
+      restored.sbtDeclarations shouldBe first.sbtDeclarations
+      restored.gitDeclarations shouldBe first.gitDeclarations
+      restored.gitRepositoryDeclarations shouldBe first.gitRepositoryDeclarations
+      restored.workspaceDeclarations shouldBe first.workspaceDeclarations
+      restored.workspaceGrants shouldBe first.workspaceGrants
+      restored.grants shouldBe first.grants
+      restored.validationCheckDeclarations shouldBe first.validationCheckDeclarations
+      declaration.checkIdentity.value shouldBe "exact content"
+      declaration.purpose shouldBe ValidationCheckPurpose.Behavior
+      declaration.adapter shouldBe "fixed-process"
+      declaration.fixedArguments shouldBe Vector("-Fx", "expected", "value.txt")
+      declaration.environment shouldBe Map("CHECK_PROFILE" -> "declared")
+      _take(binding.workingDirectoryC) shouldBe restored.workspaceDeclarations.find(_.identity == declaration.target).get.root.toRealPath()
+      restored.admission.admitC(ProcessExecutionRequest(declaration.capability)).isFaillure shouldBe true
+      val json = parse(encoded.asInstanceOf[ConfigurationValue.StringValue].value).toOption.get
+      json.asObject.get.keys.toSet shouldBe wire.asObject.get.keys.toSet
+      json.hcursor.downField("validationChecks").downArray.focus.get.asObject.get.keys.toSet shouldBe
+        Set("target", "checkIdentity", "purpose", "adapter", "capability", "identity", "executable", "fixedArguments", "limits", "environment")
+    }
+
+    "encode and decode only the exact explicit compilation, behavior and lint purposes" in _with_v6_root { wire =>
+      Given("the three tool-independent host purpose values")
+      ValidationCheckPurpose.values.foreach { purpose =>
+        val selected = _changed_entry(wire, "validationChecks", _.mapObject(_.add("purpose", Json.fromString(purpose.wireName))))
+        When("the host declaration round-trips through the unpublished initial V6 contract")
+        val plan = _take(_decode(selected))
+        val encoded = _take(RuntimeProcessExecutionPlanCodec.encode(plan))
+        val json = parse(encoded.asInstanceOf[ConfigurationValue.StringValue].value).toOption.get
+        val restored = _take(RuntimeProcessExecutionPlanCodec.decode(encoded))
+        Then("the purpose is retained exactly without inferring it from the executable or a claimed result")
+        plan.validationCheckDeclarations.head.purpose shouldBe purpose
+        restored.validationCheckDeclarations.head.purpose shouldBe purpose
+        json.hcursor.downField("validationChecks").downArray.get[String]("purpose").toOption shouldBe Some(purpose.wireName)
+      }
+      When("an unknown purpose or alias is declared")
+      val rejected = Vector("compile", "Compilation", "Behavior", "Lint", "lint ", "test", "unknown", "").map(value =>
+        _decode(_changed_entry(wire, "validationChecks", _.mapObject(_.add("purpose", Json.fromString(value))))))
+      Then("there is no implicit purpose or alias")
+      rejected.foreach(_.isFaillure shouldBe true)
+    }
+
+    "reject missing, unknown, extra and explicitly null check schema fields" in _with_v6_root { wire =>
+      Given("one strict V6 check with a mandatory explicit fixed-process adapter")
+      val names = Set("target", "checkIdentity", "purpose", "adapter", "capability", "identity", "executable", "fixedArguments", "limits", "environment")
+      val missing = names.toVector.map(name => _changed_entry(wire, "validationChecks", _.mapObject(_.remove(name))))
+      val nulls = names.toVector.map(name => _changed_entry(wire, "validationChecks", _.mapObject(_.add(name, Json.Null))))
+      val invalid = missing ++ nulls ++ Vector(
+        wire.mapObject(_.remove("validationChecks")), wire.mapObject(_.add("validationChecks", Json.Null)),
+        wire.mapObject(_.add("extra", Json.True)),
+        _changed_entry(wire, "validationChecks", _.mapObject(_.add("extra", Json.True))),
+        _changed_entry(wire, "validationChecks", _.mapObject(_.add("adapter", Json.fromString("unknown")))),
+        _changed_entry(wire, "validationChecks", _.mapObject(_.add("adapter", Json.fromString("FIXED-PROCESS")))),
+        _changed_entry(wire, "validationChecks", _.mapObject(_.add("checkIdentity", Json.fromString(" exact content")))),
+        _changed_entry(wire, "validationChecks", _.mapObject(_.add("checkIdentity", Json.fromString("exact\ncontent")))),
+        _changed_entry(wire, "validationChecks", _.mapObject(_.add("executable", Json.fromString("grep")))),
+        _changed_entry(wire, "validationChecks", _.mapObject(_.add("executable", Json.fromString("/bin/sh")))),
+        _changed_entry(wire, "validationChecks", _.mapObject(_.add("target", Json.fromString("unknown")))))
+      When("each malformed host configuration is decoded")
+      val results = invalid.map(_decode)
+      Then("none installs a fallback adapter, widened caller target or incomplete declaration")
+      results.foreach(_.isFaillure shouldBe true)
+      Vector("programs", "grants", "workspaces", "workspaceGrants", "sbtPrograms", "gitPrograms", "gitRepositories")
+        .foreach(name => _decode(wire.mapObject(_.remove(name))).isFaillure shouldBe true)
+      _decode(wire.mapObject(_.add("schema", Json.fromString(RuntimeProcessExecutionPlanCodec.SCHEMA_V5)))).isFaillure shouldBe true
+    }
+
+    "reject duplicate logical checks and capability or safe identity collisions across program families" in _with_v6_root { wire =>
+      Given("one declared check alongside every existing semantic family")
+      val check = wire.hcursor.downField("validationChecks").downArray.focus.get
+      val duplicate = check.mapObject(_.add("capability", Json.fromString("another-check")).add("identity", Json.fromString("another-check")))
+      val capabilities = Vector("programs", "sbtPrograms", "gitPrograms", "gitRepositories").map(name =>
+        wire.hcursor.downField(name).downArray.get[String]("capability").toOption.get) :+ "repository-head"
+      val identities = Vector("programs", "sbtPrograms", "gitPrograms", "gitRepositories").map(name =>
+        wire.hcursor.downField(name).downArray.get[String]("identity").toOption.get) :+ "repository-head"
+      val invalid = Vector(wire.mapObject(_.add("validationChecks", Json.arr(check, duplicate)))) ++
+        capabilities.map(value => _changed_entry(wire, "validationChecks", _.mapObject(_.add("capability", Json.fromString(value))))) ++
+        identities.map(value => _changed_entry(wire, "validationChecks", _.mapObject(_.add("identity", Json.fromString(value)))))
+      When("the same policy assembly receives each ambiguous declaration")
+      val results = invalid.map(_decode)
+      Then("logical checks, public and expanded capabilities, and safe identities remain unique")
+      results.foreach(_.isFaillure shouldBe true)
+    }
+
+    "require same-owner Manage grants for check capabilities independently of other program families" in _with_v6_root { wire =>
+      Given("a check-only V6 plan and independent workspace and process permissions")
+      val only = _check_only_v6(wire)
+      val invalid = Vector(only.mapObject(_.add("workspaceGrants", Json.arr())),
+        _changed_entry(only, "workspaceGrants", _.mapObject(_.add("access", Json.fromString("read-only")))),
+        _changed_entry(only, "workspaceGrants", _.mapObject(_.add("componentId", Json.fromString("org.example.Other")))))
+      When("the host preflights each check grant")
+      val denied = invalid.map(_decode)
+      Then("the capability grant cannot create workspace Manage authority")
+      denied.foreach(_.isFaillure shouldBe true)
+      _decode(only).isSuccess shouldBe true
+      val workspaceonly = _take(_decode(only.mapObject(_.add("grants", Json.arr()))))
+      workspaceonly.grants shouldBe empty
+      workspaceonly.validationCheckDeclarations should have size 1
+    }
+
+    "preserve check stream omissions and explicit values through common I/O default activation" in _with_v6_root { wire =>
+      Given("a check declaration omitting all stream bounds except explicit stdout")
+      val omitted = _changed_entry(wire, "validationChecks", entry => _without_stream_limits(entry).mapObject(obj =>
+        obj.add("limits", obj("limits").get.mapObject(_.add("stdoutBytes", Json.fromLong(2097152L))))))
+      When("the plan round-trips before resolving the common default")
+      val plan = _take(_decode(omitted))
+      val encoded = _take(RuntimeProcessExecutionPlanCodec.encode(plan))
+      val json = parse(encoded.asInstanceOf[ConfigurationValue.StringValue].value).toOption.get
+      val limits = json.hcursor.downField("validationChecks").downArray.downField("limits").focus.get.asObject.get
+      Then("only omitted fields remain omitted and the explicit override remains exact")
+      limits.contains("stdinBytes") shouldBe false
+      limits.contains("stderrBytes") shouldBe false
+      limits("stdoutBytes").get.asNumber.flatMap(_.toLong) shouldBe Some(2097152L)
+      When("the decoded plan resolves its common I/O default")
+      val activated = _take(RuntimeProcessExecutionPlanCodec.resolveIoDefaultsC(
+        _take(RuntimeProcessExecutionPlanCodec.decode(encoded)), 23L))
+      Then("activation fills only omitted bounds and preserves the declared grants and workspaces")
+      activated.validationCheckDeclarations.head.limits shouldBe _limits.copy(
+        stdinBytes = Some(23L), stdoutBytes = Some(2097152L), stderrBytes = Some(23L))
+      activated.grants shouldBe plan.grants
+      activated.workspaceDeclarations shouldBe plan.workspaceDeclarations
+      activated.workspaceGrants shouldBe plan.workspaceGrants
+      activated._io_default_omissions shouldBe empty
+      When("a check declaration omits every stream bound")
+      val allomitted = _take(_decode(_changed_entry(wire, "validationChecks", _without_stream_limits)))
+      Then("the ordinary decode retains the built-in default until activation")
+      allomitted.validationCheckDeclarations.head.limits.stdoutBytes shouldBe
+        Some(org.goldenport.cncf.config.IoDefaultParameters.BUILTIN_MAXIMUM_BYTES.toLong)
+    }
+  }
+
+  "E4 Omitted host stream limits" should afterWord(
+    "in spec:process-execution-runtime, example:E4, rules:R5, phase:sync-runtime-20261103-01") {
+    "retain generic and typed stream omissions until activation resolves the common default" in {
+      Given("docs/spec/process-execution-runtime.md R5 E4: generic, SBT, Git and V5 repository declarations omit all three streams")
+      val genericwire = _changed_program(_without_stream_limits)
+      val repositorywire = _changed_entry(_v5_root(_directory()), "gitRepositories", _without_stream_limits)
+      val sbtwire = _changed_entry(_v2_root(_directory()), "sbtPrograms", _without_stream_limits)
+      val gitwire = _v3_root(_directory()).mapObject(obj => obj.add("gitPrograms",
+        Json.fromValues(obj("gitPrograms").get.asArray.get.map(_without_stream_limits))))
+      When("the ordinary host codec decodes both plans")
+      val generic = _take(_decode(genericwire))
+      val repository = _take(_decode(repositorywire))
+      val sbt = _take(_decode(sbtwire))
+      val git = _take(_decode(gitwire))
+      val defaultbytes = org.goldenport.cncf.config.IoDefaultParameters.BUILTIN_MAXIMUM_BYTES.toLong
+      val limits = Vector(generic.programs.head.maximumLimits, repository.gitRepositoryDeclarations.head.limits,
+        sbt.sbtDeclarations.head.limits, git.gitDeclarations.head.limits)
+      Then("only the omitted stream quantities acquire the finite one MiB default")
+      defaultbytes shouldBe 1048576L
+      limits.foreach { value =>
+        value.stdinBytes shouldBe Some(defaultbytes)
+        value.stdoutBytes shouldBe Some(defaultbytes)
+        value.stderrBytes shouldBe Some(defaultbytes)
+        value.requireFiniteC.isSuccess shouldBe true
+      }
+      generic.programs.head.maximumLimits shouldBe _limits.copy(stdinBytes = Some(defaultbytes), stdoutBytes = Some(defaultbytes),
+        stderrBytes = Some(defaultbytes))
+      for ((plan, field) <- Vector(generic -> "programs", repository -> "gitRepositories", sbt -> "sbtPrograms", git -> "gitPrograms")) {
+        When("the unresolved declaration round-trips before the runtime supplies its common value")
+        val encoded = _take(RuntimeProcessExecutionPlanCodec.encode(plan))
+        val wire = parse(encoded.asInstanceOf[ConfigurationValue.StringValue].value).toOption.get
+        val encodedlimits = wire.hcursor.downField(field).downArray.downField("limits").focus.get
+        val restored = _take(RuntimeProcessExecutionPlanCodec.decode(encoded))
+        Then("the wire preserves precisely the three omissions and keeps the finite provisional meaning")
+        encodedlimits.asObject.get.size shouldBe 8
+        Set("stdinBytes", "stdoutBytes", "stderrBytes").foreach(name => encodedlimits.asObject.get.contains(name) shouldBe false)
+        restored.programs.map(_.maximumLimits) shouldBe plan.programs.map(_.maximumLimits)
+        restored.gitRepositoryDeclarations shouldBe plan.gitRepositoryDeclarations
+        When("activation resolves the common byte policy")
+        val activated = _take(RuntimeProcessExecutionPlanCodec.resolveIoDefaultsC(restored, 23L))
+        val activatedwire = parse(_take(RuntimeProcessExecutionPlanCodec.encode(activated))
+          .asInstanceOf[ConfigurationValue.StringValue].value).toOption.get
+        val activatedlimits = activatedwire.hcursor.downField(field).downArray.downField("limits").focus.get
+        Then("all three streams become explicit finite values and authority remains unchanged")
+        activatedlimits.asObject.get.size shouldBe 11
+        Set("stdinBytes", "stdoutBytes", "stderrBytes").foreach(name =>
+          activatedlimits.hcursor.get[Long](name).toOption shouldBe Some(23L))
+        activated._io_default_omissions shouldBe empty
+        activated.grants shouldBe plan.grants
+        activated.workspaceDeclarations shouldBe plan.workspaceDeclarations
+        activated.workspaceGrants shouldBe plan.workspaceGrants
+      }
+    }
+  }
+
+  "E5 Explicit host stream limits" should afterWord(
+    "in spec:process-execution-runtime, example:E5, rules:R5, phase:sync-runtime-20261103-01") {
+    "honor smaller and larger explicit limits independently of omitted peer streams" in {
+      Given("docs/spec/process-execution-runtime.md R5 E5: finite explicit stream overrides above and below one MiB")
+      val repositorywire = _v5_root(_directory())
+      for (field <- Vector("stdinBytes", "stdoutBytes", "stderrBytes"); size <- Vector(32L, 1048576L, 2097152L)) {
+        def _override_(entry: Json): Json = _without_stream_limits(entry).mapObject(fields => fields.add("limits",
+          fields("limits").get.mapObject(_.add(field, Json.fromLong(size)))))
+        When("each generic or normal V5 declaration supplies one explicit stream and omits the other")
+        val generic = _take(RuntimeProcessExecutionPlanCodec.resolveIoDefaultsC(
+          _take(_decode(_changed_program(_override_))), 17L)).programs.head.maximumLimits
+        val repository = _take(RuntimeProcessExecutionPlanCodec.resolveIoDefaultsC(
+          _take(_decode(_changed_entry(repositorywire, "gitRepositories", _override_))), 17L))
+          .gitRepositoryDeclarations.head.limits
+        Then("the explicit quantity survives and its omitted peer alone uses the CNCF default")
+        Vector(generic, repository).foreach { value =>
+          value.stdinBytes shouldBe Some(if (field == "stdinBytes") size else 17L)
+          value.stdoutBytes shouldBe Some(if (field == "stdoutBytes") size else 17L)
+          value.stderrBytes shouldBe Some(if (field == "stderrBytes") size else 17L)
+        }
+      }
+    }
+  }
+
+  "E6 Host stream default strictness" should afterWord(
+    "in spec:process-execution-runtime, example:E6, rules:R5, phase:sync-runtime-20261103-01") {
+    "reject missing other limits, unknown fields and every malformed explicit quantity" in {
+      Given("docs/spec/process-execution-runtime.md R5 E6: all eleven limits retain strict finite integer validation")
+      val source = _root.hcursor.downField("programs").downArray.downField("limits").focus.get
+      val names = source.asObject.get.keys.toVector
+      val malformed = Vector(Json.Null, Json.True, Json.fromString("1024"), Json.fromDoubleOrNull(1.5),
+        Json.fromLong(0L), Json.fromLong(-1L), Json.fromBigInt(BigInt(Long.MaxValue) + 1))
+      val missing = names.filterNot(Set("stdinBytes", "stdoutBytes", "stderrBytes")).map(name => source.mapObject(_.remove(name)))
+      val invalid = missing ++ names.flatMap(name => malformed.map(value => source.mapObject(_.add(name, value)))) ++
+        Vector(source.mapObject(_.add("unknown", Json.fromLong(1L))), Json.Null, Json.True, Json.arr())
+      val repositorywire = _v5_root(_directory())
+      When("the ordinary generic and normal V5 host paths decode each invalid limit object")
+      val results = invalid.flatMap { limits =>
+        def _replace_(entry: Json): Json = entry.mapObject(_.add("limits", limits))
+        Vector(_decode(_changed_program(_replace_)), _decode(_changed_entry(repositorywire, "gitRepositories", _replace_)))
+      }
+      Then("omission defaults do not admit unknown fields, missing mandatory quantities or invalid explicit streams")
+      results.foreach(_.isFaillure shouldBe true)
+    }
+  }
+
+  "E7 Stream defaults preserve limit tightening" should afterWord(
+    "in spec:process-execution-runtime, example:E7, rules:R5, phase:sync-runtime-20261103-01") {
+    "leave empty overrides absent and retain grant and request narrowing" in {
+      Given("docs/spec/process-execution-runtime.md R5 E7: a normalized host maximum and independently optional grants")
+      val maximum = _take(_decode(_changed_program(_without_stream_limits))).programs.head.maximumLimits
+      val grant = ProcessExecutionLimits(stdinBytes = Some(128L), stdoutBytes = Some(256L))
+      val request = ProcessExecutionLimits(stdoutBytes = Some(64L))
+      When("the existing finite-limit algebra resolves empty overrides and explicit tightening")
+      val unchanged = _take(ProcessExecutionLimits.effectiveC(maximum, ProcessExecutionLimits.empty, ProcessExecutionLimits.empty))
+      val narrowed = _take(ProcessExecutionLimits.effectiveC(maximum, grant, request))
+      Then("wire defaults never become implicit grant or request overrides and widening still fails")
+      ProcessExecutionLimits().stdinBytes shouldBe None
+      ProcessExecutionLimits.empty.stdoutBytes shouldBe None
+      unchanged shouldBe maximum
+      narrowed shouldBe maximum.copy(stdinBytes = Some(128L), stdoutBytes = Some(64L))
+      ProcessExecutionLimits.effectiveC(maximum, grant, ProcessExecutionLimits(stdinBytes = Some(129L))).isFaillure shouldBe true
+      ProcessExecutionLimits.effectiveC(maximum, ProcessExecutionLimits(stdoutBytes = Some(2097152L)),
+        ProcessExecutionLimits.empty).isFaillure shouldBe true
+    }
   }
 
   "Explicit selected committed-tree authority" should {

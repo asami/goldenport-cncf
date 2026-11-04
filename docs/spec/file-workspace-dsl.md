@@ -119,7 +119,8 @@ only supplied bytes. Applications use the protected DSL rather than the private
 adapter, application NIO or a shell compressor.
 
 Byte writes support only CreateNew semantics: nonnull input is checked against
-the current `ResourceReadLimits.maximumBytes` before staging or compression.
+the current `GlobalRuntimeContext.config.resourceWriteLimits.maximumBytes`
+before staging or compression.
 The same cap independently bounds stored output during streaming, including
 gzip headers and trailers. The staged file is forced and installed with the
 same-parent non-overwriting hardlink procedure below. An occupied ordinary exact
@@ -136,20 +137,36 @@ overflow fails without partial success or truncation. Malformed gzip headers,
 trailers, CRC or compressed content fail privately. Missing final leaves return
 `None` only with a valid existing parent; empty Identity or expanded Gzip data
 returns `Some(Vector.empty)`. Invalid representation or null input fails. No new
-config key, per-call cap or alternate limit source is introduced.
+per-call cap or alternate limit source is introduced.
 
 ## Complete text and current runtime policy
 
 The actual current scope's `GlobalRuntimeContext.config.resourceReadLimits`
-supplies the finite byte cap. Missing global limits fail as service unavailable;
-there is no ambient global lookup or per-call maximum. The same existing
-resource policy defaults to **1,048,576 bytes (1 MiB)** and admits **1 through
-268,435,456 bytes (256 MiB)** inclusive through these aliases:
+supplies the finite read cap; `resourceWriteLimits` supplies the independent
+write cap for text input and binary input/output. Text CAS expected values and
+existing-file observations retain the read cap, including the final observation
+before atomic replacement. Missing global limits fail as service unavailable;
+there is no ambient global lookup or per-call maximum.
+
+Both file policies follow **individual override > `cncf.io.default-maximum-bytes`
+> built-in 1,048,576 bytes (1 MiB)**. The common property accepts a positive
+integral Long, with no 1 MiB ceiling. Its numeric or strict digit string value
+must be valid even when individual overrides are supplied. Actual file policies
+must remain representable in **1 through 268,435,456 bytes (256 MiB)**; when the
+common value exceeds that range, explicit file overrides can select representable
+values. The existing read override is admitted through these aliases:
 
 - `textus.resource.read.max-bytes`;
 - `textus.runtime.resource.read.max-bytes`;
 - `cncf.resource.read.max-bytes`;
 - `cncf.runtime.resource.read.max-bytes`.
+
+The dedicated write override is exactly `cncf.resource.write.max-bytes`, with
+the same file-specific range and no forwarding alias. A read override does not
+select the write cap. Omitted process stdin/stdout/stderr limits inherit the
+same common default at runtime activation, while explicit stream values remain
+selected. Aggregate WorkArea and snapshot-total byte budgets are distinct and
+do not inherit this per-file/per-stream default.
 
 A larger selected limit permits more input; it is not a peak-memory bound.
 Immutable byte, text and JSON values may require more memory than the input size.
