@@ -1,5 +1,11 @@
 # docs/phase — Engineering Work Management
 
+Data/report/print integration allocated 2026-11-02:
+[Phase 119](phase-119.md) / [checklist](phase-119-checklist.md) is PLANNED for
+data supply, specialist report-engine integration and print request/result contracts.
+All items remain OPEN; this planning allocation starts no Session or implementation
+and preserves existing priorities.
+
 External component execution allocated 2026-11-02:
 [Phase 118](phase-118.md) / [checklist](phase-118-checklist.md) is PLANNED for
 generic controlled external execution consumed by EAI Phase 2 and TKL Phase 2.
