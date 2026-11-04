@@ -27,7 +27,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 21, 2026
- * @version Oct. 29, 2026
+ *  version Oct. 29, 2026
+ * @version Nov.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class FileExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -380,7 +381,8 @@ final class FileExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhe
     val config = Files.createDirectories(root.resolve(".textus")).resolve("config.json")
     Files.writeString(config, Json.obj(
       CncfConfigurationParameterCatalog.SUBSYSTEM_PROCESS_EXECUTION_PLAN_KEY -> Json.fromString(text),
-      "textus.resource.read.max-bytes" -> Json.fromString(cap.toString)).noSpaces, StandardCharsets.UTF_8)
+      "textus.resource.read.max-bytes" -> Json.fromString(cap.toString),
+      "cncf.resource.write.max-bytes" -> Json.fromString(cap.toString)).noSpaces, StandardCharsets.UTF_8)
     val descriptor = root.resolve("test.yaml")
     Files.writeString(descriptor,
       """kind: test-descriptor
