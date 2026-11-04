@@ -23,8 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 28, 2026
- *  version Nov.  3, 2026
- * @version Nov.  4, 2026
+ * @version Nov.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -367,7 +366,7 @@ final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThe
           change.copy(worktreeProjection = Some(GitPurposeWorktreeProjection(null))),
           change.copy(worktreeProjection = Some(GitPurposeWorktreeProjection(Some(null)))),
           change.copy(worktreeProjection = Some(GitPurposeWorktreeProjection(Some("binary\u0000text")))),
-          change.copy(worktreeProjection = Some(GitPurposeWorktreeProjection(Some("\ud800")))))
+          change.copy(worktreeProjection = Some(GitPurposeWorktreeProjection(Some(new String(Array(0xd800.toChar)))))))
         val requests = malformed.map(value => GitPurposeRequest(parent, index, Vector(value), Some(index))) :+
           GitPurposeRequest(parent, index, Vector(change.copy(worktreeProjection =
             Some(GitPurposeWorktreeProjection(Some("integrated\n"))))))
