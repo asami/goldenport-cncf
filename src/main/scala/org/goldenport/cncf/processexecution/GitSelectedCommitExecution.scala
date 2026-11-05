@@ -6,7 +6,7 @@ import org.goldenport.cncf.context.ExecutionContext
 /*
  * @since   Oct. 24, 2026
  *  version Oct. 29, 2026
- * @version Nov.  3, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object GitSelectedCommitExecution {
@@ -198,7 +198,8 @@ private[cncf] object GitPurposeCandidateExecution {
         Consequence.unit else Consequence.stateConflict("Purpose candidate mode changes require explicit semantic resolution"))
       before <- _content_c(execution, run, original)
       indexed <- _content_c(execution, run, staged)
-      remainder <- _project_c(execution, run, directory, before, indexed, change.content)
+      remainder <- _project_c(execution, run, directory, before, indexed, change.content,
+        wholeselected = change.content.exists(_.nonEmpty) && change.content == change.expectedWorktree)
       mode = original.orElse(staged).fold("100644")(_.mode)
     } yield values :+ Projection(change.path, mode, change.content, remainder) }
     tree <- _tree_c(execution, run, directory.resolve("candidate-index"), request.parent, projections, false)
@@ -289,8 +290,10 @@ private[cncf] object GitPurposeCandidateExecution {
 
   private def _project_c(execution: ResolvedProcessExecution,
     run: ResolvedProcessExecution => Consequence[ProcessExecutionResult], directory: Path,
-    before: Option[String], indexed: Option[String], content: Option[String]): Program[Option[String]] =
-    if (indexed == before || indexed == content) _success(content)
+    before: Option[String], indexed: Option[String], content: Option[String],
+    wholeselected: Boolean = false): Program[Option[String]] =
+    if (wholeselected && before.isEmpty && indexed.nonEmpty && content.exists(_.nonEmpty)) _success(content)
+    else if (indexed == before || indexed == content) _success(content)
     else if (content == before) _success(indexed)
     else (before, indexed, content) match {
       case (Some(base), Some(staged), Some(selected)) => for {

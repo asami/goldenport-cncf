@@ -197,6 +197,18 @@ independent staged changes. An optional baseline tree allows a selected repair
 to be projected onto the existing worktree while retaining its other content.
 Candidate values and object IDs express observations, not human acceptance.
 
+For an added regular text file absent from the expected parent but present in
+the index, explicit selection of the complete current worktree text replaces
+the older staged version in both the candidate and projected index. This
+requires nonempty selected text exactly equal to the change's nonempty
+`expectedWorktree`, after checking it against the actual worktree. Admitted
+path membership alone is insufficient. A partial selection with a distinct
+staged addition still requires explicit grouping and is refused; other
+addition/deletion and three-way worktree projection rules remain unchanged.
+[GitExecutionSpec E5](../../src/test/scala/org/goldenport/cncf/processexecution/GitExecutionSpec.scala)
+covers preparation without HEAD/index mutation, installation with unrelated
+work preserved, and refusal of the corresponding partial selection.
+
 When the owning workflow has explicitly resolved an overlapping repair and a
 later purpose in the same hunk, `GitPurposeChange.worktreeProjection` may carry
 `GitPurposeWorktreeProjection(content)`. This requires a `baselineTree` and is
