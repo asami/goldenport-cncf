@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for the runtime-limited ordinary single-resource capability.
  *
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ * @version Nov.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ResourceAccessBoundedReadSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -311,6 +311,75 @@ final class ResourceAccessBoundedReadSpec extends AnyWordSpec with Matchers with
         excess.toOption shouldBe None
         trace.contexts.map(_.operation) shouldBe Vector("read", "read")
         trace.phases shouldBe Vector.fill(2)(DslChokepointPhase.Resolve)
+      }
+    }
+  }
+
+  "Purpose-specific acquisition" should {
+    "honor the serialized byte boundary while ordinary acquisition retains its policy" in {
+      Given("a configured observed provider with an ordinary one-byte policy")
+      _with_fixture { root =>
+        val texts = Vector("日本\n", "{\"text\":\"\\u65e5\\u672c\"}", "{\"text\":\"日本\"}")
+        texts.zipWithIndex.foreach { case (text, index) =>
+          Files.writeString(root.resolve(s"artifact-$index.json"), text, StandardCharsets.UTF_8)
+          val reference = _reference(s"urn:textus:book:artifact-$index.json")
+          val trace = new ResourceTrace
+          val context = ExecutionContext.withResourceAccess(
+            ExecutionContext.withFrameworkDslChokepointHooks(ExecutionContext.create(), Vector(trace)),
+            _standard(root, 1))
+          val size = text.getBytes(StandardCharsets.UTF_8).length
+
+          When("the executing context selects equality and one-byte-smaller artifact limits")
+          val equal = context.readResourceText(reference, ResourceReadLimits(size), Some(StandardCharsets.UTF_8))
+          val excess = context.readResourceText(reference, ResourceReadLimits(size - 1), Some(StandardCharsets.UTF_8))
+          val ordinary = context.resources.readText(reference)
+
+          Then("only the complete exact-limit artifact succeeds and every read is observed once")
+          equal.toOption shouldBe Some(text)
+          excess.isFaillure shouldBe true
+          excess.toOption shouldBe None
+          ordinary.isFaillure shouldBe true
+          trace.contexts.map(_.operation) shouldBe Vector.fill(3)("read")
+          trace.phases shouldBe Vector.fill(3)(DslChokepointPhase.Resolve)
+          Files.readString(root.resolve(s"artifact-$index.json"), StandardCharsets.UTF_8) shouldBe text
+        }
+      }
+    }
+
+    "forward purpose limits to all configured composite providers without reconstructing them" in {
+      Given("the existing URL, Textus and external URN providers with independent ordinary limits")
+      val access = ResourceAccess.testProfile(ResourceAccessTestProfile(
+        urlPolicy = ResourceUrlPolicy(httpsHosts = Vector("catalog.example")),
+        urlProviders = Vector(new InMemoryUrlResourceProvider("https", Map("https://catalog.example/value" -> "日本"))),
+        textusUrnProviders = Vector(new InMemoryTextusUrnResourceProvider("book", Map("value" -> "日本"))),
+        urnProviders = Vector(new InMemoryUrnResourceProvider("example", Map("value" -> "日本"))),
+        readLimits = ResourceReadLimits(1)))
+      val references = Vector("https://catalog.example/value", "urn:textus:book:value", "urn:example:value").map(_reference)
+
+      When("one purpose requests complete six-byte UTF-8 content from each route")
+      val selected = references.map(access.readText(_, ResourceReadLimits(6), Some(StandardCharsets.UTF_8)))
+
+      Then("all configured providers receive the selected policy and their ordinary policy stays independent")
+      selected.map(_.toOption) shouldBe Vector.fill(3)(Some("日本"))
+      references.map(access.readText(_)).foreach(_.isFaillure shouldBe true)
+      access.read(_reference("https://foreign.example/value"), ResourceReadLimits(6)).isFaillure shouldBe true
+      access.read(_reference("urn:textus:foreign:value"), ResourceReadLimits(6)).isFaillure shouldBe true
+    }
+
+    "retain root admission and strict UTF-8 decoding for selected artifact limits" in {
+      Given("an allowed namespace, an inaccessible namespace and malformed UTF-8 bytes")
+      _with_fixture { root =>
+        Files.write(root.resolve("malformed.txt"), Array(0xc3.toByte, 0x28.toByte))
+        val context = ExecutionContext.withResourceAccess(ExecutionContext.create(), _standard(root, 1))
+
+        When("a purpose reads malformed or foreign content under its larger cap")
+        val malformed = context.readResourceText(_reference("urn:textus:book:malformed.txt"), ResourceReadLimits(64))
+        val foreign = context.readResource(_reference("urn:textus:foreign:malformed.txt"), ResourceReadLimits(64))
+
+        Then("neither decoding nor read authority is broadened by selecting a byte policy")
+        malformed.isFaillure shouldBe true
+        malformed.toOption shouldBe None
+        foreign.isFaillure shouldBe true
       }
     }
   }

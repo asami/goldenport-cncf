@@ -142,8 +142,8 @@ import org.goldenport.cncf.processexecution.{
 
 /*
  * @since   Sep. 28, 2026
- *  version Sep. 28, 2026
- * @version Oct. 15, 2026
+ *  version Oct. 15, 2026
+ * @version Nov.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -167,6 +167,19 @@ trait BehaviorFeaturePart { self: Behavior.Core.Holder =>
     charset: Option[Charset] = None
   ): Consequence[String] =
     execution_context.resources.readText(reference, charset)
+
+  protected final def read_resource(
+    reference: ResourceReference,
+    limits: org.goldenport.cncf.resource.ResourceReadLimits
+  ): Consequence[ResourceContent] =
+    execution_context.readResource(reference, limits)
+
+  protected final def read_resource_text(
+    reference: ResourceReference,
+    limits: org.goldenport.cncf.resource.ResourceReadLimits,
+    charset: Option[Charset]
+  ): Consequence[String] =
+    execution_context.readResourceText(reference, limits, charset)
 
   protected final def read_static_web_resource(
     reference: ResourceReference

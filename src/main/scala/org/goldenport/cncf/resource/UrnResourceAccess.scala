@@ -6,8 +6,8 @@ import org.goldenport.Consequence
 
 /*
  * @since   Jul. 16, 2026
- *  version Jul. 16, 2026
- * @version Oct. 15, 2026
+ *  version Oct. 15, 2026
+ * @version Nov.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 trait UrnResourceProvider {
@@ -122,6 +122,9 @@ private final class UrnResourceAccess(
   }.toMap
 
   def read(reference: ResourceReference): Consequence[ResourceContent] =
+    read(reference, limits)
+
+  override def read(reference: ResourceReference, limits: ResourceReadLimits): Consequence[ResourceContent] =
     reference match {
       case urn: ResourceReference.Urn if urn.nid == "textus" =>
         Consequence.resourceUnsupported("Textus URN resources require the dedicated standard provider")

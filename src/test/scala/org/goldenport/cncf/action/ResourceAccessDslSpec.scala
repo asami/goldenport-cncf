@@ -13,7 +13,8 @@ import org.scalatest.wordspec.AnyWordSpec
  *
  * @since   Jul. 16, 2026
  *  version Jul. 20, 2026
- * @version Oct. 15, 2026
+ *  version Oct. 15, 2026
+ * @version Nov.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ResourceAccessDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -61,6 +62,36 @@ final class ResourceAccessDslSpec extends AnyWordSpec with Matchers with GivenWh
       text.toOption shouldBe Some("日")
       refused.isFaillure shouldBe true
       refused.toOption shouldBe None
+    }
+
+    "select an immutable artifact policy without changing ordinary reads or accepting unsupported access" in {
+      Given("a configured one-byte provider and an existing custom access without bounded acquisition support")
+      val reference = ResourceReference.parseC("urn:example:value").toOption.get
+      val profile = ResourceAccessTestProfile(
+        urnProviders = Vector(new InMemoryUrnResourceProvider("example", Map("value" -> "日本"))),
+        readLimits = ResourceReadLimits(1))
+      val behavior = new ResourceBehavior(Behavior.Core(
+        ExecutionContext.withResourceAccessTestProfile(ExecutionContext.create(), profile), None, None))
+      var calls = 0
+      val unsupported = new ResourceAccess {
+        def read(reference: ResourceReference): Consequence[ResourceContent] = {
+          calls += 1
+          Consequence.success(ResourceContent(reference, Vector.empty))
+        }
+      }
+      val custom = new ResourceBehavior(Behavior.Core(
+        ExecutionContext.withResourceAccess(ExecutionContext.create(), unsupported), None, None))
+
+      When("component behavior selects six bytes through its existing protected DSL")
+      val artifact = behavior.readText(reference, ResourceReadLimits(6))
+      val ordinary = behavior.readText(reference)
+      val refused = custom.readText(reference, ResourceReadLimits(6))
+
+      Then("the configured route returns complete UTF-8 and the unsupported route fails before acquisition")
+      artifact.toOption shouldBe Some("日本")
+      ordinary.isFaillure shouldBe true
+      refused.isFaillure shouldBe true
+      calls shouldBe 0
     }
 
     "fail deterministically when no resource access implementation is configured" in {
@@ -120,6 +151,9 @@ final class ResourceAccessDslSpec extends AnyWordSpec with Matchers with GivenWh
 
     def readText(reference: ResourceReference): Consequence[String] =
       read_resource_text(reference)
+
+    def readText(reference: ResourceReference, limits: ResourceReadLimits): Consequence[String] =
+      read_resource_text(reference, limits, Some(StandardCharsets.UTF_8))
 
     def readTree(reference: ResourceTreeReference) =
       read_resource_tree(reference)

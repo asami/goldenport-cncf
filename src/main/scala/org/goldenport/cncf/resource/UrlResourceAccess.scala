@@ -9,7 +9,8 @@ import org.goldenport.Consequence
 /*
  * @since   Jul. 16, 2026
  *  version Jul. 21, 2026
- * @version Oct. 15, 2026
+ *  version Oct. 15, 2026
+ * @version Nov.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResourceUrlPolicy(
@@ -248,6 +249,9 @@ private final class UrlResourceAccess(
   }.toMap
 
   def read(reference: ResourceReference): Consequence[ResourceContent] =
+    read(reference, limits)
+
+  override def read(reference: ResourceReference, limits: ResourceReadLimits): Consequence[ResourceContent] =
     reference match {
       case url: ResourceReference.Url =>
         _authorize_c(url).flatMap { _ =>

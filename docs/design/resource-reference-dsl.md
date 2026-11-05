@@ -82,8 +82,17 @@ Runtime configuration owns one `ResourceReadLimits` policy, defaulting to
 storage assembly and the normal global-runtime context pass the actual policy
 into `ResourceAccess.standard`. Existing factory arities explicitly delegate to
 finite defaults; explicit runtime overloads carry the configured policy.
-Components own only logical references and charset choices. There is no
-component safety variant or per-call maximum argument.
+Components retain logical references and charset choices for ordinary reads.
+An explicitly declared purpose-specific policy can select an immutable
+`ResourceReadLimits` through `ExecutionContext.readResource` or
+`readResourceText`, or the corresponding protected Resource DSL overload.
+These calls borrow this ExecutionContext's existing observed `ResourceAccess`;
+they do not rebuild providers, modify generic policy, broaden roots or bypass
+authorization. The selected value reaches the existing provider acquisition
+SPI before bytes are read. An older custom access implementation returns a
+typed unsupported result for the new overload instead of reading under a
+different budget and checking content afterward. Ordinary signatures, generic
+read limits and independent Git/capture/receipt budgets retain their meaning.
 
 A larger selected limit permits more input; it is not a peak-memory bound.
 Immutable byte, text and JSON values may require more memory than the input size.

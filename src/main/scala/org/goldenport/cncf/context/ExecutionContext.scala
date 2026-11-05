@@ -52,7 +52,7 @@ import cats.~>
  *  version Jul. 31, 2026
  *  version Aug. 12, 2026
  *  version Oct. 31, 2026
- * @version Nov.  3, 2026
+ * @version Nov.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -75,6 +75,20 @@ abstract class ExecutionContext
 
   override def resources: ResourceAccess =
     ResourceAccessObservation.observed(cncfCore.resources)(using this)
+
+  /** Purpose acquisition borrows this call's existing observed provider and grants. */
+  def readResource(
+    reference: org.goldenport.cncf.resource.ResourceReference,
+    limits: org.goldenport.cncf.resource.ResourceReadLimits
+  ): Consequence[org.goldenport.cncf.resource.ResourceContent] =
+    resources.read(reference, limits)
+
+  def readResourceText(
+    reference: org.goldenport.cncf.resource.ResourceReference,
+    limits: org.goldenport.cncf.resource.ResourceReadLimits,
+    charset: Option[java.nio.charset.Charset] = None
+  ): Consequence[String] =
+    resources.readText(reference, limits, charset)
 
   override def resourceTrees: ResourceTreeAccess =
     ResourceTreeAccessObservation.observed(cncfCore.resourceTrees)(using this)

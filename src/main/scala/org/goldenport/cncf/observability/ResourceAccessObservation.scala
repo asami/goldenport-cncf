@@ -3,12 +3,13 @@ package org.goldenport.cncf.observability
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.resource.{ResourceAccess, ResourceContent, ResourceReference}
+import org.goldenport.cncf.resource.{ResourceAccess, ResourceContent, ResourceReference, ResourceReadLimits}
 
 /*
  * @since   Jul. 16, 2026
  *  version Jul. 21, 2026
- * @version Oct. 15, 2026
+ *  version Oct. 15, 2026
+ * @version Nov.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 object ResourceAccessObservation {
@@ -28,6 +29,22 @@ object ResourceAccessObservation {
         DslChokepointRunner.run(chokepoint) {
           DslChokepointRunner.phase(chokepoint, DslChokepointPhase.Resolve) {
             access.read(reference)
+          }
+        }
+      }
+
+      override def read(reference: ResourceReference, limits: ResourceReadLimits): Consequence[ResourceContent] = {
+        val provider = access.providerMetadata(reference)
+        val chokepoint = DslChokepointContext(
+          domain = "resource",
+          operation = "read",
+          attributes = Record.dataAuto(
+            "resource.scheme" -> reference.scheme
+          ) ++ Record.dataAuto(provider.safeAttributes*)
+        )
+        DslChokepointRunner.run(chokepoint) {
+          DslChokepointRunner.phase(chokepoint, DslChokepointPhase.Resolve) {
+            access.read(reference, limits)
           }
         }
       }

@@ -8,7 +8,8 @@ import org.goldenport.Consequence
 /*
  * @since   Jul. 16, 2026
  *  version Jul. 21, 2026
- * @version Oct. 15, 2026
+ *  version Oct. 15, 2026
+ * @version Nov.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResourceContent(
@@ -36,6 +37,13 @@ final case class ResourceContent(
 trait ResourceAccess {
   def read(reference: ResourceReference): Consequence[ResourceContent]
 
+  /** Select an immutable purpose policy without changing the ordinary policy.
+    * Existing custom access implementations must explicitly support this route;
+    * acquiring with their default and checking afterwards is not equivalent.
+    */
+  def read(reference: ResourceReference, limits: ResourceReadLimits): Consequence[ResourceContent] =
+    Consequence.resourceUnsupported("resource access does not support purpose-specific acquisition limits")
+
   def readStaticWeb(reference: ResourceReference): Consequence[ResourceContent] =
     Consequence.resourceUnsupported("static Web access is not configured")
 
@@ -53,6 +61,16 @@ trait ResourceAccess {
     read(reference).flatMap { content =>
       charset.map(content.textC).getOrElse(content.textC())
     }
+
+  def readText(
+    reference: ResourceReference,
+    limits: ResourceReadLimits,
+    charset: Option[Charset]
+  ): Consequence[String] =
+    read(reference, limits).flatMap { content =>
+      charset.map(content.textC).getOrElse(content.textC())
+    }
+
 }
 
 object ResourceAccess {
@@ -163,6 +181,13 @@ object ResourceAccess {
           case _: ResourceReference.Url => urlaccess.read(reference)
           case urn: ResourceReference.Urn if urn.nid == "textus" => textusaccess.read(reference)
           case _: ResourceReference.Urn => urnaccess.read(reference)
+        }
+
+      override def read(reference: ResourceReference, limits: ResourceReadLimits): Consequence[ResourceContent] =
+        reference match {
+          case _: ResourceReference.Url => urlaccess.read(reference, limits)
+          case urn: ResourceReference.Urn if urn.nid == "textus" => textusaccess.read(reference, limits)
+          case _: ResourceReference.Urn => urnaccess.read(reference, limits)
         }
 
       override def readStaticWeb(reference: ResourceReference): Consequence[ResourceContent] =

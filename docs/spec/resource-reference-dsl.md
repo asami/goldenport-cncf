@@ -53,13 +53,29 @@ for managed-resource reads rather than calling Java filesystem or network APIs.
 
 Ordinary `read(reference)` and `readText(reference, charset)` acquire complete
 content under one runtime-owned `ResourceReadLimits(maximumBytes)` policy.
-Components retain their logical references and existing method signatures;
-they neither choose a safety variant nor pass a per-call maximum:
+Components retain their logical references and existing method signatures.
+Ordinary reads use the runtime policy:
 
 ```scala
 val content = read_resource(reference)
 val text = read_resource_text(reference)
 ```
+
+A Component with a declared purpose-specific acquisition policy may instead
+use the executing `ExecutionContext.readResource(reference, limits)` or
+`readResourceText(reference, limits, charset)` with an immutable, validated
+`ResourceReadLimits`. The protected DSL exposes the corresponding
+`read_resource(reference, limits)` and `read_resource_text(reference, limits,
+charset)` overloads. This selects the complete-input acquisition budget for
+that call; it does not modify the ordinary runtime policy or grant access.
+The existing observed Resource owner selects the provider and preserves its
+authorization, permitted roots, strict text decoding and one read observation.
+Custom `ResourceAccess` implementations that do not implement this overload
+return `resourceUnsupported`; ordinary acquisition followed by a size check is
+not a fallback. Invalid limits fail before provider use. The same inclusive
+byte and complete-content rules below apply, including serialized JSON framing,
+escapes, final newlines and multibyte UTF-8. Independent Git, process capture
+and receipt budgets remain unchanged.
 
 The default maximum is **1,048,576 bytes (1 MiB)**. The admitted range is
 **1 through 268,435,456 bytes (256 MiB)**, inclusive. There is no unlimited or
