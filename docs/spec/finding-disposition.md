@@ -95,6 +95,65 @@ Alias chains are allowed; duplicate previous IDs and cycles fail. Removing an
 alias is an explicit compatibility decision, not an incidental lint update.
 ABI breaking changes require a new version and migration of stored declarations.
 
+## Consumer mapping and invocation
+
+The following are illustrative adapter inputs, not claims that CBD or Cozy has
+executed an integration check. The adapter must obtain the exact rule,
+occurrence and semantic target from its own structured finding. It must retain
+the actual decision reason and provenance rather than inventing them.
+
+```scala
+import org.goldenport.cncf.finding.FindingDispositionV1.*
+import org.goldenport.cncf.finding.FindingDispositionRepresentation.*
+
+val target = Target("component:orders", "operation:submit")
+val key = Key("car.required-operation", "missing-submit", target)
+val finding = Finding(key, "The submit operation is required")
+val coverage = Set(Coverage(key.rule, target))
+val observed = Inspection("model:1", Vector(finding), coverage)
+
+// CBD maps an already admitted, exact decision to the normalized declaration.
+val accept = Declaration(key, Kind.Accept, "Submission is owned elsewhere", "decision:orders:1")
+val accepted = interpretC(observed, observed, Vector(accept))
+// For a different admitted decision, replace Accept and its reason/provenance:
+val defer = Declaration(key, Kind.Defer, "Implement in the next milestone", "issue:orders:42")
+val deferred = interpretC(observed, observed, Vector(defer))
+
+// Cozy maps its own CML representation to the portable representation.
+// These are Scala values, not a prescription of CML property names or syntax.
+val cmlProperties = Properties(1, key.rule, key.finding, target.scope,
+  target.identity, "defer", "Implement in the next milestone", "issue:orders:42")
+val normalized = decodeC(cmlProperties) // Consequence[Declaration]
+// For Accept, map kind = "accept" and the actual admitted reason/provenance.
+```
+
+`interpretC` returns `Consequence[Report]`; callers must handle failure before
+using the report. A successful report for the still-observed exact finding has
+status `Accepted` or `Deferred` respectively, and the latter remains in
+`deferredBacklog`. For handwritten Scala, the adapter can instead call
+`readC(element, target)` and pass its successfully decoded declarations to the
+same interpreter. Neither representation establishes Human Admission.
+
+For a real fix, the adapter changes the authoritative source or model, runs the
+same rule again, and supplies the actual revisions and a verified reference to
+the change. For example, assuming the second inspection truly completed this
+rule/target and no longer observed the finding:
+
+```scala
+val correctedInspection = Inspection("model:2", Vector.empty, coverage)
+val fix = Declaration(key, Kind.Fix, "Add the required operation", "decision:orders:2")
+val change = ChangeEvidence(key, "model:1", "model:2", "diff:orders:model-1..model-2")
+val result = interpretC(observed, correctedInspection, Vector(fix), Vector(change))
+```
+
+Only those verified facts make the result `Corrected`; the example reference
+is illustrative. If a check was skipped or failed, omit its completed coverage.
+If the finding disappears without completed matching coverage, an exact Fix
+decision, and matching change evidence, the result remains `Unresolved`.
+The same reinspection boundary applies to `Configure`, with a configuration
+change and `Configured` outcome. These examples do not establish actual CBD or
+Cozy application, reinspection, artifact selection, or coverage.
+
 ## CML and Human boundaries
 
 Cozy owns CML property names, parsing and serialization. Its adapter maps model
