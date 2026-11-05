@@ -23,7 +23,8 @@ import org.goldenport.protocol.Request
  *
  * @since   Mar. 20, 2026
  *  version Aug. 23, 2026
- * @version Oct. 17, 2026
+ *  version Oct. 17, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -215,6 +216,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     caps: Set[String],
     security: SecurityContext
   ): Consequence[ResolvedIngressSecurity] = {
+    SecurityAuthenticationProvenance.inheritCredentialTransports(base.security, security)
     val privilege = _resolve_privilege_from_security(security)
     val ctx0 = ExecutionContext.withSecurityContext(base, security)
     val ctx1 = _production_runtime_context_from_base(ctx0)

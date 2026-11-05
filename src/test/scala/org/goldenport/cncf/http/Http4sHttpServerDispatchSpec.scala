@@ -3,22 +3,23 @@ package org.goldenport.cncf.http
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.goldenport.bag.Bag
-import org.goldenport.cncf.action.{CommandExecutionMode, CommandInterfaceMode}
+import org.goldenport.cncf.action.{ActionCall, CommandExecutionMode, CommandInterfaceMode, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.Component
-import org.goldenport.cncf.component.{ComponentId, ComponentInstanceId}
-import org.goldenport.cncf.context.{Capability, ExecutionContext, PrincipalId, RuntimeContext, SecurityLevel, SessionContext, SubjectKind}
+import org.goldenport.cncf.component.{ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
+import org.goldenport.cncf.context.{Capability, ExecutionContext, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel, SessionContext, SubjectKind}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.information.*
 import org.goldenport.cncf.job.JobId
 import org.goldenport.cncf.knowledge.{KnowledgeNode, KnowledgeNodeId, KnowledgeWorkingSetSnapshot}
 import org.goldenport.cncf.mcp.McpProtocolRevision
 import org.goldenport.cncf.protocol.HttpFailureTransportMetadata
-import org.goldenport.cncf.security.{AuthenticationProvider, AuthenticationRequest, AuthenticationResult}
-import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem, SubsystemUserMode}
+import org.goldenport.cncf.security.{AuthenticationProvider, AuthenticationRequest, AuthenticationResult, SecuritySubject}
+import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, GenericSubsystemAuthenticationBinding, GenericSubsystemAuthenticationProviderBinding, GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemSecurityBinding, Subsystem, SubsystemUserMode}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.conclusion.{Disposition, Interpretation}
@@ -26,6 +27,9 @@ import org.goldenport.datatype.{ContentType, MimeType}
 import org.goldenport.http.{HttpResponse, HttpStatus}
 import org.goldenport.observation.{Cause, Descriptor, Observation, Phenomenon, Taxonomy}
 import org.goldenport.protocol.Protocol
+import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
+import org.goldenport.protocol.spec as spec
+import org.goldenport.cncf.operation.{CmlOperationAccess, CmlOperationDefinition}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.record.Record
 import org.http4s.{Header, MediaType, Method, Request as HRequest, Response as HResponse, Status as HStatus, Uri}
@@ -41,7 +45,8 @@ import org.typelevel.ci.CIStringSyntax
  *  version Apr. 25, 2026
  *  version May. 25, 2026
  *  version Jun. 19, 2026
- * @version Sep.  1, 2026
+ *  version Sep.  1, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -53,6 +58,89 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
   private val _ic06e2 = afterWord(
     "in spec:phase-61.4-information-projection-compatibility, example:E2, rules:IC-06, phase:61.4, slice:IC-06B"
   )
+
+  "Original HTTP credential transports" should {
+    "reach a protected operation as secret-free facts without changing ordinary authentication" in {
+      Given("an explicit multi-user subsystem, real native HTTP dispatch and a declared local authentication provider")
+      val observed = new AtomicReference[Option[SecurityContext]](None)
+      val subsystem = _credential_transport_subsystem(observed)
+      try {
+        val app = _server(subsystem).routes(null.asInstanceOf[org.http4s.server.websocket.WebSocketBuilder2[IO]]).orNotFound
+        def _get_(headers: Vector[Header.Raw], query: String = ""): HResponse[IO] =
+          app.run(HRequest[IO](method = Method.GET, uri = Uri.unsafeFromString(
+            "/rest/v1/credential-transport/transport/check" + query)).withHeaders(org.http4s.Headers(headers))).unsafeRunSync()
+        def _expect_status_(response: HResponse[IO], expected: Int): Unit = {
+          def _safe_text_(value: String): String =
+            Vector("transport-access", "cookie-credential", "session-1").foldLeft(value)(
+              (text, secret) => text.replace(secret, "<redacted>")).take(2048)
+          val clue = if (response.status.code == expected) "" else {
+            val parsed = parse(response.as[String].unsafeRunSync()).toOption
+            val diagnostic = parsed.map { json =>
+              val error = json.hcursor.downField("error").focus.getOrElse(json).hcursor
+              io.circe.Json.obj(
+                "status" -> io.circe.Json.fromInt(response.status.code),
+                "statusText" -> error.get[String]("statusText").toOption.map(value => io.circe.Json.fromString(_safe_text_(value))).getOrElse(io.circe.Json.Null),
+                "message" -> error.get[String]("message").toOption.map(value => io.circe.Json.fromString(_safe_text_(value))).getOrElse(io.circe.Json.Null),
+                "detailCode" -> error.get[Long]("detailCode").toOption.map(io.circe.Json.fromLong).getOrElse(io.circe.Json.Null)).noSpaces
+            }.getOrElse("<non-JSON response omitted>")
+            "Native credential-transport status failure: " + diagnostic.take(4096) + ": "
+          }
+          withClue(clue) { response.status.code shouldBe expected }
+        }
+        val bearer = Header.Raw(ci"Authorization", "Bearer transport-access")
+
+        When("a Bearer-only request reaches normal operation execution")
+        val control = _get_(Vector(bearer))
+
+        Then("the provider-authenticated operation observes the original transport and its current UnitOfWork")
+        _expect_status_(control, 200)
+        observed.get().get.credentialTransports shouldBe Some(SecurityContext.CredentialTransports(
+          authorizationHeader = true, bearerHeader = true))
+        SecuritySubject.from(observed.get().get).isProviderAuthenticated shouldBe true
+        observed.get().get.principal.id.value shouldBe "transport-owner"
+
+        When("unrecognized and configured session-cookie spellings accompany the same valid Bearer")
+        val names = Vector("textus-session", "cncf-session", "TeXtUs-SeSsIoN", "textus-session-other-app",
+          "textus-session-credential-transport-http")
+        names.foreach { name =>
+          val response = _get_(Vector(bearer, Header.Raw(ci"Cookie", name + "=cookie-credential"),
+            Header.Raw(ci"X-Textus-Credential-Transports", "sessionCookie=false")),
+            "?credentialTransports.sessionCookie=false")
+          Then("the consumer rejects ambiguity using trusted facts while provider identity is retained")
+          _expect_status_(response, 403)
+          observed.get().get.credentialTransports.map(_.sessionCookie) shouldBe Some(true)
+          SecuritySubject.from(observed.get().get).isProviderAuthenticated shouldBe true
+          val body = response.as[String].unsafeRunSync()
+          body should not include "cookie-credential"
+          body should not include "transport-access"
+          observed.get().get.credentialTransports.toString should not include "cookie-credential"
+        }
+
+        When("a noncredential cookie accompanies the Bearer, or the configured cookie is used alone")
+        val preference = _get_(Vector(bearer, Header.Raw(ci"Cookie", "locale=ja")))
+        val preferencefacts = observed.get().get.credentialTransports
+        val cookieonly = _get_(Vector(Header.Raw(ci"Cookie", "textus-session-credential-transport-http=session-1")))
+        val cookiefacts = observed.get().get.credentialTransports
+
+        Then("noncredential cookies are not classified as sessions and existing configured session authentication works")
+        _expect_status_(preference, 200)
+        preferencefacts.map(_.sessionCookie) shouldBe Some(false)
+        _expect_status_(cookieonly, 200)
+        cookiefacts shouldBe Some(SecurityContext.CredentialTransports(sessionCookie = true))
+        observed.get().get.session.flatMap(_.sessionId) shouldBe Some("session-1")
+        observed.get().get.session.flatMap(_.tokenKind) shouldBe Some("access")
+
+        When("a client claims authentication and transport metadata without a provider credential")
+        observed.set(None)
+        val forged = _get_(Vector(Header.Raw(ci"X-Textus-Credential-Transports", "bearerHeader=true")),
+          "?authenticated=true&credentialTransports.bearerHeader=true&principalId=transport-owner")
+
+        Then("the native authentication checkpoint rejects the request before protected operation execution")
+        _expect_status_(forged, 403)
+        observed.get() shouldBe None
+      } finally subsystem.shutdownC().TAKE
+    }
+  }
 
   "Http4sHttpServer" must _in_phase53_spec {
     "HTTP operation, presentation, and protocol dispatch" which {
@@ -1523,6 +1611,78 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers with GivenW
 
   private def _with_stale_execution_headers(response: HResponse[IO]): HResponse[IO] =
     _stale_execution_headers.foldLeft(response)(_.putHeaders(_))
+
+  private def _credential_transport_subsystem(observed: AtomicReference[Option[SecurityContext]]): Subsystem = {
+    val subsystem = Subsystem(
+      name = "credential-transport-http",
+      scopeContext = Some(ScopeContext(kind = ScopeKind.Subsystem, name = "credential-transport-http",
+        parent = None, observabilitycontext = ExecutionContext.create().observability)),
+      configuration = ResolvedConfiguration(Configuration(Map(
+        SubsystemUserMode.CONFIGURATION_KEY -> ConfigurationValue.StringValue("multi-user"))), ConfigurationTrace.empty))
+    val configured = subsystem.withDescriptor(GenericSubsystemDescriptor(
+      path = Paths.get("<memory>"), subsystemName = "credential-transport-http",
+      componentBindings = Vector(GenericSubsystemComponentBinding("org.goldenport.cncf.test.CredentialTransport")),
+      security = Some(GenericSubsystemSecurityBinding(authentication = Some(GenericSubsystemAuthenticationBinding(
+        convention = Some("enabled"), fallbackPrivilege = Some("disabled"),
+        providers = Vector(GenericSubsystemAuthenticationProviderBinding(name = "transport-provider",
+          component = "org.goldenport.cncf.test.CredentialTransport", enabled = Some(true)))))))))
+    configured.add(_credential_transport_component(configured, observed))
+  }
+
+  private def _credential_transport_component(
+    subsystem: Subsystem,
+    observed: AtomicReference[Option[SecurityContext]]
+  ): Component = {
+    val operation = new spec.OperationDefinition {
+      val specification: spec.OperationDefinition.Specification =
+        spec.OperationDefinition.Specification.Builder("check")
+          .copy(response = spec.ResponseDefinition(result = List(org.goldenport.schema.XString))).build()
+      def createOperationRequest(req: org.goldenport.protocol.Request): Consequence[OperationRequest] = {
+        val selectedrequest = req
+        Consequence.success(new QueryAction() {
+          val request: org.goldenport.protocol.Request = selectedrequest
+          def createCall(core: ActionCall.Core): ActionCall = {
+            val captured = core
+            new ProcedureActionCall {
+              val core: ActionCall.Core = captured
+              def execute(): Consequence[OperationResponse] = {
+                val security = executionContext.security
+                observed.set(Some(security))
+                val facts = security.credentialTransports
+                if (!(executionContext.unitOfWork.executionContext eq executionContext))
+                  Consequence.stateConflict("Operation context must correspond to its current UnitOfWork")
+                else if (facts.exists(value => value.bearerHeader && value.sessionCookie))
+                  Consequence.securityPermissionDenied("Ambiguous credential transports")
+                else Consequence.success(OperationResponse.Scalar("admitted"))
+              }
+            }
+          }
+        })
+      }
+    }
+    val service = spec.ServiceDefinition(name = "transport", operations = spec.OperationDefinitionGroup(
+      cats.data.NonEmptyVector.of(operation)))
+    val componentid = ComponentId("org.goldenport.cncf.test.CredentialTransport")
+    val component = new Component() {
+      override def operationDefinitions: Vector[CmlOperationDefinition] = Vector(CmlOperationDefinition(
+        name = "check", kind = "QUERY", inputType = "TransportRequest", outputType = "TransportResponse",
+        inputValueKind = "QUERY_VALUE", access = Some(CmlOperationAccess("authenticated_only"))))
+      override def authenticationProviders: Vector[AuthenticationProvider] = Vector(new AuthenticationProvider {
+        val name: String = "transport-provider"
+        def authenticate(request: AuthenticationRequest)(using ExecutionContext): Consequence[Option[AuthenticationResult]] =
+          if (request.accessToken.contains("transport-access") || request.sessionId.contains("session-1"))
+            Consequence.success(Some(AuthenticationResult(PrincipalId("transport-owner"),
+              capabilities = Set(Capability("user")), session = Some(SessionContext(
+                sessionId = Some("session-1"), tokenKind = Some("access"))))))
+          else Consequence.success(None)
+      })
+    }.withArtifactMetadata(Component.ArtifactMetadata(sourceType = "spec", name = "credential-transport",
+      version = "0.0.0", component = Some("credential-transport")))
+    val core = Component.Core.create(componentid.name, componentid, ComponentInstanceId.default(componentid),
+      Protocol(services = spec.ServiceDefinitionGroup(Vector(service)),
+        handler = org.goldenport.protocol.handler.ProtocolHandler.default))
+    component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Main))
+  }
 
   private def _server(
     subsystem: Subsystem,

@@ -59,7 +59,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 20, 2026
  *  version Apr. 28, 2026
  *  version Aug. 11, 2026
- * @version Sep. 28, 2026
+ *  version Sep. 28, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -68,6 +69,41 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
   )
 
   "IngressSecurityResolver" should {
+    "retain admitted transport facts through fresh provider resolution without trusting attribute claims" in {
+      Given("an explicit provider and a base context with independently admitted physical transport facts")
+      val subsystem = _subsystem(fallbackenabled = false, providers = Vector(_provider("transport-provider", request =>
+        if (request.accessToken.contains("transport-access"))
+          Consequence.success(Some(AuthenticationResult(PrincipalId("transport-owner"),
+            capabilities = Set(Capability("user")),
+            session = Some(org.goldenport.cncf.context.SessionContext(sessionId = Some("transport-session"), tokenKind = Some("access"))))))
+        else Consequence.success(None))))
+      val base = subsystem.components.head.logic.executionContext()
+      val facts = org.goldenport.cncf.context.SecurityContext.CredentialTransports(
+        authorizationHeader = true, bearerHeader = true, sessionCookie = true)
+      SecurityAuthenticationProvenance.withCredentialTransports(base.security, facts)
+
+      When("provider resolution receives contradictory public transport and identity claims")
+      val resolved = IngressSecurityResolver.resolve(base, Map("Authorization" -> "Bearer transport-access",
+        "credentialTransports.sessionCookie" -> "false", "principalId" -> "forged-owner")).TAKE.executionContext
+
+      Then("the final current UnitOfWork observes the admitted facts and the actual provider identity")
+      resolved.security.credentialTransports shouldBe Some(facts)
+      resolved.unitOfWork.executionContext should be theSameInstanceAs resolved
+      resolved.unitOfWork.executionContext.security.credentialTransports shouldBe Some(facts)
+      resolved.security.principal.id.value shouldBe "transport-owner"
+      resolved.security.session.flatMap(_.tokenKind) shouldBe Some("access")
+      SecuritySubject.from(resolved.security).isProviderAuthenticated shouldBe true
+
+      When("a fresh unobserved base receives the same client metadata claims")
+      val freshbase = ExecutionContext.withSecurityContext(base, base.security.copy())
+      val unobserved = IngressSecurityResolver.resolve(freshbase,
+        Map("Authorization" -> "Bearer transport-access", "credentialTransports.sessionCookie" -> "true")).TAKE.executionContext
+
+      Then("client data cannot manufacture trusted physical observation")
+      unobserved.security.credentialTransports shouldBe None
+      unobserved.security.principal.id.value shouldBe "transport-owner"
+    }
+
     "resolve direct privilege and context" which {
       "resolve anonymous privilege when no protocol security attributes are present" in {
         Given("a request without protocol security attributes")

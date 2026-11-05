@@ -57,7 +57,50 @@ Valid operational IDs supply neither authentication nor capabilities. A client
 `cncf.security.authenticated` flag remains an explicit ControlledTest fact only;
 ordinary ingress cannot turn it into provider authentication or a system grant.
 
+## Original HTTP credential transports
+
+Ordinary HTTP operations can inspect security.credentialTransports, an optional
+SecurityContext.CredentialTransports value. A physically admitted HTTP request
+has boolean facts for authorizationHeader, bearerHeader, sessionHeader and
+sessionCookie; a context with no admitted physical observation has None.
+The value contains no cookie name/value, token, session identifier or credential
+text. bearerHeader describes the Authorization scheme, not authentication.
+
+Http4s observes the original physical headers before session normalization and
+Cookie removal. Session-cookie presence includes the configured subsystem/app
+cookie and the existing textus-session / cncf-session names and scoped
+hyphenated forms, even when that cookie cannot resolve a configured session.
+Noncredential cookies do not set that fact. Multiple transport facts can be true.
+Applications may reject an ambiguous Bearer/session-cookie combination; the
+framework does not replace their access policy or reject ordinary cookie flows.
+
+Facts are admitted in-process, follow ordinary physical-request copies and reach
+the final provider-resolved SecurityContext before operation execution. Request
+properties, header/query/form claims and constructed data values cannot install
+trusted transport facts or authenticate a caller. Copying transport facts never
+copies provider/trusted-local authentication authority from a physical request.
+Existing provider selection, authenticated subject, capabilities, session and
+final UnitOfWork/context correspondence retain their original owners.
+
+SecurityContext and SessionContext constructor, apply/copy and extractor shapes
+remain unchanged for existing compiled consumers. Transport facts use the same
+identity-attached native provenance infrastructure as authentication origin and
+are detached from public product equality and serialized credential attributes.
+Existing request/Conclusion credential redaction remains unchanged.
+
 ## Executable correspondence
+
+- [Http4sHttpServerDispatchSpec](../../src/test/scala/org/goldenport/cncf/http/Http4sHttpServerDispatchSpec.scala)
+  supplies an explicit local provider and authenticated-only operation through
+  real native HTTP dispatch. It reserves Bearer-only success, session-cookie
+  ambiguity rejection by the consumer, configured cookie-only compatibility,
+  noncredential cookies, client-claim rejection and secret-free transport facts.
+- [SecurityContextSpec](../../src/test/scala/org/goldenport/cncf/context/SecurityContextSpec.scala)
+  reserves unchanged public products, transport-only inheritance without
+  authentication, and a reducing 100-success boolean-combination/non-forgery law.
+- [IngressSecurityResolverSpec](../../src/test/scala/org/goldenport/cncf/security/IngressSecurityResolverSpec.scala)
+  also reserves provider identity and transport/current-UnitOfWork correspondence
+  while contradictory public metadata claims cannot manufacture facts.
 
 - [ObservabilityIdentitySpec](../../src/test/scala/org/goldenport/cncf/context/ObservabilityIdentitySpec.scala)
   fixes independent canonical parts/strings, default construction, full-value

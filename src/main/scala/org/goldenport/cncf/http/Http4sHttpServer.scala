@@ -50,7 +50,7 @@ import org.goldenport.cncf.observability.{ConclusionDiagnostics, ConclusionDiscl
 import org.goldenport.cncf.operation.OperationConfidentiality
 import org.goldenport.cncf.mcp.{McpJsonRpcAdapter, McpJsonRpcOutcome}
 import org.goldenport.cncf.openapi.OpenApiProjector
-import org.goldenport.cncf.security.{AuthenticationRequest, IngressSecurityResolver, SessionId}
+import org.goldenport.cncf.security.{AuthenticationRequest, IngressSecurityResolver, SecurityAuthenticationProvenance, SessionId}
 import org.goldenport.cncf.protocol.HttpFailureTransportMetadata
 import org.goldenport.protocol.spec.OperationDefinition
 import org.goldenport.bag.{Bag, BinaryBag}
@@ -70,7 +70,8 @@ import org.simplemodeling.model.datatype.{EntityId, EntityRevision}
  *  version Aug. 15, 2026
  *  version Sep. 29, 2026
  *  version Oct. 20, 2026
- * @version Oct. 21, 2026
+ *  version Oct. 21, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -4480,7 +4481,8 @@ final class Http4sHttpServer(
   ): HttpRequest =
     request.path.segments.headOption.flatMap(_presentation_component) match {
       case Some(component) =>
-        request.copy(path = HttpPath(component.componentId.name +: request.path.segments.tail))
+        SecurityAuthenticationProvenance.inheritCredentialTransports(
+          request, request.copy(path = HttpPath(component.componentId.name +: request.path.segments.tail)))
       case None => request
     }
 
@@ -5986,7 +5988,7 @@ final class Http4sHttpServer(
       _header_value(req, EntityRevisionTransport.ifMatchHeaderName) match {
         case Some(value) =>
           EntityRevisionTransport.parseEntityTagC(value).map { revision =>
-            request.copy(
+            SecurityAuthenticationProvenance.inheritCredentialTransports(request, request.copy(
               header = request.header
                 .upsertSingle(
                   EntityMutationAdapterDefaults.profilePropertyName,
@@ -5996,16 +5998,16 @@ final class Http4sHttpServer(
                   EntityRevisionTransport.observedRevisionPropertyName,
                   revision.value
                 )
-            )
+            ))
           }
         case None =>
           Consequence.success(
-            request.copy(
+            SecurityAuthenticationProvenance.inheritCredentialTransports(request, request.copy(
               header = request.header.upsertSingle(
                 EntityMutationAdapterDefaults.profilePropertyName,
                 EntityMutationAdapterDefaults.idempotentRestProfile
               )
-            )
+            ))
           )
       }
 
@@ -6280,7 +6282,11 @@ final class Http4sHttpServer(
         engine.runtimeSubsystem.executionProfileC.flatMap { subsystemprofile =>
           IngressSecurityResolver
             .resolve(subsystemprofile, base, attributes)
-            .map(resolved => WebRequestExecution(resolved.executionContext, resolution))
+            .map { resolved =>
+              SecurityAuthenticationProvenance.withCredentialTransports(
+                resolved.executionContext.security, _credential_transports(req))
+              WebRequestExecution(resolved.executionContext, resolution)
+            }
         }
       }
   }
@@ -7537,6 +7543,7 @@ final class Http4sHttpServer(
       case _ => HttpRequest.GET
     }
     val query = _query_record(req)
+    val transports = _credential_transports(req)
     val header = _disclosure_header_record(req)
     val origin = _request_origin(req)
     val context = HttpContext(
@@ -7547,10 +7554,35 @@ final class Http4sHttpServer(
     val path = pathoverride.getOrElse(req.uri.path.renderString)
     val contenttypeheader = req.headers.get[`Content-Type`]
 
-    if (_is_multipart(contenttypeheader))
-      _to_multipart_http_request(req, method, path, query, header, context).map(Consequence.success(_))
-    else
-      _to_regular_http_request(req, method, path, query, header, context, contenttypeheader)
+    val decoded: IO[Consequence[HttpRequest]] =
+      if (_is_multipart(contenttypeheader))
+        _to_multipart_http_request(req, method, path, query, header, context).map(Consequence.success(_))
+      else
+        _to_regular_http_request(req, method, path, query, header, context, contenttypeheader)
+    decoded.map(_.map(request =>
+      SecurityAuthenticationProvenance.withCredentialTransports(request, transports)))
+  }
+
+  private def _credential_transports(
+    req: org.http4s.Request[IO]
+  ): SecurityContext.CredentialTransports = {
+    val headers = req.headers.headers
+    val configuredcookies = _session_cookie_names(req).map(_.toLowerCase(java.util.Locale.ROOT)).toSet
+    val sessioncookie = headers.filter(_.name.toString.equalsIgnoreCase("Cookie")).exists { header =>
+      header.value.split(";").exists { part =>
+        val name = part.takeWhile(_ != '=').trim.toLowerCase(java.util.Locale.ROOT)
+        configuredcookies.contains(name) || name == "textus-session" || name == "cncf-session" ||
+          name.startsWith("textus-session-") || name.startsWith("cncf-session-")
+      }
+    }
+    SecurityContext.CredentialTransports(
+      authorizationHeader = headers.exists(_.name.toString.equalsIgnoreCase("Authorization")),
+      bearerHeader = headers.exists(header => header.name.toString.equalsIgnoreCase("Authorization") &&
+        header.value.trim.regionMatches(true, 0, "Bearer ", 0, 7)),
+      sessionHeader = headers.exists(header => Set("x-textus-session", "x-cncf-session")
+        .contains(header.name.toString.toLowerCase(java.util.Locale.ROOT))),
+      sessionCookie = sessioncookie
+    )
   }
 
   private def _query_record(
