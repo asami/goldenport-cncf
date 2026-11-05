@@ -24,7 +24,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 24, 2026
+ *  version Oct. 24, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -760,7 +761,7 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
       try {
         When("trusted definition assembly receives invalid host program locations")
         val relative = SbtProgramDefinition.createC(binding, SbtOperation.Test, _test_capability,
-          "project-test", Paths.get("sbt"), _limits, Map.empty)
+          "project-test", Paths.get("bin/sbt"), _limits, Map.empty)
         val missing = SbtProgramDefinition.createC(binding, SbtOperation.Test, _test_capability,
           "project-test", fixture.root.resolve("missing-sbt"), _limits, Map.empty)
         val directory = SbtProgramDefinition.createC(binding, SbtOperation.Test, _test_capability,

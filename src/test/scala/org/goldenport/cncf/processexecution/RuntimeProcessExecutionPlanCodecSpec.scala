@@ -19,7 +19,7 @@ import org.scalacheck.{Gen, Prop, Test}
 /*
  * @since   Oct.  7, 2026
  *  version Oct. 29, 2026
- * @version Nov.  5, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -1184,6 +1184,49 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
       results.mkString should not include root.toString
     }
 
+    "resolve the reserved normal sbt literal through the declaration PATH" in {
+      Given("a V2 declaration and an executable fixture on its declared PATH")
+      val root = _directory()
+      val directory = Files.createDirectory(root.resolve("tools"))
+      val executable = Files.writeString(directory.resolve("sbt"), "fixture, never executed")
+      executable.toFile.setExecutable(true) shouldBe true
+      val wire = _changed_entry(_v2_root(root), "sbtPrograms", _.mapObject(
+        _.add("sbtExecutable", Json.fromString("sbt"))
+          .add("environment", Json.obj("PATH" -> Json.fromString(directory.toString)))))
+      When("the standard codec decodes the declaration and builds its fixed typed program")
+      val plan = _take(_decode(wire))
+      val declaration = plan.sbtDeclarations.head
+      val binding = _take(plan.workspaceAdmissionOption.get.bindingC(declaration.target))
+      val program = _take(SbtProgramDefinition.createC(binding, declaration.operation, declaration.capability,
+        declaration.identity, declaration.sbtExecutable, declaration.limits, declaration.environment))
+      Then("the fixed executable is the canonical absolute fixture and the normal arguments remain fixed")
+      program._executable_location shouldBe executable.toRealPath().toString
+      program.fixedArguments shouldBe Vector("--batch", "-Dsbt.server.autostart=false",
+        "-Dsbt.supershell=false", "-Dsbt.color=false", "test")
+    }
+
+    "retain the bounded environment diagnosis for an unavailable normal sbt" in {
+      Given("V2, V3 and V6 host declarations with an explicitly empty PATH")
+      val root = _directory()
+      def _check_(wire: Json): Unit = {
+        val selected = _changed_entry(wire, "sbtPrograms", _.mapObject(
+          _.add("sbtExecutable", Json.fromString("sbt")).add("environment", Json.obj("PATH" -> Json.fromString("")))))
+        When("the standard codec preflights the normal executable")
+        val result = _decode(selected)
+        Then("the failure reports only the bounded environment diagnosis")
+        result.isFaillure shouldBe true
+        result.toString should include ("Normal sbt executable is unavailable on PATH")
+        result.toString should not include root.toString
+      }
+      try {
+        _check_(_v2_root(root))
+        _check_(_v3_root(root))
+        _with_v6_root(_check_)
+      } finally Using.resource(Files.walk(root)) { stream =>
+        stream.sorted(Comparator.reverseOrder[Path]()).iterator().asScala.foreach(path => Files.deleteIfExists(path))
+      }
+    }
+
     "reject unavailable workspace roots and invalid normal sbt executables with safe failures" in {
       Given("a real V2 checkout and a regular file with no executable permission")
       val root = _directory()
@@ -1191,7 +1234,7 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
       val wire = _v2_root(root)
       val invalid = Vector("relative", root.resolve("missing").toString, plainfile.toString).map(path =>
         _changed_entry(wire, "workspaces", _.mapObject(_.add("root", Json.fromString(path))))) ++
-        Vector("sbt", root.resolve("missing-sbt").toString, root.toString, plainfile.toString).map(path =>
+        Vector("bin/sbt", root.resolve("missing-sbt").toString, root.toString, plainfile.toString).map(path =>
           _changed_entry(wire, "sbtPrograms", _.mapObject(_.add("sbtExecutable", Json.fromString(path)))))
       When("the selected host codec preflights each unavailable location")
       val results = invalid.map(_decode)

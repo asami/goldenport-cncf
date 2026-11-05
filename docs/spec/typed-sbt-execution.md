@@ -1,5 +1,17 @@
 # Typed SBT Execution
 
+## SBT executable location
+
+The required `sbtExecutable` is either the reserved literal `sbt` or an explicit
+absolute executable path. CNCF resolves `sbt` using the declaration environment
+`PATH` when present, including an empty PATH, or the ordinary host PATH when absent.
+It selects the first available regular executable in PATH order and binds its
+canonical absolute path. An unavailable default is a configuration failure
+indicating the environment lacks sbt. An explicit absolute path is authoritative
+and must be an available executable; it never falls back to PATH. Other relative
+paths and shell command strings are rejected. Resolution does not launch a process.
+
+
 ## SBT-JVM-01 — Runtime-owned maximum heap
 
 Every typed Compile, Test, TestOnly and FixCheck admission resolves
@@ -177,8 +189,9 @@ select the same simple class name. Whitespace, Unicode, controls, wildcards,
 dollar, dash, semicolon, slash, empty and duplicate elements are rejected;
 there is no trim, normalization or caller fallback. The total class surface
 is bounded by 16*256 ASCII characters. The executable must resolve
-from an absolute path to a real available executable regular file. Relative,
-missing, directory and non-executable locations fail without reflecting host paths.
+from the reserved `sbt` literal or an absolute path to a real available executable
+regular file. Other relative, missing, directory and non-executable locations fail
+without reflecting host paths.
 The runtime renders this fixed vector with one literal final command:
 
 ```text

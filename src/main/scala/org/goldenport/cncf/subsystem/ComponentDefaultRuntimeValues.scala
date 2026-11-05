@@ -2,12 +2,13 @@ package org.goldenport.cncf.subsystem
 
 import java.nio.file.{Files, Path, Paths}
 import scala.util.control.NonFatal
+import org.goldenport.cncf.processexecution.SbtExecutableLocation
 
 /** Environment data for explicitly templated, selected CAR defaults only.
   * Reads ordinary Git metadata/configuration and locates the existing tool;
   * it never launches a process or creates a repository, identity or grant.
   * @since Oct. 27, 2026
-  * @version Oct. 27, 2026
+  * @version Nov.  6, 2026
   */
 private[cncf] object ComponentDefaultRuntimeValues {
   private val _section = """\[\s*([A-Za-z0-9.-]+)(?:\s+"(.*)")?\s*\]""".r
@@ -22,7 +23,7 @@ private[cncf] object ComponentDefaultRuntimeValues {
       "environment.java-home" -> sys.env.getOrElse("JAVA_HOME", ""),
       "environment.ssh-auth-sock" -> sys.env.getOrElse("SSH_AUTH_SOCK", ""))
     try {
-      val executable = executablePath.map(_.resolve("sbt")).find(p => Files.isRegularFile(p) && Files.isExecutable(p))
+      val executable = SbtExecutableLocation.onPath(executablePath)
         .map(p => "executable.sbt" -> p.toAbsolutePath.normalize.toString).toMap
       val repository = _repository(root).flatMap { case (worktree, gitdir, common) =>
         val head = _read(gitdir.resolve("HEAD")).map(_.trim).filter(_.startsWith("ref: refs/heads/"))

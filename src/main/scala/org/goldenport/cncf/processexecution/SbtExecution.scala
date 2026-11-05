@@ -1,7 +1,6 @@
 package org.goldenport.cncf.processexecution
 
-import java.nio.file.{Files, Path}
-import scala.util.control.NonFatal
+import java.nio.file.Path
 import org.goldenport.{Consequence, Conclusion}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.effect.{ExternalEffect, ExternalEffectKind}
@@ -9,7 +8,8 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 24, 2026
+ *  version Oct. 24, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection] = None,
@@ -80,7 +80,7 @@ private[cncf] object SbtProgramDefinition {
       _ <- binding.workingDirectoryC
       _ <- if (operation != null) Consequence.unit else _invalid_operation_c
       _ <- SbtTestSelectionPolicy.validateC(operation, testClasses)
-      executable <- _host_location_c(sbtExecutable)
+      executable <- SbtExecutableLocation.resolveC(sbtExecutable, environment)
       arguments = Vector(
         "--batch",
         "-Dsbt.server.autostart=false",
@@ -100,26 +100,6 @@ private[cncf] object SbtProgramDefinition {
         environment, SbtProgramMetadata(binding, operation, testClasses)
       )
     } yield definition
-
-  private def _host_location_c(path: Path): Consequence[Path] =
-    try {
-      if (path == null || !path.isAbsolute || path.toString.exists(_.isControl))
-        _invalid_location_c
-      else {
-        val real = path.toRealPath()
-        if (Files.isRegularFile(real) && Files.isExecutable(real))
-          Consequence.success(real)
-        else
-          _invalid_location_c
-      }
-    } catch {
-      case NonFatal(_) => _invalid_location_c
-    }
-
-  private def _invalid_location_c: Consequence[Path] =
-    Consequence.argumentPolicyViolation(
-      "sbt", "sbt.execution.runtime-location", "absolute available sbt executable", "invalid"
-    )
 
   private def _invalid_operation_c: Consequence[Unit] =
     Consequence.argumentPolicyViolation("operation", "sbt.execution.operation", "Compile, TestCompile, Test, TestOnly, FixCheck or PublishLocal", "unknown")
