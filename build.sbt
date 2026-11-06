@@ -443,7 +443,7 @@ lazy val root = project
   .settings(
     organization := "org.goldenport",
     name := "goldenport-cncf",
-    version := "0.5.4-SNAPSHOT",
+    version := "0.5.5-SNAPSHOT",
 
     scalaVersion := scala3Version,
     Compile / exportJars := true,

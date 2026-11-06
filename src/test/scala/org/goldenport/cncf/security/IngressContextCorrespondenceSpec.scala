@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 15, 2026
+ * @version Nov.  6, 2026
  */
 object IngressContextCorrespondenceSpec {
   final case class Sample(major: String, minor: String, millis: Long, entropy: String, entry: Int)
@@ -109,6 +109,28 @@ final class IngressContextCorrespondenceSpec extends AnyWordSpec with Matchers w
     active.observability shouldBe context.observability
     active.jobContext shouldBe context.jobContext
     active.runtime.context.formatting shouldBe context.runtime.context.formatting
+  }
+
+  "Selected provider context correspondence" should {
+    "retain native provider attribution and transports while rebinding the current UnitOfWork to the restored owner" in {
+      Given("a fixture-native admitted provider context with exact selected names and transport facts")
+      val identity = AuthenticationProviderIdentity("selected-binding", "selected-provider", "selected-component")
+      val source = _base()
+      SecurityAuthenticationProvenance.withProviderIdentity(source.security, identity)
+      SecurityAuthenticationProvenance.providerAuthenticated(source.security)
+      val facts = SecurityContext.CredentialTransports(bearerHeader = true)
+      SecurityAuthenticationProvenance.withCredentialTransports(source.security, facts)
+      When("the public context restoration path rebuilds the owner of the existing runtime")
+      val restored = ExecutionContext.withSecurityContext(source, source.security)
+      Then("the final current UnitOfWork and owner observe exactly the same admitted names and transports")
+      restored.security.authenticatedProvider shouldBe Some(identity)
+      restored.unitOfWork.executionContext should be theSameInstanceAs restored
+      restored.unitOfWork.executionContext.security.authenticatedProvider shouldBe Some(identity)
+      restored.security.credentialTransports shouldBe Some(facts)
+      restored.security.principal shouldBe source.security.principal
+      restored.security.session shouldBe source.security.session
+      restored.security.copy().authenticatedProvider shouldBe None
+    }
   }
 
   "Ingress context correspondence" should {

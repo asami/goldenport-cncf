@@ -15,7 +15,8 @@ import org.goldenport.cncf.context.{Capability, ExecutionContext, Principal, Pri
  *
  * @since   Apr.  9, 2026
  *  version Jun.  5, 2026
- * @version Jul. 22, 2026
+ *  version Jul. 22, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AuthenticationRequest(
@@ -255,7 +256,7 @@ final case class AuthenticationResult(
 ) {
   def toSecurityContext: SecurityContext = {
     val resolvedattributes = AuthenticationResult.defaultAttributes(principalId, attributes)
-    SecurityContext(
+    val security = SecurityContext(
       principal = new Principal {
         val id: PrincipalId = principalId
         val attributes: Map[String, String] = resolvedattributes
@@ -265,6 +266,8 @@ final case class AuthenticationResult(
       subjectKind = subjectKind,
       session = session
     )
+    SecurityAuthenticationProvenance.inherit(this, security)
+    security
   }
 }
 

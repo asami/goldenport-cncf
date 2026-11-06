@@ -42,6 +42,10 @@ final case class SecurityContext(
   subjectKind: SubjectKind = SubjectKind.Unspecified,
   session: Option[SessionContext] = None
 ) {
+  /** Exact selected provider names, available only with native provider admission. */
+  def authenticatedProvider: Option[org.goldenport.cncf.security.AuthenticationProviderIdentity] =
+    org.goldenport.cncf.security.SecurityAuthenticationProvenance.authenticatedProvider(this)
+
   /** Original physical credential transport facts, never authentication authority. */
   def credentialTransports: Option[SecurityContext.CredentialTransports] =
     org.goldenport.cncf.security.SecurityAuthenticationProvenance.credentialTransports(this)

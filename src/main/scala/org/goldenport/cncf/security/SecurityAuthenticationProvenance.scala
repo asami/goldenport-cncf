@@ -17,7 +17,8 @@ private[cncf] object SecurityAuthenticationProvenance {
   private final case class Entry(
     reference: WeakReference[AnyRef],
     origin: Option[Origin],
-    transports: Option[CredentialTransports]
+    transports: Option[CredentialTransports],
+    provider: Option[AuthenticationProviderIdentity]
   )
   private val _lock = new AnyRef
   private var _entries = Vector.empty[Entry]
@@ -34,6 +35,13 @@ private[cncf] object SecurityAuthenticationProvenance {
   def isTrustedLocalAuthenticated(value: AnyRef): Boolean =
     _origin(value).contains(Origin.TrustedLocal)
 
+  def authenticatedProvider(value: AnyRef): Option[AuthenticationProviderIdentity] =
+    _entry(value).filter(_.origin.contains(Origin.Provider)).flatMap(_.provider)
+
+  /** Actual runtime selection attaches names, without granting authenticated origin. */
+  def withProviderIdentity[A <: AnyRef](value: A, identity: AuthenticationProviderIdentity): A =
+    _set_provider(value, Some(identity))
+
   def credentialTransports(value: AnyRef): Option[CredentialTransports] =
     _entry(value).flatMap(_.transports)
 
@@ -48,31 +56,39 @@ private[cncf] object SecurityAuthenticationProvenance {
     _entry(source).foreach { entry =>
       entry.origin.foreach(origin => _mark(target, origin))
       _set_transports(target, entry.transports)
+      _set_provider(target, entry.provider)
     }
 
   private def _mark[A <: AnyRef](value: A, origin: Origin): A = _lock.synchronized {
     require(value != null, "Authentication provenance requires an object")
-    val transports = _entry(value).flatMap(_.transports)
-    _replace(value, Some(origin), transports)
+    val entry = _entry(value)
+    _replace(value, Some(origin), entry.flatMap(_.transports), entry.flatMap(_.provider))
   }
 
   private def _set_transports[A <: AnyRef](value: A, transports: Option[CredentialTransports]): A = _lock.synchronized {
     require(value != null, "Credential transport provenance requires an object")
-    val origin = _entry(value).flatMap(_.origin)
-    _replace(value, origin, transports)
+    val entry = _entry(value)
+    _replace(value, entry.flatMap(_.origin), transports, entry.flatMap(_.provider))
+  }
+
+  private def _set_provider[A <: AnyRef](value: A, provider: Option[AuthenticationProviderIdentity]): A = _lock.synchronized {
+    require(value != null, "Provider attribution requires an object")
+    val entry = _entry(value)
+    _replace(value, entry.flatMap(_.origin), entry.flatMap(_.transports), provider)
   }
 
   private def _replace[A <: AnyRef](
     value: A,
     origin: Option[Origin],
-    transports: Option[CredentialTransports]
+    transports: Option[CredentialTransports],
+    provider: Option[AuthenticationProviderIdentity]
   ): A = {
     _entries = _entries.filter { entry =>
       val retained = entry.reference.get
       retained != null && !(retained eq value)
     }
-    if (origin.nonEmpty || transports.nonEmpty)
-      _entries = _entries :+ Entry(new WeakReference[AnyRef](value), origin, transports)
+    if (origin.nonEmpty || transports.nonEmpty || provider.nonEmpty)
+      _entries = _entries :+ Entry(new WeakReference[AnyRef](value), origin, transports, provider)
     value
   }
 

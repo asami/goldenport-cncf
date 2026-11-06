@@ -36,6 +36,13 @@ class SecurityContextSpec extends AnyWordSpec with Matchers with GivenWhenThen {
       kind shouldBe SubjectKind.User
       selectedsession shouldBe Some(session)
       context.credentialTransports shouldBe None
+      context.authenticatedProvider shouldBe None
+      context.productElementNames.toVector shouldBe Vector("principal", "capabilities", "level", "subjectKind", "session")
+      org.goldenport.cncf.security.AuthenticationProviderIdentity("binding", "provider", "component").copy() match {
+        case org.goldenport.cncf.security.AuthenticationProviderIdentity(binding, provider, component) =>
+          Vector(binding, provider, component) shouldBe Vector("binding", "provider", "component")
+      }
+      context.copy().authenticatedProvider shouldBe None
     }
 
     "keep transport inheritance separate from authentication authority" in {

@@ -69,6 +69,110 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
   )
 
   "IngressSecurityResolver" should {
+    "freeze each selected binding on a fresh result when distinct providers reuse the same cached result object" in {
+      Given("two declared providers returning exactly the same cached immutable authentication result")
+      val cached = AuthenticationResult(PrincipalId("cached-owner"), capabilities = Set(Capability("read")),
+        session = Some(org.goldenport.cncf.context.SessionContext(sessionId = Some("cached-session"))))
+      val firstprovider = _provider("shared-first", request =>
+        Consequence.success(Option.when(request.attribute("route").contains("first"))(cached)))
+      val secondprovider = _provider("shared-second", _ => Consequence.success(Some(cached)))
+      val subsystem = _subsystem(false, Vector(firstprovider, secondprovider))
+      val base = subsystem.components.head.logic.executionContext()
+
+      When("a second selection completes before the first result is converted to its security context")
+      val first = AuthenticationProviderRuntime.authenticate(base, AuthenticationRequest(Map("route" -> "first"))).TAKE.get
+      val second = AuthenticationProviderRuntime.authenticate(base, AuthenticationRequest(Map("route" -> "second"))).TAKE.get
+      val firstcontext = first.toSecurityContext
+      val secondcontext = second.toSecurityContext
+      Then("each result is call-local data with no inherited private provider-authenticated grant")
+      (first eq second) shouldBe false
+      (first eq cached) shouldBe false
+      (second eq cached) shouldBe false
+      first shouldBe cached
+      second shouldBe cached
+      firstcontext.authenticatedProvider shouldBe None
+      secondcontext.authenticatedProvider shouldBe None
+      SecuritySubject.from(firstcontext).isProviderAuthenticated shouldBe false
+      SecuritySubject.from(secondcontext).isProviderAuthenticated shouldBe false
+
+      When("ordinary native provider admission independently marks each converted context")
+      SecurityAuthenticationProvenance.providerAuthenticated(firstcontext)
+      SecurityAuthenticationProvenance.providerAuthenticated(secondcontext)
+      Then("the later selection cannot retag the earlier call and the original cache remains unattributed")
+      firstcontext.authenticatedProvider shouldBe Some(AuthenticationProviderIdentity("shared-first", "shared-first", "dummy"))
+      secondcontext.authenticatedProvider shouldBe Some(AuthenticationProviderIdentity("shared-second", "shared-second", "dummy"))
+      val original = cached.toSecurityContext
+      original.authenticatedProvider shouldBe None
+      SecuritySubject.from(original).isProviderAuthenticated shouldBe false
+      SecurityAuthenticationProvenance.providerAuthenticated(original).authenticatedProvider shouldBe None
+    }
+
+    "attribute the actual second binding across authentication entry points and ingress restoration without trusting claims" in {
+      Given("an ordered no-match provider followed by a matching resolved binding with independently spelled provider name")
+      var calls = Vector.empty[String]
+      var mode = "match"
+      val result = AuthenticationResult(PrincipalId("selected-owner"), capabilities = Set(Capability("read")),
+        session = Some(org.goldenport.cncf.context.SessionContext(sessionId = Some("selected-session"))))
+      def _selected_(namevalue: String, matches: Boolean): AuthenticationProvider = new AuthenticationProvider {
+        val name: String = namevalue
+        private val _matches = matches
+        private val _provider_name = namevalue
+        private def _answer(request: AuthenticationRequest): Consequence[Option[AuthenticationResult]] = {
+          calls = calls :+ _provider_name
+          if (!_matches || mode == "none") Consequence.success(None)
+          else if (mode == "failure") Consequence.securityAuthenticationRequired("Fixture provider rejected the request")
+          else Consequence.success(Some(result))
+        }
+        def authenticate(request: AuthenticationRequest)(using ExecutionContext): Consequence[Option[AuthenticationResult]] = _answer(request)
+        override def login(request: AuthenticationRequest)(using ExecutionContext): Consequence[Option[AuthenticationResult]] = _answer(request)
+        override def currentSession(request: AuthenticationRequest)(using ExecutionContext): Consequence[Option[AuthenticationResult]] = _answer(request)
+      }
+      val first = _selected_("first-provider", false)
+      val second = _selected_("selected-provider", true)
+      val subsystem = _subsystem(false, Vector(first, second), bindingnames = Map("selected-provider" -> "SELECTED-PROVIDER"))
+      val base = subsystem.components.head.logic.executionContext()
+      val expected = AuthenticationProviderIdentity("SELECTED-PROVIDER", "selected-provider", "dummy")
+      val request = AuthenticationRequest(Map("Authorization" -> "Bearer fixture-secret",
+        "authenticatedProvider.bindingName" -> "forged", "authenticatedProvider.componentName" -> "another-component"))
+      AuthenticationProviderRuntime.providers(base) shouldBe Vector(first, second)
+
+      When("each native authentication operation selects the second actual provider")
+      Vector[() => Consequence[Option[AuthenticationResult]]](
+        () => AuthenticationProviderRuntime.authenticate(base, request),
+        () => AuthenticationProviderRuntime.login(base, request),
+        () => AuthenticationProviderRuntime.currentSession(base, request)).foreach { run =>
+        calls = Vector.empty
+        val matched = run().TAKE.get
+        val unmarked = matched.toSecurityContext
+        Then("binding metadata alone supplies no provider-authenticated grant")
+        calls shouldBe Vector("first-provider", "selected-provider")
+        unmarked.authenticatedProvider shouldBe None
+        SecuritySubject.from(unmarked).isProviderAuthenticated shouldBe false
+        val admitted = SecurityAuthenticationProvenance.providerAuthenticated(unmarked)
+        admitted.authenticatedProvider shouldBe Some(expected)
+        matched.copy().toSecurityContext.authenticatedProvider shouldBe None
+      }
+
+      When("real ingress admits the provider and restores request context into the current UnitOfWork")
+      val resolved = IngressSecurityResolver.resolve(base, request.attributes).TAKE.executionContext
+      Then("the exact selected binding survives and exposes names without request secrets or claimed realm")
+      resolved.security.authenticatedProvider shouldBe Some(expected)
+      resolved.unitOfWork.executionContext.security.authenticatedProvider shouldBe Some(expected)
+      val restored = ExecutionContext.withSecurityContext(resolved, resolved.security)
+      restored.security.authenticatedProvider shouldBe Some(expected)
+      expected.productIterator.toVector shouldBe Vector("SELECTED-PROVIDER", "selected-provider", "dummy")
+      expected.toString should not include "fixture-secret"
+      resolved.security.principal.attributes should not contain key("authenticatedProvider")
+
+      When("the same ordered providers report no match or an operational authentication failure")
+      mode = "none"; calls = Vector.empty
+      AuthenticationProviderRuntime.authenticate(base, request).TAKE shouldBe None
+      calls shouldBe Vector("first-provider", "selected-provider")
+      mode = "failure"; calls = Vector.empty
+      AuthenticationProviderRuntime.authenticate(base, request).isSuccess shouldBe false
+      calls shouldBe Vector("first-provider", "selected-provider")
+    }
+
     "retain admitted transport facts through fresh provider resolution without trusting attribute claims" in {
       Given("an explicit provider and a base context with independently admitted physical transport facts")
       val subsystem = _subsystem(fallbackenabled = false, providers = Vector(_provider("transport-provider", request =>
@@ -88,6 +192,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
 
       Then("the final current UnitOfWork observes the admitted facts and the actual provider identity")
       resolved.security.credentialTransports shouldBe Some(facts)
+      resolved.security.authenticatedProvider shouldBe Some(AuthenticationProviderIdentity("transport-provider", "transport-provider", "dummy"))
       resolved.unitOfWork.executionContext should be theSameInstanceAs resolved
       resolved.unitOfWork.executionContext.security.credentialTransports shouldBe Some(facts)
       resolved.security.principal.id.value shouldBe "transport-owner"
@@ -1500,7 +1605,8 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
       fallbackenabled: Boolean,
       providers: Vector[AuthenticationProvider] =
         Vector(_provider("dummy-provider", _ => Consequence.success(None))),
-      localsubject: Option[GenericSubsystemLocalSubjectBinding] = None
+      localsubject: Option[GenericSubsystemLocalSubjectBinding] = None,
+      bindingnames: Map[String, String] = Map.empty
   ): Subsystem = {
     val subsystem = Subsystem(
       name = "security-test",
@@ -1551,7 +1657,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers with G
                 localSubject = localsubject,
                 providers = providers.map { provider =>
                   GenericSubsystemAuthenticationProviderBinding(
-                    name = provider.name,
+                    name = bindingnames.getOrElse(provider.name, provider.name),
                     component = "dummy",
                     enabled = Some(true)
                   )
