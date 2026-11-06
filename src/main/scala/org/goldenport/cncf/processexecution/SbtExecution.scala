@@ -1,7 +1,6 @@
 package org.goldenport.cncf.processexecution
 
-import java.nio.file.{Files, Path}
-import scala.util.control.NonFatal
+import java.nio.file.Path
 import org.goldenport.{Consequence, Conclusion}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.effect.{ExternalEffect, ExternalEffectKind}
@@ -9,7 +8,9 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 24, 2026
+ *  version Oct. 24, 2026
+ *  version Nov.  5, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection] = None,
@@ -32,19 +33,26 @@ enum SbtExecutionOutcome {
   case Failed(exitCode: Int)
   case Incomplete(termination: ProcessExecutionTermination)
   case UnverifiedTests(reason: SbtTestSelectionFailure)
+  case TestValidationFailed(reason: SbtTestSelectionFailure)
 }
 
 final case class SbtExecutionResult(
   target: SbtTarget,
   operation: SbtOperation,
   processResult: ProcessExecutionResult,
-  testSelection: Option[SbtTestSelectionResult] = None
+  testSelection: Option[SbtTestSelectionResult] = None,
+  testObservation: Option[SbtTestObservation] = None
 ) {
   def outcome: SbtExecutionOutcome = processResult.termination match {
     case ProcessExecutionTermination.NotStarted => SbtExecutionOutcome.NotExecuted
     case ProcessExecutionTermination.Exited(0) if operation == SbtOperation.TestOnly => testSelection match {
       case Some(SbtTestSelectionResult.Verified(_, _, _)) => SbtExecutionOutcome.Succeeded
-      case Some(SbtTestSelectionResult.Rejected(reason)) => SbtExecutionOutcome.UnverifiedTests(reason)
+      case Some(SbtTestSelectionResult.Rejected(reason)) => reason match {
+        case SbtTestSelectionFailure.FailedTests | SbtTestSelectionFailure.ZeroTests |
+             SbtTestSelectionFailure.SuiteMismatch | SbtTestSelectionFailure.ScenarioMismatch |
+             SbtTestSelectionFailure.InventoryMismatch => SbtExecutionOutcome.TestValidationFailed(reason)
+        case _ => SbtExecutionOutcome.UnverifiedTests(reason)
+      }
       case None => SbtExecutionOutcome.UnverifiedTests(SbtTestSelectionFailure.MissingSelection)
     }
     case ProcessExecutionTermination.Exited(0) => SbtExecutionOutcome.Succeeded
@@ -80,7 +88,7 @@ private[cncf] object SbtProgramDefinition {
       _ <- binding.workingDirectoryC
       _ <- if (operation != null) Consequence.unit else _invalid_operation_c
       _ <- SbtTestSelectionPolicy.validateC(operation, testClasses)
-      executable <- _host_location_c(sbtExecutable)
+      executable <- SbtExecutableLocation.resolveC(sbtExecutable, environment)
       arguments = Vector(
         "--batch",
         "-Dsbt.server.autostart=false",
@@ -101,26 +109,6 @@ private[cncf] object SbtProgramDefinition {
       )
     } yield definition
 
-  private def _host_location_c(path: Path): Consequence[Path] =
-    try {
-      if (path == null || !path.isAbsolute || path.toString.exists(_.isControl))
-        _invalid_location_c
-      else {
-        val real = path.toRealPath()
-        if (Files.isRegularFile(real) && Files.isExecutable(real))
-          Consequence.success(real)
-        else
-          _invalid_location_c
-      }
-    } catch {
-      case NonFatal(_) => _invalid_location_c
-    }
-
-  private def _invalid_location_c: Consequence[Path] =
-    Consequence.argumentPolicyViolation(
-      "sbt", "sbt.execution.runtime-location", "absolute available sbt executable", "invalid"
-    )
-
   private def _invalid_operation_c: Consequence[Unit] =
     Consequence.argumentPolicyViolation("operation", "sbt.execution.operation", "Compile, TestCompile, Test, TestOnly, FixCheck or PublishLocal", "unknown")
 }
@@ -133,16 +121,9 @@ private[cncf] object SbtExecutionAdmission {
     result: ProcessExecutionResult
   ): SbtExecutionResult = {
     val metadata = execution.definition._sbt_metadata
-    val selection = if (operation == SbtOperation.TestOnly && result.termination == ProcessExecutionTermination.Exited(0))
-      Some(SbtTestSelectionDecoder.decode(metadata.map(_.testClasses).getOrElse(Vector.empty), result,
-        metadata.flatMap(_.scenario)) match {
-          case verified @ SbtTestSelectionResult.Verified(_, _, count) =>
-            if (target.validationEstimate.forall(_.leaves.size.toLong == count)) verified
-            else SbtTestSelectionResult.Rejected(SbtTestSelectionFailure.InventoryMismatch)
-          case rejected => rejected
-        })
-    else None
-    SbtExecutionResult(target, operation, result, selection)
+    if (operation == SbtOperation.TestOnly)
+      SbtTestReassessment.reassess(target, metadata.map(_.testClasses).getOrElse(Vector.empty), result)
+    else SbtExecutionResult(target, operation, result)
   }
 
   def validateGenericExecutionC(execution: ResolvedProcessExecution): Consequence[Unit] =

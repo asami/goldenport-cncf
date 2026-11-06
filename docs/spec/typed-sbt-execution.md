@@ -1,5 +1,17 @@
 # Typed SBT Execution
 
+## SBT executable location
+
+The required `sbtExecutable` is either the reserved literal `sbt` or an explicit
+absolute executable path. CNCF resolves `sbt` using the declaration environment
+`PATH` when present, including an empty PATH, or the ordinary host PATH when absent.
+It selects the first available regular executable in PATH order and binds its
+canonical absolute path. An unavailable default is a configuration failure
+indicating the environment lacks sbt. An explicit absolute path is authoritative
+and must be an available executable; it never falls back to PATH. Other relative
+paths and shell command strings are rejected. Resolution does not launch a process.
+
+
 ## SBT-JVM-01 — Runtime-owned maximum heap
 
 Every typed Compile, Test, TestOnly and FixCheck admission resolves
@@ -177,8 +189,9 @@ select the same simple class name. Whitespace, Unicode, controls, wildcards,
 dollar, dash, semicolon, slash, empty and duplicate elements are rejected;
 there is no trim, normalization or caller fallback. The total class surface
 is bounded by 16*256 ASCII characters. The executable must resolve
-from an absolute path to a real available executable regular file. Relative,
-missing, directory and non-executable locations fail without reflecting host paths.
+from the reserved `sbt` literal or an absolute path to a real available executable
+regular file. Other relative, missing, directory and non-executable locations fail
+without reflecting host paths.
 The runtime renders this fixed vector with one literal final command:
 
 ```text
@@ -346,31 +359,33 @@ The attempt API retains `Observed` for an actual result,
 failure, and `Uncertain(target, operation, conclusion)` for transport or driver
 uncertainty. It adds no replay, retry or fallback.
 
-For TestOnly `Exited(0)`, success additionally requires
-`Verified(testClasses, completedSuites, testsRun)`. An absent selection yields
-`UnverifiedTests(MissingSelection)`; `Rejected(reason)` yields
-`UnverifiedTests(reason)`. The closed failures are `MissingSelection`,
-`IncompleteCapture`, `InvalidReport`, `ZeroTests`, `SuiteMismatch` and
-`FailedTests`, plus `ScenarioMismatch`. Nonzero and incomplete terminals retain the existing meanings
-without inferring report success. The raw Process result is always retained.
-No result serialization is added by this producer.
+For TestOnly `Exited(0)`, success requires a completed, internally consistent,
+positive report with the exact selected suite count. `Verified` retains the
+original selection for compatibility; it is not an observation of suite names.
+`TestValidationFailed(reason)` distinguishes observed failed, canceled or aborted
+tests, zero tests, contradictory suite selection, scenario or inventory counts.
+Malformed or incomplete evidence remains `UnverifiedTests(reason)`. Nonzero exit,
+not-started and incomplete termination retain their existing outcome meanings;
+exit zero alone cannot establish test success.
 
-Pure decoding runs inside the existing SbtExec callback after exactly one
-execution and uses only the expected classes from the actual resolved private
-metadata, including its defaulted optional scenario. Both captures must be untruncated with nonnegative byte counts equal
-to captured bytes and strict UTF8 decoded with REPORT. Stdout `[info]` records
-must contain exactly one complete ordinary ScalaTest terminal report: positive
-Long `Total number of tests run: N`; `Suites: completed K, aborted 0` with K
-equal to selected classes; `Tests: succeeded N, failed 0, canceled 0, ignored I,
-pending P` with nonnegative I/P; and `All tests passed.`. Each selected suite
-must have exactly one header, using its FQN or its admitted unique simple name.
-Unknown or duplicate canonical headers, mismatched counts, missing, duplicate,
-contradictory, negative or overflowed summaries cannot verify. Zero tests are
-`ZeroTests`; positive failed/canceled/aborted counts are `FailedTests`.
-Unrelated log lines are ignored. Unsupported formats remain unverified.
-This trusted build-output interpretation is not an integrity certificate or
-hostile-code authenticity claim. Decode refusals are typed result data and
-retain the external receipt without automatic replay.
+The producer exposes `testObservation`: literal observed suite names, name
+confirmation (`Complete`, `Partial`, `Unknown`, or `Contradictory`), all parsed
+summary counts, failure marker details, and whether both captures are complete and strictly decoded. Incomplete captures retain safely decoded, newline-terminated observations preceding malformed bytes; an unterminated tail is not an observation. Missing headers are unknown, not
+requested names; partial matching headers do not prevent success when the exact
+suite count and positive passing counts are established. Contrary or duplicate
+names and mismatched suite counts fail. Both captures must be complete and strict
+UTF-8 for verification. Reporter info lines contain one ordered ScalaTest summary
+and pass marker; unrelated warning and unprefixed log lines are ignored. Malformed,
+duplicate, contradictory or overflowed summaries cannot verify. The interpretation
+is evidence from build output, not an authenticity certificate.
+
+`SbtTestReassessment.reassess(target, originalExactClasses, processResult)` is a
+pure public API for an existing `ProcessExecutionResult`. It applies the same
+scenario and optional inventory checks and preserves the supplied capture and
+termination without executing or inventing a process. The caller is responsible
+for providing the original exact admitted selection. `assess` exposes the same
+report interpretation and supplementary observation independently; process outcome
+is determined by `reassess` and the retained termination.
 
 With a scenario, its class must agree with the single exact selected class and
 the conservative successful summary must have `testsRun == 1`. Class-selection
@@ -504,7 +519,7 @@ Empty, duplicated, nonpositive, overflowing or crossed selections refuse before
 process execution. The admitted fixed suite set must match the estimate; an exact
 scenario must match its sole leaf. The explicit host execution ceiling remains
 authoritative: an estimate above it refuses, rather than silently increasing it.
-A complete successful report with a different executed leaf count is unverified
+A complete successful report with a different executed leaf count fails validation
 (`InventoryMismatch`), while its actual process exit remains retained.
 Cancellation, termination grace, capture limits and uncertain effects retain
 their existing meanings. No generic ProcessExecutionRequest route is granted.

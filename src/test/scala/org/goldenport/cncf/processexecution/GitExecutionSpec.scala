@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 28, 2026
- * @version Nov.  5, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -133,6 +133,96 @@ final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThe
         GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption shouldBe Some(parent)
         Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector shouldBe indexbytes
         Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe text
+      } finally { driver.close(); fixture.close() }
+    }
+  }
+
+  "E5 Complete selection of a staged addition" should afterWord(
+    "in spec:typed-git-execution, example:E5, rules:Purpose-specific-candidates, phase:RS-PREP-01") {
+    "install the complete added file while retaining unrelated staged and worktree content" in {
+      Given("docs/spec/typed-git-execution.md E5: an older staged addition, its complete current text and unrelated staged, unstaged and untracked work")
+      val driver = new LocalProcessExecutionDriver()
+      val fixture = create(driver = Some(driver))
+      val staged = "original addition\n"
+      val complete = staged + "selected append\n"
+      val path = GitPath.parseC("selected.txt").toOption.get
+      try {
+        initialize(fixture, Map("unrelated.txt" -> "base\n", "ongoing.txt" -> "base\n"))
+        Files.writeString(fixture.checkout.resolve("selected.txt"), staged)
+        Files.writeString(fixture.checkout.resolve("unrelated.txt"), "excluded staged\n")
+        setup(fixture.checkout, "add", "--", "selected.txt", "unrelated.txt")
+        Files.writeString(fixture.checkout.resolve("selected.txt"), complete)
+        Files.writeString(fixture.checkout.resolve("ongoing.txt"), "excluded unstaged\n")
+        Files.writeString(fixture.checkout.resolve("untracked.txt"), "excluded untracked\n")
+        val parent = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        val index = GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption.get
+        val indexbytes = Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector
+        val request = GitPurposeRequest(parent, index, Vector(GitPurposeChange(path, Some(complete), Some(complete))))
+        When("the typed Git UoW prepares the explicitly selected complete addition")
+        val prepared = GitExecutionSpecSupport.execute(fixture, GitOperation.PreparePurposeCandidate(selectionId, request)).toOption.get
+        Then("preparation succeeds while the source HEAD, index bytes and worktree remain unchanged")
+        prepared.outcome shouldBe GitExecutionOutcome.Succeeded
+        val candidate = prepared.valueC.toOption.get
+        GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption shouldBe Some(parent)
+        Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector shouldBe indexbytes
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe complete
+        Files.readString(fixture.checkout.resolve("unrelated.txt")) shouldBe "excluded staged\n"
+        Files.readString(fixture.checkout.resolve("ongoing.txt")) shouldBe "excluded unstaged\n"
+        Files.readString(fixture.checkout.resolve("untracked.txt")) shouldBe "excluded untracked\n"
+        When("the separate typed Git UoW installs the prepared complete addition")
+        val installed = GitExecutionSpecSupport.execute(fixture, GitOperation.CommitPurposeCandidate(selectionId, candidate)).toOption.get
+        Then("the commit and projected index contain the complete file and preserve every unrelated change")
+        installed.outcome shouldBe GitExecutionOutcome.Succeeded
+        GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption shouldBe Some(candidate.commit)
+        GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption shouldBe Some(candidate.projectedIndex)
+        val entry = GitExecutionSpecSupport.execute(fixture, GitOperation.TreeEntries(candidate.tree, selectionId))
+          .toOption.get.valueC.toOption.get.find(_.path == path).get.entry.get
+        GitExecutionSpecSupport.execute(fixture, GitOperation.BlobContent(entry.blob)).toOption.get.valueC.toOption.get.text shouldBe Some(complete)
+        val remaining = GitExecutionSpecSupport.execute(fixture, GitOperation.Status).toOption.get.valueC.toOption.get
+        remaining.map(_.path.value).toSet shouldBe Set("unrelated.txt", "ongoing.txt", "untracked.txt")
+        remaining.find(_.path.value == "unrelated.txt").get.indexCode shouldBe 'M'
+        remaining.find(_.path.value == "unrelated.txt").get.worktreeCode shouldBe ' '
+        remaining.find(_.path.value == "ongoing.txt").get.indexCode shouldBe ' '
+        remaining.find(_.path.value == "ongoing.txt").get.worktreeCode shouldBe 'M'
+        val pending = GitExecutionSpecSupport.execute(fixture, GitOperation.PendingDiff(candidate.commit)).toOption.get.valueC.toOption.get.text
+        pending should include("+excluded staged")
+        pending should not include("selected.txt")
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe complete
+        Files.readString(fixture.checkout.resolve("unrelated.txt")) shouldBe "excluded staged\n"
+        Files.readString(fixture.checkout.resolve("ongoing.txt")) shouldBe "excluded unstaged\n"
+        Files.readString(fixture.checkout.resolve("untracked.txt")) shouldBe "excluded untracked\n"
+      } finally { driver.close(); fixture.close() }
+    }
+
+    "refuse a partial selection of the same staged addition without changing source HEAD or index" in {
+      Given("docs/spec/typed-git-execution.md E5: a staged addition and a distinct partial purpose in its current worktree")
+      val driver = new LocalProcessExecutionDriver()
+      val fixture = create(driver = Some(driver))
+      val staged = "original addition\n"
+      val selected = "selected append\n"
+      val complete = staged + selected
+      try {
+        initialize(fixture, Map("unrelated.txt" -> "base\n"))
+        Files.writeString(fixture.checkout.resolve("selected.txt"), staged)
+        Files.writeString(fixture.checkout.resolve("unrelated.txt"), "excluded staged\n")
+        setup(fixture.checkout, "add", "--", "selected.txt", "unrelated.txt")
+        Files.writeString(fixture.checkout.resolve("selected.txt"), complete)
+        Files.writeString(fixture.checkout.resolve("untracked.txt"), "excluded untracked\n")
+        val parent = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        val index = GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption.get
+        val indexbytes = Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector
+        val request = GitPurposeRequest(parent, index, Vector(GitPurposeChange(
+          GitPath.parseC("selected.txt").toOption.get, Some(complete), Some(selected))))
+        When("the typed Git UoW prepares only the partial purpose from the added file")
+        val rejected = GitExecutionSpecSupport.execute(fixture, GitOperation.PreparePurposeCandidate(selectionId, request))
+        Then("the typed refusal preserves HEAD, the exact live index and all current content")
+        rejected.isFaillure shouldBe true
+        GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption shouldBe Some(parent)
+        Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector shouldBe indexbytes
+        GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption shouldBe Some(index)
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe complete
+        Files.readString(fixture.checkout.resolve("unrelated.txt")) shouldBe "excluded staged\n"
+        Files.readString(fixture.checkout.resolve("untracked.txt")) shouldBe "excluded untracked\n"
       } finally { driver.close(); fixture.close() }
     }
   }

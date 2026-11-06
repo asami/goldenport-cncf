@@ -24,7 +24,9 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 24, 2026
+ *  version Oct. 24, 2026
+ *  version Nov.  5, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -112,7 +114,7 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
         val actual = new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.SbtExec(
           fixture.target.copy(validationEstimate = Some(estimate)), SbtOperation.TestOnly)).toOption.get
         actual.processResult.termination shouldBe ProcessExecutionTermination.Exited(0)
-        actual.outcome shouldBe SbtExecutionOutcome.UnverifiedTests(SbtTestSelectionFailure.InventoryMismatch)
+        actual.outcome shouldBe SbtExecutionOutcome.TestValidationFailed(SbtTestSelectionFailure.InventoryMismatch)
       } finally { uow.dispose(); _close(fixture.root) }
     }
     "record local publication as one External intent and admit it only inside the executing UoW" in {
@@ -214,7 +216,8 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
           Some(SbtExecutionAttempt.Observed(SbtExecutionResult(fixture.target, SbtOperation.Compile, fixture.result))),
           Some(SbtExecutionAttempt.Observed(SbtExecutionResult(fixture.target, SbtOperation.Test, fixture.result))),
           Some(SbtExecutionAttempt.Observed(SbtExecutionResult(fixture.target, SbtOperation.TestOnly, fixture.result,
-            Some(SbtTestSelectionResult.Verified(Vector("org.example.SelectedSpec"), 1, 7L))))),
+            Some(SbtTestSelectionResult.Verified(Vector("org.example.SelectedSpec"), 1, 7L)),
+            Some(SbtTestReassessment.assess(Vector("org.example.SelectedSpec"), fixture.result).observation)))),
           Some(SbtExecutionAttempt.Observed(SbtExecutionResult(fixture.target, SbtOperation.FixCheck, fixture.result))))
         fixture.profile.driver.executions should have size 4
       } finally _close(fixture.root)
@@ -294,7 +297,8 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
         val denied = new UnitOfWorkInterpreter(new UnitOfWork(contextc.context)).run(program)
         Then("B alone runs once with its current trusted selection and shared cwd and retains raw process facts")
         val expected = SbtExecutionResult(contextb.target, SbtOperation.TestOnly, contextb.result,
-          Some(SbtTestSelectionResult.Verified(classes, 2, 7L)))
+          Some(SbtTestSelectionResult.Verified(classes, 2, 7L)),
+          Some(SbtTestReassessment.assess(classes, contextb.result).observation))
         result.toOption shouldBe Some(expected)
         result.toOption.map(_.outcome) shouldBe Some(SbtExecutionOutcome.Succeeded)
         contextb.profile.driver.executions.map(_.effectiveArguments) shouldBe Vector(Vector(
@@ -379,7 +383,7 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
         results.map(_.processResult) shouldBe fixtures.map(_.result)
         results.map(_.target) shouldBe fixtures.map(_.target)
         results.map(_.operation) shouldBe Vector.fill(fixtures.size)(SbtOperation.TestOnly)
-        results.tail.foreach(_.testSelection shouldBe None)
+        results.tail.foreach(_.testObservation should not be empty)
         unverified.outcome shouldBe SbtExecutionOutcome.UnverifiedTests(SbtTestSelectionFailure.IncompleteCapture)
         unverified.processResult shouldBe unsupported.result
         (fixtures :+ unsupported).foreach(_.profile.driver.executions should have size 1)
@@ -760,7 +764,7 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
       try {
         When("trusted definition assembly receives invalid host program locations")
         val relative = SbtProgramDefinition.createC(binding, SbtOperation.Test, _test_capability,
-          "project-test", Paths.get("sbt"), _limits, Map.empty)
+          "project-test", Paths.get("bin/sbt"), _limits, Map.empty)
         val missing = SbtProgramDefinition.createC(binding, SbtOperation.Test, _test_capability,
           "project-test", fixture.root.resolve("missing-sbt"), _limits, Map.empty)
         val directory = SbtProgramDefinition.createC(binding, SbtOperation.Test, _test_capability,

@@ -14,7 +14,7 @@ import org.goldenport.configuration.{ConfigurationValue, ConfigurationValueCodec
 /*
  * @since   Oct.  7, 2026
  *  version Oct. 28, 2026
- * @version Nov.  3, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValueCodec[RuntimeProcessExecutionPlan] {
@@ -245,7 +245,7 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
     capability <- _valid(ProcessCapabilityId.parseC(capabilitytext))
     identity <- _string(obj, "identity")
     executabletext <- _string(obj, "sbtExecutable")
-    executable <- _absolute_path(executabletext)
+    executable <- if (executabletext == "sbt") Right(Paths.get("sbt")) else _absolute_path(executabletext)
     limits <- _decode_limits(obj("limits").get)
     environment <- _string_map(obj("environment").get)
     classes <- if (operation == SbtOperation.TestOnly) _string_array(obj, "testClasses") else Right(Vector.empty[String])
@@ -431,7 +431,12 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
     json.asObject.toRight("Process field requires an object").flatMap(obj =>
       _sequence(obj.toVector.map { case (k, v) => v.asString.toRight("Process map requires strings").map(k -> _) }).map(_.toMap))
   private def _strings(values: Vector[String]): Json = Json.fromValues(values.map(Json.fromString))
-  private def _valid[A](value: Consequence[A]): Either[String, A] = value.toOption.toRight("Invalid runtime process declaration")
+  private def _valid[A](value: Consequence[A]): Either[String, A] = value match {
+    case Consequence.Success(result) => Right(result)
+    case Consequence.Failure(conclusion) if SbtExecutableLocation.isUnavailable(conclusion) =>
+      Left(SbtExecutableLocation.unavailableMessage)
+    case _ => Left("Invalid runtime process declaration")
+  }
   private def _valid_v5[A](value: Consequence[A]): Either[String, A] = value match {
     case Consequence.Success(result) => Right(result)
     case Consequence.Failure(conclusion) => Left(conclusion.toString)
