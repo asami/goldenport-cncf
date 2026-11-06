@@ -9,7 +9,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 30, 2026
+ *  version Oct. 30, 2026
+ * @version Nov.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SbtTestSelectionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -166,7 +167,6 @@ final class SbtTestSelectionSpec extends AnyWordSpec with Matchers with GivenWhe
       val report = _report(_classes, 7L, false)
       val cases = Vector(
         _report(_classes, 0L, false) -> ZeroTests,
-        report.replace("[info] org.example.SelectedSpec:\n", "") -> SuiteMismatch,
         report.replace("org.example.SelectedSpec:", "org.unknown.UnknownSpec:") -> SuiteMismatch,
         report.replace("org.other.OtherSpec:", "SelectedSpec:") -> SuiteMismatch,
         ("[info] org.example.SelectedSpec:\n" + report) -> SuiteMismatch,
@@ -177,7 +177,7 @@ final class SbtTestSelectionSpec extends AnyWordSpec with Matchers with GivenWhe
         (report + "\n[info] Suites: completed 2, aborted 0") -> InvalidReport,
         (report + "\n[info] Tests: succeeded 7, failed 0, canceled 0, ignored 0, pending 0") -> InvalidReport,
         (report + "\n[info] All tests passed.") -> InvalidReport,
-        (report + "\n[info] *** TESTS FAILED ***") -> InvalidReport,
+        (report + "\n[info] *** TESTS FAILED ***") -> FailedTests,
         (report + "\n[info] No tests were executed.") -> InvalidReport,
         report.replace("[info] All tests passed.", "") -> InvalidReport,
         report.replace("Total number of tests run: 7", "Total number of tests run: -1") -> InvalidReport,
@@ -194,6 +194,148 @@ final class SbtTestSelectionSpec extends AnyWordSpec with Matchers with GivenWhe
       Then("no malformed or contradictory report verifies tests and each refusal remains typed result data")
       decoded.foreach { case (result, reason) => result shouldBe SbtTestSelectionResult.Rejected(reason) }
       SbtTestSelectionDecoder.decode(Vector.empty, _process(report)) shouldBe SbtTestSelectionResult.Rejected(MissingSelection)
+    }
+
+    "retain actual observations for headerless and partial reports" in {
+      Given("headerless and partially named reports, including three selected suites and a contradictory zero suite count")
+      val classes = _classes
+      val headerless = _report(classes, 24L, false).linesIterator.drop(2).mkString("\n")
+      val raw = _process("[warn] unrelated warning\nlogback diagnostic\n" + headerless)
+      val three = classes :+ "org.third.ThirdSpec"
+      val threeheaderless = _report(three, 24L, false).linesIterator.drop(3).mkString("\n")
+      When("the reports are assessed against their original exact selections")
+      val assessed = SbtTestReassessment.assess(classes, raw)
+      val assessedthree = SbtTestReassessment.assess(three, _process(threeheaderless))
+      val zero = SbtTestReassessment.assess(three, _process(threeheaderless.replace("completed 3", "completed 0")))
+      Then("the observed count can confirm the selection while absent names remain unknown")
+      assessedthree.selection shouldBe SbtTestSelectionResult.Verified(three, 3, 24L)
+      assessedthree.observation.suiteNames shouldBe empty
+      assessedthree.observation.nameConfirmation shouldBe SbtSuiteNameConfirmation.Unknown
+      assessedthree.observation.completedSuites shouldBe Some(3L)
+      zero.selection shouldBe SbtTestSelectionResult.Rejected(SbtTestSelectionFailure.SuiteMismatch)
+      assessed.selection shouldBe SbtTestSelectionResult.Verified(classes, 2, 24L)
+      assessed.observation.suiteNames shouldBe Vector.empty
+      assessed.observation.nameConfirmation shouldBe SbtSuiteNameConfirmation.Unknown
+      assessed.observation.testsRun shouldBe Some(24L)
+      assessed.observation.completedSuites shouldBe Some(2L)
+      assessed.observation.succeeded shouldBe Some(24L)
+      val partial = SbtTestReassessment.assess(classes, _process("[info] SelectedSpec:\n" + headerless))
+      partial.observation.suiteNames shouldBe Vector("SelectedSpec")
+      partial.observation.nameConfirmation shouldBe SbtSuiteNameConfirmation.Partial
+      partial.selection shouldBe SbtTestSelectionResult.Verified(classes, 2, 24L)
+      val contrary = SbtTestReassessment.assess(classes, _process("[info] WrongSpec:\n" + headerless))
+      contrary.selection shouldBe SbtTestSelectionResult.Rejected(SbtTestSelectionFailure.SuiteMismatch)
+      contrary.observation.nameConfirmation shouldBe SbtSuiteNameConfirmation.Contradictory
+    }
+
+    "reassess a retained one-suite 24-pass execution without inventing a name" in {
+      Given("an optional host-selected retained result, or a deterministic representative result")
+      val representative = """[warn] compiler warning
+logback diagnostic
+[info] Run completed in 1 second.
+[info] Total number of tests run: 24
+[info] Suites: completed 1, aborted 0
+[info] Tests: succeeded 24, failed 0, canceled 0, ignored 0, pending 0
+[info] All tests passed."""
+      val fixture = sys.env.get("CNCF_SPEC_RETAINED_SBT_RESULT").map { path =>
+        val json = io.circe.parser.parse(java.nio.file.Files.readString(java.nio.file.Path.of(path))).toOption.get
+        val cursor = json.hcursor
+        val process = cursor.downField("process")
+        val termination = process.downField("termination")
+        termination.get[String]("kind").toOption.get shouldBe "exited"
+        cursor.downField("scenario").focus.get.isNull shouldBe true
+        process.get[Vector[io.circe.Json]]("artifacts").toOption.get shouldBe empty
+        def _capture_(name: String): ProcessExecutionCapture = {
+          val capture = process.downField(name)
+          capture.get[String]("text_status").toOption.get shouldBe "complete"
+          capture.get[Long]("trailing_undecoded_bytes").toOption.get shouldBe 0L
+          ProcessExecutionCapture(
+            java.util.Base64.getDecoder.decode(capture.get[String]("content_base64").toOption.get).toVector,
+            capture.get[Long]("byte_count").toOption.get,
+            capture.get[Boolean]("truncated").toOption.get)
+        }
+        val raw = ProcessExecutionResult(
+          ProcessExecutionTermination.Exited(termination.get[Int]("exit_code").toOption.get),
+          _capture_("stdout"), _capture_("stderr"), Vector.empty,
+          process.get[Long]("elapsed_millis").toOption.get,
+          process.get[String]("safe_program_identity").toOption.get)
+        val expected = cursor.downField("expected")
+        (cursor.get[Vector[String]]("testClasses").toOption.get,
+          SbtTarget(WorkspaceId.parseC(cursor.get[String]("workspaceId").toOption.get).toOption.get),
+          raw, expected.get[Long]("testsRun").toOption.get,
+          expected.get[Long]("completedSuites").toOption.get,
+          expected.get[String]("nameConfirmation").toOption.get,
+          expected.get[Vector[String]]("suiteNames").toOption.get)
+      }.getOrElse((Vector("org.example.SelectedSpec"), _target, _process(representative),
+        24L, 1L, "Unknown", Vector.empty[String]))
+      val (classes, target, raw, count, suites, confirmation, names) = fixture
+      When("the public pure reassessment interprets the original selection and retained process facts")
+      val assessment = SbtTestReassessment.reassess(target, classes, raw)
+      Then("the execution succeeds on its observed counts while suite names remain unknown")
+      count shouldBe 24L
+      suites shouldBe classes.size.toLong
+      confirmation shouldBe "Unknown"
+      names shouldBe empty
+      assessment.outcome shouldBe SbtExecutionOutcome.Succeeded
+      assessment.processResult shouldBe raw
+      assessment.testObservation.get.suiteNames shouldBe names
+      assessment.testObservation.get.nameConfirmation shouldBe SbtSuiteNameConfirmation.Unknown
+      assessment.testObservation.get.testsRun shouldBe Some(count)
+      assessment.testObservation.get.completedSuites shouldBe Some(suites)
+      SbtTestReassessment.reassess(target, classes, raw.copy(termination = ProcessExecutionTermination.TimedOut))
+        .outcome shouldBe SbtExecutionOutcome.Incomplete(ProcessExecutionTermination.TimedOut)
+    }
+
+    "retain failed counts and diagnostic lines" in {
+      Given("a completed report with a failed test count and diagnostic line")
+      val report = _report(_classes, 7L, false).replace("failed 0", "failed 1") + "\n[error] *** TEST FAILED ***"
+      When("the original capture is assessed")
+      val assessed = SbtTestReassessment.assess(_classes, _process(report))
+      Then("failure counts and details are retained and the validation fails")
+      assessed.selection shouldBe SbtTestSelectionResult.Rejected(SbtTestSelectionFailure.FailedTests)
+      assessed.observation.failed shouldBe Some(1L)
+      assessed.observation.failureDetails shouldBe Vector("*** TEST FAILED ***")
+      SbtExecutionResult(_target, SbtOperation.TestOnly, _process(report), Some(assessed.selection))
+        .outcome shouldBe SbtExecutionOutcome.TestValidationFailed(SbtTestSelectionFailure.FailedTests)
+    }
+
+    "retain complete observed lines from incomplete captures without accepting their tails" in {
+      Given("truncated stdout and stderr, and a byte-count mismatch with complete evidence and partial tails")
+      def capture(text: String, extra: Vector[Byte] = Vector.empty, truncated: Boolean = true): ProcessExecutionCapture = {
+        val bytes = text.getBytes(StandardCharsets.UTF_8).toVector ++ extra
+        ProcessExecutionCapture(bytes, bytes.size.toLong, truncated)
+      }
+      val stdout = capture("[info] SelectedSpec:\n[info] Total number of tests run: 7\n" +
+        "[info] Suites: completed 2, aborted 0\n" +
+        "[info] Tests: succeeded 6, failed 1, canceled 0, ignored 0, pending 0\n" +
+        "[info] WrongSpec:")
+      val stderr = capture("[error] *** TEST FAILED ***\n[error] *** TEST ABORTED")
+      val raw = _process("").copy(stdout = stdout, stderr = stderr)
+      val mismatch = raw.copy(stdout = stdout.copy(truncated = false, byteCount = stdout.byteCount + 1),
+        stderr = stderr.copy(truncated = false, byteCount = stderr.byteCount + 1))
+      val malformedTail = raw.copy(stdout = capture("[info] SelectedSpec:\n", Vector(0xc3.toByte)),
+        stderr = capture("[error] *** TEST FAILED ***\n", Vector(0xc3.toByte)))
+      val partialCount = raw.copy(stdout = capture("[info] Total number of tests run: 7"))
+      When("the retained captures are reassessed without executing a process")
+      val results = Vector(raw, mismatch, malformedTail, partialCount).map(x => SbtTestReassessment.reassess(_target, _classes, x))
+      Then("complete evidence remains available with incomplete status and all results remain unverified")
+      results.zip(Vector(raw, mismatch, malformedTail, partialCount)).foreach { case (result, original) =>
+        result.outcome shouldBe SbtExecutionOutcome.UnverifiedTests(SbtTestSelectionFailure.IncompleteCapture)
+        result.processResult shouldBe original
+        result.testObservation.get.captureComplete shouldBe false
+      }
+      results.take(2).foreach { result =>
+        val observed = result.testObservation.get
+        observed.suiteNames shouldBe Vector("SelectedSpec")
+        observed.nameConfirmation shouldBe SbtSuiteNameConfirmation.Partial
+        observed.testsRun shouldBe Some(7L)
+        observed.completedSuites shouldBe Some(2L)
+        observed.failed shouldBe Some(1L)
+        observed.failureDetails shouldBe Vector("*** TEST FAILED ***")
+      }
+      results(2).testObservation.get.suiteNames shouldBe Vector("SelectedSpec")
+      results(2).testObservation.get.failureDetails shouldBe Vector("*** TEST FAILED ***")
+      results(3).testObservation.get.testsRun shouldBe None
     }
 
     "require complete byte-accurate strict UTF8 on both captured streams" in {
