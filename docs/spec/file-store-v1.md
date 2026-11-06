@@ -18,9 +18,37 @@ boundary, not a replacement for that authorization.
 `FileStoreKind` is `File` or `Collection`. A collection is a grouping target;
 an S3 prefix need not be a physical folder. Metadata contains `reference`,
 display `name`, `mediaType`, optional `byteLength`, `parents`, `kind`, and optional
-`version`. Unknown length and version remain `None`, never fabricated zero or
-version. Version is an observation, not a guarantee of version-pinned reads.
+`version`, followed by optional `contentDigest: Option[FileStoreContentDigest] = None`
+and `storageRoot: Option[FileStoreRef] = None`.
+Unknown length, version, content digest and storage root remain `None`, never fabricated zero,
+version or checksum. Version is an observation, not a guarantee of version-pinned reads.
 `FileStoreContent` pairs a media type with a materialized `Bag`.
+
+`storageRoot` is an observed provider storage volume/root identity in the same
+logical store. It is not the selected parent directory, a path, or authorization.
+Providers need not invent one: Google Drive maps output-only `driveId` when
+present and My Drive may omit it. Consumers must preserve absence as absence.
+
+`FileStoreContentDigest` is a final value with a private constructor and no public
+unchecked factory or copy. `sha256C(value: String): Consequence[FileStoreContentDigest]`
+accepts exactly 64 ASCII hexadecimal characters and normalizes upper/lower case
+with `Locale.ROOT`. Null, wrong length, nonhexadecimal and whitespace input fail
+with fixed `argumentInvalid("Invalid file store content digest")`; no input is
+echoed. Public `algorithm` is `sha256`, public `value` is normalized lowercase;
+equality and hash code use both. Its safe display is `FileStoreContentDigest(sha256)`.
+
+The digest records an external binary checksum only. It performs no automatic
+calculation, source-body read, comparison, verification or registration. The
+owning caller must independently bind the expected original and provider object
+before deciding integrity. An absent checksum cannot establish TKL verification.
+This is the narrow external binary content-integrity exception to the management
+hash prohibition: no workflow admission, freshness, routing or control hashes.
+
+The digest follows the previous seven fields; storage root follows the digest.
+Both default to `None`. Existing source calls omitting them retain their field order and defaults, including
+the optional version. Case-class product/extractor arity and derived schemas
+change; consumers of those representations must adapt. This is not a binary
+compatibility guarantee: rebuild affected consumers against the changed SPI.
 
 The capability exposes `name` and exactly four operations returning `ExecUowM`:
 
@@ -58,6 +86,16 @@ Names remain display labels and distinct child identities may share a label.
 The owning Operation still establishes source/entity authorization; neither
 child metadata nor a token grants it. Token rejection does not authorize an
 automatic restart.
+
+## Optional reserved direct upload
+
+[ReservedDirectUploadFileStore](reserved-direct-file-upload-v1.md) extends the
+existing optional direct capability with server-owned new-file reservation and
+independent metadata completion bound to that retained file/root identity.
+It does not change the base operations or old unreserved direct route. The
+reservation is a private sensitive value, never caller or directory authority;
+provider completion is metadata observation, not expected-SHA verification or
+domain registration.
 
 ## Content lifetime and write outcomes
 
@@ -116,6 +154,8 @@ adapters or cloud evidence.
 
 ## Executable specifications
 
+- [GoogleDriveReservedUploadSpec](../../src/test/scala/org/goldenport/cncf/filestore/GoogleDriveReservedUploadSpec.scala)
+- [GoogleDriveContentDigestSpec](../../src/test/scala/org/goldenport/cncf/filestore/GoogleDriveContentDigestSpec.scala)
 - [FileStoreSpec](../../src/test/scala/org/goldenport/cncf/filestore/FileStoreSpec.scala)
 - [GoogleDriveChildrenSpec](../../src/test/scala/org/goldenport/cncf/filestore/GoogleDriveChildrenSpec.scala)
 - [HttpPutBagSpec](../../src/test/scala/org/goldenport/cncf/http/HttpPutBagSpec.scala)

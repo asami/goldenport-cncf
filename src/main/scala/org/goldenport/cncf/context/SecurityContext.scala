@@ -5,7 +5,8 @@ import org.goldenport.id.UniversalId
 
 /*
  * @since   Dec. 21, 2025
- * @version Jul. 31, 2026
+ *  version Jul. 31, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class PrincipalId(
@@ -41,6 +42,14 @@ final case class SecurityContext(
   subjectKind: SubjectKind = SubjectKind.Unspecified,
   session: Option[SessionContext] = None
 ) {
+  /** Exact selected provider names, available only with native provider admission. */
+  def authenticatedProvider: Option[org.goldenport.cncf.security.AuthenticationProviderIdentity] =
+    org.goldenport.cncf.security.SecurityAuthenticationProvenance.authenticatedProvider(this)
+
+  /** Original physical credential transport facts, never authentication authority. */
+  def credentialTransports: Option[SecurityContext.CredentialTransports] =
+    org.goldenport.cncf.security.SecurityAuthenticationProvenance.credentialTransports(this)
+
   def hasCapability(name: String): Boolean = {
     val target = _normalize_token(name)
     capabilities.exists(c => _normalize_token(c.name) == target)
@@ -71,6 +80,18 @@ final case class Capability(
 )
 
 object SecurityContext {
+  /** Boolean-only facts: no cookie, token, session or other credential values. */
+  final case class CredentialTransports(
+    authorizationHeader: Boolean = false,
+    bearerHeader: Boolean = false,
+    sessionHeader: Boolean = false,
+    sessionCookie: Boolean = false
+  )
+
+  object CredentialTransports {
+    val empty: CredentialTransports = CredentialTransports()
+  }
+
   private def _normalize_token(
     p: String
   ): String =

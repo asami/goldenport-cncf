@@ -80,7 +80,8 @@ import org.goldenport.bag.Bag
  *  version Apr. 30, 2026
  *  version Aug. 15, 2026
  *  version Sep.  8, 2026
- * @version Oct. 31, 2026
+ *  version Oct. 31, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -1350,6 +1351,9 @@ final class Subsystem(
               attributes
             )
         ingress.flatMap { security =>
+          httprequest.foreach(request =>
+            org.goldenport.cncf.security.SecurityAuthenticationProvenance.inheritCredentialTransports(
+              request, security.executionContext.security))
           val executioncontext =
             _with_http_runtime_parameters(security.executionContext, httprequest)
           lastcontext = Some(executioncontext)

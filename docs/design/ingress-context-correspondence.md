@@ -38,6 +38,30 @@ Moving the ordinary binding after restoration prevents an earlier context from
 remaining captured by the UnitOfWork while the caller receives a later copy.
 No rebinding is introduced after operation execution or capture.
 
+## Original credential-transport provenance
+
+Http4s owns observation of physical Authorization, Bearer scheme, session header
+and known session-cookie presence before normalization. It admits only immutable
+boolean facts against the actual physical request, retaining them across its
+canonical-route and revision-transport copies. No synthetic public header,
+client attribute, credential value or ambient ThreadLocal carries these facts.
+
+The existing SecurityAuthenticationProvenance identity/weak-reference mechanism
+retains an optional transport value independently of optional authentication
+origin. Its normal inheritance keeps both; a dedicated transport-only handoff
+never grants an authentication origin. Subsystem supplies that handoff from its
+retained physical HttpRequest to freshly resolved security before the ordinary
+operation executes. Resolver calls with an admitted base security context retain
+its transport facts without trusting request attributes. Static/Web ingress uses
+the same physical observer and final resolved context.
+
+SecurityContext exposes a typed read method and companion value, preserving its
+existing constructor/copy/extractor products and those of SessionContext. This
+keeps precompiled component consumers on the ordinary API path. Authentication
+providers remain authoritative for identity and sessions; transport observation
+is evidence of input shape only. The unchanged final UnitOfWork holds the same
+SecurityContext object and therefore observes the same admitted transport facts.
+
 ## Explicit development composition
 
 Correspondence specifications create fresh runtime datastore/entity-store spaces

@@ -1,6 +1,7 @@
 package org.goldenport.cncf.security
 
 import org.goldenport.cncf.context.{Principal, PrincipalId, SecurityContext, SecurityLevel}
+import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -8,11 +9,70 @@ import org.scalatest.prop.TableDrivenPropertyChecks
 
 /**
  * @since   Oct.  1, 2026
- * @version Oct.  8, 2026
+ *  version Oct.  8, 2026
+ * @version Nov.  6, 2026
  */
 final class SecurityAuthenticationProvenanceSpec
     extends AnyWordSpec with Matchers with GivenWhenThen with TableDrivenPropertyChecks {
   "Authentication provenance" should {
+    "expose selected names only with admitted provider origin and preserve them through explicit framework inheritance" in {
+      Given("a fixture-native selected binding, transport facts and a result without authentication admission")
+      val identity = AuthenticationProviderIdentity("binding", "provider", "component")
+      val result = AuthenticationResult(PrincipalId("selected"))
+      SecurityAuthenticationProvenance.withProviderIdentity(result, identity)
+      val context = result.toSecurityContext
+      val facts = SecurityContext.CredentialTransports(bearerHeader = true, sessionCookie = true)
+      SecurityAuthenticationProvenance.withCredentialTransports(context, facts)
+      context.authenticatedProvider shouldBe None
+      SecuritySubject.from(context).isProviderAuthenticated shouldBe false
+
+      When("the framework admits the provider and derives a new context")
+      SecurityAuthenticationProvenance.providerAuthenticated(context)
+      val inherited = context.copy()
+      SecurityAuthenticationProvenance.inherit(context, inherited)
+      Then("selected names, origin and transports survive together without transferring through a public copy")
+      inherited.authenticatedProvider shouldBe Some(identity)
+      inherited.credentialTransports shouldBe Some(facts)
+      SecuritySubject.from(inherited).isProviderAuthenticated shouldBe true
+      context.copy().authenticatedProvider shouldBe None
+      result.copy().toSecurityContext.authenticatedProvider shouldBe None
+      SecurityAuthenticationProvenance.providerAuthenticated(context.copy()).authenticatedProvider shouldBe None
+
+      When("only transport facts are copied to another provider-marked context, or origin is trusted-local")
+      val transportonly = SecurityAuthenticationProvenance.providerAuthenticated(_context("other"))
+      SecurityAuthenticationProvenance.inheritCredentialTransports(context, transportonly)
+      Then("transport propagation and trusted-local admission cannot supply selected-provider proof")
+      transportonly.credentialTransports shouldBe Some(facts)
+      transportonly.authenticatedProvider shouldBe None
+      SecurityAuthenticationProvenance.trustedLocalAuthenticated(inherited).authenticatedProvider shouldBe None
+      val legacy = SecurityAuthenticationProvenance.providerAuthenticated(_context("legacy"))
+      SecurityAuthenticationProvenance.inherit(legacy, context)
+      context.authenticatedProvider shouldBe None
+      SecuritySubject.from(context).isProviderAuthenticated shouldBe true
+    }
+
+    "refuse constructed or copied public identity claims for arbitrary shrinking names" in {
+      Given("clients able to construct metadata and authenticated-looking attributes")
+      val names = Gen.nonEmptyListOf(Gen.alphaNumChar).map(_.take(40).mkString)
+      val property = Prop.forAll(names) { name =>
+        val identity = AuthenticationProviderIdentity(name, name + "-provider", name + "-component")
+        val raw = _context(name)
+        val publiccopy = identity.copy()
+        val selected = raw.copy()
+        SecurityAuthenticationProvenance.withProviderIdentity(selected, identity)
+        val copied = selected.copy()
+        val local = SecurityAuthenticationProvenance.trustedLocalAuthenticated(selected)
+        val legacy = SecurityAuthenticationProvenance.providerAuthenticated(raw)
+        publiccopy == identity && raw.authenticatedProvider.isEmpty && copied.authenticatedProvider.isEmpty &&
+          local.authenticatedProvider.isEmpty && legacy.authenticatedProvider.isEmpty &&
+          !SecuritySubject.from(copied).isProviderAuthenticated
+      }
+      When("the public claims are inspected without actual provider selection and ingress admission")
+      val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(100), property)
+      Then("metadata construction and value equality grant no attribution")
+      checked.passed shouldBe true
+    }
+
     "reject distinct equal copies of admitted contexts and subjects across identities" in {
       Given("provider-admitted contexts for independent principal identities")
       forAll(Table("identity", "participant-1", "participant-2", "participant-3", "participant-4")) { identity =>

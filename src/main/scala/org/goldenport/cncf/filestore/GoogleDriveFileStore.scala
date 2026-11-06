@@ -15,7 +15,8 @@ import org.goldenport.protocol.Property
 
 /*
  * @since   Oct. 20, 2026
- * @version Oct. 25, 2026
+ *  version Oct. 25, 2026
+ * @version Nov.  6, 2026
  */
 /** Create-only Drive storage over admitted native HTTP programs.
   * Callers establish owning entity/source authorization before using this store.
@@ -23,10 +24,129 @@ import org.goldenport.protocol.Property
 final class GoogleDriveFileStore private (
   val name: String,
   private val _credentials: GoogleDriveCredentials
-) extends FileStoreChildren {
+) extends ReservedDirectUploadFileStore with FileStoreChildren {
   import GoogleDriveFileStore.*
 
   override def toString: String = s"GoogleDriveFileStore($name)"
+
+  def directUploadProtocol: String = "googleDriveResumable"
+
+  def prepareDirectUpload(parent: FileStoreRef, name: String, mediaType: MimeType,
+    byteLength: Long): ExecUowM[DirectFileUpload] = for {
+    _ <- _pure(_reference(parent))
+    _ <- _pure(_creation_input(_valid_name(name) && Option(mediaType).exists(value =>
+      _valid_mime(value.value) && value.value != _folder_mime) && byteLength >= 0))
+    auth <- _credentials._authorization
+    initiation <- _lift(UnitOfWorkOp.HttpPost(s"$_upload?uploadType=resumable&supportsAllDrives=true&fields=$_fields",
+      Some(_creation_json(parent, name, mediaType.value)), auth ++ _json_headers ++ Map(
+        "X-Upload-Content-Type" -> mediaType.value, "X-Upload-Content-Length" -> byteLength.toString),
+      _metadata_properties))
+    session <- _pure(if (initiation.code == 200) _session(initiation.headerValue("Location"))
+      else _status[String](initiation.code, true))
+  } yield DirectFileUpload(parent, name, mediaType, byteLength, directUploadProtocol, session)
+
+  def inspectDirectUpload(upload: DirectFileUpload): ExecUowM[DirectFileUploadStatus] = for {
+    _ <- _pure(_direct_upload_input(upload))
+    auth <- _credentials._authorization
+    result <- _inspect_direct_upload(upload, auth)
+  } yield result
+
+  def prepareReservedDirectUpload(parent: FileStoreRef, name: String, mediaType: MimeType,
+    byteLength: Long): ExecUowM[DirectFileUploadReservation] = for {
+    _ <- _pure(_reference(parent))
+    _ <- _pure(_creation_input(_valid_name(name) && Option(mediaType).exists(value =>
+      _valid_mime(value.value) && value.value != _folder_mime) && byteLength >= 0))
+    auth <- _credentials._authorization
+    collection <- _stat_with_auth(parent, auth)
+    _ <- _pure(if (collection.kind == FileStoreKind.Collection) Consequence.unit else _invalid_metadata(false))
+    generated <- _lift(UnitOfWorkOp.HttpGet(s"$_files/generateIds?count=1&space=drive&type=files",
+      auth + ("Accept" -> "application/json"), _metadata_properties))
+    id <- _pure(if (generated.code == 200) _generated_id(generated, parent, collection.storageRoot)
+      else _status[String](generated.code, false))
+    initiation <- _lift(UnitOfWorkOp.HttpPost(s"$_upload?uploadType=resumable&supportsAllDrives=true&fields=$_fields",
+      Some(_creation_json(parent, name, mediaType.value, Some(id))), auth ++ _json_headers ++ Map(
+        "X-Upload-Content-Type" -> mediaType.value, "X-Upload-Content-Length" -> byteLength.toString),
+      _metadata_properties))
+    session <- _pure(if (initiation.code == 200) _session(initiation.headerValue("Location"))
+      else _status[String](initiation.code, true))
+  } yield DirectFileUploadReservation(DirectFileUpload(parent, name, mediaType, byteLength, directUploadProtocol, session),
+    FileStoreRef(this.name, id), collection.storageRoot)
+
+  def inspectReservedDirectUpload(reservation: DirectFileUploadReservation): ExecUowM[DirectFileUploadStatus] = for {
+    _ <- _pure(_reservation_input(reservation))
+    auth <- _credentials._authorization
+    status <- _inspect_direct_upload(reservation.upload, auth)
+    result <- status match {
+      case pending @ DirectFileUploadStatus.Pending(_) => _pure[DirectFileUploadStatus](Consequence.success(pending))
+      case DirectFileUploadStatus.Completed(metadata) => for {
+        _ <- _pure(if (metadata.reference == reservation.fileReference) Consequence.unit else _invalid_metadata(false))
+        observed <- _stat_with_auth(reservation.fileReference, auth)
+        confirmed <- _pure(_reserved_metadata(observed, reservation))
+      } yield (DirectFileUploadStatus.Completed(confirmed): DirectFileUploadStatus)
+      case DirectFileUploadStatus.Expired => for {
+        response <- _stat_response(reservation.fileReference, auth)
+        reconciled <- _pure[DirectFileUploadStatus](if (response.code == 404) Consequence.success(DirectFileUploadStatus.Expired)
+          else _stat_metadata(response, reservation.fileReference).flatMap(_reserved_metadata(_, reservation))
+            .map(DirectFileUploadStatus.Completed(_)))
+      } yield reconciled
+    }
+  } yield result
+
+  private def _direct_upload_input(upload: DirectFileUpload): Consequence[Unit] = for {
+    _ <- if (Option(upload).nonEmpty) Consequence.unit
+      else Consequence.argumentInvalid("Invalid Google Drive direct upload binding")
+    _ <- _reference(upload.parent)
+    _ <- _creation_input(upload.protocol == directUploadProtocol && _valid_name(upload.name) &&
+      Option(upload.mediaType).exists(value => _valid_mime(value.value) && value.value != _folder_mime) && upload.byteLength >= 0)
+    _ <- _session(Option(upload.uploadUri))
+  } yield ()
+
+  private def _inspect_direct_upload(upload: DirectFileUpload, auth: Map[String, String]): ExecUowM[DirectFileUploadStatus] = for {
+    response <- _lift(UnitOfWorkOp.HttpPutBag(upload.uploadUri, Some(Bag.binary(Array.emptyByteArray)),
+      auth ++ Map("Content-Range" -> s"bytes */${upload.byteLength}", "Accept" -> "application/json"), _metadata_properties))
+    result <- _pure(response.code match {
+      case 200 | 201 => _confirmed_metadata(response, upload.parent, upload.name, upload.mediaType.value,
+        Some(upload.byteLength), FileStoreKind.File).map(DirectFileUploadStatus.Completed(_))
+      case 308 => _pending(response.headerValue("Range"), upload.byteLength).map(DirectFileUploadStatus.Pending(_))
+      case 404 => Consequence.success(DirectFileUploadStatus.Expired)
+      case _ => _status[DirectFileUploadStatus](response.code, false)
+    })
+  } yield result
+
+  private def _reservation_input(reservation: DirectFileUploadReservation): Consequence[Unit] = for {
+    _ <- if (Option(reservation).nonEmpty) Consequence.unit
+      else Consequence.argumentInvalid("Invalid Google Drive reserved upload binding")
+    _ <- _direct_upload_input(reservation.upload)
+    _ <- _reference(reservation.fileReference)
+    _ <- if (Option(reservation.storageRoot).nonEmpty) Consequence.unit
+      else Consequence.argumentInvalid("Invalid Google Drive reserved upload binding")
+    _ <- reservation.storageRoot.fold(Consequence.unit)(_reference)
+    _ <- if (reservation.fileReference != reservation.upload.parent && !reservation.storageRoot.contains(reservation.fileReference))
+      Consequence.unit else Consequence.argumentInvalid("Invalid Google Drive reserved upload binding")
+  } yield ()
+
+  private def _reserved_metadata(metadata: FileStoreMetadata, reservation: DirectFileUploadReservation): Consequence[FileStoreMetadata] = {
+    val upload = reservation.upload
+    if (metadata.reference == reservation.fileReference && metadata.name == upload.name &&
+        metadata.parents == Vector(upload.parent) && metadata.kind == FileStoreKind.File &&
+        metadata.mediaType.value == upload.mediaType.value && metadata.byteLength.contains(upload.byteLength) &&
+        metadata.storageRoot == reservation.storageRoot) Consequence.success(metadata)
+    else _invalid_metadata(false)
+  }
+
+  private def _generated_id(response: HttpResponse, parent: FileStoreRef, root: Option[FileStoreRef]): Consequence[String] = {
+    val parsed = try {
+      if (!response.mime.value.equalsIgnoreCase("application/json")) None
+      else for {
+        fields <- response.getString.flatMap(text => parser.parse(text).toOption).flatMap(_.asObject)
+        ids <- fields("ids").flatMap(_.asArray).filter(_.size == 1)
+        id <- ids.head.asString.filter(_valid_id).filter(value => value != parent.key && !root.exists(_.key == value))
+        _ <- Option.when(fields("space").forall(_.asString.contains("drive")))(())
+        _ <- Option.when(fields("kind").forall(_.asString.contains("drive#generatedIds")))(())
+      } yield id
+    } catch { case NonFatal(_) => None }
+    parsed.fold[Consequence[String]](_invalid_metadata(false))(Consequence.success)
+  }
 
   def listChildren(parent: FileStoreRef, limit: Int, pageToken: Option[String] = None): ExecUowM[FileStoreChildPage] = for {
     _ <- _pure(_reference(parent))
@@ -40,11 +160,21 @@ final class GoogleDriveFileStore private (
   def stat(reference: FileStoreRef): ExecUowM[FileStoreMetadata] = for {
     _ <- _pure(_reference(reference))
     auth <- _credentials._authorization
-    response <- _lift(UnitOfWorkOp.HttpGet(s"$_files/${reference.key}?supportsAllDrives=true&fields=$_fields",
+    metadata <- _stat_with_auth(reference, auth)
+  } yield metadata
+
+  private def _stat_response(reference: FileStoreRef, auth: Map[String, String]): ExecUowM[HttpResponse] =
+    _lift(UnitOfWorkOp.HttpGet(s"$_files/${reference.key}?supportsAllDrives=true&fields=$_fields",
       auth + ("Accept" -> "application/json"), _metadata_properties))
-    metadata <- _pure(if (response.code == 200) _metadata(response, false).flatMap { value =>
+
+  private def _stat_metadata(response: HttpResponse, reference: FileStoreRef): Consequence[FileStoreMetadata] =
+    if (response.code == 200) _metadata(response, false).flatMap { value =>
       if (value.reference == reference) Consequence.success(value) else _invalid_metadata(false)
-    } else _status(response.code, false))
+    } else _status(response.code, false)
+
+  private def _stat_with_auth(reference: FileStoreRef, auth: Map[String, String]): ExecUowM[FileStoreMetadata] = for {
+    response <- _stat_response(reference, auth)
+    metadata <- _pure(_stat_metadata(response, reference))
   } yield metadata
 
   def read(reference: FileStoreRef): ExecUowM[FileStoreContent] = for {
@@ -109,8 +239,16 @@ final class GoogleDriveFileStore private (
       case Some(value) => value.toLongOption.filter(_ >= 0).map(Some(_))
     }
     version <- _optional_decimal(fields, "version")
+    digest <- fields("sha256Checksum") match {
+      case None => Some(None)
+      case Some(value) => value.asString.flatMap(value => FileStoreContentDigest.sha256C(value).toOption).map(Some(_))
+    }
+    root <- fields("driveId") match {
+      case None => Some(None)
+      case Some(value) => value.asString.filter(_valid_id).map(value => Some(FileStoreRef(name, value)))
+    }
   } yield FileStoreMetadata(FileStoreRef(name, id), label, MimeType(mime), size,
-    parents.map(FileStoreRef(name, _)), if (mime == _folder_mime) FileStoreKind.Collection else FileStoreKind.File, version)
+    parents.map(FileStoreRef(name, _)), if (mime == _folder_mime) FileStoreKind.Collection else FileStoreKind.File, version, digest, root)
 
   private def _children(response: HttpResponse, parent: FileStoreRef, limit: Int): Consequence[FileStoreChildPage] = {
     val parsed = try {
@@ -147,10 +285,20 @@ final class GoogleDriveFileStore private (
 object GoogleDriveFileStore {
   private val _files = "https://www.googleapis.com/drive/v3/files"
   private val _upload = "https://www.googleapis.com/upload/drive/v3/files"
-  private val _fields = "id,name,mimeType,size,parents,trashed,version"
+  private val _fields = "id,name,mimeType,size,parents,trashed,version,sha256Checksum,driveId"
   private val _folder_mime = "application/vnd.google-apps.folder"
   private val _json_headers = Map("Content-Type" -> "application/json; charset=UTF-8", "Accept" -> "application/json")
   private val _metadata_properties = Vector(Property("http.max-response-bytes", "65536", None))
+
+  private def _pending(range: Option[String], length: Long): Consequence[Long] = {
+    val offset = range match {
+      case None => Some(0L)
+      case Some(value) if value.matches("bytes=0-(0|[1-9][0-9]*)") =>
+        value.drop(8).toLongOption.filter(value => value < length).map(_ + 1)
+      case _ => None
+    }
+    offset.fold[Consequence[Long]](Consequence.resourceInvalid("Google Drive upload progress is invalid"))(Consequence.success)
+  }
 
   def createC(name: String, credentials: GoogleDriveCredentials): Consequence[GoogleDriveFileStore] = {
     if (Option(name).exists(_.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")) && Option(credentials).nonEmpty)
@@ -198,9 +346,10 @@ object GoogleDriveFileStore {
   private def _creation_input(valid: Boolean): Consequence[Unit] =
     if (valid) Consequence.success(()) else Consequence.argumentInvalid("Invalid Google Drive file creation input")
 
-  private def _creation_json(parent: FileStoreRef, label: String, mime: String): String =
-    Json.obj("name" -> Json.fromString(label), "mimeType" -> Json.fromString(mime),
-      "parents" -> Json.arr(Json.fromString(parent.key))).noSpaces
+  private def _creation_json(parent: FileStoreRef, label: String, mime: String, reservedid: Option[String] = None): String =
+    Json.obj((reservedid.map(value => "id" -> Json.fromString(value)).toVector ++
+      Vector("name" -> Json.fromString(label), "mimeType" -> Json.fromString(mime),
+        "parents" -> Json.arr(Json.fromString(parent.key))))*).noSpaces
 
   private def _parents(fields: JsonObject): Option[Vector[String]] = fields("parents") match {
     case None => Some(Vector.empty)
