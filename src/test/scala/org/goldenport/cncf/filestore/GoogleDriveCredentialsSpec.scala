@@ -23,7 +23,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 20, 2026
- * @version Oct. 20, 2026
+ *  version Oct. 25, 2026
+ * @version Nov.  6, 2026
  */
 final class GoogleDriveCredentialsSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import GoogleDriveFixture.*
@@ -229,7 +230,7 @@ final class GoogleDriveCredentialsSpec extends AnyWordSpec with Matchers with Gi
 private[filestore] object GoogleDriveFixture {
   val driveOrigin: String = "https://www.googleapis.com"
   val oauthUrl: String = "https://oauth2.googleapis.com/token"
-  val fields: String = "id,name,mimeType,size,parents,trashed,version"
+  val fields: String = "id,name,mimeType,size,parents,trashed,version,sha256Checksum,driveId"
   val folderMime: String = "application/vnd.google-apps.folder"
   val sessionUrl: String = s"$driveOrigin/upload/drive/v3/files?uploadType=resumable&upload_id=synthetic-session-marker"
   val parent: FileStoreRef = FileStoreRef("drive-main", "parent_01")

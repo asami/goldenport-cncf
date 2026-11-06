@@ -79,10 +79,10 @@ refresh material. These are outbound credentials, not an ingress
 ## Metadata and content reads
 
 The metadata field selection is exactly
-`id,name,mimeType,size,parents,trashed,version`. `stat` performs one GET:
+`id,name,mimeType,size,parents,trashed,version,sha256Checksum,driveId`. `stat` performs one GET:
 
 ```text
-https://www.googleapis.com/drive/v3/files/{id}?supportsAllDrives=true&fields=id,name,mimeType,size,parents,trashed,version
+https://www.googleapis.com/drive/v3/files/{id}?supportsAllDrives=true&fields=id,name,mimeType,size,parents,trashed,version,sha256Checksum,driveId
 ```
 
 It sends Bearer authorization and `Accept: application/json`, requesting a
@@ -101,6 +101,42 @@ verbatim as an observation, without an invented value or version-pinned read
 promise. JSON numbers, nulls, leading zeroes, signs, spaces and fractions do not
 meet these string contracts. Malformed metadata has the fixed
 `resourceInvalid("Google Drive file metadata is invalid")` failure.
+
+Output-only `driveId`, when present, must be a nonempty safe opaque Drive ID
+string under the same provider ID rule. It becomes
+`storageRoot=Some(FileStoreRef(configuredStore, actualDriveId))`. Missing means
+`None`, including My Drive; null, numbers, empty or invalid strings are malformed
+metadata. This is a volume observation, never the selected directory or a grant.
+The same native parser preserves it in create, status and child metadata.
+
+The native `sha256Checksum` is an output-only SHA-256 observation available when
+Drive supplies it for stored binary content, as documented in the
+[Drive File resource](https://developers.google.com/workspace/drive/api/reference/rest/v3/files).
+Absence becomes `contentDigest=None`, including folders and unavailable binary
+checksums. A present field must be a string accepted by
+`FileStoreContentDigest.sha256C`; numeric, null, empty, nonhexadecimal, wrong-length
+and whitespace values are malformed metadata. Valid uppercase input becomes the
+same normalized typed value as lowercase. No MD5, writable custom property,
+filename or file ID is substituted or hashed.
+
+Stat obtains this checksum with its independent metadata GET and never downloads
+the original. The same parser preserves or rejects checksum observations for
+create, completed direct-upload status and child responses. Existing fixed safe
+metadata/write/page diagnostics apply without echoing the checksum or provider
+body; existing credential, validation and admission contracts continue to apply.
+The field itself does not mark a direct upload or TKL resource verified or
+registered. TKL must compare an authenticated immutable expected digest against
+an independently observed, reservation-bound provider object; absent SHA-256 is
+not successful verification. That owning policy is pending, outside this adapter
+metadata foundation. The management-hash exception is limited to external binary
+content equality and grants no freshness or workflow-control mechanism.
+
+The [Drive upload guide](https://developers.google.com/workspace/drive/api/guides/manage-uploads)
+documents pre-generated file IDs for binary creation. The optional
+[reserved direct capability](reserved-direct-file-upload-v1.md) supplies server
+reservation/file-ID binding and an independent stat completion observation.
+Expected-SHA comparison and TKL verification/registration remain future owning
+policy. Existing unreserved direct preparation remains POST-only with no ID.
 
 `read` performs one GET, with no hidden stat:
 
@@ -152,7 +188,7 @@ UTF8 form-percent-encoded with `java.net.URLEncoder`. Decoded values are exactly
 | `supportsAllDrives` | `true` |
 | `includeItemsFromAllDrives` | `true` |
 | `pageSize` | the requested limit |
-| `fields` | `nextPageToken,incompleteSearch,files(id,name,mimeType,size,parents,trashed,version)` |
+| `fields` | `nextPageToken,incompleteSearch,files(id,name,mimeType,size,parents,trashed,version,sha256Checksum,driveId)` |
 | `pageToken` | supplied opaque token, omitted when absent |
 
 The GET uses the same Bearer authorization, JSON Accept, native host admission
@@ -193,7 +229,7 @@ normalization, label lookup or label uniqueness assumption.
 `createCollection` performs one metadata POST to:
 
 ```text
-https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&fields=id,name,mimeType,size,parents,trashed,version
+https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&fields=id,name,mimeType,size,parents,trashed,version,sha256Checksum,driveId
 ```
 
 The JSON body is exactly `{name, mimeType, parents:[parent.key]}`, with folder
@@ -213,7 +249,7 @@ only during the admitted write and closes it on success/failure.
 The first request is one native metadata POST to:
 
 ```text
-https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,mimeType,size,parents,trashed,version
+https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,mimeType,size,parents,trashed,version,sha256Checksum,driveId
 ```
 
 It uses the same three-field metadata body and JSON/Accept/Bearer headers plus
@@ -280,6 +316,8 @@ unchanged.
 
 ## Executable specifications
 
+- [GoogleDriveReservedUploadSpec](../../src/test/scala/org/goldenport/cncf/filestore/GoogleDriveReservedUploadSpec.scala)
+- [GoogleDriveContentDigestSpec](../../src/test/scala/org/goldenport/cncf/filestore/GoogleDriveContentDigestSpec.scala)
 - [GoogleDriveCredentialsSpec](../../src/test/scala/org/goldenport/cncf/filestore/GoogleDriveCredentialsSpec.scala)
 - [GoogleDriveFileStoreSpec](../../src/test/scala/org/goldenport/cncf/filestore/GoogleDriveFileStoreSpec.scala)
 - [GoogleDriveChildrenSpec](../../src/test/scala/org/goldenport/cncf/filestore/GoogleDriveChildrenSpec.scala)

@@ -6,7 +6,8 @@ import org.goldenport.datatype.MimeType
 
 /*
  * @since   Oct. 20, 2026
- * @version Oct. 25, 2026
+ *  version Oct. 25, 2026
+ * @version Nov.  6, 2026
  */
 
 /** Configured store identity and provider-opaque physical key, never authority.
@@ -20,9 +21,11 @@ enum FileStoreKind {
   case File, Collection
 }
 
-/** Unknown size/version remain None. Version is an observation only and does
+/** Unknown size/version/contentDigest/storageRoot remain None. Version is an observation only and does
   * not promise version-pinned reads. Names are display labels, not identities,
   * unique paths, or grants; duplicate labels are permitted.
+  * A provider checksum is an observation, never automatic verification or registration.
+  * storageRoot observes a provider volume/root identity, not a directory or authority.
   */
 final case class FileStoreMetadata(
   reference: FileStoreRef,
@@ -31,7 +34,9 @@ final case class FileStoreMetadata(
   byteLength: Option[Long],
   parents: Vector[FileStoreRef],
   kind: FileStoreKind,
-  version: Option[String] = None
+  version: Option[String] = None,
+  contentDigest: Option[FileStoreContentDigest] = None,
+  storageRoot: Option[FileStoreRef] = None
 )
 
 /** A materialized value that remains readable after UnitOfWork completion. */
