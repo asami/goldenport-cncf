@@ -77,7 +77,7 @@ No duplicate item or provider decomposition is introduced here.
 
 ## HYG-SYNC-PH99-METADATA-01
 
-- Status: OPEN
+- Status: RESOLVED
 - Discovered: 2026-10-31, independent integration review.
 - Repository / owner: goldenport-cncf; the existing SBT contract or Phase 99 maintainer.
 - Category: Historical Phase status projection; priority P3.
@@ -87,6 +87,7 @@ No duplicate item or provider decomposition is introduced here.
 - Boundary: inherited from the incoming parent, outside the limited SQLite repair; no implementation or historical Phase-status change is admitted by this record.
 - Proposed task: The Phase 99 owner should reconcile metadata against native closure evidence when separately selected; this integration neither closes nor reopens Phase 99.
 - Task / commit: not scheduled.
+- Resolution (2026-11-07): At the user's request, reconciled both Phase 99 documents with the retained native completion audit: 6,909 successful tests, accepted independent Phase review, release commit `efc672af` and Session `95b37fc2053d60c77b044b00a1d871b6` ending `Terminal / completed` on 2026-10-30. Updated the status headers and replaced obsolete pending-closure prose. The original native acceptance records remain intact; this is a documentation correction to an already completed Phase.
 
 ## HYG-SYNC-CHECKED-TYPE-OWNER-01
 

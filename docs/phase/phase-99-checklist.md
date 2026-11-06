@@ -1,6 +1,7 @@
 # Phase 99 Checklist: Finding Disposition ABI
 
-status=in-progress
+status=closed
+closed_at=2026-10-30
 
 - [x] Freeze normalized Finding Disposition model.
 - [x] Freeze stable rule/finding identity and target binding.
@@ -26,8 +27,15 @@ extensible rule IDs, exact target binding and the absence of automatic insertion
 The first whole-repository check ran 6,880 tests in 909 completed suites and
 failed only the existing catalog cardinality assertion. On 2026-10-29, native
 same-Session inventory adoption admitted that test's bounded correction.
-Fresh whole-repository validation, integrated Phase review and release closure
-remain required; the checked behavior items do not claim Phase completion.
+On 2026-10-30, fresh native whole-repository validation passed with 6,909
+successful tests in 912 completed suites, zero failures and zero aborted
+suites. Five canceled, one ignored and 46 pending tests are not successful
+coverage. Independent integrated Phase review accepted the candidate with no
+blocking findings. Native release closure completed in commit `efc672af`, and
+Session `95b37fc2053d60c77b044b00a1d871b6` reached `Terminal / completed`.
+All 12 checklist items are complete; Phase 99 is closed. Cozy CML mapping is
+covered as a documented adapter contract, without claiming downstream
+integration validation.
 
 <!-- sm-workflow completion 95b37fc2053d60c77b044b00a1d871b6 phase 99 -->
 Accepted phase 99.
