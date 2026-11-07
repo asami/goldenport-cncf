@@ -221,3 +221,8 @@ collectとretireは既定でdry-run、実行には`--apply`が必要。collect�
 application bootstrap前に既存ownerへ渡す。公開済みruntimeを修正版へ更新し、
 実際に選択された成果物とinspect・dry-runを確認するまでは、この操作が
 インストール済み環境で成功したとは扱わない。実キャッシュの回収も未実施。
+
+公開入口 `CncfMain.main` でも上記の正確な接頭辞と直接の `cache` 形式を
+bootstrap前に既存ownerへ渡し、失敗コードを `CliFailed` で返す修正を追加した。
+実際のmainを呼ぶ回帰仕様を追加したが、検証・受入れ、通常経路での発行、
+launcherが選択した成果物の確認とinspect・dry-runは別途必要である。

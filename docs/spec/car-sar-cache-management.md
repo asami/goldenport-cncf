@@ -254,6 +254,10 @@ command cache ...`, with an explicit `--root`. The exact runtime argument prefix
 bootstrap, and the owner validates its complete remaining argument tail. The direct
 runtime form `cache ...` also reaches the owner before bootstrap. Other invocations
 retain their normal framework option handling and application admission.
+At the public `CncfMain.main` entry, a nonzero cache status is reported using
+`CliFailed` with the same code. Installed launcher qualification remains pending:
+publish the accepted runtime, verify the selected artifact, and exercise inspection
+and dry-run before treating the installed command as operational.
 `inspect` reports the bounded inspection, and `collect` defaults to dry-run;
 `--apply` performs collection. `legacy-inspect --kind car|sar --archive PATH`
 reports a known path-key and source generation; `legacy-retire --kind car|sar

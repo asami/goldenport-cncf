@@ -442,6 +442,10 @@ to that owner before application bootstrap. Only the exact runtime prefix
 unchanged to the strict operation parser. The direct runtime `cache ...` entry
 retains the same boundary, while other invocations retain normal bootstrap and
 admission. The existing owner supplies filesystem and cache-lock safety.
+The public `CncfMain.main` selects these forms before its own bootstrap and
+reports nonzero owner statuses through `CliFailed`, which the launcher observes.
+Source implementation alone does not qualify an installed runtime: publication,
+artifact selection, inspection and dry-run verification remain pending.
 It defaults to dry-run for collection and retirement, requires an expected
 key and generation for retirement, and reports refusal through its exit status.
 Applied collection can continue at most 128 bounded batches in one owner lifetime;

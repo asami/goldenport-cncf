@@ -1,14 +1,58 @@
 package org.goldenport.cncf.cli
 
+import java.io.{ByteArrayOutputStream, PrintStream}
+import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 import scala.jdk.CollectionConverters.*
 import scala.util.Using
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.goldenport.cncf.CncfMain
 
 class ManagedCacheOperationSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   "The cache operation" should {
+    "reach the managed owner through the public main before application bootstrap" in {
+      Given("an explicit cache root and the launcher's exact standalone argument prefix")
+      val parent = Files.createDirectories(Path.of("target/managed-cache-cli-spec"))
+      val root = Files.createTempDirectory(parent, "main-")
+      val originalOut = System.out
+      val originalErr = System.err
+      val bytes = new ByteArrayOutputStream()
+      val output = new PrintStream(bytes, true, StandardCharsets.UTF_8)
+      val prefix = Array("--no-default-components", "command", "cache")
+      try {
+        Console.withOut(output) {
+          Console.withErr(output) {
+            When("the public main inspects and dry-runs collection, including the direct cache form")
+            CncfMain.main(prefix ++ Array("inspect", "--root", root.toString))
+            CncfMain.main(Array("cache", "collect", "--root", root.toString))
+            Then("the managed owner reports both results")
+            val report = bytes.toString(StandardCharsets.UTF_8)
+            report should include ("CacheInspection")
+            report should include ("CacheCollectionResult")
+
+            When("the complete tail contains an invalid option or a retirement is refused")
+            val invalid = intercept[CncfMain.CliFailed] {
+              CncfMain.main(prefix ++ Array("inspect", "--root", root.toString, "--no-default-components"))
+            }
+            val refused = intercept[CncfMain.CliFailed] {
+              CncfMain.main(prefix ++ Array("legacy-retire", "--root", root.toString,
+                "--kind", "car", "--key", "0" * 64, "--generation", "1" * 64, "--apply"))
+            }
+            Then("the public failure convention preserves the parser and owner status")
+            invalid.code shouldBe 2
+            refused.code shouldBe 1
+          }
+        }
+      } finally {
+        System.setOut(originalOut)
+        System.setErr(originalErr)
+        output.close()
+        Using.resource(Files.walk(root))(_.iterator().asScala.toVector.sortBy(_.getNameCount).reverse.foreach(Files.deleteIfExists(_)))
+      }
+    }
+
     "require a root, use dry-run by default, and require exact retirement inputs" in {
       ManagedCacheOperation.parse(Vector("collect")).isLeft shouldBe true
       ManagedCacheOperation.parse(Vector("collect", "--root", "/tmp/cache")).toOption.get.applyChanges shouldBe false
