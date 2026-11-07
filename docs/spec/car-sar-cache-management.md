@@ -248,9 +248,12 @@ the matched current pointer, without deleting payloads. Follow with bounded
 protected. Unknown paths, lock files and caller originals are never selected by
 this operation. This operation does not scan or infer historical aliases.
 
-The CLI projects these operations through `cncf command cache` with an explicit `--root`.
-The runtime first consumes its recognized framework options; the cache operation
-validates the remaining arguments.
+The standalone launcher form is `cncf --runtime 0.5.6-SNAPSHOT --no-default-components
+command cache ...`, with an explicit `--root`. The exact runtime argument prefix
+`--no-default-components command cache` reaches the cache owner before application
+bootstrap, and the owner validates its complete remaining argument tail. The direct
+runtime form `cache ...` also reaches the owner before bootstrap. Other invocations
+retain their normal framework option handling and application admission.
 `inspect` reports the bounded inspection, and `collect` defaults to dry-run;
 `--apply` performs collection. `legacy-inspect --kind car|sar --archive PATH`
 reports a known path-key and source generation; `legacy-retire --kind car|sar

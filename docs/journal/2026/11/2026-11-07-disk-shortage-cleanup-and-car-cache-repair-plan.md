@@ -214,3 +214,10 @@ CARの解決済みrepository/coordinateをmanaged selectionへ渡す変更と、
 collectとretireは既定でdry-run、実行には`--apply`が必要。collectの継続は
 `--apply --batches N`で同じownerの中で最大128回まで行う。対象と期待世代を
 毎回確認し、不一致や使用中の拒否は再確認後に再試行する。
+
+公開済みstandalone launcherで使用する形式は
+`cncf --runtime 0.5.6-SNAPSHOT --no-default-components command cache inspect --root PATH`。
+他の操作も同じ接頭辞に続ける。修正したソースではこのruntime引数列を
+application bootstrap前に既存ownerへ渡す。公開済みruntimeを修正版へ更新し、
+実際に選択された成果物とinspect・dry-runを確認するまでは、この操作が
+インストール済み環境で成功したとは扱わない。実キャッシュの回収も未実施。

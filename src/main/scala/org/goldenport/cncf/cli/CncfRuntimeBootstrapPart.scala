@@ -1229,6 +1229,8 @@ private[cli] trait CncfRuntimeBootstrapPart {
 
   def run(args: Array[String]): Int = {
     if (args.headOption.contains("cache")) return ManagedCacheOperation.run(args.drop(1))
+    if (args.take(3).toVector == Vector("--no-default-components", "command", "cache"))
+      return ManagedCacheOperation.run(args.drop(3))
     val cwd = Paths.get("").toAbsolutePath.normalize
     _prepare_launch_consequence(cwd, args) match {
       case Consequence.Success(Left(code)) =>

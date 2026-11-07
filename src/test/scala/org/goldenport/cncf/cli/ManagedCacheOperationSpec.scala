@@ -38,12 +38,16 @@ class ManagedCacheOperationSpec extends AnyWordSpec with Matchers with GivenWhen
         val invalid = CncfRuntime.run(prefix ++ Array("collect", "--root", root.toString, "--batches", "2"))
         val duplicate = CncfRuntime.run(prefix ++ Array("inspect", "--root", root.toString, "--root", root.toString))
         val unknown = CncfRuntime.run(prefix ++ Array("inspect", "--root", root.toString, "--unknown-cache-option"))
+        val frameworkoption = CncfRuntime.run(prefix ++ Array("inspect", "--root", root.toString, "--no-default-components"))
+        val missingroot = CncfRuntime.run(prefix ++ Array("inspect"))
         val refused = CncfRuntime.run(prefix ++ Array("legacy-retire", "--root", root.toString,
           "--kind", "car", "--key", "0" * 64, "--generation", "1" * 64, "--apply"))
         Then("argument failures and owner refusal retain their distinct failure statuses")
         invalid shouldBe 2
         duplicate shouldBe 2
         unknown shouldBe 2
+        frameworkoption shouldBe 2
+        missingroot shouldBe 2
         refused shouldBe 1
       } finally Using.resource(Files.walk(root))(_.iterator().asScala.toVector.sortBy(_.getNameCount).reverse.foreach(Files.deleteIfExists(_)))
     }

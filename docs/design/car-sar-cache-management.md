@@ -435,7 +435,13 @@ exclusion. Pointer mismatch and active use refuse the operation. Retirement
 leaves actual reclamation to bounded collection and its complete reference checks.
 It never removes stable lock files or the original caller input.
 
-The `cncf command cache` entry requires an explicit root and delegates to that owner.
+The standalone launcher invocation `cncf --runtime 0.5.6-SNAPSHOT
+--no-default-components command cache ...` requires an explicit root and delegates
+to that owner before application bootstrap. Only the exact runtime prefix
+`--no-default-components command cache` uses this boundary; its tail is passed
+unchanged to the strict operation parser. The direct runtime `cache ...` entry
+retains the same boundary, while other invocations retain normal bootstrap and
+admission. The existing owner supplies filesystem and cache-lock safety.
 It defaults to dry-run for collection and retirement, requires an expected
 key and generation for retirement, and reports refusal through its exit status.
 Applied collection can continue at most 128 bounded batches in one owner lifetime;
