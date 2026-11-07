@@ -1,0 +1,7 @@
+# Firebase as an optional Textus infrastructure provider
+
+On 2026-11-08 we adopted an application-independent boundary for Firebase. Deployments select services individually. The Flutter Core Service / Provider model owns the client integration, Application Framework owns reusable interactions, and the application chooses its providers and domain screens.
+
+On the server, CNCF already selects one notification provider. Placing FCM delivery behind the deployed Textus notification component preserves its recipient preferences, durable record and authenticated inbox. App Check evidence belongs at ingress, with user identity, Operation admission and resource authorization evaluated by their existing owners. Remote presentation settings and client diagnostics give Firebase a bounded role without transferring Material storage or runtime security policy to the client.
+
+The [CNCF architecture](../../../design/firebase-provider-boundary.md) and [Flutter architecture](https://github.com/asami/textus-flutter-core/blob/main/docs/design/firebase-provider-boundary.md) capture the decision. Later work is registered in the [CNCF plan](../../../phase/firebase-integration-plan.md), [Flutter Core plan](https://github.com/asami/textus-flutter-core/blob/main/docs/phase/firebase-provider-plan.md) and [Framework plan](https://github.com/asami/textus-flutter-application-framework/blob/main/docs/phase/firebase-presentation-plan.md). The plans describe future acceptance.
