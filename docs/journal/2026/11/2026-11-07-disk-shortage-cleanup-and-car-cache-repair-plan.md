@@ -1,7 +1,7 @@
 # ディスク逼迫の整理手順とCARキャッシュ修正計画
 
 Date: 2026-11-07
-Status: 調査・作業手順を記録。CNCFの修正と既存キャッシュの回収は未実施
+Status: CAR managed-cache修正と限定回収は実施済み。その他の整理・退避先の最終状態は未確認
 
 ## 今回の判断
 
@@ -226,3 +226,77 @@ application bootstrap前に既存ownerへ渡す。公開済みruntimeを修正�
 bootstrap前に既存ownerへ渡し、失敗コードを `CliFailed` で返す修正を追加した。
 実際のmainを呼ぶ回帰仕様を追加したが、検証・受入れ、通常経路での発行、
 launcherが選択した成果物の確認とinspect・dry-runは別途必要である。
+
+
+## 2026-11-07 後続結果: CAR修正と限定回収
+
+上の各節は記載時点の観察・計画・引継ぎであり、その時点の「未実施」は
+以下の後続結果によって更新された。CAR修正と限定回収の完了を、ディスク整理全体の
+完了には拡大しない。
+
+### 修正、検証、発行
+
+repositoryの論理座標をmanaged selectionへ引き継ぎ、明示ファイルを分離した。
+旧参照は自動統合せず、対象を明示するlegacy管理と既存のbounded collectionを用いる。
+standaloneのcache入口と実際の公開 `CncfMain.main` のbootstrap前経路も修正した。
+製品の最終コミットは `b2508202dfbf5f4a16486e18427650aa7bccfaae`。
+
+以前のsource `ecd28d146003fa5e36020ad17b58144054362bdc` でのfull testは
+798 suites、7041 tests成功であり、後のpublic Main修正を含む最終treeのfull testと
+読み替えない。最終public Main変更についてはnative fix-check、compile、
+`ManagedCacheOperationSpec` のfocused 4 testsが成功し、独立reviewとlocal commitが
+完了した。先行するmanaged-cache修正、CLI入口、standalone境界もそれぞれ独立reviewと
+native completionを経た。これらの記録は下記に区別して保持する。
+
+通常のruntime所有 `LocalPublicationService` による `publishLocal` はclean source
+`b2508202` から `org.goldenport:goldenport-cncf_3:0.5.6-SNAPSHOT` を発行し、
+exit 0で完了した。実際に選択されたjarは
+`~/.ivy2/local/org.goldenport/goldenport-cncf_3/0.5.6-SNAPSHOT/jars/goldenport-cncf_3.jar`。
+インストール済みruntimeのclasspathと `CncfMain$.class`、
+`CncfRuntimeBootstrapPart.class` の実バイトを照合し、source fallbackなしで
+公開runtimeによるinspectが成功した。
+
+### 実操作と観測
+
+対象rootは `/Users/asami/.cncf/cache`。実行したstandalone形式は以下で、
+`collect` は既定でdry-run、実回収は明示的な `--apply` を要する。
+
+```sh
+cncf --runtime 0.5.6-SNAPSHOT --no-default-components command cache inspect --root /Users/asami/.cncf/cache
+cncf --runtime 0.5.6-SNAPSHOT --no-default-components command cache collect --root /Users/asami/.cncf/cache --dry-run
+cncf --runtime 0.5.6-SNAPSHOT --no-default-components command cache collect --root /Users/asami/.cncf/cache --apply --batches 128
+```
+
+事前dry-runは128件を訪問し `truncated=true`、WouldReclaim 7件
+（記録サイズ2,111,763,724 bytes）、Retained 4件だった。これは部分集計である。
+applyは最大128回の指定に対し100 batchesで終了し、最後は `truncated=false`、
+Failed 0件だった。回収報告はextracted 593件、記録サイズ165,626,300,887 bytes。
+回収時点の保持はextracted 112件・5,077,615,010 bytes、source 866件・
+28,157,239,607 bytes、coordinate 1件・2,523,441 bytes。後続consumerが展開を
+再生成し得るため、この保持数を現在の固定値とはしない。defaultのoffline source、
+current、active lease保護を維持し、手動の参照・lock削除やsource evictionは行っていない。
+
+Dataボリュームの利用可能容量はapply前15,237,120,000 bytes、apply直後
+181,452,800,000 bytes、後続確認時180,633,600,000 bytesだった。回収報告の
+metadataサイズはボリューム空き容量の差と同一ではなく、他の書込みの影響を排除して
+差の全てを回収だけに帰属する証拠もない。回収後の公開runtime inspectと、通常の
+installed sm-workflowの `collectLocalPublication` は成功した。後者は新たなSBT実行や
+発行を意味しない。
+
+### 証拠と残作業
+
+以下はこの環境の保持されたpublic artifactであり、各結果の時点・範囲を確認できる。
+これらのpublic artifactとnative Session記録は保持し、`target` 内にあることだけを理由に
+破棄しない。永続的な製品ソース履歴の基準は上記commitとする。
+
+- managed-cache修正のreview・completion: `target/sm-workflow/car-cache-20261107-host/target/sm-workflow/tasks/car-cache-disk-pressure-20261107/continuation-after-delivery01/complete-review04/advance/response.json`
+- CLI入口のreview・completion: `target/sm-workflow/car-cache-20261107-host/target/sm-workflow/tasks/car-cache-cli-entry-20261107/complete-review01/advance/response.json`
+- standalone境界のreview・completion: `target/sm-workflow/car-cache-builtin-20261107-host/target/sm-workflow/tasks/car-cache-builtin-boundary-20261107/complete-review01/advance/response.json`
+- public Mainのreview・completion: `target/sm-workflow/car-cache-builtin-20261107-host/target/sm-workflow/tasks/car-cache-public-main-entry-20261107/complete-review01/advance/response.json`
+- 発行と回収後consumer: `target/sm-workflow/car-cache-builtin-20261107-host/target/sm-workflow/tasks/car-cache-public-main-entry-20261107/publication-after-cleanup.response.json`
+- runtime選択、事前dry-run、回収結果、回収後観測: `target/sm-workflow/car-cache-20261107-host/target/sm-workflow/tasks/car-cache-cli-entry-20261107/operations/` の `final-runtime-selection-observation.json`、`pre-apply-observation.json`、`collection-result-observation.json`、`post-cleanup-observation.json`。同所に `inspect05.stdout.log`、`collect-dry01.stdout.log`、`collect-apply01.stdout.log`、`inspect-after01.stdout.log` を保持する。
+
+P610を含む他のworktree、旧installation、指定backupの整理・削除はこの結果では
+確認していない。先行して作成した一時アーカイブの現在状態も未確認である。
+引き続き所有・利用・履歴・退避物を確認してから個別に判断し、backupの最終削除や
+ディスク整理全体の完了を推測しない。
