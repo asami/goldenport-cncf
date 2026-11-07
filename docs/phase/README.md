@@ -1,6 +1,6 @@
 # docs/phase — Engineering Work Management
 
-[Optional Firebase server integration](firebase-integration-plan.md) is planned for later selection. It connects provider-owned push delivery and optional ingress attestation to the Flutter client plans.
+[Phase 121 — Firebase notification delivery and ingress attestation](phase-121.md) is planned for later delivery. Progress is recorded in the [Phase 121 checklist](phase-121-checklist.md).
 
 Data/report/print integration allocated 2026-11-02:
 [Phase 119](phase-119.md) / [checklist](phase-119-checklist.md) is PLANNED for

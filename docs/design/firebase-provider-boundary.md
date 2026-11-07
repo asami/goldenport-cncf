@@ -15,4 +15,4 @@ For attestation, deployments can observe verification outcomes before enabling e
 
 The [Flutter counterpart](https://github.com/asami/textus-flutter-core/blob/main/docs/design/firebase-provider-boundary.md) owns client contracts and platform adapters. Textus UserAccount owns identity and session lifecycle, TKL owns Material identity and storage placement, and Core owns the pending submission queue. Firebase Authentication, Firestore and Firebase Storage would each require their own domain owner's decision.
 
-See the [server development plan](../phase/firebase-integration-plan.md) and [decision journal](../journal/2026/11/2026-11-08-firebase-provider-boundary.md).
+See the [server development plan](../phase/phase-121.md) and [decision journal](../journal/2026/11/2026-11-08-firebase-provider-boundary.md).
