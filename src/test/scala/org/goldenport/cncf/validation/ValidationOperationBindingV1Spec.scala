@@ -17,7 +17,8 @@ import ValidationMetadataV1.{FeatureReference, Purpose}
 
 /** Public exact binding over real discovery, without acquiring execution authority.
  * @since   Oct. 18, 2026
- * @version Oct. 19, 2026
+ *  version Oct. 19, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 @annotation.ValidationSpecification(declaration = classOf[AdmissionTestDeclaration])
@@ -45,6 +46,21 @@ final class ValidationOperationBindingV1Spec extends AnyWordSpec with Matchers w
       queried.operation.metadata.get.executionRequirement shouldBe selected.metadata.get.executionRequirement
       queried.operation.metadata.get.executionRequirement.get.reviewRequired shouldBe true
       queried.operation.metadata.get.executionRequirement.get.capabilities.map(_.identity) shouldBe Vector("base", "extra")
+    }
+
+    "retain every declared canonical mode as a distinct exact invocation" in {
+      Given("an exact discovered operation with two required modes and live execution requirements")
+      val original = _inventory()
+      val operation = original.operations.find(_.reference.operation == "parameter:1").get
+      val metadata = operation.metadata.get.copy(executionModes = Some(Set("develop", "production")))
+      val inventory = original.copy(operations = Vector(operation.copy(metadata = Some(metadata))))
+      When("the shared binder expands required variants instead of one caller-selected label")
+      val variants = ValidationOperationBindingV1.bindVariantsC(inventory, operation.reference, _workspace_id).toOption.get
+      Then("mode identity is distinct while selectors, inputs and source provenance are retained")
+      variants.map(_.intent.target.validationMode) shouldBe Vector(Some("develop"), Some("production"))
+      variants.map(_.operation.provenance).distinct shouldBe Vector(operation.provenance)
+      variants.map(_.intent.target.scenario).distinct should have size 1
+      ValidationOperationBindingV1.bindC(inventory, operation.reference, _workspace_id).isFaillure shouldBe true
     }
 
     "bind supplemental HEAVY and unannotated operations without changing their declarations" in {

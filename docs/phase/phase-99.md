@@ -1,8 +1,9 @@
 # Phase 99: Finding Disposition ABI
 
-status=in-progress
+status=closed
 planned_at=2026-10-04
 started_at=2026-10-27
+closed_at=2026-10-30
 consumer=CAR lint, Cozy, textus-cbd-support, sm-workflow
 related=Phase 90 Candidate-Admission
 
@@ -83,8 +84,15 @@ same reserved repair, preserving the accepted Step, original base and counts.
 The correction checks the scenario's single canonical Subsystem user-mode
 registration and retains its alias, target and codec assertions.
 
-Fresh whole-repository validation, independent integrated Phase review and
-native release closure remain required. This Phase remains in progress.
+On 2026-10-30, fresh native whole-repository validation passed with 6,909
+successful tests in 912 completed suites, zero failures and zero aborted
+suites. Five canceled, one ignored and 46 pending tests are not successful
+coverage. Independent integrated Phase review accepted the candidate with no
+blocking findings. Native release closure completed in commit `efc672af`, and
+Session `95b37fc2053d60c77b044b00a1d871b6` reached `Terminal / completed`.
+All 12 checklist items are complete; Phase 99 is closed. Cozy CML mapping is
+covered as a documented adapter contract, without claiming downstream
+integration validation.
 
 <!-- sm-workflow completion 95b37fc2053d60c77b044b00a1d871b6 phase 99 -->
 Accepted phase 99.

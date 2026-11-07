@@ -1,7 +1,7 @@
 # Test selection with standard annotations
 
 Date: 2026-10-31
-Status: approved target contract; producer/consumer migration pending.
+Status: approved target contract; bounded standard discovery/selection source connection authored on 2026-11-06; catalogue migration and qualification pending.
 
 ## One custom classification
 
@@ -95,3 +95,19 @@ execution and sm-workflow selects/collects variants. Excluded or explicit-only
 tests are not re-enrolled merely because a requested mode matches.
 Coordinate [TM-01..04](../phase/test-execution-mode-plan.md) with TA-C1..5
 without restoring retired purpose labels or claiming either migration complete.
+
+## Bounded discovery connection — 2026-11-06
+
+`ValidationDiscoveryV1` now retains framework tags and explicit-only facts on
+actual discovered operations. Automatic discovery inspects DoNotDiscover before
+suite construction. An exact `explicitSuites` request may enroll the named suite;
+feature/wildcard queries and Slow selection alone do not enroll it. The opt-in
+`standardFramework` query applies ordinary exclusions, with `includeSlow`
+reserved for explicit selected scope. Existing purpose queries remain readable
+legacy behavior during this bounded change; they do not claim the new standard
+FULL semantics or catalogue-wide retirement.
+
+Source-authored executable specifications cover class/per-test Slow,
+DoNotDiscover construction exclusion, exact focused mode variants and real
+harmless fixture consumption. Installed build/discovery applicability and
+end-to-end merged-project qualification remain outstanding.

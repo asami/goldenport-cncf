@@ -9,19 +9,21 @@ import ValidationArtifactEnumeration.*
 
 /** Scoped registration discovery. The caller retains all ClassLoader ownership.
  * @since   Oct. 18, 2026
- * @version Oct. 18, 2026
+ * @version Nov.  6, 2026
  */
 private[validation] object ValidationDiscovery {
   private final case class ArtifactResult(operations: Vector[Operation], diagnostics: Vector[Diagnostic],
     usable: Boolean, complete: Boolean)
 
-  def discoverC(scope: DiscoveryScope, loader: ClassLoader): Consequence[Inventory] =
+  def discoverC(scope: DiscoveryScope, loader: ClassLoader, explicitSuites: Set[String]): Consequence[Inventory] =
     validateScopeC(scope).flatMap { _ =>
-      if (loader == null) failure("loader", "null", "caller-owned ClassLoader")
+      if (explicitSuites == null || explicitSuites.exists(value => !classValid(value)) || explicitSuites.size > 16)
+        failure("explicitSuites", "query", "bounded exact suite names")
+      else if (loader == null) failure("loader", "null", "caller-owned ClassLoader")
       else {
         val artifacts = scope.artifacts.sortBy(x => (x.componentIdentity, x.artifactIdentity))
         val results = artifacts.map { artifact =>
-          val result = _artifact(artifact, loader)
+          val result = _artifact(artifact, loader, explicitSuites)
           val limited = _limit(result.operations, result.diagnostics, 32, artifact.artifactIdentity)
           result.copy(operations = limited._1, diagnostics = limited._2)
         }
@@ -80,7 +82,7 @@ private[validation] object ValidationDiscovery {
   def failure[A](field: String, policy: String, expected: String): Consequence[A] =
     Consequence.argumentPolicyViolation(field, s"validation.discovery.$policy", expected, "invalid")
 
-  private def _artifact(artifact: ArtifactScope, loader: ClassLoader): ArtifactResult = {
+  private def _artifact(artifact: ArtifactScope, loader: ClassLoader, explicitsuites: Set[String]): ArtifactResult = {
     val enumeration = enumerate(artifact)
     val results = enumeration.names.map { name =>
       try {
@@ -89,6 +91,9 @@ private[validation] object ValidationDiscovery {
           ArtifactResult(Vector.empty, Vector.empty, true, true)
         } else if (!sameArtifact(clazz, artifact.root)) {
           _unsupported("provenance", name, "Suite code source differs from the selected artifact")
+        } else if (clazz.isAnnotationPresent(classOf[org.scalatest.DoNotDiscover]) && !explicitsuites(clazz.getName)) {
+          // Exclude before construction: discovery must not prepare an external fixture.
+          ArtifactResult(Vector.empty, Vector.empty, true, true)
         } else {
           _suite(clazz, artifact)
         }
@@ -115,7 +120,12 @@ private[validation] object ValidationDiscovery {
           Vector(diagnostic("unsupported-suite", clazz.getName,
             "Nested suites or malformed registered test names are unsupported"))
         } else Vector.empty)
-        val operations = if (invalidnames) interpreted.operations.map(_.copy(metadata = None)) else interpreted.operations
+        val operations = interpreted.operations.map { operation =>
+          val tags = suite.tags.getOrElse(operation.selector.testName, Set.empty[String]) ++
+            (if (clazz.isAnnotationPresent(classOf[org.scalatest.tags.Slow])) Set("org.scalatest.tags.Slow") else Set.empty[String])
+          operation.copy(metadata = if (invalidnames) None else operation.metadata,
+            framework = Some(FrameworkFacts(tags, clazz.isAnnotationPresent(classOf[org.scalatest.DoNotDiscover]))))
+        }
         ArtifactResult(operations, diagnostics, true, !nested && !invalidnames)
       }
     } catch {

@@ -7,11 +7,11 @@ import org.goldenport.Consequence
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 24, 2026
- * @version Nov.  5, 2026
+ * @version Nov.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 enum SbtTestSelectionFailure {
-  case MissingSelection, IncompleteCapture, InvalidReport, ZeroTests, SuiteMismatch, FailedTests, ScenarioMismatch, InventoryMismatch
+  case MissingSelection, IncompleteCapture, InvalidReport, ZeroTests, SuiteMismatch, FailedTests, ScenarioMismatch, InventoryMismatch, ModeObservationMismatch, DiscoveryUnavailable, BatchSelectionMismatch
 }
 
 enum SbtTestSelectionResult {

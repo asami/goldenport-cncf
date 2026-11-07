@@ -10,7 +10,7 @@ import org.goldenport.cncf.workspace.*
 /*
  * @since   Oct.  7, 2026
  *  version Oct. 28, 2026
- * @version Nov.  3, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] final case class WorkspaceRuntimeDeclaration(identity: WorkspaceId, root: Path)
@@ -36,7 +36,9 @@ private[cncf] final case class SbtRuntimeDeclaration(
   sbtExecutable: Path,
   limits: ProcessExecutionLimits,
   environment: Map[String, String],
-  testClasses: Vector[String] = Vector.empty
+  testClasses: Vector[String] = Vector.empty,
+  validationMode: Option[SbtValidationMode.Binding] = None,
+  validationDiscovery: Option[SbtValidationDiscovery.Binding] = None, discoveredTests: Boolean = false
 )
 
 private[cncf] final case class GitRuntimeDeclaration(
@@ -228,8 +230,14 @@ private[cncf] object RuntimeProcessExecutionPlan {
     sbttagged <- sbtdeclarations.foldLeft(Consequence.success(Vector.empty[ProcessProgramDefinition])) { (prior, declaration) => for {
       values <- prior
       binding <- workspace.bindingC(declaration.target)
+      discovery <- if (!declaration.discoveredTests) Consequence.success(declaration.validationDiscovery)
+        else sbtdeclarations.filter(d => d.target == declaration.target && d.operation == SbtOperation.TestCompile)
+          .flatMap(_.validationDiscovery) match {
+            case Vector(value) if declaration.validationDiscovery.isEmpty => Consequence.success(Some(value))
+            case _ => Consequence.configurationInvalid("Dynamic TestOnly requires exactly one same-workspace opted-in TestCompile owner")
+          }
       definition <- SbtProgramDefinition.createC(binding, declaration.operation, declaration.capability,
-        declaration.identity, declaration.sbtExecutable, declaration.limits, declaration.environment, declaration.testClasses)
+        declaration.identity, declaration.sbtExecutable, declaration.limits, declaration.environment, declaration.testClasses, declaration.validationMode, discovery, declaration.discoveredTests)
     } yield values :+ definition }
     gittagged <- allgit.foldLeft(Consequence.success(Vector.empty[ProcessProgramDefinition])) { (prior, declaration) => for {
       values <- prior

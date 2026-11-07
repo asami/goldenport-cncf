@@ -16,6 +16,7 @@ object CliHelpOperation {
       |  command   Execute component operations
       |  server    Control CNCF runtime server
       |  client    Call operations on a remote server
+      |  cache     Inspect and manage one explicitly selected cache root
       |
       |Examples
       |  cncf command org.goldenport.cncf.Admin.system.ping

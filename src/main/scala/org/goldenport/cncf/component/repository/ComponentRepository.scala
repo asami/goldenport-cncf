@@ -419,12 +419,17 @@ object ComponentRepository extends GlobalObservable {
     baseDir: Path,
     params: ComponentCreate,
     packagePrefixes: Seq[String],
-    releaseonly: Boolean = false
+    releaseonly: Boolean = false,
+    repositoryIdentity: Option[String] = None
   ) extends ComponentRepository {
     override private[repository] def prepareAssemblyApi(): Consequence[AssemblyApiMetadata] = {
       val hasrequests = _requested_components(params).nonEmpty
-      val requested = _requested_component_artifacts(baseDir, params, releaseonly, params.managedCacheRoot)
+      val repository = repositoryIdentity.getOrElse(baseDir.toAbsolutePath.normalize.toUri.toString)
+      val requested = _requested_component_artifacts(baseDir, params, releaseonly, params.managedCacheRoot, repositoryIdentity)
       val artifacts = if (hasrequests) requested else _list_artifacts(baseDir)
+        .filterNot(artifact => releaseonly && _is_snapshot_artifact(artifact))
+        .map(artifact => _with_repository_coordinate(artifact, repository, params.managedCacheRoot))
+      _reject_ambiguous_car_coordinates(artifacts)
       _load_assembly_api_artifacts(artifacts, params.managedCacheRoot)
     }
 
@@ -437,12 +442,17 @@ object ComponentRepository extends GlobalObservable {
         val log = PersistentBootstrapLog.forClass(classOf[ComponentDirRepository], ObservabilityScopeDefaults.Bootstrap)
         val origin = ComponentOrigin.Repository("component-dir")
         val hasrequests = requestedcomponents.nonEmpty
-        val artifacts = _requested_component_artifacts(baseDir, effectiveparams, releaseonly, effectiveparams.managedCacheRoot)
-        val components =
+        val artifacts = _requested_component_artifacts(baseDir, effectiveparams, releaseonly, effectiveparams.managedCacheRoot, repositoryIdentity)
+        val selected =
           if (hasrequests)
-            artifacts.flatMap(_discover_artifact(_, effectiveparams, origin, log))
-          else
-            _discover_from_artifacts(basedir = baseDir, params = effectiveparams, origin = origin, log = log, releaseonly = releaseonly)
+            artifacts
+          else {
+            val repository = repositoryIdentity.getOrElse(baseDir.toAbsolutePath.normalize.toUri.toString)
+            _list_artifacts(baseDir).filterNot(artifact => releaseonly && _is_snapshot_artifact(artifact))
+              .map(artifact => _with_repository_coordinate(artifact, repository, effectiveparams.managedCacheRoot))
+          }
+        _reject_ambiguous_car_coordinates(selected)
+        val components = selected.flatMap(_discover_artifact(_, effectiveparams, origin, log))
         if (components.nonEmpty) {
           components
         } else {
@@ -1017,7 +1027,8 @@ object ComponentRepository extends GlobalObservable {
         cacheRoot,
         with_assembly_api_class_loader(params).withManagedCacheRoot(cacheRoot),
         packagePrefixes,
-        releaseonly = true
+        releaseonly = true,
+        repositoryIdentity = Some(baseUrl)
       )
       repository.discover()
     }
@@ -1115,7 +1126,7 @@ object ComponentRepository extends GlobalObservable {
           case StandardRepositoryKind.Car =>
             _resolve_standard_component_artifact(cacheRoot, componentName, version, releaseonly = true, cacheroot = Some(cacheRoot))
               .orElse(_fetch_standard_component_artifact(baseUrl, cacheRoot, componentName, version))
-              .collect { case Artifact(path, ArtifactKind.Car) => path }
+              .collect { case Artifact(path, ArtifactKind.Car, _) => path }
           case _ =>
             None
         }
@@ -1241,9 +1252,9 @@ object ComponentRepository extends GlobalObservable {
       None
     } else {
       _list_artifacts(baseDir).iterator.flatMap {
-        case Artifact(path, ArtifactKind.Sar) =>
+        case Artifact(path, ArtifactKind.Sar, _) =>
           withArchiveSourceReadC(path)(GenericSubsystemDescriptor.load).toOption
-        case Artifact(path, ArtifactKind.SarDir) =>
+        case Artifact(path, ArtifactKind.SarDir, _) =>
           GenericSubsystemDescriptor.load(path).toOption
         case _ =>
           None
@@ -1260,9 +1271,9 @@ object ComponentRepository extends GlobalObservable {
       None
     } else {
       _list_artifacts(baseDir).iterator.flatMap {
-        case Artifact(path, ArtifactKind.Car) =>
+        case Artifact(path, ArtifactKind.Car, _) =>
           withArchiveSourceReadC(path)(ComponentDescriptorLoader.loadArchive).toOption
-        case Artifact(path, ArtifactKind.CarDir) =>
+        case Artifact(path, ArtifactKind.CarDir, _) =>
           ComponentDescriptorLoader.loadArchive(path).toOption
         case _ =>
           None
@@ -1278,7 +1289,7 @@ object ComponentRepository extends GlobalObservable {
       Vector.empty
     } else {
       _list_artifacts(baseDir).iterator.flatMap {
-        case Artifact(path, ArtifactKind.Car | ArtifactKind.CarDir) =>
+        case Artifact(path, ArtifactKind.Car | ArtifactKind.CarDir, _) =>
           withArchiveSourceReadC(path)(ComponentDescriptorLoader.loadArchive).toOption
         case _ =>
           None
@@ -1339,7 +1350,7 @@ object ComponentRepository extends GlobalObservable {
     version.flatMap { _ =>
       val requestedid = ComponentId.parseC(componentname).toOption
       _list_artifacts(baseDir).iterator.collect {
-        case Artifact(path, ArtifactKind.Car | ArtifactKind.CarDir) => path
+        case Artifact(path, ArtifactKind.Car | ArtifactKind.CarDir, _) => path
       }.find { path =>
         withArchiveSourceReadC(path)(ComponentDescriptorLoader.probeArchiveComponentIdentityC).toOption match {
           case Some((componentid, descriptorversion)) =>
@@ -1356,7 +1367,7 @@ object ComponentRepository extends GlobalObservable {
     version: Option[String]
   ): Consequence[Option[GenericSubsystemDescriptor]] =
     artifact match {
-      case Artifact(path, ArtifactKind.Car) =>
+      case Artifact(path, ArtifactKind.Car, _) =>
         withArchiveSourceReadC(path) { input =>
           ComponentDescriptorLoader.loadArchive(input).flatMap { descriptor =>
             if (_matches_component_descriptor(descriptor, componentname, version))
@@ -1365,7 +1376,7 @@ object ComponentRepository extends GlobalObservable {
               Consequence.success(None)
           }
         }
-      case Artifact(path, ArtifactKind.CarDir) =>
+      case Artifact(path, ArtifactKind.CarDir, _) =>
         ComponentDescriptorLoader.loadArchive(path).flatMap { descriptor =>
           if (_matches_component_descriptor(descriptor, componentname, version))
             GenericSubsystemDescriptor.fromComponentDescriptor(path, descriptor).map(Some(_))
@@ -1391,7 +1402,7 @@ object ComponentRepository extends GlobalObservable {
       None
     } else {
       _list_artifacts(baseDir).iterator.flatMap {
-        case Artifact(path, ArtifactKind.Car) =>
+        case Artifact(path, ArtifactKind.Car, _) =>
           withArchiveSourceReadC(path)(ComponentDescriptorLoader.loadArchive).toOption
             .filter(_matches_component_descriptor(_, componentName, version))
             .map(_ => path)
@@ -1399,7 +1410,7 @@ object ComponentRepository extends GlobalObservable {
           None
       }.toSeq.headOption
         .orElse(_resolve_standard_component_artifact(baseDir, componentName, version).collect {
-          case Artifact(path, ArtifactKind.Car) => path
+          case Artifact(path, ArtifactKind.Car, _) => path
         })
     }
   }
@@ -1571,14 +1582,42 @@ object ComponentRepository extends GlobalObservable {
       } yield acc ++ metadata
     }
 
+  private def _with_repository_coordinate(artifact: Artifact, repository: String, cacheRoot: Option[Path]): Artifact =
+    if (artifact.kind != ArtifactKind.Car) artifact
+    else {
+      val identity = withArchiveSourceReadC(artifact.path, cacheRoot)(ComponentDescriptorLoader.loadArchive).toOption
+        .flatMap(_.requireCanonicalIdentityC.toOption)
+        .map { case (id, release) => repository -> s"${id.name}:$release" }
+      artifact.copy(repositoryCoordinate = identity)
+    }
+
+  private def _reject_ambiguous_car_coordinates(artifacts: Vector[Artifact]): Unit = {
+    val duplicates = artifacts.filter(_.kind == ArtifactKind.Car)
+      .flatMap(artifact => artifact.repositoryCoordinate.map(_ -> artifact.path))
+      .groupBy(_._1).toVector.filter(_._2.map(_._2).distinct.size > 1).sortBy(_._1.toString)
+    if (duplicates.nonEmpty) {
+      val ((repository, coordinate), paths) = duplicates.head
+      val detail = paths.map(_._2.toString).sorted.mkString(", ")
+      val failure: Consequence[Unit] = Consequence.resourceInvalid(
+        s"Ambiguous CAR repository coordinate $coordinate in $repository: $detail; publish one selected archive or use an explicit file")
+      ComponentRepositoryAssemblyDiscovery.required(failure)
+    }
+  }
+
   private def _requested_component_artifacts(
     basedir: Path,
     params: ComponentCreate,
     releaseonly: Boolean = false,
-    cacheroot: Option[Path] = None
+    cacheroot: Option[Path] = None,
+    repositoryIdentity: Option[String] = None
   ): Vector[Artifact] = {
+    val repository = repositoryIdentity.getOrElse(basedir.toAbsolutePath.normalize.toUri.toString)
     _requested_components(params).flatMap { case (name, version) =>
-      _resolve_requested_component_artifact(basedir, name, version, releaseonly, cacheroot)
+      _resolve_requested_component_artifact(basedir, name, version, releaseonly, cacheroot).map { artifact =>
+        if (artifact.kind == ArtifactKind.Car && version.nonEmpty)
+          artifact.copy(repositoryCoordinate = Some(repository -> s"$name:${version.get}"))
+        else artifact
+      }
     }.distinct
   }
 
@@ -1688,9 +1727,9 @@ object ComponentRepository extends GlobalObservable {
     cacheroot: Option[Path] = None
   ): Option[ComponentDescriptor] =
     _resolve_standard_component_artifact(basedir, componentname, None, releaseonly, cacheroot).iterator.flatMap {
-      case Artifact(path, ArtifactKind.Car) =>
+      case Artifact(path, ArtifactKind.Car, _) =>
         withArchiveSourceReadC(path, cacheroot)(ComponentDescriptorLoader.loadArchive).toOption
-      case Artifact(path, ArtifactKind.CarDir) =>
+      case Artifact(path, ArtifactKind.CarDir, _) =>
         ComponentDescriptorLoader.loadArchive(path).toOption
       case _ =>
         None
@@ -1745,8 +1784,8 @@ object ComponentRepository extends GlobalObservable {
     cacheroot: Option[Path] = None
   ): Option[GenericSubsystemDescriptor] =
     _resolve_standard_subsystem_artifact(basedir, subsystemname, releaseonly).flatMap {
-      case Artifact(path, ArtifactKind.Sar) => withArchiveSourceReadC(path, cacheroot)(GenericSubsystemDescriptor.load).toOption
-      case Artifact(path, ArtifactKind.SarDir) => GenericSubsystemDescriptor.load(path).toOption
+      case Artifact(path, ArtifactKind.Sar, _) => withArchiveSourceReadC(path, cacheroot)(GenericSubsystemDescriptor.load).toOption
+      case Artifact(path, ArtifactKind.SarDir, _) => GenericSubsystemDescriptor.load(path).toOption
       case _ => None
     }
 
@@ -1806,7 +1845,7 @@ object ComponentRepository extends GlobalObservable {
     componentname: String
   ): Option[ComponentDescriptor] =
     _fetch_standard_component_artifact(baseurl, cacheroot, componentname, None).iterator.flatMap {
-      case Artifact(path, ArtifactKind.Car) =>
+      case Artifact(path, ArtifactKind.Car, _) =>
         withArchiveSourceReadC(path, Some(cacheroot))(ComponentDescriptorLoader.loadArchive).toOption
       case _ =>
         None
@@ -1840,7 +1879,7 @@ object ComponentRepository extends GlobalObservable {
     subsystemname: String
   ): Option[GenericSubsystemDescriptor] =
     _fetch_standard_subsystem_artifact(baseurl, cacheroot, subsystemname, None).flatMap {
-      case Artifact(path, ArtifactKind.Sar) =>
+      case Artifact(path, ArtifactKind.Sar, _) =>
         withArchiveSourceReadC(path, Some(cacheroot))(GenericSubsystemDescriptor.load).toOption
       case _ =>
         None
@@ -2090,7 +2129,7 @@ object ComponentRepository extends GlobalObservable {
   ): Seq[Component] =
     artifact.kind match {
       case ArtifactKind.Jar => _discover_component_from_jar(artifact.path, params, origin, log)
-      case ArtifactKind.Car => _discover_component_from_car(artifact.path, params, origin, log)
+      case ArtifactKind.Car => _discover_component_from_car(artifact.path, params, origin, log, repositoryCoordinate = artifact.repositoryCoordinate)
       case ArtifactKind.CarDir => _discover_component_from_car_dir(artifact.path, params, origin, log)
       case ArtifactKind.Sar => _discover_component_from_sar(artifact.path, params, origin, log)
       case ArtifactKind.SarDir => _discover_component_from_sar_dir(artifact.path, params, origin, log)
@@ -2106,7 +2145,8 @@ object ComponentRepository extends GlobalObservable {
 
   private case class Artifact(
     path: Path,
-    kind: ArtifactKind
+    kind: ArtifactKind,
+    repositoryCoordinate: Option[(String, String)] = None
   )
 
   private def _discover_component_from_jar(
@@ -2129,10 +2169,11 @@ object ComponentRepository extends GlobalObservable {
     params: ComponentCreate,
     origin: ComponentOrigin,
     log: BootstrapLog,
-    sardescriptor: Option[GenericSubsystemDescriptor] = None
+    sardescriptor: Option[GenericSubsystemDescriptor] = None,
+    repositoryCoordinate: Option[(String, String)] = None
   ): Seq[Component] =
     _repository_result(
-      _discover_component_from_car_c(carpath, params, origin, log, sardescriptor),
+      _discover_component_from_car_c(carpath, params, origin, log, sardescriptor, repositoryCoordinate = repositoryCoordinate),
       params,
       log,
       s"[component-dir] car=${carpath.getFileName} invalid car"
@@ -2144,7 +2185,8 @@ object ComponentRepository extends GlobalObservable {
     origin: ComponentOrigin,
     log: BootstrapLog,
     sardescriptor: Option[GenericSubsystemDescriptor] = None,
-    parentgeneration: Option[org.goldenport.cncf.component.cache.SourceGeneration] = None
+    parentgeneration: Option[org.goldenport.cncf.component.cache.SourceGeneration] = None,
+    repositoryCoordinate: Option[(String, String)] = None
   ): Consequence[Vector[Component]] = {
     org.goldenport.cncf.component.cache.ManagedArchiveCache.fromC(
       params.configuration, params.managedCacheRoot
@@ -2163,7 +2205,7 @@ object ComponentRepository extends GlobalObservable {
       }
       parentgeneration match {
         case Some(parent) => cache.withRetainedEmbeddedCarC(carpath, parent, register)(use)
-        case None => cache.withRetainedCarC(carpath, register)(use)
+        case None => cache.withRetainedCarC(carpath, register, repositoryCoordinate)(use)
       }
     }
   }

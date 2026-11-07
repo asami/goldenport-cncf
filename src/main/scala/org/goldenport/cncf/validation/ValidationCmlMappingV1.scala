@@ -9,7 +9,7 @@ import ValidationMetadataV1.{Declaration, DurationClass, FeatureReference, Metad
 
 /** Normalized CML properties, independent of CML syntax and generation.
  * @since   Oct. 18, 2026
- * @version Oct. 18, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 object ValidationCmlMappingV1 {
@@ -26,7 +26,8 @@ object ValidationCmlMappingV1 {
     expectedDuration: Option[DurationValue] = None,
     durationClass: Option[String] = None,
     executionRequirement: Option[ExecutionRequirement] = None,
-    requiredSemantics: Set[String] = Set.empty
+    requiredSemantics: Set[String] = Set.empty,
+    executionModes: Option[Set[String]] = None
   ) {
     def declarationC: Consequence[Declaration] = ValidationCmlMappingV1.declarationC(this)
   }
@@ -41,7 +42,8 @@ object ValidationCmlMappingV1 {
           _invalid_c("durationClass", "exact NORMAL or LONG_RUNNING label"))
       }
       declaration <- Declaration(properties.abiVersion, purposes, properties.features, duration,
-        durationclass, properties.executionRequirement, properties.requiredSemantics).validateC
+        durationclass, properties.executionRequirement, properties.requiredSemantics,
+        executionModes = properties.executionModes).validateC
     } yield declaration
 
   def resolveC(

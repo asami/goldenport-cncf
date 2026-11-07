@@ -31,6 +31,13 @@ object CncfMain extends GlobalObservable {
       return
     }
 
+    if (args.headOption.contains("cache") ||
+        args.take(3).toVector == Vector("--no-default-components", "command", "cache")) {
+      val code = CncfRuntime.run(args)
+      if (code != 0) throw new CliFailed(code)
+      return
+    }
+
     val cwd = Paths.get("").toAbsolutePath.normalize
     val bootstrap = CncfRuntime.bootstrapC(cwd, args) match {
       case Consequence.Success(value) => value

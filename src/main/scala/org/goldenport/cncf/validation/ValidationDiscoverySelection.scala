@@ -8,7 +8,8 @@ import ValidationDiscovery.{failure, ordered}
 
 /** Pure admission, purpose/feature queries and exact supplemental references.
  * @since   Oct. 18, 2026
- * @version Oct. 31, 2026
+ *  version Oct. 31, 2026
+ * @version Nov.  6, 2026
  */
 private[validation] object ValidationDiscoverySelection {
   def selectC(inventory: Inventory, query: SelectionQuery): Consequence[Vector[Operation]] =
@@ -18,7 +19,10 @@ private[validation] object ValidationDiscoverySelection {
           case (reference, operations) if operations.size > 1 => reference
         }.toSet
         ordered(inventory.operations.filter { operation =>
-          !ambiguous.contains(operation.reference) && operation.metadata.exists { metadata =>
+          !ambiguous.contains(operation.reference) && (!query.standardFramework || operation.framework.exists { facts =>
+            (!facts.explicitOnly || query.explicitSuites(operation.selector.suiteClassName)) &&
+              (query.includeSlow || !facts.tags("org.scalatest.tags.Slow"))
+          }) && operation.metadata.exists { metadata =>
               (query.purposes.isEmpty || metadata.purposes.exists(query.purposes.contains)) &&
               (query.features.isEmpty || metadata.features.exists(query.features.contains))
           }
@@ -39,7 +43,8 @@ private[validation] object ValidationDiscoverySelection {
     }
 
   private def _query(query: SelectionQuery): Consequence[Unit] =
-    if (query == null || query.purposes == null || query.features == null || query.purposes.contains(null)) {
+    if (query == null || query.purposes == null || query.features == null || query.purposes.contains(null) || query.explicitSuites == null ||
+        query.explicitSuites.size > 16 || query.explicitSuites.exists(value => !classValid(value))) {
       failure("query", "query", "non-null typed purpose and feature sets")
     } else {
       query.features.toVector.foldLeft(Consequence.unit) { (result, feature) =>
@@ -101,7 +106,8 @@ private[validation] object ValidationDiscoverySelection {
 
   private def _operation(operation: Operation): Consequence[Unit] = {
     if (operation == null || operation.provenance == null || operation.selector == null ||
-        operation.metadata == null || operation.metadata.contains(null) || operation.diagnostics == null) {
+        operation.metadata == null || operation.metadata.contains(null) || operation.diagnostics == null || operation.framework == null || operation.framework.exists(f =>
+          f == null || f.tags == null || f.tags.exists(tag => !textValid(tag)))) {
       failure("operation", "null", "non-null operation data and optional metadata")
     } else if (operation.provenance.abiVersion != ABI_VERSION) {
       failure("abiVersion", "abi", "supported metadata ABI version 1")
@@ -127,8 +133,9 @@ private[validation] object ValidationDiscoverySelection {
       val declaration = Declaration(purposes = Some(metadata.purposes), features = metadata.features,
         expectedDuration = metadata.expectedDuration, durationClass = Some(metadata.durationClass),
         executionRequirement = metadata.executionRequirement,
-        requiredSemantics = if (metadata.inputSchema.nonEmpty) Set("inputSchema") else Set.empty,
-        inputSchema = Some(metadata.inputSchema))
+        inputSchema = Some(metadata.inputSchema), executionModes = metadata.executionModes,
+        requiredSemantics = (if (metadata.inputSchema.nonEmpty) Set("inputSchema") else Set.empty[String]) ++
+          (if (metadata.executionModes.nonEmpty) Set("executionModes") else Set.empty[String]))
       val normalized = ValidationMetadataV1.resolveC(None, Some(declaration)).toOption
       val canonicalduration = metadata.expectedDuration != null && metadata.expectedDuration.forall { duration =>
         duration != null && duration.unit == java.util.concurrent.TimeUnit.NANOSECONDS

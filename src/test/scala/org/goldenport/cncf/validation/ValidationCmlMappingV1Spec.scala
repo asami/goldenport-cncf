@@ -13,7 +13,8 @@ import ValidationMetadataV1.*
 
 /** CML-normalized properties and Scala declarations have one semantic interpreter.
  * @since   Oct. 18, 2026
- * @version Oct. 31, 2026
+ *  version Oct. 31, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ValidationCmlMappingV1Spec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -25,6 +26,19 @@ final class ValidationCmlMappingV1Spec extends AnyWordSpec with Matchers with Gi
     reasoning = ReasoningLevel.Deep, reviewRequired = true,
     disposition = Some(ExecutionDisposition(ExecutionPlacement.Delegated, ExecutionIndependence.Required, "origin:orders")),
     reasoningClass = Some(ReasoningClassReference("orders:careful")))
+
+  "CML mode declarations" should {
+    "normalize the same required execution variants as source providers" in {
+      Given("a normalized CML declaration requiring dev and production")
+      val properties = ValidationCmlMappingV1.Properties(requiredSemantics = Set("executionModes"),
+        executionModes = Some(Set("dev", "production")))
+      When("the ordinary CML mapping resolves shared metadata")
+      val result = ValidationCmlMappingV1.resolveC(Some(properties), None).toOption.get
+      Then("canonical required modes survive without becoming test purpose labels")
+      result.executionModes shouldBe Some(Set("develop", "production"))
+      result.purposes shouldBe empty
+    }
+  }
 
   "Normalized CML metadata" should {
     "map every property to the same validated Scala declaration" in {

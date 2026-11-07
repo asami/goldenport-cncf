@@ -15,7 +15,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalacheck.{Gen, Prop, Test}
 import org.goldenport.Consequence
 import org.goldenport.configuration.ConfigurationValue
-import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
+import org.goldenport.cncf.component.{ComponentCreate, ComponentDescriptor, ComponentId, ComponentOrigin}
 import org.goldenport.cncf.component.repository.{CanonicalArchiveFixtureComponent, CanonicalArchiveFixtureFactory, ComponentRepository}
 import org.goldenport.cncf.component.testutil.CarArchiveFixture
 import org.goldenport.cncf.subsystem.Subsystem
@@ -27,6 +27,144 @@ import org.goldenport.cncf.testutil.TestComponentFactory
   */
 class ManagedCarCacheSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import ManagedCarCacheFixture.*
+
+  "Repository coordinate selection" should {
+    "switch across archive paths while preserving separate repositories and explicit files" in withCacheFixture { root =>
+      val firstPath = archive(root.resolve("first.car"), root, "old")
+      val secondPath = archive(root.resolve("second.car"), root, "new")
+      val cache = new ManagedArchiveCache(ManagedCachePolicy(root.resolve("cache")))
+      val identity = Some("repository-a" -> "example:1-SNAPSHOT")
+      val old = cache.acquireCarC(firstPath, identity).TAKE
+      val oldTree = old.value.root
+      val updated = cache.acquireCarC(secondPath, identity).TAKE
+      try {
+        updated.generation should not be (old.generation)
+        Files.isDirectory(oldTree) shouldBe true
+        val separate = cache.acquireCarC(firstPath, Some("repository-b" -> "example:1-SNAPSHOT")).TAKE
+        val explicit = cache.acquireCarC(firstPath).TAKE
+        try {
+          separate.generation shouldBe old.generation
+          explicit.generation shouldBe old.generation
+          val selection = new ManagedGenerationSelection(cache.root, cache.policy)
+          selection.observe(selection.repositoryCoordinate("repository-a", "example:1-SNAPSHOT", ArchiveKind.Car)).get.source shouldBe updated.generation.source
+          selection.observe(selection.repositoryCoordinate("repository-b", "example:1-SNAPSHOT", ArchiveKind.Car)).get.source shouldBe old.generation.source
+          selection.observe(selection.coordinate(firstPath, ArchiveKind.Car)).get.source shouldBe old.generation.source
+        } finally { separate.close(); explicit.close() }
+      } finally { updated.close(); old.close(); cache.close() }
+    }
+
+    "require the expected generation and no active lease for explicit legacy retirement" in withCacheFixture { root =>
+      val car = archive(root.resolve("legacy.car"), root)
+      val cache = new ManagedArchiveCache(ManagedCachePolicy(root.resolve("cache")))
+      val active = cache.acquireCarC(car).TAKE
+      val (key, generation) = cache.inspectLegacyCurrentC(car, ArchiveKind.Car).TAKE.get
+      cache.retireLegacyCurrentC(key, generation, dryRun = true).TAKE shouldBe false
+      cache.retireLegacyCurrentC(key, generation, dryRun = false).TAKE shouldBe false
+      cache.inspectLegacyCurrentC(car, ArchiveKind.Car).TAKE.get._2 shouldBe generation
+      active.close()
+      val wrong = SourceGeneration(ArchiveKind.Car, "0" * 64)
+      cache.retireLegacyCurrentC(key, wrong, dryRun = false).TAKE shouldBe false
+      cache.retireLegacyCurrentC(key, generation, dryRun = true).TAKE shouldBe true
+      cache.inspectLegacyCurrentC(car, ArchiveKind.Car).TAKE should not be empty
+      cache.retireLegacyCurrentC(key, generation, dryRun = false).TAKE shouldBe true
+      cache.inspectLegacyCurrentC(car, ArchiveKind.Car).TAKE shouldBe empty
+      cache.close()
+    }
+  }
+
+  "Legacy retirement" should {
+    "leave the current pointer usable after metadata failure and allow a retry" in withCacheFixture { root =>
+      val car = archive(root.resolve("legacy-failure.car"), root)
+      var fail = false
+      val files = new ManagedCacheFiles {
+        override def writeMetadata(path: Path, text: String): Unit = {
+          if (fail && path.getFileName.toString.startsWith("retirement.json"))
+            throw new java.io.IOException("injected retirement write failure")
+          super.writeMetadata(path, text)
+        }
+        def deleteTree(path: Path): Unit = ManagedCacheFiles.deleteTree(path)
+      }
+      val cache = new ManagedArchiveCache(ManagedCachePolicy(root.resolve("cache")), files)
+      val lease = cache.acquireCarC(car).TAKE
+      val (key, generation) = cache.inspectLegacyCurrentC(car, ArchiveKind.Car).TAKE.get
+      lease.close()
+      Files.deleteIfExists(cache.root.resolve("metadata/generations").resolve(generation.key).resolve("retirement.json"))
+      fail = true
+      cache.retireLegacyCurrentC(key, generation, dryRun = false).isSuccess shouldBe false
+      cache.inspectLegacyCurrentC(car, ArchiveKind.Car).TAKE.get._2 shouldBe generation
+      fail = false
+      cache.retireLegacyCurrentC(key, generation, dryRun = false).TAKE shouldBe true
+      cache.inspectLegacyCurrentC(car, ArchiveKind.Car).TAKE shouldBe empty
+      cache.close()
+    }
+  }
+
+  "The repository resolver" should {
+    "reject simultaneous archives before selection for requested and unrequested discovery" in withCacheFixture { root =>
+      Vector(Some("0.1.0-SNAPSHOT"), None).zipWithIndex.foreach { case (requested, index) =>
+        val repository = Files.createDirectory(root.resolve(s"ambiguous-$index"))
+        val oldPath = archive(repository.resolve("old.car"), root, "old", "0.1.0-SNAPSHOT")
+        val cache = new ManagedArchiveCache(ManagedCachePolicy(root.resolve(s"ambiguous-cache-$index")))
+        val old = runtime(repository, cache.root, requested)
+        val selection = new ManagedGenerationSelection(cache.root, cache.policy)
+        val key = selection.repositoryCoordinate(repository.toAbsolutePath.normalize.toUri.toString,
+          "org.goldenport.fixture.CanonicalArchiveFixture:0.1.0-SNAPSHOT", ArchiveKind.Car)
+        val original = selection.observe(key).get.source
+        val newPath = archive(repository.resolve("new.car"), root, "new", "0.1.0-SNAPSHOT")
+        try {
+          val failure = intercept[RuntimeException] { runtime(repository, cache.root, requested) }
+          failure.getMessage should include ("Ambiguous CAR repository coordinate")
+          selection.observe(key).get.source shouldBe original
+          old.lazyResource("managed-cache/lazy.txt") shouldBe "old"
+          val explicit = fileRuntime(newPath, cache.root)
+          try explicit.lazyResource("managed-cache/lazy.txt") shouldBe "new" finally explicit.close()
+          selection.observe(key).get.source shouldBe original
+          Files.delete(oldPath)
+          val updated = runtime(repository, cache.root, requested)
+          val current = selection.observe(key).get.source
+          try {
+            current should not be original
+            updated.lazyResource("managed-cache/lazy.txt") shouldBe "new"
+            old.lazyResource("managed-cache/lazy.txt") shouldBe "old"
+            val repeated = runtime(repository, cache.root, requested)
+            try {
+              selection.observe(key).get.source shouldBe current
+              repeated.lazyResource("managed-cache/lazy.txt") shouldBe "new"
+            } finally repeated.close()
+          } finally updated.close()
+        } finally { old.close(); cache.close() }
+      }
+    }
+
+    "keep one SNAPSHOT selection across different flat archive names and isolate other origins" in withCacheFixture { root =>
+      val repository = Files.createDirectory(root.resolve("repository"))
+      val otherRepository = Files.createDirectory(root.resolve("other-repository"))
+      val oldPath = archive(repository.resolve("old.car"), root, "old", "0.1.0-SNAPSHOT")
+      val otherPath = otherRepository.resolve("other.car")
+      Files.copy(oldPath, otherPath)
+      val cache = new ManagedArchiveCache(ManagedCachePolicy(root.resolve("cache")))
+      val old = runtime(repository, cache.root, Some("0.1.0-SNAPSHOT"))
+      val other = runtime(otherRepository, cache.root, Some("0.1.0-SNAPSHOT"))
+      val explicit = fileRuntime(otherPath, cache.root)
+      val newPath = root.resolve("new.car")
+      archive(newPath, root, "new", "0.1.0-SNAPSHOT")
+      Files.delete(oldPath)
+      Files.move(newPath, repository.resolve("new.car"))
+      val updated = runtime(repository, cache.root, Some("0.1.0-SNAPSHOT"))
+      try {
+        old.lazyResource("managed-cache/lazy.txt") shouldBe "old"
+        updated.lazyResource("managed-cache/lazy.txt") shouldBe "new"
+        other.lazyResource("managed-cache/lazy.txt") shouldBe "old"
+        val selection = new ManagedGenerationSelection(cache.root, cache.policy)
+        val coordinate = "org.goldenport.fixture.CanonicalArchiveFixture:0.1.0-SNAPSHOT"
+        val firstKey = selection.repositoryCoordinate(repository.toAbsolutePath.normalize.toUri.toString, coordinate, ArchiveKind.Car)
+        val otherKey = selection.repositoryCoordinate(otherRepository.toAbsolutePath.normalize.toUri.toString, coordinate, ArchiveKind.Car)
+        selection.observe(firstKey).get.source should not be (selection.observe(otherKey).get.source)
+        selection.observe(selection.coordinate(otherPath, ArchiveKind.Car)).get.source shouldBe selection.observe(otherKey).get.source
+        explicit.lazyResource("managed-cache/lazy.txt") shouldBe "old"
+      } finally { updated.close(); explicit.close(); other.close(); old.close(); cache.close() }
+    }
+  }
 
   "The managed CAR repository route" should {
     "same-JVM ownership and reuse" which {
@@ -385,7 +523,7 @@ private[cache] object ManagedCarCacheFixture {
 
   def fileIdentity(path: Path): Any = Files.readAttributes(path, classOf[BasicFileAttributes]).fileKey()
 
-  def archive(target: Path, assets: Path, payload: String = "lazy payload"): Path = {
+  def archive(target: Path, assets: Path, payload: String = "lazy payload", version: String = "0.1.0"): Path = {
     val jar = Files.createTempFile(assets, "component-", ".jar")
     Using.resource(new ZipOutputStream(Files.newOutputStream(jar))) { zip =>
       Vector(classOf[CanonicalArchiveFixtureFactory], classOf[CanonicalArchiveFixtureComponent]).foreach { cls =>
@@ -399,7 +537,7 @@ private[cache] object ManagedCarCacheFixture {
       }
     }
     val descriptor = Files.createTempFile(assets, "descriptor-", ".json")
-    Files.writeString(descriptor, """{"schemaVersion":3,"component":{"namespace":"org.goldenport.fixture","id":"CanonicalArchiveFixture","version":"0.1.0"}}""")
+    Files.writeString(descriptor, s"""{"schemaVersion":3,"component":{"namespace":"org.goldenport.fixture","id":"CanonicalArchiveFixture","version":"$version"}}""")
     CarArchiveFixture.write(target, Vector("component-descriptor.json" -> descriptor, "component/main.jar" -> jar))
     target
   }
@@ -415,12 +553,25 @@ private[cache] object ManagedCarCacheFixture {
     def close(): Unit = Subsystem.shutdownOwned(owner)
   }
 
-  def runtime(repository: Path, cache: Path): Runtime = {
+  def runtime(repository: Path, cache: Path, requestedVersion: Option[String] = None): Runtime = {
     val owner = TestComponentFactory.subsystemWithConfig(Map("cncf.component.cache.root" -> ConfigurationValue.StringValue(cache.toString)))
     try {
+      val id = ComponentId("org.goldenport.fixture.CanonicalArchiveFixture")
+      val descriptors = requestedVersion.toVector.map(version => ComponentDescriptor(name = Some(id.name),
+        componentName = Some(id.name), version = Some(version), schemaVersion = Some(3), componentId = Some(id)))
       val components = new ComponentRepository.ComponentDirRepository(repository,
-        ComponentCreate(owner, ComponentOrigin.Repository("component-dir")), ComponentRepository.resolvePackagePrefixes()).discover()
+        ComponentCreate(owner, ComponentOrigin.Repository("component-dir"), descriptors), ComponentRepository.resolvePackagePrefixes()).discover()
       require(components.exists(_.componentId.name == "org.goldenport.fixture.CanonicalArchiveFixture"), "fixture CAR discovery failed")
+      new Runtime(owner)
+    } catch { case error: Throwable => Subsystem.shutdownOwned(owner); throw error }
+  }
+
+  def fileRuntime(file: Path, cache: Path): Runtime = {
+    val owner = TestComponentFactory.subsystemWithConfig(Map("cncf.component.cache.root" -> ConfigurationValue.StringValue(cache.toString)))
+    try {
+      val components = new ComponentRepository.ComponentFileRepository(file,
+        ComponentCreate(owner, ComponentOrigin.Repository("component-file")), ComponentRepository.resolvePackagePrefixes()).discover()
+      require(components.nonEmpty, "explicit file discovery failed")
       new Runtime(owner)
     } catch { case error: Throwable => Subsystem.shutdownOwned(owner); throw error }
   }

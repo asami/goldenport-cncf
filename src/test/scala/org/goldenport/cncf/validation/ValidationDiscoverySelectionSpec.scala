@@ -49,9 +49,16 @@ class ValidationDiscoverySelectionSpec extends AnyWordSpec with Matchers with Gi
         getClass.getClassLoader).toOption.get
       inventory.completeness shouldBe Completeness.COMPLETE
       inventory.diagnostics shouldBe empty
-      inventory.operations.size shouldBe 3
-      val inherited = inventory.operations.find(_.reference.operation == "inherited-operation").get
-      ValidationDiscoveryV1.resolveC(inventory, inherited.reference).toOption shouldBe Some(inherited)
+      inventory.operations.size shouldBe 1
+      inventory.operations.map(_.selector.suiteClassName).toSet shouldBe Set(ordinary)
+      val explicitInventory = discoverC(DiscoveryScope("explicit-scope", "scope-1", Vector(artifact)),
+        getClass.getClassLoader, Set(hidden)).toOption.get
+      explicitInventory.completeness shouldBe Completeness.COMPLETE
+      explicitInventory.diagnostics shouldBe empty
+      explicitInventory.operations.size shouldBe 3
+      explicitInventory.operations.count(_.selector.suiteClassName == hidden) shouldBe 2
+      val inherited = explicitInventory.operations.find(_.reference.operation == "inherited-operation").get
+      ValidationDiscoveryV1.resolveC(explicitInventory, inherited.reference).toOption shouldBe Some(inherited)
       inherited.provenance.sourceRevision shouldBe "source-1"
       inherited.provenance.operationRevision shouldBe "operation-2"
       inherited.metadata.get.origins shouldBe Origins(true, true)

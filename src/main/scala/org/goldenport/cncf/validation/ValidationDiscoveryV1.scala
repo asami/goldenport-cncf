@@ -5,7 +5,7 @@ import org.goldenport.Consequence
 
 /** Scoped actual ScalaTest inventory and pure selection contract.
  * @since   Oct. 18, 2026
- * @version Oct. 18, 2026
+ * @version Nov.  6, 2026
  */
 object ValidationDiscoveryV1 {
   enum Completeness {
@@ -31,12 +31,14 @@ object ValidationDiscoveryV1 {
   )
   final case class DiscoveryScope(identity: String, revision: String, artifacts: Vector[ArtifactScope])
   final case class Diagnostic(code: String, source: String, message: String)
+  final case class FrameworkFacts(tags: Set[String], explicitOnly: Boolean)
   final case class Operation(
     reference: OperationReference,
     provenance: Provenance,
     selector: ScalaTestSelector,
     metadata: Option[ValidationMetadataV1.Metadata],
-    diagnostics: Vector[Diagnostic]
+    diagnostics: Vector[Diagnostic],
+    framework: Option[FrameworkFacts] = None
   )
   final case class Inventory(
     scope: DiscoveryScope,
@@ -46,11 +48,14 @@ object ValidationDiscoveryV1 {
   )
   final case class SelectionQuery(
     purposes: Set[ValidationMetadataV1.Purpose] = Set.empty,
-    features: Set[ValidationMetadataV1.FeatureReference] = Set.empty
+    features: Set[ValidationMetadataV1.FeatureReference] = Set.empty,
+    standardFramework: Boolean = false,
+    includeSlow: Boolean = false,
+    explicitSuites: Set[String] = Set.empty
   )
 
-  def discoverC(scope: DiscoveryScope, loader: ClassLoader): Consequence[Inventory] =
-    ValidationDiscovery.discoverC(scope, loader)
+  def discoverC(scope: DiscoveryScope, loader: ClassLoader, explicitSuites: Set[String] = Set.empty): Consequence[Inventory] =
+    ValidationDiscovery.discoverC(scope, loader, explicitSuites)
 
   def selectC(inventory: Inventory, query: SelectionQuery): Consequence[Vector[Operation]] =
     ValidationDiscoverySelection.selectC(inventory, query)

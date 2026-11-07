@@ -9,7 +9,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceExecutionAdmiss
  * @since   Jul. 17, 2026
  *  version Jul. 22, 2026
  *  version Oct. 28, 2026
- * @version Nov.  2, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ProcessCapabilityId private (value: String) {
@@ -629,6 +629,23 @@ object ProcessProgramDefinition {
         definition.allowedResourceTrees, definition._environment,
         Some(metadata.copy(testClasses = Vector(selection.suiteClassName), scenario = Some(selection))),
         definition._git_metadata)
+  }
+
+  private[processexecution] def withSbtValidationBatchC(
+    definition: ProcessProgramDefinition, tasks: Vector[String]
+  ): Consequence[ProcessProgramDefinition] = {
+    val arguments = definition.fixedArguments.dropRight(1) :+ (";" + tasks.mkString(";"))
+    fromSbtRuntimeC(definition.capability, definition.safeProgramIdentity, definition._executable_location,
+      arguments, definition.maximumLimits, definition._environment.values, definition._sbt_metadata.get)
+  }
+
+  private[processexecution] def withSbtValidationModeC(
+    definition: ProcessProgramDefinition, mode: String, provider: String
+  ): Consequence[ProcessProgramDefinition] = {
+    val arguments = definition.fixedArguments.dropRight(1) :+
+      (definition.fixedArguments.last + s" \"-Dcncf.validation.mode=$mode\" \"-Dcncf.validation.provider=$provider\"")
+    fromSbtRuntimeC(definition.capability, definition.safeProgramIdentity, definition._executable_location,
+      arguments, definition.maximumLimits, definition._environment.values, definition._sbt_metadata.get)
   }
 
   private[processexecution] def fromGitRuntimeC(

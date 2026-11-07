@@ -225,3 +225,46 @@ Default reusable originals remain retained.
 This contract was accepted for CC-02 onward through CC-01's ordinary compile,
 independent review and Step commit. That acceptance establishes no implemented
 shared cache, cross-JVM protection or Phase completion.
+
+## Explicit legacy coordinate retirement (2026-11-07)
+
+CAR repository resolution carries the selected repository identity and
+resolved component/release coordinate into managed selection. An explicitly
+supplied file retains its normalized URI identity. Existing path-keyed selections
+are not automatically merged: their historical origin cannot be inferred safely.
+When a flat repository contains multiple CAR files with the same canonical
+component and release, discovery rejects the ambiguous coordinate before any
+component acquisition or current selection change. Publish one selected archive
+for that coordinate, or use an explicit file to select a distinct archive.
+
+On the selected `ManagedArchiveCache` owner, `inspectLegacyCurrentC(path, kind)`
+returns the old path-key and current source generation for one known input.
+`retireLegacyCurrentC(key, expected, dryRun = true)` checks that exact selection
+and attempts the same coordinate and source/extraction exclusion needed for safe
+retirement. A false result means a mismatch or contention; retry only after
+reinspection. The apply form (`dryRun = false`) records retirement and removes
+the matched current pointer, without deleting payloads. Follow with bounded
+`collectC` on the same owner; other current references and active leases remain
+protected. Unknown paths, lock files and caller originals are never selected by
+this operation. This operation does not scan or infer historical aliases.
+
+The standalone launcher form is `cncf --runtime 0.5.6-SNAPSHOT --no-default-components
+command cache ...`, with an explicit `--root`. The exact runtime argument prefix
+`--no-default-components command cache` reaches the cache owner before application
+bootstrap, and the owner validates its complete remaining argument tail. The direct
+runtime form `cache ...` also reaches the owner before bootstrap. Other invocations
+retain their normal framework option handling and application admission.
+At the public `CncfMain.main` entry, a nonzero cache status is reported using
+`CliFailed` with the same code. Installed launcher qualification remains pending:
+publish the accepted runtime, verify the selected artifact, and exercise inspection
+and dry-run before treating the installed command as operational.
+`inspect` reports the bounded inspection, and `collect` defaults to dry-run;
+`--apply` performs collection. `legacy-inspect --kind car|sar --archive PATH`
+reports a known path-key and source generation; `legacy-retire --kind car|sar
+--key KEY --generation DIGEST` defaults to dry-run and needs `--apply` to change
+the selected pointer. Both forms accept an explicit `--dry-run`; it conflicts
+with `--apply`. Refusal returns a failing status and requires reinspection.
+Collection `--apply --batches N` (1–128) keeps one owner open and follows its
+bounded continuation; a dry-run is one bounded projection and repeating it does
+not advance the cursor. Inspect output, failures, in-use entries and truncation
+before drawing conclusions. The CLI does not perform a global inventory.
