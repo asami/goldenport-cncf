@@ -435,7 +435,7 @@ exclusion. Pointer mismatch and active use refuse the operation. Retirement
 leaves actual reclamation to bounded collection and its complete reference checks.
 It never removes stable lock files or the original caller input.
 
-The `cncf cache` entry requires an explicit root and delegates to that owner.
+The `cncf command cache` entry requires an explicit root and delegates to that owner.
 It defaults to dry-run for collection and retirement, requires an expected
 key and generation for retirement, and reports refusal through its exit status.
 Applied collection can continue at most 128 bounded batches in one owner lifetime;

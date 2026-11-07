@@ -208,9 +208,9 @@ CARの解決済みrepository/coordinateをmanaged selectionへ渡す変更と、
 実cacheの参照変更・回収、SNAPSHOT発行、利用側の選択確認、退避先の整理も
 未実施であり、後続の所有者へ引き継ぐ。Phase 116の履歴は変更しない。
 
-操作入口は `cncf cache inspect --root PATH`、`cncf cache collect --root PATH`、
-`cncf cache legacy-inspect --root PATH --kind car --archive PATH`、
-`cncf cache legacy-retire --root PATH --kind car --key KEY --generation DIGEST`。
+操作入口は `cncf command cache inspect --root PATH`、`cncf command cache collect --root PATH`、
+`cncf command cache legacy-inspect --root PATH --kind car --archive PATH`、
+`cncf command cache legacy-retire --root PATH --kind car --key KEY --generation DIGEST`。
 collectとretireは既定でdry-run、実行には`--apply`が必要。collectの継続は
 `--apply --batches N`で同じownerの中で最大128回まで行う。対象と期待世代を
 毎回確認し、不一致や使用中の拒否は再確認後に再試行する。

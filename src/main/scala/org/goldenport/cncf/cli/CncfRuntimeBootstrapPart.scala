@@ -1080,9 +1080,17 @@ private[cli] trait CncfRuntimeBootstrapPart {
         Left(2)
       case Right(specs) =>
         val (runtimeparameterargs, commandtail) = _split_command_args(actualargs)
-        val runtimeparse0 = _runtime_parameter_parser.parse(runtimeparameterargs.toIndexedSeq)
-        val runtimeparse = runtimeparse0.copy(residual = runtimeparse0.residual ++ commandtail)
-        val domainargs = _strip_configuration_args(runtimeparse.residual.toArray)
+        // The generic runtime parser converts options to properties. Preserve the
+        // builtin cache tail verbatim so its own strict parser sees every option.
+        val iscache = runtimeparameterargs.take(2).toVector == Vector("command", "cache")
+        val runtimeparse = if (iscache)
+          RuntimeParameterParseResult(Vector.empty, runtimeparameterargs.toVector ++ commandtail, None)
+        else {
+          val parsed = _runtime_parameter_parser.parse(runtimeparameterargs.toIndexedSeq)
+          parsed.copy(residual = parsed.residual ++ commandtail)
+        }
+        val domainargs = if (iscache) runtimeparse.residual.toArray
+          else _strip_configuration_args(runtimeparse.residual.toArray)
         val mode = _mode_from_args(domainargs)
         val runtimeconfig = _runtime_config(configuration)
         val aliasresolver = _alias_resolver(configuration)
@@ -1232,6 +1240,8 @@ private[cli] trait CncfRuntimeBootstrapPart {
         }
         code
       case Consequence.Success(Right(launch)) =>
+        if (launch.domainargs.take(2).toVector == Vector("command", "cache"))
+          return ManagedCacheOperation.run(launch.domainargs.drop(2))
         _prepare_runtime(launch)
         val r: Consequence[OperationRequest] =
           _runtime_protocol_engine.makeOperationRequest(launch.domainargs)
