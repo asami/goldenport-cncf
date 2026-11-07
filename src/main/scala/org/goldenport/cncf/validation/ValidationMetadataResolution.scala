@@ -8,11 +8,12 @@ import ValidationMetadataV1.*
 
 /** Pure admission and composition of the V1 declaration contract.
  * @since   Oct. 18, 2026
- * @version Oct. 19, 2026
+ *  version Oct. 19, 2026
+ * @version Nov.  6, 2026
  */
 private[validation] object ValidationMetadataResolution {
   private val _required_semantics = Set(
-    "purposes", "features", "expectedDuration", "durationClass", "executionRequirement", "inputSchema"
+    "purposes", "features", "expectedDuration", "durationClass", "executionRequirement", "inputSchema", "executionModes"
   )
 
   def validateFeatureC(feature: FeatureReference): Consequence[FeatureReference] =
@@ -44,7 +45,10 @@ private[validation] object ValidationMetadataResolution {
       }
       fields.flatMap { normalized =>
         _optional(declaration.inputSchema, "inputSchema")(ValidationInputsV1.validateSchemaC)
-          .map(schema => normalized.copy(inputSchema = schema))
+          .flatMap { schema =>
+            _optional(declaration.executionModes, "executionModes")(ValidationExecutionModeV1.normalizeC)
+              .map(modes => normalized.copy(inputSchema = schema, executionModes = modes))
+          }
       }
     }
 
@@ -66,7 +70,8 @@ private[validation] object ValidationMetadataResolution {
           overrides.durationClass.orElse(defaults.durationClass).getOrElse(DurationClass.NORMAL),
           requirement,
           Origins(specification.nonEmpty, operation.nonEmpty),
-          overrides.inputSchema.orElse(defaults.inputSchema).getOrElse(Vector.empty)
+          overrides.inputSchema.orElse(defaults.inputSchema).getOrElse(Vector.empty),
+          overrides.executionModes.orElse(defaults.executionModes)
         )
       }
     }
@@ -86,7 +91,10 @@ private[validation] object ValidationMetadataResolution {
       _failure[Unit]("requiredSemantics", "required-semantics", "known required semantic names", "null")
     } else {
       val unknown = value.requiredSemantics.filter(x => x == null || !_required_semantics.contains(x))
-      if (unknown.isEmpty && value.inputSchema != null &&
+      if (unknown.isEmpty && value.executionModes != null && value.executionModes.nonEmpty &&
+          !value.requiredSemantics.contains("executionModes"))
+        _failure[Unit]("requiredSemantics", "required-semantics", "executionModes for a mode declaration", "missing")
+      else if (unknown.isEmpty && value.inputSchema != null &&
           value.inputSchema.exists(schema => schema != null && schema.nonEmpty) &&
           !value.requiredSemantics.contains("inputSchema"))
         _failure[Unit]("requiredSemantics", "required-semantics", "inputSchema for nonempty schema", "missing")

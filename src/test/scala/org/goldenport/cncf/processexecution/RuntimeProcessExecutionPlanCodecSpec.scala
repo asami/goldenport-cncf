@@ -726,6 +726,56 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
       }
     }
 
+    "require independent dynamic TestOnly declaration beside the opted-in ordinary TestCompile owner" in {
+      Given("ordinary TestCompile and TestOnly programs with separate capabilities on the same workspace")
+      val directory = _directory()
+      val original = _v2_root(directory)
+      val base = original.hcursor.get[Vector[Json]]("sbtPrograms").toOption.get.head
+      val scope = Json.obj("componentIdentity" -> Json.fromString("project"), "artifactIdentity" -> Json.fromString("project-tests"),
+        "artifactRevision" -> Json.fromString("1"), "packagePrefix" -> Json.fromString("project.spec"))
+      val compile = base.mapObject(_.add("operation", Json.fromString("test-compile")).add("validationDiscovery", scope))
+      val test = base.mapObject(_.add("operation", Json.fromString("test-only")).add("capability", Json.fromString("ordinary-exact-tests"))
+        .add("identity", Json.fromString("ordinary-exact-tests")).add("testClasses", Json.arr()).add("discoveredTests", Json.True)
+        .add("validationMode", Json.obj("modes" -> Json.arr(Json.fromString("develop")),
+          "provider" -> Json.fromString("fixture"), "livePrerequisites" -> Json.arr())))
+      val wire = original.mapObject(fields => fields.add("sbtPrograms", Json.arr(compile, test)).add("grants",
+        fields("grants").get.mapArray(_.map(_.mapObject(grant => grant.add("capabilities",
+          grant("capabilities").get.mapArray(_ :+ Json.fromString("ordinary-exact-tests"))))))))
+      When("the host codec binds and round-trips both independent normal programs")
+      val decoded = _take(_decode(wire))
+      val encoded = _take(RuntimeProcessExecutionPlanCodec.encode(decoded)).asInstanceOf[ConfigurationValue.StringValue]
+      Then("the build projection is distinct from explicit dynamic TestOnly scope and mode authority")
+      parse(encoded.value).toOption.get shouldBe wire
+      decoded.sbtDeclarations.find(_.operation == SbtOperation.TestCompile).get.validationDiscovery.nonEmpty shouldBe true
+      decoded.sbtDeclarations.find(_.operation == SbtOperation.TestOnly).get.discoveredTests shouldBe true
+      val noowner = wire.mapObject(_.add("sbtPrograms", Json.arr(test)))
+      _decode(noowner).isFaillure shouldBe true
+      val nooptin = wire.mapObject(_.add("sbtPrograms", Json.arr(compile, test.mapObject(_.remove("discoveredTests")))))
+      _decode(nooptin).isFaillure shouldBe true
+    }
+
+    "retain optional shared mode bindings and refuse unsupported declarations without changing legacy bytes" in {
+      Given("an ordinary TestOnly host binding with canonical modes and an explicit actual fixture adapter")
+      val directory = _directory()
+      val legacy = _changed_entry(_v2_root(directory), "sbtPrograms", _.mapObject(_.add("operation", Json.fromString("test-only"))
+        .add("testClasses", Json.arr(Json.fromString("project.spec.ProductSpec")))))
+      val mode = Json.obj("modes" -> Json.arr(Json.fromString("develop"), Json.fromString("production")),
+        "provider" -> Json.fromString("fixture"), "livePrerequisites" -> Json.arr())
+      val wire = _changed_entry(legacy, "sbtPrograms", _.mapObject(_.add("validationMode", mode)))
+      When("the ordinary host codec resolves and encodes the extension")
+      val restored = _take(_decode(wire))
+      val encoded = _take(RuntimeProcessExecutionPlanCodec.encode(restored)).asInstanceOf[ConfigurationValue.StringValue]
+      Then("canonical selected-mode support is retained separately from absent historical declarations")
+      parse(encoded.value).toOption.get shouldBe wire
+      restored.sbtDeclarations.head.validationMode shouldBe Some(SbtValidationMode.Binding(Set("develop", "production"), "fixture"))
+      _take(_decode(legacy)).sbtDeclarations.head.validationMode shouldBe None
+      val live = _changed_entry(wire, "sbtPrograms", _.mapObject(_.add("validationMode",
+        mode.mapObject(_.add("provider", Json.fromString("live"))))))
+      _decode(live).isFaillure shouldBe true
+      val invalid = _changed_entry(wire, "sbtPrograms", _.mapObject(_.add("validationMode", Json.Null)))
+      _decode(invalid).isFaillure shouldBe true
+    }
+
     "round-trip exact TestOnly declarations through V2 and V3 without mixing generic programs" in {
       Given("V2 and V3 host objects with a trusted exact two-class TestOnly selection")
       val classes = Vector("org.example.SelectedSpec", "org.other.OtherSpec")

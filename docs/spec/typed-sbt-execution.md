@@ -126,9 +126,10 @@ task expression, extra argv, main, executable, host cwd,
 launcher, environment or capability selector in this component API.
 
 The trailing default preserves ordinary `SbtTarget(workspaceId)` source calls.
-Its case-class extractor arity changes from one to two, so extractor consumers
-must update. There is no binary-compatibility claim for precompiled SNAPSHOT
-callers. Scenario `validateC` reuses the host class grammar below and requires
+Its historical case-class extractor arity changed from one to two, so extractor
+consumers had to update. The narrow legacy JVM entry-point guarantee below does
+not cover every precompiled SNAPSHOT product or extractor shape.
+Scenario `validateC` reuses the host class grammar below and requires
 an exact nonempty already-trimmed control-free test name of at most 512
 characters. Double quote, backslash and semicolon are explicitly unsupported
 literal rendering. There is no trimming, escaping or fuzzy fallback. Null
@@ -342,8 +343,12 @@ termination limits, Job cancellation, descendant cleanup and closure apply.
 
 `SbtExecutionResult` retains `target`, `operation` and the actual bounded
 `processResult`, plus a fourth defaulted
-`testSelection: Option[SbtTestSelectionResult] = None`; existing three-argument
-source calls remain valid. Compile/Test/FixCheck `outcome` is `Succeeded` for `Exited(0)`,
+`testSelection: Option[SbtTestSelectionResult] = None` and fifth defaulted
+`testObservation: Option[SbtTestObservation] = None`; existing three-argument
+source calls remain valid. The observation is immutable reporter data, with
+literal suite names and their confirmation, optional counts, failure details
+and capture completeness. Its presence does not supply verification or alter
+outcome decisions. Compile/Test/FixCheck `outcome` is `Succeeded` for `Exited(0)`,
 `Failed(exitCode)` for nonzero exit, and `Incomplete(termination)` for launch
 failure, timeout, cancellation, output limit or artifact limit. Captures,
 truncation, byte/artifact counts, elapsed duration and safe identity are
@@ -386,6 +391,43 @@ termination without executing or inventing a process. The caller is responsible
 for providing the original exact admitted selection. `assess` exposes the same
 report interpretation and supplementary observation independently; process outcome
 is determined by `reassess` and the retained termination.
+
+### Legacy JVM entry points — CNCF-OLD-SBT-ABI-01
+
+The old compiled operational CAR413 caller failed with
+`NoSuchMethodError` for `SbtTarget$.apply(String, Option, Option)` after B2
+expanded the case-class fields. Constant-pool evidence from that untouched CAR
+also identifies the five-argument result apply and
+`SbtExecutionOutcome.TestValidationFailed`. The compatibility boundary restores
+the following exact constructor, companion `apply` and instance `copy` arities:
+
+- `SbtTarget`: the first three fields `workspaceId`, `scenario`,
+  `validationEstimate`, with workspace identity erased to JVM `String`.
+- `SbtExecutionResult`: four fields `target`, `operation`, `processResult`,
+  `testSelection`, and five fields adding `testObservation`.
+
+Legacy constructors and applies leave additional fields at their ordinary absent
+defaults. Legacy target copy preserves mode, provider, discovery and batch
+selection. Legacy result copy preserves appended metadata; four-argument copy
+also preserves an existing observation, while five-argument copy uses its
+supplied observation. Generated full-arity construction, copy and default getters
+remain available. In particular result constructor-default getter five and
+`copy$default$5` mean observation, never validation mode. B2 `validationMode`,
+`discovery` and `batch` follow this five-field prefix. Internal admission uses
+named arguments for that appended metadata and creates no synthetic observation.
+
+`TestValidationFailed(reason: SbtTestSelectionFailure)` retains its operational
+JVM type identity for old callers. Its availability preserves the current failed-test interpretation and execution/recovery policy. All workspace, capability, operation, fixed-program and empty-request
+admission rules remain in force.
+
+`SbtExecutionBinaryCompatibilitySpec` reserves these erased signatures, actual
+reflective invocation, defaults, nonempty observation/feature-metadata separation
+and unchanged outcome/admission decisions using synthetic data only. These are
+preliminary regression guards. They do not qualify the actual untouched old CAR
+through typed SBT/UoW, establish publication, or promise compatibility for every
+unpublished intermediate product shape or precompiled SNAPSHOT version. Actual
+old-CAR qualification requires separately retained termination and typed receipts.
+
 
 With a scenario, its class must agree with the single exact selected class and
 the conservative successful summary must have `testsRun == 1`. Class-selection
@@ -534,3 +576,67 @@ Preserve typed execution, final selection before setup, effect authority,
 process limits and SBT locking. No arbitrary argv/environment input or duplicate
 per-test table. The current implementation is not claimed to support this
 extension; [TM-01..04](../phase/test-execution-mode-plan.md) owns delivery.
+
+## Managed exact mode variants — 2026-11-06
+
+The existing TestOnly declaration optionally adds `validationMode` with exact
+fields `modes` (sorted canonical OperationMode names), `provider` (`fixture` or
+`live`) and `livePrerequisites` (distinct admitted environment names). Absence
+preserves the existing canonical host encoding. Other operations refuse this
+extension. A live binding requires nonempty declared prerequisites; missing
+values refuse preparation before dispatch, without fixture fallback.
+
+`SbtTarget.validationMode` and optional `validationProvider` select an exact
+variant only with an existing exact scenario. Admission preserves the current
+workspace, owner, grants, fixed executable and finite limits. ConfigMap transport
+and `ValidationExecutionModeV1` child consumption retain requested versus actual
+mode/provider separately. A positive TestOnly report without the one matching
+child observation yields `ModeObservationMismatch`. The observation decoder
+requires complete byte-accurate UTF-8 captures and one exact child line; it does
+not authenticate hostile build output. Failure, incomplete capture and missing
+qualification remain distinct from success, without replay.
+
+## Ordinary build discovery and bounded exact batches — 2026-11-06
+
+An ordinary TestCompile declaration may opt into `validationDiscovery` with its
+existing `componentIdentity`, `artifactIdentity`, `artifactRevision` and
+`packagePrefix`. Its single admitted invocation executes the fixed ordered SBT
+1.x tasks `Test / compile`, `export Test / fullClasspath`, and
+`export Test / exportedProducts`. The supported decoder requires exactly two nonempty,
+unprefixed, absolute path-list export records in that order. Known SBT log
+prefixes are separate diagnostics. Products must occur within fullClasspath;
+extra, missing, ambiguous, invalid UTF-8, incomplete or failed output cannot
+supply a successful artifact view. No convenient last-line inference is used.
+Absent declarations preserve the original command and host encoding.
+
+The returned typed build view is observation data. It grants no TestOnly or
+live/provider permission. Dynamic exact selection requires a separately declared
+TestOnly program with its own capability, Manage authority, `discoveredTests:
+true`, empty legacy `testClasses`, and explicit mode/provider policy. The host
+binds its package/artifact scope from the same-workspace opted-in TestCompile
+owner; it does not inherit that owner's process grant. Missing independent
+TestOnly authority refuses before launch. Static TestOnly class declarations
+retain their existing behavior and bounds.
+
+The producer accepts only validated exact case/parameter/mode selectors and
+constructs its closed semicolon-separated ScalaTest task sequence. Up to 64
+variants share one ordinary SBT invocation, with grouping further constrained by
+the actual host's finite argument budget. Every task has its own ConfigMap and
+framework lifecycle; fork configuration remains the project's ordinary Test
+configuration. Each selected case requires one matching child mode/provider
+observation and one verified single-test report. Passed prefixes, actual failed
+variants, unverified observations and not-executed tails stay distinct. The
+actual process capture, termination and elapsed time remain attached to each
+batch; individual test durations are not inferred from batch elapsed time.
+
+The repository consumer retains one logical check for the complete group,
+including the native build occurrence, actual product/classpath discovery,
+all selected required variants and every batch occurrence. The legacy bound of
+16 logical checks does not truncate normal FULL membership. Native candidate
+observations bracket build/test effects; source revision comes from the actual
+pending candidate, not a caller-supplied current-tree metadata envelope. No new
+GoalPhase Session, test registry, shell fallback, launcher or freshness
+certificate is introduced. Source-authored specifications include a fetched
+program merge, more than sixteen operations, ordinary/forked child execution,
+Slow/DoNotDiscover exclusions and failure without push. They are not execution
+or installed-qualification evidence until the owning runtime runs them.

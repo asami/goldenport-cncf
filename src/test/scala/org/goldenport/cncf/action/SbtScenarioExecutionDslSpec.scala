@@ -19,7 +19,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /** Actual-context admission of exact scenario intent through the existing interpreter.
  * @since   Oct. 18, 2026
- * @version Oct. 24, 2026
+ *  version Oct. 24, 2026
+ * @version Nov.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SbtScenarioExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -255,11 +256,65 @@ final class SbtScenarioExecutionDslSpec extends AnyWordSpec with Matchers with G
     }
   }
 
+  "Managed child mode admission" should {
+    "transport canonical ConfigMap selection while refusing configured-only proof and live fallback" in {
+      Given("an admitted fixture project, a missing binding and a live binding without its required credential")
+      val fixture = _fixture(Vector(_class_name), modebinding = Some(SbtValidationMode.Binding(Set("develop", "production"), "fixture")))
+      val absent = _fixture(Vector(_class_name))
+      val live = _fixture(Vector(_class_name), modebinding = Some(SbtValidationMode.Binding(Set("production"), "live", Vector("LIVE_TOKEN"))))
+      try {
+        val target = SbtTarget(_workspace_id, Some(_scenario), validationMode = Some("develop"))
+        When("typed SBT admission and its existing interpreter select the exact develop case")
+        val result = new UnitOfWorkInterpreter(new UnitOfWork(fixture.context)).interpret(
+          UnitOfWorkOp.SbtExec(target, SbtOperation.TestOnly)).toOption.get
+        Then("the same bounded task carries child ConfigMap tokens but a label-only process PASS is unverified")
+        fixture.profile.driver.executions.head.effectiveArguments.last should endWith(
+          "\"-Dcncf.validation.mode=develop\" \"-Dcncf.validation.provider=fixture\"")
+        result.outcome shouldBe SbtExecutionOutcome.UnverifiedTests(SbtTestSelectionFailure.ModeObservationMismatch)
+        result.validationMode.get shouldBe a[SbtValidationMode.Result.Unverified]
+        When("a required live production variant is offered fixture or missing live prerequisites")
+        val required = target.copy(validationMode = Some("production"), validationProvider = Some("live"))
+        val denied = Vector(fixture, absent, live).map(value => SbtExecutionAdmission.resolveC(value.context, required, SbtOperation.TestOnly))
+        Then("all unavailable variants refuse before any additional process launch")
+        denied.foreach(_.isFaillure shouldBe true)
+        fixture.profile.driver.executions should have size 1
+        absent.profile.driver.executions shouldBe empty
+        live.profile.driver.executions shouldBe empty
+      } finally Vector(fixture, absent, live).foreach(value => _close(value.root))
+    }
+  }
+
+  "Bounded exact batches" should {
+    "use one independently admitted TestOnly occurrence for many variants and retain current grant denial" in {
+      Given("twenty exact cases, an ordinary mode-aware TestOnly host and an otherwise identical ungranted host")
+      val binding = Some(SbtValidationMode.Binding(Set("develop"), "fixture"))
+      val allowed = _fixture(Vector(_class_name), modebinding = binding)
+      val denied = _fixture(Vector(_class_name), modebinding = binding, granted = false)
+      val cases = (1 to 20).toVector.map(index => SbtValidationMode.Case(SbtScenarioSelection(_class_name, "case " + index), "develop"))
+      val target = SbtTarget(_workspace_id, validationBatch = cases)
+      try {
+        When("the existing typed interpreter narrows and executes the batch under current authority")
+        val actual = new UnitOfWorkInterpreter(new UnitOfWork(allowed.context)).interpret(UnitOfWorkOp.SbtExec(target, SbtOperation.TestOnly)).toOption.get
+        val rejected = SbtExecutionAdmission.resolveC(denied.context, target, SbtOperation.TestOnly)
+        Then("one bounded producer-owned task sequence is dispatched while the missing independent grant launches nothing")
+        allowed.profile.driver.executions should have size 1
+        val task = allowed.profile.driver.executions.head.effectiveArguments.last
+        task.count(_ == ';') shouldBe 20
+        cases.foreach(selected => task should include(selected.selector.testName))
+        actual.outcome shouldBe SbtExecutionOutcome.UnverifiedTests(SbtTestSelectionFailure.BatchSelectionMismatch)
+        rejected.isFaillure shouldBe true
+        denied.profile.driver.executions shouldBe empty
+      } finally Vector(allowed, denied).foreach(value => _close(value.root))
+    }
+  }
+
   private def _fixture(
     classes: Vector[String],
     permission: WorkspacePermission = WorkspacePermission.Manage,
     granted: Boolean = true,
-    owner: ComponentId = _owner
+    owner: ComponentId = _owner,
+    modebinding: Option[SbtValidationMode.Binding] = None,
+    environment: Map[String, String] = Map("BUILD_PROFILE" -> "scenario")
   ): Fixture = {
     val base = Files.createDirectories(Path.of("target", "sbt-scenario-dsl-spec").toAbsolutePath)
     val root = Files.createTempDirectory(base, "case-")
@@ -268,7 +323,7 @@ final class SbtScenarioExecutionDslSpec extends AnyWordSpec with Matchers with G
       Vector(WorkspaceGrant(_owner, _workspace_id, permission))).toOption.get
     val definition = SbtProgramDefinition.createC(workspace.bindingC(_workspace_id).toOption.get,
       SbtOperation.TestOnly, _capability, "scenario-test-only", Path.of("/usr/bin/true"),
-      _limits, Map("BUILD_PROFILE" -> "scenario"), classes).toOption.get
+      _limits, environment, classes, modebinding).toOption.get
     val policy = ProcessExecutionPolicy.createC(Vector(definition)).toOption.get
     val admission = ProcessExecutionAdmission.forComponentsC(policy,
       Map(_owner -> (if (granted) Vector(ProcessExecutionGrant(_capability)) else Vector.empty))).toOption.get

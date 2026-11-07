@@ -6,7 +6,8 @@ import org.goldenport.cncf.workflow.WorkflowProtocolV1.ExecutionRequirement
 
 /** Source declarations and normalized operation metadata, independent of discovery.
  * @since   Oct. 18, 2026
- * @version Oct. 31, 2026
+ *  version Oct. 31, 2026
+ * @version Nov.  6, 2026
  */
 object ValidationMetadataV1 {
   val ABI_VERSION: Int = 1
@@ -32,10 +33,11 @@ object ValidationMetadataV1 {
     durationClass: Option[DurationClass] = None,
     executionRequirement: Option[ExecutionRequirement] = None,
     requiredSemantics: Set[String] = Set.empty,
-    inputSchema: Option[Vector[ValidationInputsV1.Parameter]] = None
+    inputSchema: Option[Vector[ValidationInputsV1.Parameter]] = None,
+    executionModes: Option[Set[String]] = None
   ) {
     def validateC: Consequence[Declaration] =
-      ValidationMetadataResolution.validateDeclarationC(this).map(x => copy(inputSchema = x.inputSchema))
+      ValidationMetadataResolution.validateDeclarationC(this).map(x => copy(inputSchema = x.inputSchema, executionModes = x.executionModes))
   }
 
   final case class Origins(specification: Boolean, operation: Boolean)
@@ -47,7 +49,8 @@ object ValidationMetadataV1 {
     durationClass: DurationClass,
     executionRequirement: Option[ExecutionRequirement],
     origins: Origins,
-    inputSchema: Vector[ValidationInputsV1.Parameter] = Vector.empty
+    inputSchema: Vector[ValidationInputsV1.Parameter] = Vector.empty,
+    executionModes: Option[Set[String]] = None
   )
 
   def resolveC(

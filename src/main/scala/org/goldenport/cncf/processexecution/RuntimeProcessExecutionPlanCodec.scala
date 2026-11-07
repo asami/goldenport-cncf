@@ -197,7 +197,14 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
         }), "capability" -> Json.fromString(x.capability.print), "identity" -> Json.fromString(x.identity),
         "sbtExecutable" -> Json.fromString(x.sbtExecutable.toString), "limits" -> _limits_json(x.limits),
         "environment" -> Json.obj(x.environment.toVector.map { case (k, v) => k -> Json.fromString(v) }*))
-    if (x.operation == SbtOperation.TestOnly) base.mapObject(_.add("testClasses", _strings(x.testClasses))) else base
+    val classes = if (x.operation == SbtOperation.TestOnly) base.mapObject(_.add("testClasses", _strings(x.testClasses))) else base
+    val modes = x.validationMode.fold(classes)(mode => classes.mapObject(_.add("validationMode", Json.obj(
+      "modes" -> _strings(mode.modes.toVector.sorted), "provider" -> Json.fromString(mode.provider),
+      "livePrerequisites" -> _strings(mode.livePrerequisites)))))
+    val discovery = x.validationDiscovery.fold(modes)(binding => modes.mapObject(_.add("validationDiscovery", Json.obj(
+      "componentIdentity" -> Json.fromString(binding.componentIdentity), "artifactIdentity" -> Json.fromString(binding.artifactIdentity),
+      "artifactRevision" -> Json.fromString(binding.artifactRevision), "packagePrefix" -> Json.fromString(binding.packagePrefix)))))
+    if (x.discoveredTests) discovery.mapObject(_.add("discoveredTests", Json.True)) else discovery
   }
 
   private def _workspace(json: Json, gitroot: Boolean): Either[String, WorkspaceRuntimeDeclaration] = for {
@@ -228,7 +235,9 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
   private def _sbt_program(json: Json): Either[String, SbtRuntimeDeclaration] = for {
     operationtext <- json.hcursor.get[String]("operation").left.map(_ => "Invalid typed build operation")
     names = Set("target", "operation", "capability", "identity", "sbtExecutable", "limits", "environment") ++
-      (if (operationtext == "test-only") Set("testClasses") else Set.empty[String])
+      (if (operationtext == "test-only") Set("testClasses") else Set.empty[String]) ++
+      (if (json.asObject.exists(_.contains("validationMode"))) Set("validationMode") else Set.empty[String]) ++
+      Set("validationDiscovery", "discoveredTests").filter(name => json.asObject.exists(_.contains(name)))
     obj <- _fields(json, names)
     targettext <- _string(obj, "target")
     target <- _valid(WorkspaceId.parseC(targettext))
@@ -249,8 +258,35 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
     limits <- _decode_limits(obj("limits").get)
     environment <- _string_map(obj("environment").get)
     classes <- if (operation == SbtOperation.TestOnly) _string_array(obj, "testClasses") else Right(Vector.empty[String])
-    _ <- _valid(SbtTestSelectionPolicy.validateC(operation, classes))
-  } yield SbtRuntimeDeclaration(target, operation, capability, identity, executable, limits, environment, classes)
+    dynamic <- obj("discoveredTests") match {
+      case None => Right(false)
+      case Some(value) => value.asBoolean.filter(_ == true).toRight("discoveredTests must be absent or true")
+    }
+    _ <- if (dynamic && operation == SbtOperation.TestOnly && classes.isEmpty) Right(())
+      else _valid(SbtTestSelectionPolicy.validateC(operation, classes))
+    discovery <- obj("validationDiscovery") match {
+      case None => Right(None)
+      case Some(value) => for {
+        fields <- _fields(value, Set("componentIdentity", "artifactIdentity", "artifactRevision", "packagePrefix"))
+        component <- _string(fields, "componentIdentity")
+        artifact <- _string(fields, "artifactIdentity")
+        revision <- _string(fields, "artifactRevision")
+        prefix <- _string(fields, "packagePrefix")
+        binding <- _valid(SbtValidationDiscovery.Binding(component, artifact, revision, prefix).validateC)
+      } yield Some(binding)
+    }
+    mode <- obj("validationMode") match {
+      case None => Right(None)
+      case Some(value) => for {
+        fields <- _fields(value, Set("modes", "provider", "livePrerequisites"))
+        modes <- _string_array(fields, "modes")
+        provider <- _string(fields, "provider")
+        prerequisites <- _string_array(fields, "livePrerequisites")
+        binding <- _valid(SbtValidationMode.Binding(modes.toSet, provider, prerequisites).validateC)
+        _ <- Either.cond(modes == modes.distinct.sorted, (), "Noncanonical execution mode set")
+      } yield Some(binding)
+    }
+  } yield SbtRuntimeDeclaration(target, operation, capability, identity, executable, limits, environment, classes, mode, discovery, dynamic)
 
   private def _git_program(json: Json): Either[String, GitRuntimeDeclaration] = for {
     operationtext <- json.hcursor.get[String]("operation").left.map(_ => "Invalid typed Git operation")

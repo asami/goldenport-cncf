@@ -1,7 +1,7 @@
 # Per-test execution modes and build integration
 
 Decision date: 2026-11-02
-Status: adopted extension contract; ABI/annotation and execution implementation pending
+Status: adopted extension contract; bounded shared producer/consumer source connection authored on 2026-11-06; installed qualification pending
 Authorities: [validation metadata](validation-test-metadata.md),
 [standard test annotations](test-selection-standard-annotations.md),
 [runtime-mode behavior](runtime-mode-security-defaults.md)
@@ -55,9 +55,14 @@ a guard scenario can declare test and production and assert enabled behavior in
 test and disabled behavior in production. Test code owns those expected outcomes;
 neither build.sbt nor sm-workflow invents them or demands identical results.
 
-This is a planned metadata extension. The current V1 field list does not already
-expose this declaration. Freeze the concrete typed field, annotation/CML mapping
-and ABI version/required-semantics treatment in TM-01 before implementation.
+The V1 extension adds trailing optional `executionModes: Option[Set[String]]`
+to source `Declaration`, normalized `Metadata` and normalized CML `Properties`.
+A declaration must include `executionModes` in `requiredSemantics`; consumers
+that do not support that required semantic refuse it. Existing absent fields
+retain their original meaning. Existing Java specification/scenario annotations
+continue to name the same typed declaration providers; no annotation mode table
+is introduced. Resolution normalizes OperationMode aliases, preserves class
+inheritance and operation replacement, and rejects explicit empty requirements.
 Unsupported consumers must report unsupported required semantics, not ignore
 the modes, reinterpret them as arbitrary business parameters or claim acceptance.
 Preserve existing evidence and closed Phase 103 history.
@@ -111,3 +116,37 @@ universal four-mode suite replay, separate comparison ledger or live-provider
 call is needed merely to verify selection and dispatch.
 
 Delivery: [producer follow-up](../phase/test-execution-mode-plan.md).
+
+## Bounded implementation connection — 2026-11-06
+
+`ValidationOperationBindingV1.bindVariantsC` expands all required modes (ordinary
+absence defaults to develop) into exact TestOnly targets. A single `bindC`
+refuses multi-mode requirements rather than dropping variants. The current host
+plan optionally supplies `validationMode` on its existing TestOnly declaration:
+canonical supported `modes`, `provider` (`fixture` or `live`) and
+`livePrerequisites` (required names in the admitted environment). A live binding
+requires explicit prerequisites. An operation requiring the existing
+`external-service` execution capability also requires the live provider; a
+fixture binding cannot fulfill that variant.
+
+The existing immutable admitted task adds namespaced ScalaTest ConfigMap
+arguments; there is no caller command/environment override. The project fixture
+consumes the same ConfigMap in its normal `withFixture` path, initializes the
+application mode, and supplies its actual adapter choice to
+`ValidationExecutionModeV1.consumeC`. That child emits one exact structured
+mode observation. Selection, positive process termination and a configured mode
+alone do not establish actual mode/provider qualification. Missing, duplicate,
+foreign or conflicting observations produce an unverified outcome and preserve
+the process capture. The supported ConfigMap path also reaches forked ScalaTest
+JVMs; actual installed forked dispatch remains a qualification obligation.
+
+The subsequent bounded source continuation adds the normal producer-owned
+TestCompile export observation and exact batch connection described in
+[typed SBT execution](typed-sbt-execution.md). It derives discovery from actual
+products/full classpath and retains native candidate/build causation. Supplied
+current-tree fixtures remain narrower evidence. Connected normal/forked fixture
+specifications now author default develop, explicit test/demo/production and
+missing-live-prerequisite behavior; no nightly four-mode FULL matrix is added.
+Actual native execution, installed qualification, publication and Phase
+completion are not claimed. Individual case durations remain unknown, while
+actual batch elapsed time is preserved.
