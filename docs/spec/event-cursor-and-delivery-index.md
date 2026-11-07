@@ -74,7 +74,7 @@ The scalar encoding/constructor ABI is now admitted for the bounded codecs
 described below, grounded in producer source and the consumed jar. Runtime
 integration remains a separate gate; decoded identities grant no execution.
 
-## Delivery-index record: cncf.event-delivery-index.v1
+## Delivery-index record and exact-key lookup
 
 Only new persistent facts with an explicit committed-delivery key create a
 delivery-index row. Key-free persistent events use the event collection's
@@ -82,21 +82,17 @@ EventId identity and need no delivery-discriminator index. Transient events
 create neither index nor event row. The index is a deduplication lookup, not
 a delivered/acknowledged flag or an exactly-once dispatch receipt.
 
-Logical index fields:
-- index_schema: exact cncf.event-delivery-index.v1.
-- lookup_key: exact canonical structural delivery-key storage bytes.
-- event_reference: exact typed issued EventId components.
-- sequence: canonical positive decimal Long text.
-- event_body_digest: SHA-256 of the complete canonical stored event envelope.
+The agreed identity contract uses the issued EventId. A delivery key resolves
+to that EventId by complete canonical key equality. Each key maps to at most
+one EventId, including concurrent retries. Verify the referenced event,
+sequence and intrinsic key within the same snapshot. Event and index writes
+remain atomic with the cursor. Neither an index address nor a body diagnostic
+requires a computed digest.
 
-The bounded index entry identity is a fixed schema-domain prefix and lowercase
-SHA-256 of canonical lookup_key bytes. Hashes are lookup accelerators, never
-identity/permission proof. On load, compare full lookup_key bytes; a digest
-collision or mismatch fails closed rather than aliasing another key. Then load
-the referenced event from the same provider and require exact EventId, sequence,
-key and body digest. Dangling/mismatched rows reject; no repair, overwrite or
-sequence reuse is implied. Index writes are Create-only in the same transaction
-as cursor/Workflow updates and their event Creates.
+The storage schema, physical index and migration procedure remain design
+questions. The migration must preserve previously recorded key-to-EventId
+mappings and duplicate detection across cutover. The dated progress records
+below describe earlier implementation behavior.
 
 ## Duplicate classification and transaction boundary
 
@@ -146,7 +142,7 @@ Required executable specs before activation:
   field order and unsupported constituent; V1 retains its rejection behavior.
 - V2 key absence/presence, exact prefixes and corrupt/unknown bytes; no lossy key
   copy; catalog/authority cannot be inferred from decoded declarations.
-- Index exact key/digest/reference/sequence matching, simulated hash collision,
+- Index exact key, EventId reference and sequence matching, legacy-address lookup,
   dangling row rejection and no index for transient/key-free events.
 - EventId-first and key-first lookup paths, batch-local duplicates, divergent
   identity/key indexes, retained-first payload and no extra sequence/index alias.
