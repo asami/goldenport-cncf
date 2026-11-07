@@ -195,3 +195,22 @@ ScalaDocの同梱は既存の契約であるため、容量対策として無断
 - 今後の実施結果は、修正したファイル、実際の検証範囲、選択されたSNAPSHOT、
   回収結果、退避先の削除結果を区別して追記する。既存のPhase完了を今回の検証結果へ
   読み替えない。
+
+## 後続実装の引継ぎ
+
+CARの解決済みrepository/coordinateをmanaged selectionへ渡す変更と、
+既知の旧入力を明示指定するowner APIを追加した。旧currentの自動統合は行わない。
+対象pathを`inspectLegacyCurrentC`で確認し、返されたkeyとgenerationを指定して
+`retireLegacyCurrentC`をdry-runし、競合・不一致なら再確認する。apply後の
+回収は既存のbounded `collectC`で行う。詳細は仕様と設計を参照。
+
+回帰仕様は追加したが、この記録時点ではnative fix-check/testは未実行。
+実cacheの参照変更・回収、SNAPSHOT発行、利用側の選択確認、退避先の整理も
+未実施であり、後続の所有者へ引き継ぐ。Phase 116の履歴は変更しない。
+
+操作入口は `cncf cache inspect --root PATH`、`cncf cache collect --root PATH`、
+`cncf cache legacy-inspect --root PATH --kind car --archive PATH`、
+`cncf cache legacy-retire --root PATH --kind car --key KEY --generation DIGEST`。
+collectとretireは既定でdry-run、実行には`--apply`が必要。collectの継続は
+`--apply --batches N`で同じownerの中で最大128回まで行う。対象と期待世代を
+毎回確認し、不一致や使用中の拒否は再確認後に再試行する。

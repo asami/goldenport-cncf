@@ -415,3 +415,28 @@ aliases. Preserve historical receipts and reusable failure scenarios. Existing o
 reservation files are not grounds to reject a healthy cache, but this revision
 does not authorize deleting live old-process records/locks or sweeping the cache.
 See the [CC-04 adoption handoff](../journal/2026/10/2026-10-22-phase116-cache-simplification-handoff.md).
+
+## 2026-11-07 logical CAR selection and legacy handoff
+
+A resolved CAR carries its repository identity and resolved component/release
+coordinate from the existing resolver into managed selection. Standard remote
+repositories use their selected base URL; local repository resolution uses the
+selected base directory. Explicit file inputs keep URI identity. This changes no
+content generation, lease or admission rules.
+Flat repository discovery rejects multiple CAR files for the same canonical
+component/release before acquiring components. The resolver does not infer a
+newest archive from their names, timestamps or contents. Operators publish one
+selected archive per coordinate or choose a distinct archive as an explicit file.
+
+Legacy aliases are not merged by descriptor or filename. The existing owner can
+inspect one known old input, compare its key and source generation, and dry-run
+or apply explicit retirement under coordinate then nonblocking source/tree
+exclusion. Pointer mismatch and active use refuse the operation. Retirement
+leaves actual reclamation to bounded collection and its complete reference checks.
+It never removes stable lock files or the original caller input.
+
+The `cncf cache` entry requires an explicit root and delegates to that owner.
+It defaults to dry-run for collection and retirement, requires an expected
+key and generation for retirement, and reports refusal through its exit status.
+Applied collection can continue at most 128 bounded batches in one owner lifetime;
+no implicit scan or automatic legacy alias migration is introduced.

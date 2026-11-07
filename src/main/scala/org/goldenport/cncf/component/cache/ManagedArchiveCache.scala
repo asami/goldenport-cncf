@@ -237,18 +237,22 @@ final class ManagedArchiveCache private[cache] (
     throw CacheFailure(CacheFailure.Reason.ContentionExceeded, "publish-source", generation.key)
   }
 
-  def acquireCarC(archive: Path): Consequence[ExtractionLease[CarExtracted]] =
-    _acquire_selected(archive, ArchiveKind.Car, CarExtractor.resolveDirectory,
+  def acquireCarC(archive: Path): Consequence[ExtractionLease[CarExtracted]] = acquireCarC(archive, None)
+
+  private[cncf] def acquireCarC(archive: Path, identity: Option[(String, String)]): Consequence[ExtractionLease[CarExtracted]] =
+    _acquire_selected(archive, ArchiveKind.Car, identity, CarExtractor.resolveDirectory,
       (source, tree, reserve) => CarExtractor.extractToC(source, tree, reserve))
 
   def acquireSarC(archive: Path): Consequence[ExtractionLease[SarExtracted]] =
-    _acquire_selected(archive, ArchiveKind.Sar, SarExtractor.resolveDirectory,
+    _acquire_selected(archive, ArchiveKind.Sar, None, SarExtractor.resolveDirectory,
       (source, tree, reserve) => SarExtractor.extractToC(source, tree, reserve))
 
-  private def _acquire_selected[A](archive: Path, kind: ArchiveKind,
+  private def _acquire_selected[A](archive: Path, kind: ArchiveKind, identity: Option[(String, String)],
     resolve: Path => Consequence[A], extract: (Path, Path, Long => Unit) => Consequence[A]
   ): Consequence[ExtractionLease[A]] = Consequence {
-    val coordinate = _selection.coordinate(archive, kind)
+    val coordinate = identity.map { case (repository, resolved) =>
+      _selection.repositoryCoordinate(repository, resolved, kind)
+    }.getOrElse(_selection.coordinate(archive, kind))
     var expected = _selection.observe(coordinate)
     var reselect = false
     var attempts = 0
@@ -366,9 +370,10 @@ final class ManagedArchiveCache private[cache] (
     */
   private[cncf] def withRetainedCarC[A](
     archive: Path,
-    register: AutoCloseable => Consequence[Unit]
+    register: AutoCloseable => Consequence[Unit],
+    identity: Option[(String, String)] = None
   )(use: CarExtracted => Consequence[A]): Consequence[A] =
-    _with_retained(acquireCarC(archive), register)(use)
+    _with_retained(acquireCarC(archive, identity), register)(use)
 
   private def _with_retained[A, B](acquired: Consequence[ExtractionLease[A]],
     register: AutoCloseable => Consequence[Unit]
@@ -418,6 +423,19 @@ final class ManagedArchiveCache private[cache] (
       _remove_payload(directory)
     })
   }
+
+  /** Inspect one known old input path, without scanning or changing the cache. */
+  def inspectLegacyCurrentC(archive: Path, kind: ArchiveKind): Consequence[Option[(String, SourceGeneration)]] =
+    Consequence {
+      val key = _selection.coordinate(archive, kind)
+      _selection.observe(key).map(value => key -> value.source)
+    }
+
+  /** Compare one explicitly selected legacy pointer before retirement. Active
+    * source or extraction leases and mismatched generations cause a safe refusal.
+    */
+  def retireLegacyCurrentC(coordinateKey: String, expected: SourceGeneration, dryRun: Boolean = true): Consequence[Boolean] =
+    Consequence { _selection.retireCurrent(coordinateKey, expected, dryRun) }
 
   /** Physical totals cover only the returned bounded candidates. */
   def inspectC(): Consequence[CacheInspection] = Consequence {

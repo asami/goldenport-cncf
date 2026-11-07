@@ -22,6 +22,38 @@ private[cache] final class ManagedGenerationSelection(root: Path, policy: Manage
     MessageDigest.getInstance("SHA-256").digest(bytes).map(value => f"${value & 0xff}%02x").mkString
   }
 
+  def repositoryCoordinate(repository: String, coordinate: String, kind: ArchiveKind): String = {
+    require(repository.nonEmpty && coordinate.nonEmpty, "repository and coordinate must be nonempty")
+    val value = s"repository:${kind.directory}:${repository.length}:$repository:$coordinate"
+    MessageDigest.getInstance("SHA-256").digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+      .map(value => f"${value & 0xff}%02x").mkString
+  }
+
+  /** Explicit compare-and-retire. No unknown alias is inferred or swept. */
+  def retireCurrent(key: String, expected: SourceGeneration, dryRun: Boolean): Boolean = {
+    require(key.matches("[0-9a-f]{64}"), "invalid coordinate key")
+    val coordinate = ManagedCacheLocks.tryAcquire(_coordinate_lock(key), false)
+    if (coordinate.isEmpty) false
+    else try {
+      if (!_read(key).exists(_.source == expected)) false
+      else {
+        val source = ManagedCacheLocks.tryAcquire(_generation_lock(expected.key), false)
+        if (source.isEmpty) false
+        else try {
+          val tree = ManagedCacheLocks.tryAcquire(_generation_lock(ExtractionGeneration(expected).key), false)
+          if (tree.isEmpty) false
+          else try {
+            if (!dryRun) {
+              markRetired(expected)
+              Files.delete(_current(key))
+            }
+            true
+          } finally tree.get.close()
+        } finally source.get.close()
+      }
+    } finally coordinate.get.close()
+  }
+
   private def _coordinate_lock(key: String): Path = root.resolve("locks/coordinates").resolve(key + ".lock")
   private def _generation_lock(key: String): Path = root.resolve("locks/generations").resolve(key + ".lock")
   private def _current(key: String): Path = root.resolve("metadata/coordinates").resolve(key).resolve("current.json")
