@@ -30,13 +30,71 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Oct. 21, 2026
  *  version Oct. 29, 2026
  *  version Oct. 31, 2026
- * @version Nov.  3, 2026
+ * @version Nov.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkspaceFileExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _id = WorkspaceId.parseC("project").toOption.get
   private val _target = FileTarget(_id)
   private val _owner = ComponentId("org.goldenport.spec.FileOwner")
+
+  "Explicit File policies" should {
+    "bound identity, gzip and UTF-8 independently of generic reads and writes" in {
+      Given("a two-byte generic cap and complete files at and over a four-byte selected cap")
+      _with_root { root =>
+        val exact = "éé".getBytes(StandardCharsets.UTF_8).toVector
+        Files.write(root.resolve("exact"), exact.toArray)
+        Files.write(root.resolve("excess"), (exact :+ 10.toByte).toArray)
+        Files.write(root.resolve("invalid"), Array(0xc3.toByte, 0x28.toByte))
+        Files.write(root.resolve("exact.gz"), _gzip(exact).toArray)
+        Files.write(root.resolve("excess.gz"), _gzip(Vector.fill[Byte](100)(42)).toArray)
+        Files.write(root.resolve("equal-expanded.gz"), _gzip(Vector.fill[Byte](24)(42)).toArray)
+        Files.write(root.resolve("over-expanded.gz"), _gzip(Vector.fill[Byte](25)(42)).toArray)
+        val context = _context(root, cap = 2)
+        val read = FileReadPolicy(ResourceReadLimits(4))
+        val gzipread = FileReadPolicy(ResourceReadLimits(_gzip(exact).size))
+        val write = FileWritePolicy(ResourceReadLimits(4))
+        When("the adapter applies explicitly selected budgets")
+        val text = WorkspaceFileExecution.readTextC(context, _target, _path("exact"), read)
+        val overflow = WorkspaceFileExecution.readTextC(context, _target, _path("excess"), read)
+        val invalid = WorkspaceFileExecution.readTextC(context, _target, _path("invalid"), read)
+        val bytes = WorkspaceFileExecution.readBytesC(context, _target, _path("exact"), FileRepresentation.Identity, read)
+        val zipped = WorkspaceFileExecution.readBytesC(context, _target, _path("exact.gz"), FileRepresentation.Gzip, gzipread)
+        val expandedover = WorkspaceFileExecution.readBytesC(context, _target, _path("excess.gz"), FileRepresentation.Gzip,
+          FileReadPolicy(ResourceReadLimits(50)))
+        val equalexpanded = WorkspaceFileExecution.readBytesC(context, _target, _path("equal-expanded.gz"),
+          FileRepresentation.Gzip, FileReadPolicy(ResourceReadLimits(24)))
+        val overexpanded = WorkspaceFileExecution.readBytesC(context, _target, _path("over-expanded.gz"),
+          FileRepresentation.Gzip, FileReadPolicy(ResourceReadLimits(24)))
+        val bytewrite = WorkspaceFileExecution.writeBytesC(context, _target, _path("bytes"), exact,
+          FileRepresentation.Identity, write)
+        val byteoverflow = WorkspaceFileExecution.writeBytesC(context, _target, _path("bytes-over"), exact :+ 1.toByte,
+          FileRepresentation.Identity, write)
+        val nullpolicy = WorkspaceFileExecution.readTextC(context, _target, _path("exact"), null)
+        val created = WorkspaceFileExecution.writeTextC(context, _target, _path("created"), "éé", FileWriteMode.CreateNew, write)
+        val conflict = WorkspaceFileExecution.writeTextC(context, _target, _path("created"), "éé", FileWriteMode.CreateNew, write)
+        val oversized = WorkspaceFileExecution.writeTextC(context, _target, _path("large"), "éé!", FileWriteMode.CreateNew, write)
+        val update = WorkspaceFileExecution.writeTextC(context, _target, _path("created"), "ok", FileWriteMode.UpdateExisting("éé"), write)
+        Then("complete data succeeds, malformed and over-limit operations fail, and write policy does not lift update reads")
+        text.toOption.get.text shouldBe Some("éé")
+        bytes.toOption.get.bytes shouldBe Some(exact)
+        zipped.toOption.get.bytes shouldBe Some(exact)
+        Vector(overflow, invalid).foreach(_.isFaillure shouldBe true)
+        expandedover.isFaillure shouldBe true
+        equalexpanded.toOption.get.bytes shouldBe Some(Vector.fill[Byte](24)(42))
+        overexpanded.isFaillure shouldBe true
+        bytewrite.toOption.get.outcome shouldBe FileWriteOutcome.Created
+        byteoverflow.isFaillure shouldBe true
+        nullpolicy.isFaillure shouldBe true
+        WorkspaceFileExecution.readTextC(context, _target, _path("exact")).isFaillure shouldBe true
+        created.toOption.get.outcome shouldBe FileWriteOutcome.Created
+        conflict.toOption.get.outcome shouldBe FileWriteOutcome.Conflict(FileWriteConflict.AlreadyExists)
+        oversized.isFaillure shouldBe true
+        update.isFaillure shouldBe true
+        Files.readString(root.resolve("created")) shouldBe "éé"
+      }
+    }
+  }
 
   "Resolved common File byte policy" should {
     "accept exact read and write quantities and reject excess through the real File UoW" in {

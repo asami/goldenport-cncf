@@ -17,7 +17,7 @@ import org.goldenport.cncf.processexecution.{RuntimeProcessExecutionPlan, Runtim
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkEffectClass, UnitOfWorkInterpreter, UnitOfWorkOp, UnitOfWorkProgramRecorder, UnitOfWorkProgramStubProvider}
 import org.goldenport.cncf.workspace.*
-import org.goldenport.cncf.resource.{ResourceTreeSelection, ResourceTreeQueryLimits}
+import org.goldenport.cncf.resource.{ResourceReadLimits, ResourceTreeSelection, ResourceTreeQueryLimits}
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.protocol.Protocol
 import org.scalatest.GivenWhenThen
@@ -28,7 +28,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Oct. 15, 2026
  *  version Oct. 21, 2026
  *  version Oct. 29, 2026
- * @version Nov.  5, 2026
+ * @version Nov.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class FileExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -38,6 +38,90 @@ final class FileExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhe
   private val _id = WorkspaceId.parseC("project").toOption.get
   private val _target = FileTarget(_id)
   private val _path = WorkspaceFilePath.parseC("message\n\\.txt").toOption.get
+
+  "Purpose-specific File budgets" should {
+    "acquire a complete large artifact while both ordinary limits remain in force" in {
+      Given("ReadOnly workspaces with 1 MiB and 16 MiB generic limits and one 37.5 MiB artifact")
+      val small = _fixture(permission = WorkspacePermission.ReadOnly, cap = 1024 * 1024)
+      val large = _fixture(permission = WorkspacePermission.ReadOnly, cap = 16 * 1024 * 1024)
+      try {
+        val payload = Array.fill[Byte](375 * 1024 * 1024 / 10)(42)
+        Files.write(small.checkout.resolve(_path.value), payload)
+        Files.write(large.checkout.resolve(_path.value), payload)
+        val behavior = new FileDslBehavior(Behavior.Core(small.context, None, None))
+        val policy = FileReadPolicy(ResourceReadLimits(64 * 1024 * 1024))
+        val first = new UnitOfWorkInterpreter(new UnitOfWork(small.context))
+        val second = new UnitOfWorkInterpreter(new UnitOfWork(large.context))
+        When("both owning interpreters execute ordinary reads and the latter executes a selected read")
+        val ordinary = Vector(first, second).map(_.run(behavior.readBytes(_target, _path, FileRepresentation.Identity)))
+        val selected = second.run(behavior.readBytes(_target, _path, FileRepresentation.Identity, policy))
+        val denied = second.run(behavior.write(_target, _path, "new", FileWriteMode.CreateNew,
+          FileWritePolicy(ResourceReadLimits(64 * 1024 * 1024))))
+        Then("both ordinary reads fail, the selected payload is complete and no write grant is inferred")
+        ordinary.foreach(_.isFaillure shouldBe true)
+        selected.toOption.get.bytes.get.toArray.toVector shouldBe payload.toVector
+        selected.toOption.get.effect.kind shouldBe ExternalEffectKind.FileRead
+        denied.isFaillure shouldBe true
+      } finally { _close(large); _close(small) }
+    }
+
+    "interpret all explicit budgeted operations and keep read and write capacity independent" in {
+      Given("a Manage workspace with four-byte generic limits and separately selected budgets")
+      val fixture = _fixture(cap = 4)
+      try {
+        val behavior = new FileDslBehavior(Behavior.Core(fixture.context, None, None))
+        val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(fixture.context))
+        val read = FileReadPolicy(ResourceReadLimits(64))
+        val write = FileWritePolicy(ResourceReadLimits(64))
+        val textpath = WorkspaceFilePath.parseC("text").toOption.get
+        val gzipath = WorkspaceFilePath.parseC("bytes.gz").toOption.get
+        val genericpath = WorkspaceFilePath.parseC("generic").toOption.get
+        val bytes = "expanded payload".getBytes(StandardCharsets.UTF_8).toVector
+        Files.writeString(fixture.checkout.resolve(textpath.value), "long text", StandardCharsets.UTF_8)
+        When("the actual UoW reads with a selected policy and executes independently chosen writes")
+        val text = interpreter.run(behavior.read(_target, textpath, read))
+        val denied = interpreter.run(behavior.write(_target, genericpath, "long text", FileWriteMode.CreateNew))
+        val written = interpreter.run(behavior.write(_target, genericpath, "long text", FileWriteMode.CreateNew, write))
+        val compressed = interpreter.run(behavior.writeBytes(_target, gzipath, bytes, FileRepresentation.Gzip, write))
+        val expanded = interpreter.run(behavior.readBytes(_target, gzipath, FileRepresentation.Gzip, read))
+        Then("only explicitly selected write capacity permits larger output and all typed results carry actual effects")
+        text.toOption.get.text shouldBe Some("long text")
+        text.toOption.get.effect.kind shouldBe ExternalEffectKind.FileRead
+        denied.isFaillure shouldBe true
+        written.toOption.get.outcome shouldBe FileWriteOutcome.Created
+        written.toOption.get.effect.kind shouldBe ExternalEffectKind.FileWrite
+        compressed.toOption.get.outcome shouldBe FileWriteOutcome.Created
+        compressed.toOption.get.effect.kind shouldBe ExternalEffectKind.FileWrite
+        expanded.toOption.get.bytes shouldBe Some(bytes)
+        expanded.toOption.get.effect.kind shouldBe ExternalEffectKind.FileRead
+        Files.readString(fixture.checkout.resolve(genericpath.value), StandardCharsets.UTF_8) shouldBe "long text"
+      } finally _close(fixture)
+    }
+
+    "record budgeted File operations as distinct external occurrences" in {
+      Given("an unconfigured behavior and explicit independent policies")
+      val behavior = new FileDslBehavior(Behavior.Core(ExecutionContext.create(), None, None))
+      val readpolicy = FileReadPolicy(ResourceReadLimits(8))
+      val writepolicy = FileWritePolicy(ResourceReadLimits(4))
+      val provider = new UnitOfWorkProgramStubProvider {
+        def resultFor[A](ordinal: Int, operation: UnitOfWorkOp[A]): Consequence[A] = operation match {
+          case UnitOfWorkOp.FileReadTextWithPolicy(_, _, _) => Consequence.success(FileReadTextResult(_target, _path, None))
+          case UnitOfWorkOp.FileWriteTextWithPolicy(_, _, _, _, _) => Consequence.success(FileWriteTextResult(_target, _path, FileWriteOutcome.Created))
+          case _ => Consequence.notImplemented("unexpected File operation")
+        }
+      }
+      When("the two intents are recorded")
+      val recording = UnitOfWorkProgramRecorder.record(for {
+        read <- behavior.read(_target, _path, readpolicy)
+        write <- behavior.write(_target, _path, "text", FileWriteMode.CreateNew, writepolicy)
+      } yield (read, write), provider)
+      Then("the policies survive and each operation remains external")
+      recording.occurrences.map(_.operation) shouldBe Vector(
+        UnitOfWorkOp.FileReadTextWithPolicy(_target, _path, readpolicy),
+        UnitOfWorkOp.FileWriteTextWithPolicy(_target, _path, "text", FileWriteMode.CreateNew, writepolicy))
+      recording.occurrences.map(_.effectClass) shouldBe Vector.fill(2)(UnitOfWorkEffectClass.External)
+    }
+  }
 
   "Typed File DSL under the owning UoW" should {
     "read selected snapshot bytes from the actual interpreting UoW rather than the construction workspace" in {
@@ -447,6 +531,13 @@ private final class FileDslBehavior(val behaviorCore: Behavior.Core) extends Beh
     file_write_bytes(target, path, bytes, representation)
   def readBytes(target: FileTarget, path: WorkspaceFilePath, representation: FileRepresentation) =
     file_read_bytes(target, path, representation)
+  def writeBytes(target: FileTarget, path: WorkspaceFilePath, bytes: Vector[Byte], representation: FileRepresentation, policy: FileWritePolicy) =
+    file_write_bytes(target, path, bytes, representation, policy)
+  def readBytes(target: FileTarget, path: WorkspaceFilePath, representation: FileRepresentation, policy: FileReadPolicy) =
+    file_read_bytes(target, path, representation, policy)
+  def read(target: FileTarget, path: WorkspaceFilePath, policy: FileReadPolicy) = file_read_text(target, path, policy)
+  def write(target: FileTarget, path: WorkspaceFilePath, text: String, mode: FileWriteMode, policy: FileWritePolicy) =
+    file_write_text(target, path, text, mode, policy)
   def read(target: FileTarget, path: WorkspaceFilePath) = file_read_text(target, path)
   def write(target: FileTarget, path: WorkspaceFilePath, text: String, mode: FileWriteMode) = file_write_text(target, path, text, mode)
 }

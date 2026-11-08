@@ -2,8 +2,8 @@ package org.goldenport.cncf.unitofwork
 
 import org.scalacheck.{Gen, Prop, Test}
 import org.goldenport.cncf.processexecution.{GitOperation, GitTarget, SbtOperation, SbtTarget}
-import org.goldenport.cncf.workspace.{FileRepresentation, FileTarget, FileWriteMode, WorkspaceFilePath, WorkspaceId}
-import org.goldenport.cncf.resource.ResourceTreeSelection
+import org.goldenport.cncf.workspace.{FileReadPolicy, FileWritePolicy, FileRepresentation, FileTarget, FileWriteMode, WorkspaceFilePath, WorkspaceId}
+import org.goldenport.cncf.resource.{ResourceReadLimits, ResourceTreeSelection}
 import org.goldenport.cncf.workflow.{CompletionContract, ContextBundle, ContextContract, ContextSnapshot, EvidenceContract, ProviderExecutionRequest, StateMachineOperationIdentity, StateMachineProvidedApiRequest, StateMachineRequiredOperation, StateMachineRequiredOperationIdentity, StateMachineRequiredOperationMetadata, StateMachineRunIdentity}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -15,7 +15,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Sep.  8, 2026
  *  version Sep. 28, 2026
  *  version Oct. 27, 2026
- * @version Oct. 29, 2026
+ *  version Oct. 29, 2026
+ * @version Nov.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkProgramPlanningSpec
@@ -75,6 +76,33 @@ final class UnitOfWorkProgramPlanningSpec
   )
 
   "UnitOfWorkProgramPlanner" should {
+    "keep every budgeted File occurrence as an external boundary" in {
+      Given("all four budgeted File intents and repeated writes amid local and control operations")
+      val target = FileTarget(WorkspaceId.parseC("planning").toOption.get)
+      val path = WorkspaceFilePath.parseC("private/path").toOption.get
+      val read = FileReadPolicy(ResourceReadLimits(64))
+      val write = FileWritePolicy(ResourceReadLimits(32))
+      val bytes = Vector[Byte](4, 5, 6)
+      val writetext = UnitOfWorkOp.FileWriteTextWithPolicy(target, path, "private replacement", FileWriteMode.CreateNew, write)
+      val writebytes = UnitOfWorkOp.FileWriteBytesWithPolicy(target, path, bytes, FileRepresentation.Gzip, write)
+      val operations = Vector(_local, _control, UnitOfWorkOp.FileReadTextWithPolicy(target, path, read),
+        UnitOfWorkOp.FileReadBytesWithPolicy(target, path, FileRepresentation.Gzip, read),
+        writetext, writetext, writebytes, writebytes, _control, _local)
+      When("the planner classifies the original ordered intents")
+      val plan = UnitOfWorkProgramPlanner.plan(operations)
+      Then("every external occurrence has its own ordinal and segment without payload disclosure")
+      plan.occurrences.map(_.operation) shouldBe operations
+      plan.occurrences.map(_.ordinal) shouldBe operations.indices.toVector
+      plan.occurrences.map(_.effectClass) shouldBe Vector(UnitOfWorkEffectClass.Local, UnitOfWorkEffectClass.Control) ++
+        Vector.fill(6)(UnitOfWorkEffectClass.External) ++ Vector(UnitOfWorkEffectClass.Control, UnitOfWorkEffectClass.Local)
+      plan.segments shouldBe Vector(UnitOfWorkPlanSegment.LocalAtomic(plan.occurrences.take(2))) ++
+        plan.occurrences.slice(2, 8).map(UnitOfWorkPlanSegment.ExternalBoundary.apply) ++
+        Vector(UnitOfWorkPlanSegment.LocalAtomic(plan.occurrences.drop(8)))
+      plan.occurrences.mkString should not include "private replacement"
+      plan.occurrences.mkString should not include "private/path"
+      plan.occurrences.mkString should not include bytes.toString
+    }
+
     "classify each selected workspace snapshot as an external File read boundary" in {
       Given("equal typed snapshot intents surrounded by local work")
       val target = FileTarget(WorkspaceId.parseC("snapshot-planning").toOption.get)

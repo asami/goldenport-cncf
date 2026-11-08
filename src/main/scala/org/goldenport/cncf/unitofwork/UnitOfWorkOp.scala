@@ -26,7 +26,7 @@ import org.goldenport.cncf.operation.evaluation.OperationEvaluationSupplementalI
 import org.goldenport.cncf.oauth.OAuthConnectionRequest
 import org.goldenport.cncf.workflow.{ActionExecution, ProviderExecutionRequest, StateMachineProvidedApiRequest}
 import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
-import org.goldenport.cncf.workspace.{FileSnapshotLimits, FileReadSnapshotResult, FilePrepareDirectoryResult, FileReadBytesResult, FileReadTextResult, FileRepresentation, FileTarget, FileWriteBytesResult, FileWriteMode, FileWriteTextResult, WorkspaceFilePath}
+import org.goldenport.cncf.workspace.{FileReadPolicy, FileWritePolicy, FileSnapshotLimits, FileReadSnapshotResult, FilePrepareDirectoryResult, FileReadBytesResult, FileReadTextResult, FileRepresentation, FileTarget, FileWriteBytesResult, FileWriteMode, FileWriteTextResult, WorkspaceFilePath}
 
 import org.goldenport.cncf.resource.{ResourceTreeSelection, ResourceTreeQueryLimits}
 
@@ -46,7 +46,8 @@ import org.goldenport.cncf.resource.{ResourceTreeSelection, ResourceTreeQueryLim
  *  version May.  4, 2026
  *  version Jul. 26, 2026
  *  version Oct. 27, 2026
- * @version Oct. 29, 2026
+ *  version Oct. 29, 2026
+ * @version Nov.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -217,6 +218,26 @@ object UnitOfWorkOp {
     mode: FileWriteMode
   ) extends UnitOfWorkOp[FileWriteTextResult] {
     override def toString: String = s"FileWriteText($target,FileWrite)"
+  }
+
+  final case class FileReadBytesWithPolicy(target: FileTarget, path: WorkspaceFilePath,
+    representation: FileRepresentation, policy: FileReadPolicy) extends UnitOfWorkOp[FileReadBytesResult] {
+    override def toString: String = s"FileReadBytesWithPolicy($target,$representation,FileRead)"
+  }
+
+  final case class FileReadTextWithPolicy(target: FileTarget, path: WorkspaceFilePath,
+    policy: FileReadPolicy) extends UnitOfWorkOp[FileReadTextResult] {
+    override def toString: String = s"FileReadTextWithPolicy($target,FileRead)"
+  }
+
+  final case class FileWriteBytesWithPolicy(target: FileTarget, path: WorkspaceFilePath, bytes: Vector[Byte],
+    representation: FileRepresentation, policy: FileWritePolicy) extends UnitOfWorkOp[FileWriteBytesResult] {
+    override def toString: String = s"FileWriteBytesWithPolicy($target,$representation,FileWrite)"
+  }
+
+  final case class FileWriteTextWithPolicy(target: FileTarget, path: WorkspaceFilePath, text: String,
+    mode: FileWriteMode, policy: FileWritePolicy) extends UnitOfWorkOp[FileWriteTextResult] {
+    override def toString: String = s"FileWriteTextWithPolicy($target,FileWrite)"
   }
 
   // ------------------------------------------------------------

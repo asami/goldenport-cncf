@@ -19,7 +19,7 @@ import org.goldenport.cncf.resource.{ResourceReadAcquisition, ResourceReadLimits
  *  version Oct. 21, 2026
  *  version Oct. 29, 2026
  *  version Oct. 31, 2026
- * @version Nov.  3, 2026
+ * @version Nov.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class FileTarget(workspaceId: WorkspaceId)
@@ -40,6 +40,15 @@ final case class FileReadSnapshotResult(target: FileTarget, selection: ResourceT
   def totalByteSize: Long = entries.foldLeft(0L)(_ + _.byteSize)
   def effect: ExternalEffect = ExternalEffect(ExternalEffectKind.FileRead, target.workspaceId)
   override def toString: String = s"FileReadSnapshotResult($target,FileRead)"
+}
+
+/** Explicit finite budgets carry no workspace authority. */
+final case class FileReadPolicy(limits: ResourceReadLimits) {
+  require(limits != null, "File read limits are required")
+}
+
+final case class FileWritePolicy(limits: ResourceReadLimits) {
+  require(limits != null, "File write limits are required")
 }
 
 enum FileRepresentation {
@@ -161,8 +170,17 @@ private[cncf] object WorkspaceFileExecution {
     target: FileTarget,
     path: WorkspaceFilePath,
     representation: FileRepresentation
-  ): Consequence[FileReadBytesResult] =
-    _admit_c(context, target, path, WorkspacePermission.ReadOnly).flatMap { case (binding, limits, validpath) =>
+  ): Consequence[FileReadBytesResult] = _read_bytes_with_policy_c(context, target, path, representation, None)
+
+  def readBytesC(context: ExecutionContext, target: FileTarget, path: WorkspaceFilePath,
+    representation: FileRepresentation, policy: FileReadPolicy): Consequence[FileReadBytesResult] =
+    if (policy == null || policy.limits == null) _invalid_intent_c
+    else _read_bytes_with_policy_c(context, target, path, representation, Some(policy))
+
+  private def _read_bytes_with_policy_c(context: ExecutionContext, target: FileTarget, path: WorkspaceFilePath,
+    representation: FileRepresentation, policy: Option[FileReadPolicy]): Consequence[FileReadBytesResult] =
+    _admit_c(context, target, path, WorkspacePermission.ReadOnly).flatMap { case (binding, genericlimits, validpath) =>
+      val limits = policy.map(_.limits).getOrElse(genericlimits)
       if (representation == null) _invalid_intent_c
       else _guard_c {
         for {
@@ -186,11 +204,20 @@ private[cncf] object WorkspaceFileExecution {
     path: WorkspaceFilePath,
     bytes: Vector[Byte],
     representation: FileRepresentation
-  ): Consequence[FileWriteBytesResult] =
+  ): Consequence[FileWriteBytesResult] = _write_bytes_with_policy_c(context, target, path, bytes, representation, None)
+
+  def writeBytesC(context: ExecutionContext, target: FileTarget, path: WorkspaceFilePath, bytes: Vector[Byte],
+    representation: FileRepresentation, policy: FileWritePolicy): Consequence[FileWriteBytesResult] =
+    if (policy == null || policy.limits == null) _invalid_intent_c
+    else _write_bytes_with_policy_c(context, target, path, bytes, representation, Some(policy))
+
+  private def _write_bytes_with_policy_c(context: ExecutionContext, target: FileTarget, path: WorkspaceFilePath,
+    bytes: Vector[Byte], representation: FileRepresentation, policy: Option[FileWritePolicy]): Consequence[FileWriteBytesResult] =
     for {
       admitted <- _admit_c(context, target, path, WorkspacePermission.Manage)
       (binding, _, validpath) = admitted
-      limits <- context.resourceWriteLimitsC
+      genericlimits <- context.resourceWriteLimitsC
+      limits = policy.map(_.limits).getOrElse(genericlimits)
       _ <- if (bytes == null || representation == null) _invalid_intent_c[Unit]
         else if (bytes.size > limits.maximumBytes) _overflow_c[Unit]
         else if (representation == FileRepresentation.Gzip && limits.maximumBytes < 20) _overflow_c[Unit]
@@ -215,7 +242,17 @@ private[cncf] object WorkspaceFileExecution {
     } yield FileWriteBytesResult(target, validpath, representation, outcome)
 
   def readTextC(context: ExecutionContext, target: FileTarget, path: WorkspaceFilePath): Consequence[FileReadTextResult] =
-    _admit_c(context, target, path, WorkspacePermission.ReadOnly).flatMap { case (binding, limits, validpath) =>
+    _read_text_with_policy_c(context, target, path, None)
+
+  def readTextC(context: ExecutionContext, target: FileTarget, path: WorkspaceFilePath,
+    policy: FileReadPolicy): Consequence[FileReadTextResult] =
+    if (policy == null || policy.limits == null) _invalid_intent_c
+    else _read_text_with_policy_c(context, target, path, Some(policy))
+
+  private def _read_text_with_policy_c(context: ExecutionContext, target: FileTarget, path: WorkspaceFilePath,
+    policy: Option[FileReadPolicy]): Consequence[FileReadTextResult] =
+    _admit_c(context, target, path, WorkspacePermission.ReadOnly).flatMap { case (binding, genericlimits, validpath) =>
+      val limits = policy.map(_.limits).getOrElse(genericlimits)
       _guard_c {
         binding.resolveFileC(validpath).flatMap(_read_c(_, limits))
           .map(text => FileReadTextResult(target, validpath, text))
@@ -228,11 +265,20 @@ private[cncf] object WorkspaceFileExecution {
     path: WorkspaceFilePath,
     text: String,
     mode: FileWriteMode
-  ): Consequence[FileWriteTextResult] =
+  ): Consequence[FileWriteTextResult] = _write_text_with_policy_c(context, target, path, text, mode, None)
+
+  def writeTextC(context: ExecutionContext, target: FileTarget, path: WorkspaceFilePath, text: String,
+    mode: FileWriteMode, policy: FileWritePolicy): Consequence[FileWriteTextResult] =
+    if (policy == null || policy.limits == null) _invalid_intent_c
+    else _write_text_with_policy_c(context, target, path, text, mode, Some(policy))
+
+  private def _write_text_with_policy_c(context: ExecutionContext, target: FileTarget, path: WorkspaceFilePath,
+    text: String, mode: FileWriteMode, policy: Option[FileWritePolicy]): Consequence[FileWriteTextResult] =
     for {
       admitted <- _admit_c(context, target, path, WorkspacePermission.Manage)
       (binding, limits, validpath) = admitted
-      writelimits <- context.resourceWriteLimitsC
+      genericwritelimits <- context.resourceWriteLimitsC
+      writelimits = policy.map(_.limits).getOrElse(genericwritelimits)
       bytes <- _text_bytes_c(text, writelimits)
       _ <- mode match {
         case FileWriteMode.CreateNew => Consequence.unit

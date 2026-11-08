@@ -3,14 +3,15 @@ package org.goldenport.cncf.action
 import cats.free.Free
 import org.goldenport.ConsequenceT
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWorkOp}
-import org.goldenport.cncf.workspace.{FileSnapshotLimits, FileReadSnapshotResult, FilePrepareDirectoryResult, FileReadBytesResult, FileReadTextResult, FileRepresentation, FileTarget, FileWriteBytesResult, FileWriteMode, FileWriteTextResult, WorkspaceFilePath}
+import org.goldenport.cncf.workspace.{FileReadPolicy, FileWritePolicy, FileSnapshotLimits, FileReadSnapshotResult, FilePrepareDirectoryResult, FileReadBytesResult, FileReadTextResult, FileRepresentation, FileTarget, FileWriteBytesResult, FileWriteMode, FileWriteTextResult, WorkspaceFilePath}
 
 import org.goldenport.cncf.resource.{ResourceTreeSelection, ResourceTreeQueryLimits}
 
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 21, 2026
- * @version Oct. 29, 2026
+ *  version Oct. 29, 2026
+ * @version Nov.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorFileExecutionPart extends BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -46,4 +47,20 @@ trait BehaviorFileExecutionPart extends BehaviorFeaturePart { self: Behavior.Cor
     mode: FileWriteMode
   ): ExecUowM[FileWriteTextResult] =
     ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.FileWriteText(target, path, text, mode)))
+  protected final def file_read_bytes(target: FileTarget, path: WorkspaceFilePath,
+    representation: FileRepresentation, policy: FileReadPolicy): ExecUowM[FileReadBytesResult] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.FileReadBytesWithPolicy(target, path, representation, policy)))
+
+  protected final def file_read_text(target: FileTarget, path: WorkspaceFilePath,
+    policy: FileReadPolicy): ExecUowM[FileReadTextResult] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.FileReadTextWithPolicy(target, path, policy)))
+
+  protected final def file_write_bytes(target: FileTarget, path: WorkspaceFilePath, bytes: Vector[Byte],
+    representation: FileRepresentation, policy: FileWritePolicy): ExecUowM[FileWriteBytesResult] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.FileWriteBytesWithPolicy(target, path, bytes, representation, policy)))
+
+  protected final def file_write_text(target: FileTarget, path: WorkspaceFilePath, text: String,
+    mode: FileWriteMode, policy: FileWritePolicy): ExecUowM[FileWriteTextResult] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.FileWriteTextWithPolicy(target, path, text, mode, policy)))
+
 }

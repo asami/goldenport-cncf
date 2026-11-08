@@ -343,3 +343,7 @@ stronger source snapshot owner. Workflow metrics can retain this immutable resul
 once at each intended endpoint, convert acquisition failure to unavailable, and
 reuse their retained payload without repeating acquisition. This producer does
 not count lines, acquire usage or prescribe workflow closure policy.
+
+## Purpose-specific File I/O budgets
+
+File reads may explicitly select `FileReadPolicy(ResourceReadLimits(...))` for text or bytes, including both stored and expanded Gzip bytes. File writes may independently select `FileWritePolicy(ResourceReadLimits(...))` for text or bytes. The finite limits use the same validated bounds as Resource limits. Selection is immutable and applies only to that operation; it does not alter generic runtime defaults or confer workspace authority. Unselected operations retain their existing limits. A selected write policy does not change the read limit used for `UpdateExisting` comparison. All existing path, permission, encoding, atomicity and outcome rules apply.

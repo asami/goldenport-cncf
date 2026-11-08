@@ -65,7 +65,7 @@ import org.simplemodeling.model.directive.Update
  *  version Sep. 19, 2026
  *  version Oct. 27, 2026
  *  version Oct. 29, 2026
- * @version Nov.  2, 2026
+ * @version Nov.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -1398,6 +1398,26 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     case UnitOfWorkOp.FileWriteText(target, path, text, mode) =>
       _with_calltree("uow:file:write-text") {
         org.goldenport.cncf.workspace.WorkspaceFileExecution.writeTextC(uow.executionContext, target, path, text, mode)
+      }
+
+    case UnitOfWorkOp.FileReadBytesWithPolicy(target, path, representation, policy) =>
+      _with_calltree("uow:file:read-bytes") {
+        org.goldenport.cncf.workspace.WorkspaceFileExecution.readBytesC(uow.executionContext, target, path, representation, policy)
+      }
+
+    case UnitOfWorkOp.FileReadTextWithPolicy(target, path, policy) =>
+      _with_calltree("uow:file:read-text") {
+        org.goldenport.cncf.workspace.WorkspaceFileExecution.readTextC(uow.executionContext, target, path, policy)
+      }
+
+    case UnitOfWorkOp.FileWriteBytesWithPolicy(target, path, bytes, representation, policy) =>
+      _with_calltree("uow:file:write-bytes") {
+        org.goldenport.cncf.workspace.WorkspaceFileExecution.writeBytesC(uow.executionContext, target, path, bytes, representation, policy)
+      }
+
+    case UnitOfWorkOp.FileWriteTextWithPolicy(target, path, text, mode, policy) =>
+      _with_calltree("uow:file:write-text") {
+        org.goldenport.cncf.workspace.WorkspaceFileExecution.writeTextC(uow.executionContext, target, path, text, mode, policy)
       }
 
     case UnitOfWorkOp.ValidationCheckExec(target, operation) =>
