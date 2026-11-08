@@ -2,7 +2,7 @@
 
 status=initial
 authority=canonical
-updated_at=2026-11-02
+updated_at=2026-11-08
 
 ## Purpose
 
@@ -15,6 +15,10 @@ The working principle is:
 
 > Trust explicit contracts and admitted authority, not network location,
 > credentials alone, a running process, or the identity of a developer or AI.
+
+## Optional Firebase providers
+
+The [Firebase provider boundary](firebase-provider-boundary.md) assigns app attestation to configured ingress, push delivery to the deployed notification provider, and client diagnostics and presentation settings to Flutter. UserAccount authentication and CNCF Operation/resource authorization apply to protected requests.
 
 ## Small-business standard deployment
 

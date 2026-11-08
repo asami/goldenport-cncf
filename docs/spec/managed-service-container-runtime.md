@@ -14,7 +14,7 @@ Managed SQL pool ownership and shutdown are specified separately in
 ## Terms
 
 - **service definition**: an admitted declaration of one logical service;
-- **service owner**: an explicit runtime/component lifecycle identity;
+- **service owner**: the logical component or subsystem runtime instance responsible for the service lifecycle;
 - **external service**: a deployment-supplied endpoint not owned by CNCF;
 - **runtime-owned service**: a service whose lifecycle is registered to a
   service owner;
@@ -36,6 +36,22 @@ image, endpoint, process, or provider convention.
 The service registry MUST key a managed lifecycle by the admitted service
 owner and logical service identity. A resource with the requested name but
 without matching ownership and compatibility evidence MUST NOT be adopted.
+
+The owner in the registry key MUST identify the responsible logical instance
+as defined in the [ID design](../design/id.md#owner-level-typed-identity-contract).
+Two instances of the same component with their own services have distinct owner
+keys; stopping one instance applies cleanup only to its services. When a
+subsystem manages a service shared by its components, its subsystem instance
+owns that service. On restart, reuse requires the same logical owner instance
+and the existing service compatibility checks.
+
+Resolve a configured `ServiceContainerName` within the admitted owner to its
+`ServiceContainerId`. Two owners may each configure a service named
+`database`; lookup MUST select the service of the requested owner. If the
+provider replaces the backing container for that service, its registry key
+(owner, logical service ID) MUST stay stable while the gateway updates the
+`ProviderContainerId` reference to the ID returned by the provider for the
+replacement. Subsequent lifecycle operations target that provider-issued ID.
 
 ### External Endpoint (SC1-R2)
 

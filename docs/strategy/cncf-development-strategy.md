@@ -5411,6 +5411,13 @@ the local release commit containing `phase115-final-closure-20261018-01@1`.
 Two OPEN nonblocking Hygiene records stay separate. This source-only boundary
 closes Phase 115 only, not whole Workbench migration; no successor is started.
 
+### 9.69 CNCF ID inventory and ownership contracts
+
+[Phase 120](../phase/phase-120.md) is planned and stays unopened through
+completion of the November 10 NICT demo. The [demo-boundary inventory](../journal/2026/11/2026-11-06-id-phase-demo-boundary.md)
+separates interim Studio qualification from post-demo ownership and ID migration.
+Progress belongs to the [Phase checklist](../phase/phase-120-checklist.md).
+
 ## Status Navigation Erratum — 2026-09-28
 
 The `Process Status Pointers` and `Current Phase Status Snapshot` sections
