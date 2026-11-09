@@ -116,6 +116,21 @@ final class UnitOfWorkHttpAdmissionSpec extends AnyWordSpec with Matchers with G
     else interpreter.interpret(op)
   }
 
+  "Observed POST admission" should {
+    "report an unconfigured host refusal before driver acquisition" in {
+      Given("an unconfigured actual Component and an observed POST")
+      val driver = new CountedDriver(_response())
+      val uow = new CountedUnitOfWork(_context(None), driver)
+      val op = UnitOfWorkOp.HttpPostObserved("/selected", Some(_body), _headers, Vector.empty)
+      When("the native interpreter executes the operation")
+      val result = new UnitOfWorkInterpreter(uow).interpret(op)
+      Then("it records the refusal without acquiring or calling the driver")
+      _take(result) shouldBe UnitOfWorkOp.ObservedHttpPostResult.NotDispatched
+      uow.acquisitions shouldBe 0
+      driver.calls shouldBe empty
+    }
+  }
+
   "Actual HTTP UnitOfWork admission" should {
     "deny all five unconfigured operations in direct and Free execution before driver or bag acquisition" in {
       Vector(false, true).foreach { free =>

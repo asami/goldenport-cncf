@@ -112,6 +112,19 @@ object UnitOfWorkOp {
     override def toString: String = "HttpPost(<redacted>)"
   }
 
+  /** Native observation of a single managed POST. The result is not a grant. */
+  private[cncf] sealed trait ObservedHttpPostResult
+  private[cncf] object ObservedHttpPostResult {
+    case object NotDispatched extends ObservedHttpPostResult
+    case object PossiblyDispatched extends ObservedHttpPostResult
+    final case class Response(response: HttpResponse) extends ObservedHttpPostResult
+  }
+  private[cncf] final case class HttpPostObserved(
+    path: String, body: Option[String], headers: Map[String, String], properties: Vector[Property]
+  ) extends UnitOfWorkOp[ObservedHttpPostResult] {
+    override def toString: String = "HttpPostObserved(<redacted>)"
+  }
+
   final case class HttpPostBag(
     path: String,
     body: Option[org.goldenport.bag.Bag],

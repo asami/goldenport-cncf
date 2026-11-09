@@ -27,6 +27,7 @@ private[cncf] object UnitOfWorkOperationClassifier {
           UnitOfWorkOp.OAuthConnectionExecute(_) |
           UnitOfWorkOp.HttpGet(_, _, _) |
           UnitOfWorkOp.HttpPost(_, _, _, _) |
+          UnitOfWorkOp.HttpPostObserved(_, _, _, _) |
           UnitOfWorkOp.HttpPostBag(_, _, _, _) |
           UnitOfWorkOp.HttpPut(_, _, _, _) |
           UnitOfWorkOp.HttpPutBag(_, _, _, _) |

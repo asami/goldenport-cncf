@@ -160,3 +160,14 @@ protection, or impose streaming upload quotas.
 - [Inline action/UoW calltree behavior](../../src/test/scala/org/goldenport/cncf/component/ComponentLogicOperationDefinitionSemanticsSpec.scala)
 - [Startup data source imports](../../src/test/scala/org/goldenport/cncf/importer/StartupDataImportSpec.scala)
 - [Startup entity source imports](../../src/test/scala/org/goldenport/cncf/importer/StartupEntityImportSpec.scala)
+
+## Observed collection POST
+
+The optional FileStore reserved-collection path uses a native observed POST.
+The same managed host admission is checked before driver acquisition. A refusal
+is returned as an operation-bound not-dispatched observation; an exception once
+the driver is invoked is possibly dispatched. The provider interprets an
+actual response and may confirm only the reserved identity. No response or
+process interruption before the caller durably retains the observation is not
+proof of non-dispatch. This path does not alter ordinary HTTP API behavior or
+relax authority. See [FileStore collection write observation](filestore-write-observation.md).
