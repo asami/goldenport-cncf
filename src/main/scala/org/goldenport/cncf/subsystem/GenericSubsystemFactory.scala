@@ -20,7 +20,8 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version May. 18, 2026
  *  version Aug. 15, 2026
  *  version Sep.  7, 2026
- * @version Oct. 27, 2026
+ *  version Oct. 27, 2026
+ * @version Nov. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -328,10 +329,25 @@ object GenericSubsystemFactory {
   ): Consequence[Option[GenericSubsystemDescriptor]] =
     _configured_component_name(configuration) match {
       case Some(name) =>
-        Consequence.configurationInvalid(
-          s"configured component requires canonical namespace/id/version: alias=$name; " +
-            "required=canonical namespace/id/version"
-        )
+        _assembly_descriptor_c(configuration).flatMap {
+          case Some(descriptor) =>
+            val version = RuntimeConfig.getString(configuration, RuntimeConfig.componentVersionKey)
+              .map(_.trim).filter(_.nonEmpty)
+            val matches = descriptor.componentBindings.filter { binding =>
+              binding.componentId.exists(_.name == name) && version.forall(binding.version.contains)
+            }
+            if (matches.size == 1)
+              Consequence.success(Some(descriptor))
+            else
+              Consequence.configurationInvalid(
+                s"configured component requires one matching canonical namespace/id/version binding: selector=$name"
+              )
+          case None =>
+            Consequence.configurationInvalid(
+              s"configured component requires canonical namespace/id/version: alias=$name; " +
+                "required=canonical namespace/id/version"
+            )
+        }
       case None =>
         _assembly_descriptor_c(configuration)
     }

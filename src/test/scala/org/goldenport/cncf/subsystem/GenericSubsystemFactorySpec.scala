@@ -43,7 +43,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr.  7, 2026
  *  version Aug. 18, 2026
- * @version Oct. 15, 2026
+ *  version Oct. 15, 2026
+ * @version Nov. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemFactorySpec
@@ -526,9 +527,48 @@ final class GenericSubsystemFactorySpec
         staticresult shouldBe a[org.goldenport.Consequence.Failure[_]]
         runtimeresult shouldBe a[org.goldenport.Consequence.Failure[_]]
         staticresult.asInstanceOf[org.goldenport.Consequence.Failure[_]].conclusion.display should include (
-          "configured component requires canonical namespace/id/version"
+          "configured assembly descriptor requires a component name or non-empty components binding"
         )
       }
+      }
+    }
+
+    "resolve an installed selector only against an unambiguous canonical assembly binding" in {
+      Given("a configured qualified component and version with an explicit assembly")
+      _with_temp_dir { root =>
+        val assembly = root.resolve("assembly.yaml")
+        val configuration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.componentNameKey -> ConfigurationValue.StringValue("org.example.App"),
+            RuntimeConfig.componentVersionKey -> ConfigurationValue.StringValue("1.0.0"),
+            RuntimeConfig.assemblyDescriptorKey -> ConfigurationValue.StringValue(assembly.toString)
+          )),
+          ConfigurationTrace.empty
+        )
+        val cases = Vector(
+          ("matching", "  - namespace: org.example\n    id: App\n    version: 1.0.0\n", true),
+          ("different identity", "  - namespace: org.example\n    id: Other\n    version: 1.0.0\n", false),
+          ("different version", "  - namespace: org.example\n    id: App\n    version: 2.0.0\n", false),
+          ("missing version", "  - namespace: org.example\n    id: App\n", false),
+          ("malformed identity", "  - namespace: bad namespace\n    id: App\n    version: 1.0.0\n", false),
+          ("ambiguous", "  - namespace: org.example\n    id: App\n    version: 1.0.0\n    instance: first\n  - namespace: org.example\n    id: App\n    version: 1.0.0\n    instance: second\n", false)
+        )
+
+        When("static and runtime resolution evaluate each assembly")
+        cases.foreach { case (label, bindings, accepted) =>
+          Files.writeString(assembly, s"subsystem: installed\ncomponents:\n$bindings", StandardCharsets.UTF_8)
+          val staticresult = GenericSubsystemFactory.resolveDescriptorC(configuration)
+          val policy = RepositoryBootstrapPolicy(baseDirectory = root, defaultRepositoriesEnabled = false)
+          val runtimeresult = GenericSubsystemFactory.runtimeResolveDescriptorC(configuration, Some(policy))
+
+          Then(s"$label is admitted only when the canonical binding is unique and exact")
+          withClue(label) {
+            staticresult.toOption.nonEmpty shouldBe accepted
+            runtimeresult.toOption.nonEmpty shouldBe accepted
+            if (accepted)
+              staticresult.toOption.flatten.toVector.flatMap(_.componentBindings).flatMap(_.componentId.map(_.name)) shouldBe Vector("org.example.App")
+          }
+        }
       }
     }
 
