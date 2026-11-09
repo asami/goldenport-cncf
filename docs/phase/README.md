@@ -1,5 +1,12 @@
 # docs/phase — Engineering Work Management
 
+Strict Scala integration planned 2026-11-09:
+[sm-workflow Phase 6.12 capability handoff](sm-workflow-6.12-strict-scala-plan.md)
+records EXEC-01–EXEC-04, all OPEN. Qualify existing typed SBT/UoW/FixCheck and
+later consume the independently reusable shared rules in CNCF's build. No new
+runtime API, new worktree or whole-Phase waiting dependency is assumed; CNCF
+implementation remains owned by CNCF development in canonical main.
+
 [Phase 121 — Firebase notification delivery and ingress attestation](phase-121.md) is planned for later delivery. Progress is recorded in the [Phase 121 checklist](phase-121-checklist.md).
 
 Data/report/print integration allocated 2026-11-02:
