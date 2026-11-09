@@ -1,14 +1,16 @@
-# CNCF capability handoff for sm-workflow Phase 6.12
+# Phase 122 — Typed SBT qualification and shared Scala lint integration
 
-Stage Status:
-- Current status: OPEN / planned qualification
-- Owner: CNCF development (`CNCF開発`), canonical goldenport-cncf main
-- Update rule: Record actual existing capability and shared-rule consumption.
-- Closure basis: EXEC-01–EXEC-04 below; no new runtime API is assumed.
+status=planned
+planned_at=2026-11-09
+execution_started=false
+owner=CNCF
 
-Planned: 2026-11-09
+Progress: [Phase 122 checklist](phase-122-checklist.md). All EXEC-01–EXEC-04
+items remain OPEN. This Phase records CNCF's producer work; sm-workflow Phase
+6.12 is its consumer, not the CNCF Phase number.
+
 Consumer: [sm-workflow Phase 6.12](../../../sm-workflow/docs/phase/phase-6.12.md)
-Coordination: [delivery dependencies](../../../sm-workflow/docs/phase/sm-workflow-6.12-dependencies.md)
+Coordination: [delivery dependencies](../../../sm-workflow/docs/phase/phase-6.12-dependencies.md)
 Existing route: [typed SBT execution](../spec/typed-sbt-execution.md)
 
 ## Existing capability and ownership
@@ -27,22 +29,13 @@ in semantic analysis does not require executing the observed Program or importin
 the whole runtime into the rule artifact. Existing CAR/resource/effect boundary
 guarantees remain with their current owners.
 
-## Work and acceptance ledger
+## Work and acceptance
 
-- [ ] EXEC-01: Return actual typed FixCheck/Compile/test capability, configuration
-      and retained-result contracts with canonical revision and invocation limits.
-      Qualify existing behavior before proposing any new public operation.
-- [ ] EXEC-02: In a tiny ordinary SBT target, show a selected lint violation and
-      subsequent correction return through normal UoW execution as actual check
-      outcomes. Reuse qualifying existing evidence and preserve actual failures;
-      no AI-side SBT execution or fabricated result/termination records.
-- [ ] EXEC-03: Once SLP-RULES is accepted, consume its shared baseline/team package
-      in CNCF's own build where applicable. Preserve local differences and scoped
-      existing debt; do not duplicate rule implementations or make unrelated
-      repository-wide cleanup a prerequisite.
-- [ ] EXEC-04: Return SLP-EXEC with source/artifact selection, actual configuration
-      surface, results, review disposition and known gaps. If existing APIs suffice,
-      state explicitly that no runtime implementation change is needed.
+The [checklist](phase-122-checklist.md) retains the existing cross-project
+delivery IDs EXEC-01–EXEC-04 and is the completion ledger. EXEC-01/02 qualify
+the existing execution route, EXEC-03 consumes the independently delivered
+shared rules, and EXEC-04 returns the scoped SLP-EXEC handoff. No new runtime
+API is assumed.
 
 ## Dependencies and boundaries
 

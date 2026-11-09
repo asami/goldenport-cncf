@@ -1,8 +1,9 @@
 # docs/phase — Engineering Work Management
 
 Strict Scala integration planned 2026-11-09:
-[sm-workflow Phase 6.12 capability handoff](sm-workflow-6.12-strict-scala-plan.md)
-records EXEC-01–EXEC-04, all OPEN. Qualify existing typed SBT/UoW/FixCheck and
+[Phase 122](phase-122.md) / [checklist](phase-122-checklist.md)
+records CNCF's EXEC-01–EXEC-04 handoff to sm-workflow Phase 6.12, all OPEN.
+Qualify existing typed SBT/UoW/FixCheck and
 later consume the independently reusable shared rules in CNCF's build. No new
 runtime API, new worktree or whole-Phase waiting dependency is assumed; CNCF
 implementation remains owned by CNCF development in canonical main.
