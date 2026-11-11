@@ -86,14 +86,15 @@ private[cncf] final class RuntimeProcessExecutionPlan private (
   val gitRepositoryDeclarations: Vector[GitRepositoryRuntimeDeclaration],
   val workspaceAdmissionOption: Option[WorkspaceExecutionAdmission],
   private[cncf] val _io_default_omissions: Map[(String, Int), Set[String]] = Map.empty,
-  val validationCheckDeclarations: Vector[ValidationCheckRuntimeDeclaration] = Vector.empty
+  val validationCheckDeclarations: Vector[ValidationCheckRuntimeDeclaration] = Vector.empty,
+  val candidatePolicies: Vector[SessionCandidateWorkspacePolicy] = Vector.empty
 ) {
   private[cncf] def _with_io_default_omissions(
     omissions: Map[(String, Int), Set[String]]
   ): RuntimeProcessExecutionPlan =
     new RuntimeProcessExecutionPlan(programs, grants, admission, schemaVersion,
       workspaceDeclarations, workspaceGrants, sbtDeclarations, gitDeclarations,
-      gitRepositoryDeclarations, workspaceAdmissionOption, omissions, validationCheckDeclarations)
+      gitRepositoryDeclarations, workspaceAdmissionOption, omissions, validationCheckDeclarations, candidatePolicies)
 }
 
 private[cncf] object RuntimeProcessExecutionPlan {
@@ -177,6 +178,16 @@ private[cncf] object RuntimeProcessExecutionPlan {
     _create_semantic_c(programs, grants, workspaceDeclarations, workspaceGrants, sbtDeclarations,
       gitDeclarations, RuntimeProcessExecutionPlanCodec.SCHEMA_V6, gitRepositoryDeclarations, validationCheckDeclarations)
 
+  def createV7C(programs: Vector[ProcessProgramDefinition], grants: Map[ComponentId, Vector[ProcessExecutionGrant]],
+    workspaceDeclarations: Vector[WorkspaceRuntimeDeclaration], workspaceGrants: Vector[WorkspaceGrant],
+    sbtDeclarations: Vector[SbtRuntimeDeclaration], gitDeclarations: Vector[GitRuntimeDeclaration],
+    gitRepositoryDeclarations: Vector[GitRepositoryRuntimeDeclaration],
+    validationCheckDeclarations: Vector[ValidationCheckRuntimeDeclaration],
+    candidatePolicies: Vector[SessionCandidateWorkspacePolicy]): Consequence[RuntimeProcessExecutionPlan] =
+    _create_semantic_c(programs, grants, workspaceDeclarations, workspaceGrants, sbtDeclarations,
+      gitDeclarations, RuntimeProcessExecutionPlanCodec.SCHEMA_V7, gitRepositoryDeclarations,
+      validationCheckDeclarations, candidatePolicies)
+
   private def _create_semantic_c(
     programs: Vector[ProcessProgramDefinition],
     grants: Map[ComponentId, Vector[ProcessExecutionGrant]],
@@ -186,7 +197,8 @@ private[cncf] object RuntimeProcessExecutionPlan {
     gitdeclarations: Vector[GitRuntimeDeclaration],
     schema: String,
     gitrepositories: Vector[GitRepositoryRuntimeDeclaration] = Vector.empty,
-    validationchecks: Vector[ValidationCheckRuntimeDeclaration] = Vector.empty
+    validationchecks: Vector[ValidationCheckRuntimeDeclaration] = Vector.empty,
+    candidatepolicies: Vector[SessionCandidateWorkspacePolicy] = Vector.empty
   ): Consequence[RuntimeProcessExecutionPlan] = for {
     // Generic restrictions apply to generic declarations alone, before the
     // semantic tags are combined with the existing process policy.
@@ -226,7 +238,7 @@ private[cncf] object RuntimeProcessExecutionPlan {
       case _ => false
     }).groupBy(x => x.target -> x.selectionId).values.forall(_.map(_.selectedPaths).distinct.size == 1))
       Consequence.unit else Consequence.configurationInvalid("Git selection declarations require identical ordered selected paths for each workspace and selection ID")
-    workspace <- WorkspaceExecutionAdmission.createC(workspacedeclarations.map(x => x.identity -> x.root), workspacegrants)
+    workspace <- WorkspaceExecutionAdmission.createC(workspacedeclarations.map(x => x.identity -> x.root), workspacegrants, candidatepolicies)
     sbttagged <- sbtdeclarations.foldLeft(Consequence.success(Vector.empty[ProcessProgramDefinition])) { (prior, declaration) => for {
       values <- prior
       binding <- workspace.bindingC(declaration.target)
@@ -256,7 +268,7 @@ private[cncf] object RuntimeProcessExecutionPlan {
         declaration.limits, declaration.environment)
     } yield values :+ definition }
     tagged = sbttagged ++ gittagged ++ checktagged
-    _ <- if (schema != RuntimeProcessExecutionPlanCodec.SCHEMA_V6 ||
+    _ <- if (!Set(RuntimeProcessExecutionPlanCodec.SCHEMA_V6, RuntimeProcessExecutionPlanCodec.SCHEMA_V7).contains(schema) ||
         (programs ++ tagged).map(_.safeProgramIdentity).distinct.size == (programs ++ tagged).size)
       Consequence.unit else Consequence.configurationInvalid("Runtime process safe identities must be unique across all program families")
     policy <- ProcessExecutionPolicy.createC(programs ++ tagged)
@@ -277,7 +289,7 @@ private[cncf] object RuntimeProcessExecutionPlan {
     admission <- ProcessExecutionAdmission.forComponentsC(policy, effectivegrants)
   } yield new RuntimeProcessExecutionPlan(programs, grants, admission,
     schema, workspacedeclarations, workspacegrants, sbtdeclarations, gitdeclarations, gitrepositories, Some(workspace),
-    validationCheckDeclarations = validationchecks)
+    validationCheckDeclarations = validationchecks, candidatePolicies = candidatepolicies)
 
   private def _expand_repositories_c(
     programs: Vector[ProcessProgramDefinition],

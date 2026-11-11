@@ -59,6 +59,12 @@ private[cncf] final case class WorkspaceGrant(
   permission: WorkspacePermission
 )
 
+private[cncf] final case class SessionCandidateWorkspacePolicy(
+  componentId: ComponentId,
+  parent: WorkspaceId,
+  alias: WorkspaceId
+)
+
 /** One trusted binding, shared by semantic tools. Host paths never reach CAR data. */
 private[cncf] final class WorkspaceBinding private (
   val workspaceId: WorkspaceId,
@@ -151,8 +157,30 @@ private[cncf] object WorkspaceBinding {
 
 private[cncf] final class WorkspaceExecutionAdmission private (
   private val _bindings: Map[WorkspaceId, WorkspaceBinding],
-  private val _grants: Map[(ComponentId, WorkspaceId), WorkspacePermission]
+  private val _grants: Map[(ComponentId, WorkspaceId), WorkspacePermission],
+  private val _candidate_policies: Vector[SessionCandidateWorkspacePolicy]
 ) {
+  private[cncf] def candidatePolicyC(scope: ScopeContext, parent: WorkspaceId,
+    alias: WorkspaceId): Consequence[SessionCandidateWorkspacePolicy] = for {
+    owner <- WorkspaceExecutionAdmission.componentIdC(scope)
+    policy <- _candidate_policies.find(x => x.componentId == owner && x.parent == parent && x.alias == alias)
+      .map(Consequence.success).getOrElse(Consequence.serviceUnavailable("Session candidate workspace host policy is not configured"))
+    _ <- admitC(scope, parent, WorkspacePermission.Manage)
+    _ <- admitC(scope, alias, WorkspacePermission.Manage)
+  } yield policy
+
+  private[cncf] def candidateBindingC(scope: ScopeContext, policy: SessionCandidateWorkspacePolicy,
+    binding: WorkspaceBinding, observation: Boolean): Consequence[WorkspaceExecutionAdmission] = for {
+    actual <- candidatePolicyC(scope, policy.parent, policy.alias)
+    _ <- if (actual == policy) Consequence.unit else WorkspaceBinding.unavailableC
+    selected <- if (binding != null && binding.workspaceId == policy.alias) binding.workingDirectoryC
+      else WorkspaceBinding.unavailableC
+    parent <- admitC(scope, policy.parent, WorkspacePermission.Manage).flatMap(_.workingDirectoryC)
+    _ <- if (selected != parent && selected.startsWith(parent)) Consequence.unit else WorkspaceBinding.unavailableC
+  } yield new WorkspaceExecutionAdmission(_bindings.updated(policy.alias, binding),
+    if (observation) _grants.map { case (key, _) => key -> WorkspacePermission.ReadOnly }
+    else _grants, _candidate_policies)
+
   def bindingC(workspaceId: WorkspaceId): Consequence[WorkspaceBinding] =
     _bindings.get(workspaceId).map(Consequence.success).getOrElse(
       Consequence.argumentPolicyViolation(
@@ -180,9 +208,13 @@ private[cncf] final class WorkspaceExecutionAdmission private (
 }
 
 private[cncf] object WorkspaceExecutionAdmission {
+  def createC(roots: Vector[(WorkspaceId, Path)], grants: Vector[WorkspaceGrant]): Consequence[WorkspaceExecutionAdmission] =
+    createC(roots, grants, Vector.empty)
+
   def createC(
     roots: Vector[(WorkspaceId, Path)],
-    grants: Vector[WorkspaceGrant]
+    grants: Vector[WorkspaceGrant],
+    candidatePolicies: Vector[SessionCandidateWorkspacePolicy]
   ): Consequence[WorkspaceExecutionAdmission] = {
     val ids = roots.map(_._1)
     val owners = grants.map(x => x.componentId -> x.workspaceId)
@@ -194,6 +226,12 @@ private[cncf] object WorkspaceExecutionAdmission {
       Consequence.argumentPolicyViolation(
         "workspace", "workspace.execution.configuration", "known workspace and actual component grant", "invalid"
       )
+    else if (candidatePolicies == null || candidatePolicies.exists(p => p == null || p.componentId == null ||
+      p.parent == p.alias || !ids.contains(p.parent) || !ids.contains(p.alias) ||
+      !grants.contains(WorkspaceGrant(p.componentId, p.parent, WorkspacePermission.Manage)) ||
+      !grants.contains(WorkspaceGrant(p.componentId, p.alias, WorkspacePermission.Manage))) ||
+      candidatePolicies.map(p => (p.componentId, p.alias)).distinct.size != candidatePolicies.size)
+      Consequence.configurationInvalid("Candidate workspace policy requires distinct registered parent and alias with component Manage grants")
     else
       roots.foldLeft(Consequence.success(Map.empty[WorkspaceId, WorkspaceBinding])) {
         case (acc, (id, root)) => for {
@@ -201,7 +239,7 @@ private[cncf] object WorkspaceExecutionAdmission {
           binding <- WorkspaceBinding.createC(id, root)
         } yield bindings.updated(id, binding)
       }.map(bindings => new WorkspaceExecutionAdmission(
-        bindings, grants.map(x => (x.componentId -> x.workspaceId) -> x.permission).toMap
+        bindings, grants.map(x => (x.componentId -> x.workspaceId) -> x.permission).toMap, candidatePolicies
       ))
   }
 

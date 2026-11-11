@@ -540,6 +540,21 @@ final class ProcessProgramDefinition private (
 object ProcessProgramDefinition {
   private val _safe_identity_pattern = "[a-z][a-z0-9-]{0,63}".r
 
+  /** Rebind only already-tagged semantic definitions; all authority and limits are retained. */
+  private[processexecution] def rebindWorkspace(
+    definition: ProcessProgramDefinition,
+    original: WorkspaceBinding,
+    replacement: WorkspaceBinding
+  ): ProcessProgramDefinition = {
+    val sbt = definition._sbt_metadata.map(x => if (x.binding eq original) x.copy(binding = replacement) else x)
+    val git = definition._git_metadata.map(x => if (x.binding eq original) x.copy(binding = replacement) else x)
+    new ProcessProgramDefinition(definition.capability, definition.safeProgramIdentity,
+      definition._executable_location, definition.fixedArguments, definition.argumentPolicy,
+      definition.maximumLimits, definition.allowedArtifacts, definition.allowsWorkingDirectory,
+      definition.allowedInputFiles, definition.allowedInputFilePaths, definition.allowedResourceTrees,
+      definition._environment, sbt, git, definition._git_purpose_input, definition._validation_check_metadata)
+  }
+
   /** Closed preparation available only after CommitSelected admission. */
   private[processexecution] def gitSelectionProbeC(
     definition: ProcessProgramDefinition
@@ -816,9 +831,29 @@ final case class ProcessExecutionGrant(
  */
 final class ProcessExecutionAdmission private (
   policy: ProcessExecutionPolicy,
-  grants: Map[ProcessCapabilityId, ProcessExecutionGrant],
+  private val grants: Map[ProcessCapabilityId, ProcessExecutionGrant],
   componentadmissions: Option[Map[org.goldenport.cncf.component.ComponentId, ProcessExecutionAdmission]] = None
 ) {
+  private[cncf] def rebindWorkspaceC(original: WorkspaceBinding,
+    replacement: WorkspaceBinding): Consequence[ProcessExecutionAdmission] = for {
+    rebound <- policy.rebindWorkspaceC(original, replacement)
+    result <- componentadmissions match {
+      case Some(values) => ProcessExecutionAdmission.forComponentsC(rebound,
+        values.map { case (owner, admission) => owner -> admission.grants.values.toVector })
+      case None => ProcessExecutionAdmission.createC(rebound, grants.values.toVector)
+    }
+  } yield result
+
+  private[cncf] def candidateObservationC(original: WorkspaceBinding,
+    replacement: WorkspaceBinding): Consequence[ProcessExecutionAdmission] = for {
+    rebound <- policy.candidateObservationC(original, replacement)
+    result <- componentadmissions match {
+      case Some(values) => ProcessExecutionAdmission.forComponentsC(rebound,
+        values.map { case (owner, admission) => owner -> admission.grants.values.toVector })
+      case None => ProcessExecutionAdmission.createC(rebound, grants.values.toVector)
+    }
+  } yield result
+
   private[cncf] def admitValidationCheckForScopeC(
     scope: ScopeContext,
     binding: WorkspaceBinding,
@@ -1070,6 +1105,24 @@ final case class ResolvedProcessExecution(
 final class ProcessExecutionPolicy private (
   private val _definitions: Map[ProcessCapabilityId, ProcessProgramDefinition]
 ) {
+  private[processexecution] def rebindWorkspaceC(original: WorkspaceBinding,
+    replacement: WorkspaceBinding): Consequence[ProcessExecutionPolicy] =
+    if (original == null || replacement == null || original.workspaceId != replacement.workspaceId)
+      Consequence.configurationInvalid("Candidate binding must retain the eligible workspace identity")
+    else ProcessExecutionPolicy.createC(_definitions.values.toVector.map(
+      ProcessProgramDefinition.rebindWorkspace(_, original, replacement)))
+
+  private[processexecution] def candidateObservationC(original: WorkspaceBinding,
+    replacement: WorkspaceBinding): Consequence[ProcessExecutionPolicy] = {
+    val definitions = _definitions.values.filter(_._git_metadata.exists(x =>
+      (x.binding eq original) && Set(GitOperationKind.Root, GitOperationKind.Head).contains(x.kind))).toVector
+    if (original == null || replacement == null || original.workspaceId != replacement.workspaceId ||
+      definitions.size != 2)
+      Consequence.serviceUnavailable("Candidate Git root and head observation capabilities are not configured")
+    else ProcessExecutionPolicy.createC(definitions.map(
+      ProcessProgramDefinition.rebindWorkspace(_, original, replacement)))
+  }
+
   def resolveC(
     request: ProcessExecutionRequest,
     grant: ProcessExecutionGrant

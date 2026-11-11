@@ -23,6 +23,7 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
   val SCHEMA_V3 = "cncf.runtime-process-execution.v3"
   val SCHEMA_V5 = "cncf.runtime-process-execution.v5"
   val SCHEMA_V6 = "cncf.runtime-process-execution.v6"
+  val SCHEMA_V7 = "cncf.runtime-process-execution.v7"
   private val _parser = JawnParser(allowDuplicateKeys = false)
   private val _limit_names = Vector("launchTimeoutMillis", "executionTimeoutMillis", "terminationGraceMillis",
     "stdinBytes", "stdoutBytes", "stderrBytes", "argumentCount", "argumentBytes", "artifactCount", "artifactBytes", "workAreaBytes")
@@ -41,6 +42,7 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
           case SCHEMA_V3 => Right(Set("schema", "programs", "grants", "workspaces", "workspaceGrants", "sbtPrograms", "gitPrograms"))
           case SCHEMA_V5 => Right(Set("schema", "programs", "grants", "workspaces", "workspaceGrants", "sbtPrograms", "gitPrograms", "gitRepositories"))
           case SCHEMA_V6 => Right(Set("schema", "programs", "grants", "workspaces", "workspaceGrants", "sbtPrograms", "gitPrograms", "gitRepositories", "validationChecks"))
+          case SCHEMA_V7 => Right(Set("schema", "programs", "grants", "workspaces", "workspaceGrants", "sbtPrograms", "gitPrograms", "gitRepositories", "validationChecks", "sessionCandidateWorkspaces"))
           case _ => Left("Unsupported runtime process schema")
         }
         root <- _fields(json, names)
@@ -52,18 +54,22 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
         plan <- if (schema == SCHEMA) _valid(RuntimeProcessExecutionPlan.createC(programs, grants.toMap))
           else for {
             workspacevalues <- _array(root, "workspaces")
-            workspaces <- _sequence(workspacevalues.map(x => _workspace(x, schema == SCHEMA_V3 || schema == SCHEMA_V5 || schema == SCHEMA_V6)))
+            workspaces <- _sequence(workspacevalues.map(x => _workspace(x, Set(SCHEMA_V3, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7).contains(schema))))
             workspacegrantvalues <- _array(root, "workspaceGrants")
             workspacegrants <- _sequence(workspacegrantvalues.map(_workspace_grant))
             sbtvalues <- _array(root, "sbtPrograms")
             sbt <- _sequence(sbtvalues.map(_sbt_program))
-            git <- if (schema == SCHEMA_V3 || schema == SCHEMA_V5 || schema == SCHEMA_V6) _array(root, "gitPrograms").flatMap(xs => _sequence(xs.map(_git_program)))
+            git <- if (Set(SCHEMA_V3, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7).contains(schema)) _array(root, "gitPrograms").flatMap(xs => _sequence(xs.map(_git_program)))
               else Right(Vector.empty[GitRuntimeDeclaration])
-            repositories <- if (schema == SCHEMA_V5 || schema == SCHEMA_V6) _array(root, "gitRepositories").flatMap(xs => _sequence(xs.map(_git_repository)))
+            repositories <- if (Set(SCHEMA_V5, SCHEMA_V6, SCHEMA_V7).contains(schema)) _array(root, "gitRepositories").flatMap(xs => _sequence(xs.map(_git_repository)))
               else Right(Vector.empty[GitRepositoryRuntimeDeclaration])
-            checks <- if (schema == SCHEMA_V6) _array(root, "validationChecks").flatMap(xs => _sequence(xs.map(_validation_check)))
+            checks <- if (Set(SCHEMA_V6, SCHEMA_V7).contains(schema)) _array(root, "validationChecks").flatMap(xs => _sequence(xs.map(_validation_check)))
               else Right(Vector.empty[ValidationCheckRuntimeDeclaration])
-            value <- if (schema == SCHEMA_V6)
+            candidates <- if (schema == SCHEMA_V7) _array(root, "sessionCandidateWorkspaces").flatMap(xs => _sequence(xs.map(_candidate_policy)))
+              else Right(Vector.empty[SessionCandidateWorkspacePolicy])
+            value <- if (schema == SCHEMA_V7)
+              _valid(RuntimeProcessExecutionPlan.createV7C(programs, grants.toMap, workspaces, workspacegrants, sbt, git, repositories, checks, candidates))
+              else if (schema == SCHEMA_V6)
               _valid(RuntimeProcessExecutionPlan.createV6C(programs, grants.toMap, workspaces, workspacegrants, sbt, git, repositories, checks))
               else if (schema == SCHEMA_V5)
               _valid_v5(RuntimeProcessExecutionPlan.createV5C(programs, grants.toMap, workspaces, workspacegrants, sbt, git, repositories))
@@ -107,17 +113,30 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
           case WorkspacePermission.Manage => "manage"
         })))))
       .add("sbtPrograms", Json.fromValues(plan.sbtDeclarations.map(_sbt_json))))
-    val gitroot = if (plan.schemaVersion == SCHEMA_V3 || plan.schemaVersion == SCHEMA_V5 || plan.schemaVersion == SCHEMA_V6)
+    val gitroot = if (Set(SCHEMA_V3, SCHEMA_V5, SCHEMA_V6, SCHEMA_V7).contains(plan.schemaVersion))
       semantic.mapObject(_.add("gitPrograms", Json.fromValues(plan.gitDeclarations.map(_git_json)))) else semantic
-    val repositoryroot = if (plan.schemaVersion == SCHEMA_V5 || plan.schemaVersion == SCHEMA_V6)
+    val repositoryroot = if (Set(SCHEMA_V5, SCHEMA_V6, SCHEMA_V7).contains(plan.schemaVersion))
       gitroot.mapObject(_.add("gitRepositories", Json.fromValues(plan.gitRepositoryDeclarations.map(_git_repository_json)))) else gitroot
-    val root = if (plan.schemaVersion == SCHEMA_V6)
+    val checksroot = if (Set(SCHEMA_V6, SCHEMA_V7).contains(plan.schemaVersion))
       repositoryroot.mapObject(_.add("validationChecks", Json.fromValues(plan.validationCheckDeclarations.map(_validation_check_json)))) else repositoryroot
+    val root = if (plan.schemaVersion == SCHEMA_V7) checksroot.mapObject(_.add("sessionCandidateWorkspaces",
+      Json.fromValues(plan.candidatePolicies.map(x => Json.obj("componentId" -> Json.fromString(x.componentId.name),
+        "parent" -> Json.fromString(x.parent.print), "alias" -> Json.fromString(x.alias.print)))))) else checksroot
     val declared = _map_io_limits(root, (name, index, limits) =>
       plan._io_default_omissions.getOrElse(name -> index, Set.empty).foldLeft(limits)((obj, field) => obj.remove(field)))
     val encoded = ConfigurationValue.StringValue(declared.noSpaces)
     Consequence.success(encoded)
   }
+
+  private def _candidate_policy(json: Json): Either[String, SessionCandidateWorkspacePolicy] = for {
+    obj <- _fields(json, Set("componentId", "parent", "alias"))
+    ownertext <- _string(obj, "componentId")
+    owner <- _valid(ComponentId.parseC(ownertext))
+    parenttext <- _string(obj, "parent")
+    parent <- _valid(WorkspaceId.parseC(parenttext))
+    aliastext <- _string(obj, "alias")
+    alias <- _valid(WorkspaceId.parseC(aliastext))
+  } yield SessionCandidateWorkspacePolicy(owner, parent, alias)
 
   def resolveIoDefaultsC(plan: RuntimeProcessExecutionPlan, commonBytes: Long): Consequence[RuntimeProcessExecutionPlan] =
     IoDefaultParameters.codec.encode(commonBytes).flatMap { _ =>

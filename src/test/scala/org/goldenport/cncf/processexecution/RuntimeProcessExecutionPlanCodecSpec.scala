@@ -40,6 +40,31 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
     Map(_owner -> Vector(ProcessExecutionGrant(_capability)))))
   private val _encoded = _take(RuntimeProcessExecutionPlanCodec.encode(_plan)).asInstanceOf[ConfigurationValue.StringValue]
   private val _root = parse(_encoded.value).toOption.get
+
+  "Candidate-scoped semantic definitions" should {
+    "retain typed SBT authority while changing only the selected binding" in {
+      Given("two directories bound to the same logical alias and an existing typed build definition")
+      val first = _directory()
+      val second = _directory()
+      val alias = _take(WorkspaceId.parseC("candidate"))
+      val original = _take(WorkspaceBinding.createC(alias, first))
+      val replacement = _take(WorkspaceBinding.createC(alias, second))
+      val definition = _take(SbtProgramDefinition.createC(original, SbtOperation.Test,
+        _capability, "selected-token", Paths.get("/usr/bin/true"), _limits, Map.empty))
+      When("the internal scoped policy derives a replacement")
+      val rebound = ProcessProgramDefinition.rebindWorkspace(definition, original, replacement)
+      Then("only the binding changes and the original remains unchanged")
+      (definition._sbt_metadata.get.binding eq original) shouldBe true
+      (rebound._sbt_metadata.get.binding eq replacement) shouldBe true
+      rebound.capability shouldBe definition.capability
+      rebound.fixedArguments shouldBe definition.fixedArguments
+      rebound.maximumLimits shouldBe definition.maximumLimits
+      rebound._environment shouldBe definition._environment
+      val other = _take(WorkspaceBinding.createC(_take(WorkspaceId.parseC("other")), second))
+      val policy = _take(ProcessExecutionPolicy.createC(Vector(definition)))
+      policy.rebindWorkspaceC(original, other).isFaillure shouldBe true
+    }
+  }
   private def _decode(value: Json) = RuntimeProcessExecutionPlanCodec.decode(ConfigurationValue.StringValue(value.noSpaces))
   private def _changed_program(f: Json => Json): Json = _root.mapObject(_.add("programs",
     Json.arr(f(_root.hcursor.downField("programs").downArray.focus.get))))
@@ -134,6 +159,33 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
       grant.mapObject(_.add("capabilities", Json.arr(Json.fromString("selected-check")))))
 
   "V6 declared validation check host schema" should {
+    "retain the V7 managed parent and eligible alias across codec and IO-default projection" in _with_v6_root { wire =>
+      Given("explicit Manage grants for a managed parent and candidate alias")
+      val root = Paths.get(wire.hcursor.downField("workspaces").downArray.get[String]("root").toOption.get)
+      val parent = Files.createDirectory(root.resolve("managed-candidate-parent"))
+      val workspaces = wire.hcursor.get[Vector[Json]]("workspaces").toOption.get ++ Vector(
+        Json.obj("identity" -> Json.fromString("candidate-parent"), "root" -> Json.fromString(parent.toString)),
+        Json.obj("identity" -> Json.fromString("candidate-alias"), "root" -> Json.fromString(root.toString)))
+      val grants = wire.hcursor.get[Vector[Json]]("workspaceGrants").toOption.get ++ Vector("candidate-parent", "candidate-alias").map(id =>
+        Json.obj("componentId" -> Json.fromString(_owner.name), "workspaceId" -> Json.fromString(id), "access" -> Json.fromString("manage")))
+      val candidate = Json.obj("componentId" -> Json.fromString(_owner.name), "parent" -> Json.fromString("candidate-parent"),
+        "alias" -> Json.fromString("candidate-alias"))
+      val v7 = wire.mapObject(_.add("schema", Json.fromString(RuntimeProcessExecutionPlanCodec.SCHEMA_V7))
+        .add("workspaces", Json.fromValues(workspaces)).add("workspaceGrants", Json.fromValues(grants))
+        .add("sessionCandidateWorkspaces", Json.arr(candidate)))
+      When("the host plan is decoded, defaulted and round-tripped")
+      val first = _take(_decode(v7))
+      val projected = _take(RuntimeProcessExecutionPlanCodec.resolveIoDefaultsC(first, 1024L))
+      val restored = _take(RuntimeProcessExecutionPlanCodec.decode(_take(RuntimeProcessExecutionPlanCodec.encode(projected))))
+      Then("the exact owner, parent and eligible alias remain attached")
+      val expected = SessionCandidateWorkspacePolicy(_owner, _take(WorkspaceId.parseC("candidate-parent")),
+        _take(WorkspaceId.parseC("candidate-alias")))
+      first.candidatePolicies shouldBe Vector(expected)
+      projected.candidatePolicies shouldBe Vector(expected)
+      restored.candidatePolicies shouldBe Vector(expected)
+      _decode(v7.mapObject(_.add("workspaceGrants", Json.fromValues(grants.dropRight(1))))).isFaillure shouldBe true
+    }
+
     "round-trip exact fixed checks with all V5 families and workspace admission" in _with_v6_root { wire =>
       Given("an additive V6 declaration with generic, SBT, selected Git, repository and validation check entries")
       When("the strict host codec decodes, encodes and decodes it")

@@ -27,6 +27,7 @@ import org.goldenport.cncf.oauth.OAuthConnectionRequest
 import org.goldenport.cncf.workflow.{ActionExecution, ProviderExecutionRequest, StateMachineProvidedApiRequest}
 import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
 import org.goldenport.cncf.workspace.{FileReadPolicy, FileWritePolicy, FileSnapshotLimits, FileReadSnapshotResult, FilePrepareDirectoryResult, FileReadBytesResult, FileReadTextResult, FileRepresentation, FileTarget, FileWriteBytesResult, FileWriteMode, FileWriteTextResult, WorkspaceFilePath}
+import org.goldenport.cncf.workspace.{SessionCandidateWorkspaceSelection, WorkspaceId}
 
 import org.goldenport.cncf.resource.{ResourceTreeSelection, ResourceTreeQueryLimits}
 
@@ -174,6 +175,11 @@ object UnitOfWorkOp {
     target: GitTarget,
     operation: GitOperation[A]
   ) extends UnitOfWorkOp[GitExecutionResult[A]]
+
+  final case class SessionCandidatePrepare(source: WorkspaceId, parent: WorkspaceId, alias: WorkspaceId,
+    session: String, candidate: String) extends UnitOfWorkOp[SessionCandidateWorkspaceSelection] {
+    override def toString: String = "SessionCandidatePrepare(FileWrite)"
+  }
 
   final case class FileReadSnapshot(target: FileTarget, selection: ResourceTreeSelection,
     limits: ResourceTreeQueryLimits = FileSnapshotLimits.default) extends UnitOfWorkOp[FileReadSnapshotResult] {

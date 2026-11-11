@@ -37,6 +37,7 @@ private[cncf] object UnitOfWorkOperationClassifier {
           UnitOfWorkOp.SbtExec(_, _) |
           UnitOfWorkOp.SbtExecAttempt(_, _) |
           UnitOfWorkOp.GitExec(_, _) |
+          UnitOfWorkOp.SessionCandidatePrepare(_, _, _, _, _) |
           UnitOfWorkOp.FileReadSnapshot(_, _, _) |
           UnitOfWorkOp.FilePrepareDirectory(_, _) |
           UnitOfWorkOp.FileReadBytesWithPolicy(_, _, _, _) |

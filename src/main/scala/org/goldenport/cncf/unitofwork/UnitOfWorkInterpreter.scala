@@ -1375,6 +1375,11 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         org.goldenport.cncf.workspace.WorkspaceFileExecution.readSnapshotC(uow.executionContext, target, selection, limits)
       }
 
+    case UnitOfWorkOp.SessionCandidatePrepare(source, parent, alias, session, candidate) =>
+      _with_calltree("uow:workspace:prepare-session-candidate") {
+        org.goldenport.cncf.workspace.SessionCandidateWorkspace.prepareC(uow.executionContext, source, parent, alias, session, candidate)
+      }
+
     case UnitOfWorkOp.FilePrepareDirectory(target, path) =>
       _with_calltree("uow:file:prepare-directory") {
         org.goldenport.cncf.workspace.WorkspaceFileExecution.prepareDirectoryC(uow.executionContext, target, path)
