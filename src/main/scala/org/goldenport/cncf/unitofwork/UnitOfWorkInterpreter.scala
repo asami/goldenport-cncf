@@ -337,6 +337,17 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         }
       }
 
+    case UnitOfWorkOp.HttpPostObserved(path, body, headers, properties) =>
+      _with_calltree("uow:http:post-observed") {
+        HttpExecutionAdmission.resolveC(uow.executionContext, HttpExecutionMethod.Post, path, properties) match {
+          case Consequence.Failure(_) => Consequence.success(UnitOfWorkOp.ObservedHttpPostResult.NotDispatched)
+          case Consequence.Success(admitted) =>
+            try Consequence.success(UnitOfWorkOp.ObservedHttpPostResult.Response(
+              _http_driver.post(admitted.absoluteUrl, body, headers, admitted.properties)))
+            catch { case NonFatal(_) => Consequence.success(UnitOfWorkOp.ObservedHttpPostResult.PossiblyDispatched) }
+        }
+      }
+
     case UnitOfWorkOp.HttpPostBag(path, body, headers, properties) =>
       _with_calltree("uow:http:post") {
         HttpExecutionAdmission.resolveC(uow.executionContext, HttpExecutionMethod.Post, path, properties).flatMap { admitted =>

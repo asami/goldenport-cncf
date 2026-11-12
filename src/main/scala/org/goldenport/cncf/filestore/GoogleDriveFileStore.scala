@@ -24,7 +24,7 @@ import org.goldenport.protocol.Property
 final class GoogleDriveFileStore private (
   val name: String,
   private val _credentials: GoogleDriveCredentials
-) extends ReservedDirectUploadFileStore with FileStoreChildren {
+) extends ReservedDirectUploadFileStore with FileStoreChildren with ObservedCollectionFileStore {
   import GoogleDriveFileStore.*
 
   override def toString: String = s"GoogleDriveFileStore($name)"
@@ -185,6 +185,70 @@ final class GoogleDriveFileStore private (
     content <- _pure(if (response.code == 200) Consequence.success(FileStoreContent(response.mime, response.bag))
       else _status(response.code, false))
   } yield content
+
+  def reserveCollection(binding: FileStoreWriteBinding): ExecUowM[FileStoreCollectionReservation] = for {
+    _ <- _pure(_write_binding(binding))
+    auth <- _credentials._authorization
+    collection <- _stat_with_auth(binding.parent, auth)
+    _ <- _pure(if (collection.kind == FileStoreKind.Collection) Consequence.unit else _invalid_metadata(false))
+    generated <- _lift(UnitOfWorkOp.HttpGet(s"$_files/generateIds?count=1&space=drive&type=files",
+      auth + ("Accept" -> "application/json"), _metadata_properties))
+    id <- _pure(if (generated.code == 200) _generated_id(generated, binding.parent, collection.storageRoot)
+      else _status[String](generated.code, false))
+  } yield FileStoreCollectionReservation(binding, FileStoreRef(name, id), collection.storageRoot)
+
+  def createReservedCollection(reservation: FileStoreCollectionReservation): ExecUowM[FileStoreWriteObservation] = for {
+    _ <- _pure(_collection_reservation(reservation))
+    auth <- _credentials._authorization
+    result <- ConsequenceT.liftF(Free.liftF[UnitOfWorkOp, UnitOfWorkOp.ObservedHttpPostResult](
+      UnitOfWorkOp.HttpPostObserved(s"$_files?supportsAllDrives=true&fields=$_fields",
+        Some(_creation_json(reservation.binding.parent, reservation.binding.name, _folder_mime, Some(reservation.reference.key))),
+        auth ++ _json_headers, _metadata_properties)))
+    state = result match {
+      case UnitOfWorkOp.ObservedHttpPostResult.NotDispatched => FileStoreWriteState.NotDispatched
+      case UnitOfWorkOp.ObservedHttpPostResult.PossiblyDispatched => FileStoreWriteState.PossiblyDispatched
+      case UnitOfWorkOp.ObservedHttpPostResult.Response(response) =>
+        if (Set(200, 201)(response.code))
+          _collection_metadata(response, reservation).toOption.map(FileStoreWriteState.Confirmed(_))
+            .getOrElse(FileStoreWriteState.Unknown)
+        else FileStoreWriteState.Unknown
+    }
+  } yield FileStoreWriteObservation(reservation, state)
+
+  def inspectReservedCollection(reservation: FileStoreCollectionReservation): ExecUowM[FileStoreWriteObservation] = for {
+    _ <- _pure(_collection_reservation(reservation))
+    auth <- _credentials._authorization
+    response <- _stat_response(reservation.reference, auth)
+    state = if (response.code == 200)
+      _collection_metadata(response, reservation).toOption.map(FileStoreWriteState.Confirmed(_))
+        .getOrElse(FileStoreWriteState.Unknown)
+    else FileStoreWriteState.Unknown
+  } yield FileStoreWriteObservation(reservation, state)
+
+  private def _write_binding(binding: FileStoreWriteBinding): Consequence[Unit] = for {
+    _ <- if (Option(binding).nonEmpty) Consequence.unit else Consequence.argumentInvalid("Invalid collection binding")
+    _ <- _reference(binding.parent)
+    _ <- if (Option(binding.operation).exists(_.trim.nonEmpty) && Option(binding.caller).exists(_.trim.nonEmpty) &&
+      _valid_name(binding.name)) Consequence.unit else Consequence.argumentInvalid("Invalid collection binding")
+  } yield ()
+
+  private def _collection_reservation(reservation: FileStoreCollectionReservation): Consequence[Unit] = for {
+    _ <- if (Option(reservation).nonEmpty) Consequence.unit else Consequence.argumentInvalid("Invalid collection reservation")
+    _ <- _write_binding(reservation.binding)
+    _ <- _reference(reservation.reference)
+    _ <- if (Option(reservation.storageRoot).nonEmpty) Consequence.unit else Consequence.argumentInvalid("Invalid collection reservation")
+    _ <- reservation.storageRoot.fold(Consequence.unit)(_reference)
+    _ <- if (reservation.reference != reservation.binding.parent && !reservation.storageRoot.contains(reservation.reference))
+      Consequence.unit else Consequence.argumentInvalid("Invalid collection reservation")
+  } yield ()
+
+  private def _collection_metadata(response: HttpResponse, reservation: FileStoreCollectionReservation): Consequence[FileStoreMetadata] =
+    _confirmed_metadata(response, reservation.binding.parent, reservation.binding.name, _folder_mime, None, FileStoreKind.Collection)
+      .flatMap { metadata =>
+        if (metadata.reference == reservation.reference && metadata.parents == Vector(reservation.binding.parent) &&
+            metadata.storageRoot == reservation.storageRoot) Consequence.success(metadata)
+        else _invalid_metadata(false)
+      }
 
   def createCollection(parent: FileStoreRef, name: String): ExecUowM[FileStoreMetadata] = for {
     _ <- _pure(_reference(parent))
