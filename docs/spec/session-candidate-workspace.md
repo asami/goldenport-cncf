@@ -16,6 +16,12 @@ or unknown selection fails closed. Neither provision nor reacquisition removes
 or resets a directory. The runtime owns the association and effect history.
 
 The result supplies a candidate-scoped execution context and opaque reference.
+The returned candidate and observation contexts are self-bound to their native
+Action/UnitOfWork interpreter for ordinary `ProcedureActionCall.executeProgram`
+usage. They use the existing synchronous framework Action binding, retaining
+lifecycle facilities and sharing execution metadata with the owning context.
+The caller uses the returned context directly and must not construct an
+application UnitOfWork or interpreter to make it usable.
 That context retains the original source workspace binding and substitutes only
 the eligible candidate alias. Its typed process definitions use the same alias
 binding while preserving the original capabilities, grants, arguments, limits,

@@ -8,6 +8,11 @@ import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext}
 import org.goldenport.cncf.processexecution.{GitExecutionOutcome, GitExecutionResult, GitObjectId, GitOperation, ProcessExecutionTermination}
 
+/*
+ * @since   Nov. 12, 2026
+ * @version Nov. 12, 2026
+ * @author  ASAMI, Tomoharu
+ */
 /** Pure logical record retained by the workflow runtime, without host paths. */
 final case class SessionCandidateWorkspaceRecord(component: String, source: String, parent: String,
   alias: String, session: String, candidate: String)
@@ -114,7 +119,7 @@ object SessionCandidateWorkspace {
       else process.rebindWorkspaceC(original, binding)
     scoped = ScopeContext.Instance(scope.core.copy(parent = Some(scope),
       workspaceExecutionAdmissionOption = Some(scopedworkspace), processExecutionAdmissionOption = Some(scopedprocess)))
-  } yield context.withScope(scoped)
+  } yield ExecutionContext.withActionScope(context, scoped)
 
   private def _binding_c(context: ExecutionContext, reference: SessionCandidateWorkspaceReference):
       Consequence[(SessionCandidateWorkspacePolicy, WorkspaceBinding)] = for {
