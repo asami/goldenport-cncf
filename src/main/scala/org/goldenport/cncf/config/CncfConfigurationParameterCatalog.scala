@@ -10,14 +10,14 @@ import org.goldenport.cncf.context.{ExecutionIdMode, ExecutionOrderingMode, Exec
 import org.goldenport.cncf.http.WebDisplayFormatPolicyId
 import org.goldenport.cncf.http.{RuntimeHttpExecutionPlan, RuntimeHttpExecutionPlanCodec}
 import org.goldenport.cncf.subsystem.{SubsystemStoragePlan, SubsystemStoragePlanCodec, SubsystemUserMode}
-import org.goldenport.cncf.processexecution.{RuntimeProcessExecutionPlan, RuntimeProcessExecutionPlanCodec}
+import org.goldenport.cncf.processexecution.{RuntimeProcessExecutionPlanDeclaration, RuntimeProcessExecutionPlanDeclarationCodec}
 import org.goldenport.configuration.{CanonicalParameterId, ConfigurationParameter, ConfigurationValue, ConfigurationValueCodec}
 
 /*
  * @since   Aug.  3, 2026
  *  version Aug.  4, 2026
  *  version Oct. 31, 2026
- * @version Nov.  3, 2026
+ * @version Nov. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfConfigurationParameterCatalog private[config] (
@@ -497,7 +497,7 @@ object CncfConfigurationParameterCatalog {
   private val _subsystem_storage_plan_parameter = _take(ConfigurationParameter.create(
     _take(CanonicalParameterId.parse(SUBSYSTEM_STORAGE_PLAN_KEY)), SubsystemStoragePlanCodec))
   private val _subsystem_process_execution_plan_parameter = _take(ConfigurationParameter.create(
-    _take(CanonicalParameterId.parse(SUBSYSTEM_PROCESS_EXECUTION_PLAN_KEY)), RuntimeProcessExecutionPlanCodec))
+    _take(CanonicalParameterId.parse(SUBSYSTEM_PROCESS_EXECUTION_PLAN_KEY)), RuntimeProcessExecutionPlanDeclarationCodec))
   private val _subsystem_http_execution_plan_parameter = _take(ConfigurationParameter.create(
     _take(CanonicalParameterId.parse(SUBSYSTEM_HTTP_EXECUTION_PLAN_KEY)), RuntimeHttpExecutionPlanCodec))
 
@@ -619,7 +619,7 @@ object CncfConfigurationParameterCatalog {
     _subsystem_user_mode_parameter
   private[cncf] val subsystemStoragePlan: ConfigurationParameter[SubsystemStoragePlan] =
     _subsystem_storage_plan_parameter
-  private[cncf] val subsystemProcessExecutionPlan: ConfigurationParameter[RuntimeProcessExecutionPlan] =
+  private[cncf] val subsystemProcessExecutionPlan: ConfigurationParameter[RuntimeProcessExecutionPlanDeclaration] =
     _subsystem_process_execution_plan_parameter
   private[cncf] val subsystemHttpExecutionPlan: ConfigurationParameter[RuntimeHttpExecutionPlan] =
     _subsystem_http_execution_plan_parameter

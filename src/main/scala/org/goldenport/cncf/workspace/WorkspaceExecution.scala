@@ -9,7 +9,8 @@ import org.goldenport.cncf.context.ScopeContext
 
 /*
  * @since   Oct. 15, 2026
- * @version Oct. 21, 2026
+ *  version Oct. 21, 2026
+ * @version Nov. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 opaque type WorkspaceId = String
@@ -215,7 +216,23 @@ private[cncf] object WorkspaceExecutionAdmission {
     roots: Vector[(WorkspaceId, Path)],
     grants: Vector[WorkspaceGrant],
     candidatePolicies: Vector[SessionCandidateWorkspacePolicy]
-  ): Consequence[WorkspaceExecutionAdmission] = {
+  ): Consequence[WorkspaceExecutionAdmission] =
+    validateDeclarationsC(roots, grants, candidatePolicies).flatMap { _ =>
+      roots.foldLeft(Consequence.success(Map.empty[WorkspaceId, WorkspaceBinding])) {
+        case (acc, (id, root)) => for {
+          bindings <- acc
+          binding <- WorkspaceBinding.createC(id, root)
+        } yield bindings.updated(id, binding)
+      }.map(bindings => new WorkspaceExecutionAdmission(
+        bindings, grants.map(x => (x.componentId -> x.workspaceId) -> x.permission).toMap, candidatePolicies
+      ))
+    }
+
+  def validateDeclarationsC(
+    roots: Vector[(WorkspaceId, Path)],
+    grants: Vector[WorkspaceGrant],
+    candidatePolicies: Vector[SessionCandidateWorkspacePolicy]
+  ): Consequence[Unit] = {
     val ids = roots.map(_._1)
     val owners = grants.map(x => x.componentId -> x.workspaceId)
     if (ids.distinct.size != ids.size || owners.distinct.size != owners.size)
@@ -232,15 +249,7 @@ private[cncf] object WorkspaceExecutionAdmission {
       !grants.contains(WorkspaceGrant(p.componentId, p.alias, WorkspacePermission.Manage))) ||
       candidatePolicies.map(p => (p.componentId, p.alias)).distinct.size != candidatePolicies.size)
       Consequence.configurationInvalid("Candidate workspace policy requires distinct registered parent and alias with component Manage grants")
-    else
-      roots.foldLeft(Consequence.success(Map.empty[WorkspaceId, WorkspaceBinding])) {
-        case (acc, (id, root)) => for {
-          bindings <- acc
-          binding <- WorkspaceBinding.createC(id, root)
-        } yield bindings.updated(id, binding)
-      }.map(bindings => new WorkspaceExecutionAdmission(
-        bindings, grants.map(x => (x.componentId -> x.workspaceId) -> x.permission).toMap, candidatePolicies
-      ))
+    else Consequence.unit
   }
 
   /** Labels and ScopeKind.Component alone are never component identity. */

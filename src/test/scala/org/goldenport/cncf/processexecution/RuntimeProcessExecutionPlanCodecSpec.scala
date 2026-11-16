@@ -19,7 +19,7 @@ import org.scalacheck.{Gen, Prop, Test}
 /*
  * @since   Oct.  7, 2026
  *  version Oct. 29, 2026
- * @version Nov.  6, 2026
+ * @version Nov. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -42,6 +42,35 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
   private val _root = parse(_encoded.value).toOption.get
 
   "Candidate-scoped semantic definitions" should {
+    "prepare all semantic families without workspace metadata and attach only the actual admitted binding" in {
+      Given("typed build, Git and check declarations with available executables and no admitted workspace")
+      val root = _directory()
+      val alias = _take(WorkspaceId.parseC("prepared-alias"))
+      val sbt = _take(SbtProgramDefinition.prepareC(SbtOperation.Compile, _capability, "prepared-sbt",
+        Paths.get("/usr/bin/true"), _limits, Map.empty, Vector.empty, None, None, false))
+      val declared = GitExecutionSpecSupport.declaration(GitOperationKind.Root, root.resolve("remote.git").toString)
+      val git = _take(GitProgramDefinition.prepareC(declared.operation, declared.capability, declared.identity,
+        declared.gitExecutable, declared.localBranch, declared.remote, declared.remoteBranch, declared.endpoint,
+        declared.commitIdentity, declared.selectionId, declared.selectedPath, declared.commitMessage,
+        declared.limits, declared.environment, declared.selectedPaths))
+      val check = _take(ValidationCheckProgramDefinition.prepareC(_take(ValidationCheckId.parseC("prepared-check")),
+        ValidationCheckPurpose.Compilation, ValidationCheckProgramDefinition.ADAPTER, _capability, "prepared-check",
+        Paths.get("/usr/bin/true"), Vector.empty, _limits, Map.empty))
+      When("the prepared definitions are retained before actual directory admission")
+      val definitions = Vector(sbt.definition, git.definition, check.definition)
+      Then("they carry no executable workspace metadata and create no prospective root")
+      definitions.forall(p => p._sbt_metadata.isEmpty && p._git_metadata.isEmpty && p._validation_check_metadata.isEmpty) shouldBe true
+      Files.notExists(root.resolve("prospective")) shouldBe true
+      Given("the real existing root is admitted once")
+      val binding = _take(WorkspaceBinding.createC(alias, root))
+      When("each prepared family attaches that binding")
+      val bound = Vector(_take(sbt.bindC(binding)), _take(git.bindC(binding)), _take(check.bindC(binding)))
+      Then("every semantic metadata value retains the exact real binding")
+      bound(0)._sbt_metadata.get.binding should be theSameInstanceAs binding
+      bound(1)._git_metadata.get.binding should be theSameInstanceAs binding
+      bound(2)._validation_check_metadata.get.binding should be theSameInstanceAs binding
+    }
+
     "retain typed SBT authority while changing only the selected binding" in {
       Given("two directories bound to the same logical alias and an existing typed build definition")
       val first = _directory()

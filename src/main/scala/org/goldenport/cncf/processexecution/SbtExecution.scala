@@ -12,7 +12,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 24, 2026
- * @version Nov. 12, 2026
+ * @version Nov. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection] = None,
@@ -163,6 +163,21 @@ private[cncf] final case class SbtProgramMetadata(
   def effect: ExternalEffect = ExternalEffect(ExternalEffectKind.Build, binding.workspaceId)
 }
 
+private[cncf] final case class PreparedSbtProgram(
+  definition: ProcessProgramDefinition,
+  operation: SbtOperation,
+  testclasses: Vector[String],
+  validationmode: Option[SbtValidationMode.Binding],
+  discovery: Option[SbtValidationDiscovery.Binding],
+  discoveredtests: Boolean
+) {
+  def bindC(binding: WorkspaceBinding): Consequence[ProcessProgramDefinition] =
+    if (binding == null) WorkspaceBinding.unavailableC
+    else binding.workingDirectoryC.map(_ => ProcessProgramDefinition.bindPrepared(definition,
+      sbt = Some(SbtProgramMetadata(binding, operation, testclasses,
+        validationMode = validationmode, discovery = discovery, discoveredTests = discoveredtests))))
+}
+
 private[cncf] object SbtProgramDefinition {
   def createC(
     binding: WorkspaceBinding,
@@ -176,8 +191,22 @@ private[cncf] object SbtProgramDefinition {
     validationMode: Option[SbtValidationMode.Binding] = None,
     discovery: Option[SbtValidationDiscovery.Binding] = None, discoveredTests: Boolean = false
   ): Consequence[ProcessProgramDefinition] =
+    prepareC(operation, capability, safeProgramIdentity, sbtExecutable, limits, environment,
+      testClasses, validationMode, discovery, discoveredTests).flatMap(_.bindC(binding))
+
+  def prepareC(
+    operation: SbtOperation,
+    capability: ProcessCapabilityId,
+    safeProgramIdentity: String,
+    sbtExecutable: Path,
+    limits: ProcessExecutionLimits,
+    environment: Map[String, String],
+    testClasses: Vector[String],
+    validationMode: Option[SbtValidationMode.Binding],
+    discovery: Option[SbtValidationDiscovery.Binding],
+    discoveredTests: Boolean
+  ): Consequence[PreparedSbtProgram] =
     for {
-      _ <- binding.workingDirectoryC
       _ <- if (operation != null) Consequence.unit else _invalid_operation_c
       _ <- if (discoveredTests && operation == SbtOperation.TestOnly && testClasses.isEmpty && discovery.nonEmpty) Consequence.unit
         else SbtTestSelectionPolicy.validateC(operation, testClasses)
@@ -208,11 +237,11 @@ private[cncf] object SbtProgramDefinition {
       )
       arguments = if (operation == SbtOperation.TestCompile && discovery.nonEmpty)
         basearguments.dropRight(1) ++ SbtValidationDiscovery.tasks else basearguments
-      definition <- ProcessProgramDefinition.fromSbtRuntimeC(
-        capability, safeProgramIdentity, executable.toString, arguments, limits,
-        environment, SbtProgramMetadata(binding, operation, testClasses, validationMode = validationMode, discovery = discovery, discoveredTests = discoveredTests)
+      definition <- ProcessProgramDefinition.fromRuntimeC(
+        capability, safeProgramIdentity, executable.toString, arguments,
+        ProcessArgumentPolicy(arguments), limits, Set.empty, environment = environment
       )
-    } yield definition
+    } yield PreparedSbtProgram(definition, operation, testClasses, validationMode, discovery, discoveredTests)
 
   private def _invalid_operation_c: Consequence[Unit] =
     Consequence.argumentPolicyViolation("operation", "sbt.execution.operation", "Compile, TestCompile, Test, TestOnly, FixCheck or PublishLocal", "unknown")

@@ -9,7 +9,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceExecutionAdmiss
  * @since   Jul. 17, 2026
  *  version Jul. 22, 2026
  *  version Oct. 28, 2026
- * @version Nov.  6, 2026
+ * @version Nov. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ProcessCapabilityId private (value: String) {
@@ -538,6 +538,41 @@ final class ProcessProgramDefinition private (
 }
 
 object ProcessProgramDefinition {
+  /** Pre-effect V8 validation covers the complete fixed prefix and every declared template. */
+  private[cncf] def validatePreparedArgumentsC(definition: ProcessProgramDefinition): Consequence[Unit] = {
+    val fixed = definition.fixedArguments.map(ProcessArgumentSlot.Literal.apply)
+    val templates = definition.argumentPolicy.permittedArgumentTemplates.toVector
+    val vectors = if (templates.isEmpty) Vector(fixed) else templates.map(t => fixed ++ t.slots)
+    vectors.foldLeft(Consequence.unit) { (prior, slots) => prior.flatMap { _ =>
+      slots.foldLeft(Consequence.unit)((acc, slot) => acc.flatMap(_ => slot.validateC)).flatMap { _ =>
+        val bytes = slots.foldLeft(0L) { (total, slot) => total + (slot match {
+          case ProcessArgumentSlot.Literal(value) => value.getBytes("UTF-8").length.toLong
+          case ProcessArgumentSlot.LowerHex(lengths, prefix, suffix) =>
+            lengths.max.toLong + prefix.getBytes("UTF-8").length + suffix.getBytes("UTF-8").length
+        }) }
+        val limits = definition.maximumLimits
+        if (limits.argumentCount.exists(_ < slots.size.toLong))
+          Consequence.argumentLimitExceeded("arguments", limits.argumentCount.get, slots.size.toLong, "process.execution.argument-count")
+        else if (limits.argumentBytes.exists(_ < bytes))
+          Consequence.argumentLimitExceeded("arguments", limits.argumentBytes.get, bytes, "process.execution.argument-bytes")
+        else Consequence.unit
+      }
+    } }
+  }
+
+  /** Attach semantic metadata only after the actual workspace has been admitted. */
+  private[processexecution] def bindPrepared(
+    definition: ProcessProgramDefinition,
+    sbt: Option[SbtProgramMetadata] = None,
+    git: Option[GitProgramMetadata] = None,
+    check: Option[ValidationCheckProgramMetadata] = None
+  ): ProcessProgramDefinition =
+    new ProcessProgramDefinition(definition.capability, definition.safeProgramIdentity,
+      definition._executable_location, definition.fixedArguments, definition.argumentPolicy,
+      definition.maximumLimits, definition.allowedArtifacts, definition.allowsWorkingDirectory,
+      definition.allowedInputFiles, definition.allowedInputFilePaths, definition.allowedResourceTrees,
+      definition._environment, sbt, git, _validation_check_metadata = check)
+
   private val _safe_identity_pattern = "[a-z][a-z0-9-]{0,63}".r
 
   /** Rebind only already-tagged semantic definitions; all authority and limits are retained. */

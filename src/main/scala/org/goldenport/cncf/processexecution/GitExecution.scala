@@ -11,7 +11,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 28, 2026
- * @version Nov.  2, 2026
+ * @version Nov. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 /** Per-call selected data within an already granted program's fixed scope.
@@ -34,7 +34,8 @@ object GitTarget {
   * the ordinary UnitOfWork Git execution must independently admit the intent again.
   * Missing or invalid context, target or operation is a typed failure.
   * @since   Oct. 27, 2026
-  * @version Oct. 28, 2026
+  *  version Oct. 28, 2026
+  * @version Nov. 16, 2026
   */
 object GitExecutionPreflight {
   def validateC[A](context: ExecutionContext, target: GitTarget, operation: GitOperation[A]): Consequence[Unit] =
@@ -386,6 +387,34 @@ private[cncf] final case class GitProgramMetadata(
   def trackingRef: String = s"refs/remotes/$remote/${remoteBranch.value}"
 }
 
+private[cncf] final case class GitProgramParameters(
+  kind: GitOperationKind,
+  selectionid: Option[GitSelectionId],
+  localbranch: GitBranchName,
+  remote: String,
+  remotebranch: GitBranchName,
+  endpoint: String,
+  commitidentity: Option[GitCommitIdentity],
+  selectedpath: Option[GitPath],
+  commitmessage: Option[String],
+  selectedpaths: Vector[GitPath]
+) {
+  def trackingRef: String = s"refs/remotes/$remote/${remotebranch.value}"
+  def bind(binding: WorkspaceBinding): GitProgramMetadata =
+    GitProgramMetadata(binding, kind, selectionid, localbranch, remote, remotebranch, endpoint,
+      commitidentity, selectedpath, commitmessage, selectedpaths)
+}
+
+private[cncf] final case class PreparedGitProgram(
+  definition: ProcessProgramDefinition,
+  parameters: GitProgramParameters
+) {
+  def bindC(binding: WorkspaceBinding): Consequence[ProcessProgramDefinition] =
+    if (binding == null) GitProgramDefinition.invalidC
+    else binding.workingDirectoryC.map(_ => ProcessProgramDefinition.bindPrepared(definition,
+      git = Some(parameters.bind(binding))))
+}
+
 private[cncf] object GitProgramDefinition {
   val checkpointMessage = "sm-workflow full-state checkpoint"
   val fixedEnvironment = Map("GIT_TERMINAL_PROMPT" -> "0", "GIT_CONFIG_NOSYSTEM" -> "1",
@@ -410,25 +439,45 @@ private[cncf] object GitProgramDefinition {
     limits: ProcessExecutionLimits,
     environment: Map[String, String],
     selectedPaths: Vector[GitPath] = Vector.empty
-  ): Consequence[ProcessProgramDefinition] = for {
-    _ <- if (binding != null && kind != null) Consequence.unit else invalidC
+  ): Consequence[ProcessProgramDefinition] =
+    prepareC(kind, capability, safeProgramIdentity, gitExecutable, localBranch, remote, remoteBranch,
+      endpoint, commitIdentity, selectionId, selectedPath, commitMessage, limits, environment, selectedPaths)
+      .flatMap(_.bindC(binding))
+
+  def prepareC(
+    kind: GitOperationKind,
+    capability: ProcessCapabilityId,
+    safeProgramIdentity: String,
+    gitExecutable: Path,
+    localBranch: GitBranchName,
+    remote: String,
+    remoteBranch: GitBranchName,
+    endpoint: String,
+    commitIdentity: Option[GitCommitIdentity],
+    selectionId: Option[GitSelectionId],
+    selectedPath: Option[GitPath],
+    commitMessage: Option[String],
+    limits: ProcessExecutionLimits,
+    environment: Map[String, String],
+    selectedPaths: Vector[GitPath]
+  ): Consequence[PreparedGitProgram] = for {
+    _ <- if (kind != null) Consequence.unit else invalidC
     _ <- if (safeProgramIdentity != null && safeProgramIdentity.matches("[a-z][a-z0-9-]{0,63}") &&
       capability != null && capability.value.matches("[a-z][a-z0-9-]{0,63}")) Consequence.unit else invalidC
-    _ <- binding.workingDirectoryC
     _ <- _validate_host_c(kind, localBranch, remote, remoteBranch, endpoint, commitIdentity, selectionId, selectedPath, commitMessage, selectedPaths)
     executable <- _executable_c(gitExecutable)
     _ <- if (environment != null && environment.keySet.subsetOf(Set("PATH", "SSH_AUTH_SOCK", "TMPDIR"))) Consequence.unit else invalidC
-    metadata = GitProgramMetadata(binding, kind, selectionId, localBranch, remote, remoteBranch, endpoint,
+    parameters = GitProgramParameters(kind, selectionId, localBranch, remote, remoteBranch, endpoint,
       commitIdentity, selectedPath, commitMessage, selectedPaths)
-    slots = _slots(metadata)
+    slots = _slots(parameters)
     boundary = slots.indexWhere { case _: ProcessArgumentSlot.LowerHex => true; case _ => false }
     fixed = if (boundary < 0) slots.map { case ProcessArgumentSlot.Literal(text) => text; case _ => "" }
       else slots.take(boundary).map { case ProcessArgumentSlot.Literal(text) => text; case _ => "" }
     dynamic = if (boundary < 0) Vector.empty else slots.drop(boundary)
-    definition <- ProcessProgramDefinition.fromGitRuntimeC(capability, safeProgramIdentity, executable.toString,
+    definition <- ProcessProgramDefinition.fromRuntimeC(capability, safeProgramIdentity, executable.toString,
       fixed, ProcessArgumentPolicy(fixed, admission = ProcessArgumentAdmission.Template,
-        permittedArgumentTemplates = Set(ProcessArgumentTemplate(dynamic))), limits, environment ++ fixedEnvironment, metadata)
-  } yield definition
+        permittedArgumentTemplates = Set(ProcessArgumentTemplate(dynamic))), limits, Set.empty, environment = environment ++ fixedEnvironment)
+  } yield PreparedGitProgram(definition, parameters)
 
   private[processexecution] def selectedBaseKind(kind: GitOperationKind): GitOperationKind = kind match {
     case GitOperationKind.StageSelected | GitOperationKind.StageSelectedAll => GitOperationKind.StageFullState
@@ -520,17 +569,17 @@ private[cncf] object GitProgramDefinition {
     }
   } catch { case NonFatal(_) => invalidC }
 
-  private def _slots(metadata: GitProgramMetadata): Vector[ProcessArgumentSlot] = {
+  private def _slots(metadata: GitProgramParameters): Vector[ProcessArgumentSlot] = {
     import ProcessArgumentSlot.{Literal, LowerHex}
     def _l_(texts: String*): Vector[ProcessArgumentSlot] = texts.toVector.map(Literal.apply)
     val oid = LowerHex(Set(40, 64))
-    val identity = metadata.commitIdentity.toVector.flatMap(x => _l_("-c", s"user.name=${x.name.trim}",
+    val identity = metadata.commitidentity.toVector.flatMap(x => _l_("-c", s"user.name=${x.name.trim}",
       "-c", s"user.email=${x.email.trim}", "-c", "user.useConfigOnly=true"))
     val command = metadata.kind match {
       case GitOperationKind.PreparePurposeCandidate | GitOperationKind.MaterializePurposeCandidate | GitOperationKind.CommitPurposeCandidate => _l_("rev-parse", "--verify", "HEAD")
       case GitOperationKind.Branch => _l_("symbolic-ref", "--quiet", "--short", "HEAD")
       case GitOperationKind.Root => _l_("rev-parse", "--show-toplevel")
-      case GitOperationKind.RemoteTip => _l_("ls-remote", "--exit-code", "--heads", "--", metadata.endpoint, s"refs/heads/${metadata.remoteBranch.value}")
+      case GitOperationKind.RemoteTip => _l_("ls-remote", "--exit-code", "--heads", "--", metadata.endpoint, s"refs/heads/${metadata.remotebranch.value}")
       case GitOperationKind.Head => _l_("rev-parse", "--verify", "HEAD^{commit}")
       case GitOperationKind.Tree => _l_("rev-parse", "--verify", "HEAD^{tree}")
       case GitOperationKind.Status => _l_("status", "--porcelain=v1", "-z", "--untracked-files=all")
@@ -545,39 +594,41 @@ private[cncf] object GitProgramDefinition {
       case GitOperationKind.UnmergedIndex => _l_("ls-files", "--unmerged", "-z")
       case GitOperationKind.Fetch => _l_("fetch", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules",
         "--no-auto-maintenance", "--no-write-commit-graph", "--no-prune", "--refmap=", "--", metadata.endpoint,
-        s"refs/heads/${metadata.remoteBranch.value}:${metadata.trackingRef}")
+        s"refs/heads/${metadata.remotebranch.value}:${metadata.trackingRef}")
       case GitOperationKind.FastForward => _l_("merge", "--ff-only", "--no-edit", "--no-autostash", "--no-verify", "--no-gpg-sign", "--") :+ oid
       case GitOperationKind.PendingMerge => identity ++ _l_("merge", "--no-ff", "--no-commit", "--no-edit", "--no-autostash", "--no-verify", "--no-gpg-sign", "--") :+ oid
       case GitOperationKind.CommitPending => identity ++ _l_("commit", "--no-verify", "--no-gpg-sign", "--no-edit")
       case GitOperationKind.Push => _l_("push", "--porcelain", "--no-verify", "--no-follow-tags", "--recurse-submodules=no", "--", metadata.endpoint) :+
-        LowerHex(Set(40, 64), suffix = s":refs/heads/${metadata.remoteBranch.value}")
+        LowerHex(Set(40, 64), suffix = s":refs/heads/${metadata.remotebranch.value}")
       case GitOperationKind.CreateCheckpoint => identity ++ _l_("commit-tree", "--no-gpg-sign", "-m", checkpointMessage) ++ Vector(oid, Literal("-p"), oid)
       case GitOperationKind.InstallCheckpoint => _l_("update-ref", "--no-deref", "--create-reflog", "-m", checkpointMessage,
-        s"refs/heads/${metadata.localBranch.value}") ++ Vector(oid, oid)
+        s"refs/heads/${metadata.localbranch.value}") ++ Vector(oid, oid)
       case GitOperationKind.CommitMetadata => _l_("show", "--no-patch", "--no-show-signature", "--format=%H%n%T%n%P") ++ Vector(oid, Literal("--"))
       case GitOperationKind.BlobContent => _l_("cat-file", "blob") :+ oid
       case GitOperationKind.CheckPendingIndex => _l_("diff", "--cached", "--no-ext-diff", "--no-textconv", "--check") ++ Vector(oid, Literal("--"))
       case GitOperationKind.PendingDiff => _l_("diff", "--cached", "--no-ext-diff", "--no-textconv", "--no-color", "--no-renames") ++ Vector(oid, Literal("--"))
       case GitOperationKind.PendingPaths => _l_("diff", "--cached", "--no-ext-diff", "--no-textconv", "--no-renames", "--name-only", "-z") ++ Vector(oid, Literal("--"))
-      case GitOperationKind.StageSelected => _l_("--literal-pathspecs", "add", "--", metadata.selectedPath.get.value)
-      case GitOperationKind.StageSelectedAll => _l_("--literal-pathspecs", "add", "--all", "--", metadata.selectedPath.get.value)
-      case GitOperationKind.CommitSelected => identity ++ _l_("--literal-pathspecs", "commit", "--only", "--no-verify", "--no-gpg-sign", "-m", metadata.commitMessage.get, "--") ++
-        metadata.selectedPaths.map(x => Literal(x.value))
+      case GitOperationKind.StageSelected => _l_("--literal-pathspecs", "add", "--", metadata.selectedpath.get.value)
+      case GitOperationKind.StageSelectedAll => _l_("--literal-pathspecs", "add", "--all", "--", metadata.selectedpath.get.value)
+      case GitOperationKind.CommitSelected => identity ++ _l_("--literal-pathspecs", "commit", "--only", "--no-verify", "--no-gpg-sign", "-m", metadata.commitmessage.get, "--") ++
+        metadata.selectedpaths.map(x => Literal(x.value))
       case GitOperationKind.CheckSelectedIndex => _l_("--literal-pathspecs", "diff", "--cached", "--no-ext-diff", "--no-textconv", "--check") ++
-        Vector(oid, Literal("--")) ++ metadata.selectedPaths.map(x => Literal(x.value))
+        Vector(oid, Literal("--")) ++ metadata.selectedpaths.map(x => Literal(x.value))
       case GitOperationKind.SelectedIndexChanges => _l_("--literal-pathspecs", "diff", "--cached", "--no-ext-diff", "--no-textconv", "--raw", "--no-abbrev", "--no-renames", "-z") ++
-        Vector(oid, Literal("--")) ++ metadata.selectedPaths.map(x => Literal(x.value))
+        Vector(oid, Literal("--")) ++ metadata.selectedpaths.map(x => Literal(x.value))
       case GitOperationKind.TreeChanges => _l_("diff-tree", "--no-commit-id", "--no-ext-diff", "--no-textconv", "--raw", "--no-abbrev", "--no-renames", "-r", "-z") ++
         Vector(oid, oid, Literal("--"))
       case GitOperationKind.TreeEntries => _l_("--literal-pathspecs", "ls-tree", "--full-tree", "-z") ++
-        Vector(oid, Literal("--")) ++ metadata.selectedPaths.map(x => Literal(x.value))
+        Vector(oid, Literal("--")) ++ metadata.selectedpaths.map(x => Literal(x.value))
     }
     prefix.map(Literal.apply) ++ command
   }
 
   private[processexecution] def physicalCommitArguments(metadata: GitProgramMetadata,
     paths: Vector[GitPath]): Vector[String] =
-    _slots(metadata.copy(selectedPaths = paths)).collect { case ProcessArgumentSlot.Literal(text) => text }
+    _slots(GitProgramParameters(metadata.kind, metadata.selectionId, metadata.localBranch,
+      metadata.remote, metadata.remoteBranch, metadata.endpoint, metadata.commitIdentity,
+      metadata.selectedPath, metadata.commitMessage, paths)).collect { case ProcessArgumentSlot.Literal(text) => text }
 
   private[cncf] def typedArgumentsC(operation: GitOperation[?], metadata: GitProgramMetadata): Consequence[Vector[String]] = {
     def _oid_(value: GitObjectId): Consequence[String] =
