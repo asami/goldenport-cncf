@@ -52,3 +52,45 @@ OPEN. Owner: goldenport-cncf. WorkspaceFirstUseInitializationSpec.scala:156 reta
 - Follow-up task/commit: not assigned.
 
 OPEN. Owner: goldenport-cncf. ComponentDefaultRuntimeValuesSpec.scala:157-159 retains a pre-existing second worktree-config action beneath the preceding Then without a separate semantic action/expectation pair. Current changes only rename the fixture helper in this scenario. Risk: specification presentation only. Separately clarify the retained scenario boundaries without changing execution or assertions.
+
+## HYG-INIT1-RUNTIME-LIFECYCLE-SIZE-01
+
+- Status: OPEN; priority P3.
+- Discovered: 2026-11-16, independent focused review of the same-CAR Resource default connection.
+- Owner: goldenport-cncf.
+- Location: `src/main/scala/org/goldenport/cncf/cli/CncfRuntimeInstanceLifecyclePart.scala`.
+- Evidence: 1,054 baseline / 1,069 reviewed lines, above the ordinary-source 1,000-line debt threshold.
+- Category and risk: inherited responsibility/size maintenance; the bounded connection remains reviewable, with no observed size-caused defect.
+- Current boundary: lifecycle extraction would change additional collaborators and is separate from Resource setting precedence.
+- Proposed task: assess coherent lifecycle-role extraction, preserving initialization order, cleanup and source behavior.
+- Follow-up task/commit: not assigned.
+
+HYG-INIT1-RUNTIME-LIFECYCLE-SIZE-01 — OPEN, P3. CncfRuntimeInstanceLifecyclePart.scala is 1,054 baseline / 1,069 current lines, above the 1,000-line ordinary-source debt threshold. It retains runtime construction, configuration/profile admission, component verification and command-mode dispatch responsibilities. The current resource-default connection remains bounded and reviewable; no size-caused defect was found. Separately assess coherent lifecycle-role extraction across its self-type collaborators and callers while preserving initialization order, resource cleanup, source API and behavior. No extraction is admitted by the INIT1 resource-default repair.
+
+## HYG-INIT1-PREFLIGHT-TYPE-OWNERSHIP-01
+
+- Status: OPEN; priority P3.
+- Discovered: 2026-11-16, independent focused review of the same-CAR Resource default connection.
+- Owner: goldenport-cncf.
+- Location: `src/main/scala/org/goldenport/cncf/cli/CncfRuntimeInstanceLifecyclePart.scala`, `RuntimeConfigurationPreflight`.
+- Evidence: the reviewed base already declares the case class inside the instance mix-in trait.
+- Category and risk: inherited instance-dependent type ownership; no runtime defect was observed.
+- Current boundary: extraction requires its callers and shared type ownership to be assessed separately.
+- Proposed task: assess an instance-independent data-type owner, preserving source contracts and behavior.
+- Follow-up task/commit: not assigned.
+
+HYG-INIT1-PREFLIGHT-TYPE-OWNERSHIP-01 — OPEN, P3. CncfRuntimeInstanceLifecyclePart.scala:103 retains the pre-existing RuntimeConfigurationPreflight case class inside an instance mix-in trait. This predates INIT1 and retains instance-dependent type ownership contrary to the shared type-modeling direction. The added resource-default field does not introduce a new owner or observed runtime defect. Separately assess moving the data type to an instance-independent owner with its callers and specifications. Preserve current behavior and source contracts; no type extraction is admitted by this repair.
+
+## HYG-INIT1-EXISTING-PACKAGE-HELPER-NAMING-01
+
+- Status: OPEN; priority P3.
+- Discovered: 2026-11-16, independent focused review of the same-CAR Resource default connection.
+- Owner: goldenport-cncf.
+- Locations: `src/main/scala/org/goldenport/cncf/config/RuntimeConfig.scala`, existing `Settings.withStores` and `settingsFrom`; directly affected `GenericSubsystemFactory` / `GenericSubsystemDescriptor` package-visible helpers.
+- Evidence: these camelCase package-visible helpers predate the reviewed delta.
+- Category and risk: inherited naming consistency, separate from the newly introduced helper's current naming blocker.
+- Current boundary: incidental broad renaming is not part of the Resource connection repair.
+- Proposed task: freeze selected declarations/callers for naming maintenance, retaining visibility and compatibility.
+- Follow-up task/commit: not assigned. Existing `HYG-RUNTIME-CONFIG-PUBLIC-PARAM-001` and `HYG-RUNTIME-CONFIG-SIZE-001` remain in their original October journals without duplicate entries here.
+
+HYG-INIT1-EXISTING-PACKAGE-HELPER-NAMING-01 — OPEN, P3. RuntimeConfig.scala retains pre-existing package-visible camelCase helpers including Settings.withStores and settingsFrom; directly affected GenericSubsystemFactory/GenericSubsystemDescriptor helpers also retain this pattern. These declarations predate the reviewed delta. Separately freeze a naming-conformance task covering the selected declarations and callers, preserving visibility, named-argument compatibility and behavior. Existing naming debt does not authorize new violations or incidental renaming during INIT1.

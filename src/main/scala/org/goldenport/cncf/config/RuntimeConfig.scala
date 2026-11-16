@@ -3,7 +3,7 @@ package org.goldenport.cncf.config
 import java.nio.file.{Path, Paths}
 
 import org.goldenport.Consequence
-import org.goldenport.configuration.ResolvedConfiguration
+import org.goldenport.configuration.{Configuration, ResolvedConfiguration}
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.log.LogBackend
 import org.goldenport.cncf.observability.LogLevel
@@ -27,7 +27,7 @@ import org.goldenport.cncf.resource.{ResourceReadLimits, ResourceTreePolicy, Res
  *  version Jun. 19, 2026
  *  version Jul. 30, 2026
  *  version Oct. 23, 2026
- * @version Nov.  3, 2026
+ * @version Nov. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -476,6 +476,20 @@ object RuntimeConfig {
       resourceTreePolicy = ResourceTreePolicy(),
       mcpClientPolicyPath = None
     )
+
+  /** Only absent resource-read setting groups inherit selected CAR defaults. */
+  private[cncf] def _with_selected_resource_defaults(
+    configuration: ResolvedConfiguration,
+    defaults: Configuration
+  ): ResolvedConfiguration = {
+    val supplied = configuration.configuration.values
+    val inherited = Vector(RESOURCE_READ_MAX_BYTES_KEY, resourceUrlFileRootsKey).flatMap { key =>
+      val spellings = key +: _legacy_aliases(key)
+      if (spellings.exists(ConfigurationAccess._has_value(configuration, _))) Vector.empty
+      else spellings.flatMap(spelling => defaults.values.get(spelling).map(spelling -> _))
+    }.toMap
+    ResolvedConfiguration(Configuration(inherited ++ supplied), configuration.trace)
+  }
 
   def from(
     configuration: ResolvedConfiguration,

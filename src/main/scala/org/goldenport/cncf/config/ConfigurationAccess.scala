@@ -8,10 +8,16 @@ import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
  *  version Mar. 24, 2026
  *  version Apr. 15, 2026
  *  version Jul.  2, 2026
- * @version Aug. 14, 2026
+ *  version Aug. 14, 2026
+ * @version Nov. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 object ConfigurationAccess {
+  private[cncf] def _has_value(conf: ResolvedConfiguration, key: String): Boolean =
+    conf.configuration.values.contains(key) ||
+      _lookup(conf.configuration.values, key.split('.').toList.filter(_.nonEmpty)).isDefined ||
+      getString(conf, key).isDefined
+
   def getString(
     conf: ResolvedConfiguration,
     key: String
