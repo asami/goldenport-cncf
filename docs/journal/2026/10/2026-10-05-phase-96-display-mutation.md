@@ -305,15 +305,6 @@ changed by B authoring.
 
 ## P96-06B representative001 compile failure and frozen correction
 
-`phase96-p96-06b-representative-result-001@1` for
-`phase96-p96-06b-validation-subject-001@1` records the actual first representative
-RequestCodecSpec attempt. Normal Information generation and 213 production
-sources compiled. Test compilation then failed with three fixture errors and
-229 warnings; no tests ran. SBT and wrapper both exited 1 with the serial lock
-released. The retained evidence is
-`/private/tmp/skill.cncf.d/a-d63803ac-a78a-4854-86ef-ac1a36effa9c/45775-20261005T104425Z.summary.json`
-and `/private/tmp/skill.cncf.d/a-d63803ac-a78a-4854-86ef-ac1a36effa9c/45775-20261005T104425Z.log`.
-
 The three exact compiler errors in DisplayMutationCodecFixture were:
 
 - At 27:118: `Found GeneratedLogicalUiAbi.identity:String; Required Json=>Json`.
@@ -489,3 +480,5 @@ P96-07's four criteria and P96-08..11 remain OPEN; full Phase reviews remain
 zero. Final validation/review/release/closure and separate Cozy/server/app
 aggregate gates remain with their existing owners. This factual reconciliation
 adds no execution evidence or acceptance boundary.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/10/2026-10-05-phase-96-display-mutation.md.gz`

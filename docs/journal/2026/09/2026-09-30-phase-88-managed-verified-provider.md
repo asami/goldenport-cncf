@@ -42,9 +42,6 @@ wrapper exit=0, lock=released; persistent summary confirms compile coverage.
 The user-selected simplified parent execution route preserved serial locking,
 fresh permission metadata and scoped platform review.
 
-Log:
-/tmp/skill.cncf.d/cncf-sbt-6d1cb57cd796939c69d9cc7267c6e9ac934a0e47c80d8700e3f31603c46cf742-f03ef6b03da4172d441b865063abf171/53744-20260930T065003Z.log
-
 Validated SHA-256:
 - EntityVerifiedMultiGuardDataStore.scala: 7a66e4aecc8da407e19d23ae6f7df3e148f6f59b6ed55a5b073cef3200d9734a
 - SqlDataStore.scala: c1fe34937c1ea5e8a0739da540cde971c88aa0d05cee3109efc0077e9c80ff93
@@ -59,3 +56,5 @@ still need dedicated evidence; existing native same-owner and generic admission
 specs are not relabeled as those proofs.
 S12/P2-U15/P2-U16/P2-U05 remain open. No full-suite, independent review or typed
 Phase/PLAN acceptance is claimed. No commit/publication was performed.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-managed-verified-provider.md.gz`

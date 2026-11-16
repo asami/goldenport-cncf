@@ -63,6 +63,7 @@ wildcards remain unchanged. The gate was repeated because those observed
 warnings required a source correction.
 
 Final command:
+
 ```text
 sbt --batch clean test 'show Compile / scalacOptions' 'show Test / scalacOptions'
 ```
@@ -78,17 +79,6 @@ sbt --batch clean test 'show Compile / scalacOptions' 'show Test / scalacOptions
 | Job correction conservation | _result unchanged from baseline; only _result_v2 outer null fallback changed |
 | HEAD/index and four preexisting dirty paths | Original HEAD; index empty; all four paths byte-for-byte preserved |
 | All 12 edited Scala version headers; git diff --check | PASS |
-
-Final invocation: `cncf-warnings-clean-test-723c26aecb4f4cb5`.
-SBT exit 0, wrapper exit 0, terminal `lock=released` verified.
-
-First-gate log: `/tmp/skill.cncf.d/cncf-sbt-ea71d1697bd0826d90daa834018fbbc9304fed312cf086a01dd0495ed843778b-efb2d8676f36597b3828a984491dfdc8/37809-20260928T093432Z.log`.
-Final-gate log: `/tmp/skill.cncf.d/cncf-sbt-698a92d3f540ab5e9993eb986b12cd154b00c3d62dd90e0322d309026b550378-3399b2b396ef90c6331160c07c6b6058/38301-20260928T093908Z.log`.
-Final log SHA-256: `71c93d42355d56809b8cf8a428dce915172d681cd614e7b7859572c73ebf2fd9`.
-
-Both invocations use the registered cncf_command_runner and the shared serial
-wrapper, normal SBT/Ivy/Coursier repositories, and the 4096 MB/G1 JVM profile.
-The parent waited for lock=released before editing or starting another SBT.
 
 Current Incident Blocker: resolved; zero compiler warnings and the full gate passed.
 No new Hygiene or Development Candidate is admitted by this warning repair.
@@ -115,3 +105,5 @@ The parent's exact model identifier and effort are unavailable.
 One additional editor spawn request did not start because of the agent-thread
 limit. The already registered editor was resumed for the remaining disjoint
 manifest; no alternate profile or execution route was substituted.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-28-cncf-compiler-warning-cleanup.md.gz`

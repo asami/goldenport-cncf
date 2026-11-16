@@ -74,12 +74,6 @@ Receipt SHA-256:
 Validated complete-tree SHA-256:
 `dba72d076bc2dd8436a69004821f7fffa8c2e72dc4a5fdcf1e2e034db677cd6c`.
 
-Receipt:
-`/tmp/skill.cncf.d/cncf-command-execution-2b83880b619b73d4d9a9b74d5ecebd02d556375857ab3b97cfd2f3dc2854a56f-e2a52657491e8d1228bd1ebf1025867d/command-execution-sha256-036b33d70962b6355a522e5d6d2265e0cc58a24368d3fa765ed404a55613263e`.
-
-Log:
-`/tmp/skill.cncf.d/cncf-sbt-002d3d1505d8c0b0c40e968964df6ab9c3f4cada5ea269904178e1ad9ec10ea9-4e28eef63a9cc3785a75815ec77d8e6f/14927-20260929T024652Z.log`.
-
 Validated S2 source SHA-256:
 
 - Component.scala:
@@ -114,3 +108,5 @@ ArtScene and other-owned changes remain untouched. No sm-workflow semantics or
 cncf-* skill changes were added to CNCF.
 
 See [Phase 88](../../../phase/phase-88.md).
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-29-phase-88-instance-bootstrap.md.gz`

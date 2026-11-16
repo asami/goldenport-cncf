@@ -21,15 +21,6 @@ hierarchy and canonical split documents flatten physical fields without a
 `groupBy` collapse. The existing candidate constructor reports a duplicate
 canonical `(parameter,target)` structurally, and CNCF never rereads the file.
 
-Generic `Test/compile` plus `FileConfigLoaderSpec` and
-`ConfigurationResolutionSnapshotSpec` passed 7/7 through serialized invocation
-`20002-20260803T123545Z`. Development-local `publishLocal` completed through
-`21867-20260803T123833Z`; it wrote only the local Ivy artifact and did not
-publish externally. CNCF `Test/compile` plus
-`CncfRuntimeConfigurationProjectionSpec`, `CncfRuntimeSnapshotBootstrapSpec`,
-and `Phase55RuntimeConfigurationBoundarySpec` passed 20/20 through serialized
-invocation `22594-20260803T123955Z`.
-
 Independent review found the initial public-trait evolution lacked an additive
 default; raw scalar construction could differ from accepted SnakeYAML values;
 the duplicate test admitted an invalid user-mode value; one test retained
@@ -72,3 +63,5 @@ Generic validation passed 7/7 at `70744-20260803T135927Z`; local-only
 The final focused re-review is clean. It verified deterministic binary scalar
 conversion, raw/compatibility equality coverage, updated Scala version headers,
 and cleanup of test directories under `target/`.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/08/2026-08-03-phase-55-gcf08l-raw-yaml-duplicate-member-preservation.md.gz`

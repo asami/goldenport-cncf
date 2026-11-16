@@ -35,17 +35,11 @@ SBT exit 0, wrapper exit 0 and lock released, with an accepted execution receipt
 The five new examples ran with the existing seven route/host/policy/codec/
 conditional-update/selected-record suites. This is focused, not full-suite QA.
 
-Invocation: `SMWF-P2-CNCF-P88-MEMORY-ROUTE-RETEST-20260930-301`.
-Receipt:
-`/tmp/skill.cncf.d/cncf-command-execution-001ae0fec78af662f54684d2510b4fc47dcb4812fcf9f113247ec773215a69b7-11d91bf54fd3cbf23c1354c6f362f628/command-execution-sha256-40962c79d08d511066c0fc3f65a3eb36654f549f6c0fa2ef412946586217310a`.
-Log:
-`/tmp/skill.cncf.d/cncf-sbt-c9a16c98056aa7da759eb3777cf4ff94cd10127ac8ac88d947fc34849575dcf6-09091c9dc087c6df98b6e063dea7ff5a/91896-20260930T011326Z.log`.
-Agent Use: registered-custom-role cncf_command_runner, gpt-5.6-luna / medium,
-`/root/sbt_receipt_577a88bfffa9548cebe4`; actual receipt identity matched.
-
 Subsequent changes are documentation only. No commit, publication or runtime
 activation. S12, P2-U15, P2-U16 and P2-U05 remain unchecked. The next contract
 must provide admitted same-provider readback of every guarded/Create record,
 not just the two-record Transitioned result, before it can authorize success
 or delivery. Cross-owner and SQLite acceptance still require their own real
 transaction, rollback and independent-writer specs.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-s12-memory-route.md.gz`

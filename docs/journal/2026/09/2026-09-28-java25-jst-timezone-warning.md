@@ -67,10 +67,6 @@ The formatting probe returned `2026/09/28 09:00:00`,
 for the original inputs. The legacy `JST` control still warns under the same
 Java 25, demonstrating that warning handling was not suppressed.
 
-SBT was serialized through the registered command runners and shared wrapper.
-All three invocations finished with SBT exit 0, wrapper exit 0, and
-`lock=released`.
-
 - Date specs: `cncf-jst-date-specs-d7feb45572ae48c7`.
 - Dependency refresh: `cncf-jst-refresh-cdf635b04a6144a1`.
 - CNCF generation: `cncf-jst-generation-a77c4c9d6fea43d1`.
@@ -112,3 +108,5 @@ medium. Parent reasoning effort is unavailable.
 | /root/sbt_attempt_24a5b654c2774cf0306e | gpt-5.6-luna | medium | cncf_command_runner / registered custom role | 0 | 1 | 0 | SBT; existing date specs | 8 passed |
 | /root/sbt_attempt_6c9b3bac8265920c366a | gpt-5.6-luna | medium | cncf_command_runner / registered custom role | 0 | 1 | 0 | SBT; dependency-artifact-refresh | Successful |
 | /root/sbt_attempt_78db1a8f9920ef299319 | gpt-5.6-luna | medium | cncf_command_runner / registered custom role | 0 | 1 | 0 | SBT; CNCF generation determinism | Successful; warning absent |
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-28-java25-jst-timezone-warning.md.gz`

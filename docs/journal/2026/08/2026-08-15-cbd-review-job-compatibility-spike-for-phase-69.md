@@ -21,9 +21,6 @@ Persistent CNCF Job and CBD Entity settlement path.
 
 The spike compiled and its focused boundary suite passed:
 
-- `Test / compile`: invocation `37198-20260815T082709Z`, exit 0.
-- six focused suites: invocation `38617-20260815T083022Z`, 61 tests, 0 failures.
-
 These results establish that the experiment was coherent enough to execute;
 they do not make it an accepted CBD Support or CNCF design.
 
@@ -132,3 +129,5 @@ spike as inventory input; durable execution/result recovery is owned by Phases
 69 and 69.1, exact lookup and cursor enumeration by Phase 69.2, and the fresh
 CBD Support recovery acceptance by Phase 69.7. This note does not change the
 spike disposition or adopt its rejected implementation.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/08/2026-08-15-cbd-review-job-compatibility-spike-for-phase-69.md.gz`

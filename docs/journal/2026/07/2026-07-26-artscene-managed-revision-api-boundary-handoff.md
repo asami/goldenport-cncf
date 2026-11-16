@@ -169,6 +169,8 @@ as an unreviewed compile workaround.
 
 ## Required CNCF Work
 
+Execution details are retained in the local archive referenced below.
+
 ### 1. Fix the managed application-facing API boundary
 
 - Keep ordinary Entity update available as `entity_update(id, patch)` without
@@ -570,15 +572,6 @@ CNCF and Cozy now implement the corrected ordinary Aggregate boundary:
   strict mutation attempt without changing the collection default; and
 - the provider preserves the explicit effective execution policy.
 
-The focused CNCF Entity/OCC/Web regression passed 361 tests in 7 suites. The
-CNCF full validation passed 2523 tests in 363 completed suites with a 4 GB
-maximum heap and no failures. Cozy focused generator validation passed 30
-tests, the Cozy full suite passed 662 tests in 59 suites, and regenerated
-ArtScene compiled 167 Scala sources against locally published CNCF and Cozy
-snapshots. The ArtScene focused correction boundary passed all 60 tests in
-`ArtSceneManualExhibitionSpec`, `ArtSceneCandidateFilteringSpec`,
-`ArtSceneFacilityMasterDataSpec`, and `ArtSceneUpdateFetchSpec`.
-
 The corrected ordinary patch-by-id UnitOfWork route now returns a
 revision-transparent `Record`. A separate observed operation returns
 `EntityRecordSnapshot` only when the caller supplies an observed revision.
@@ -604,3 +597,5 @@ unmanaged non-`SimpleEntity` fixture as a versioned save.
 
 The correction is not yet closed because read-only review, any resulting
 review-fix, and clean re-review remain outstanding.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/07/2026-07-26-artscene-managed-revision-api-boundary-handoff.md.gz`

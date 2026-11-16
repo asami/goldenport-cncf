@@ -1,5 +1,24 @@
 # docs/phase — Engineering Work Management
 
+HA implementation priority updated 2026-11-12:
+[Phase 108](phase-108.md#implementation-priority---2026-11-12) prioritizes the
+first operational immutable-replacement route: planned Switchover with admitted
+updates in flight, shared A/B/C cache synchronization, synchronized fallback,
+conditional retirement and repeatable scheduled/compatible-CAR replacement.
+IR-01 through IR-05 are OPEN. Full automatic Failover and expanded deployment
+qualification follow; authority-loss safety remains a first-route requirement.
+This updates HA work ordering, not completed delivery or native execution status.
+
+Entity residency and Read-only plans registered 2026-11-13:
+[Phase 123 — Activity-Scoped Entity Working Sets](phase-123.md) /
+[checklist](phase-123-checklist.md) extends the existing Working Set candidate;
+[Phase 124 — Read-only Operation for Failure and Maintenance](phase-124.md) /
+[checklist](phase-124-checklist.md) adds a separate service-mode delivery.
+Both are PLANNED, all items OPEN, execution_started=false. First single-runtime
+routes reuse existing capabilities; Phase 108 acceptance and priorities are
+unchanged. GitHub already allocates Phase 122 to typed SBT/lint work; these local
+registrations reserve the next two numbers without starting or syncing work.
+
 [Phase 121 — Firebase notification delivery and ingress attestation](phase-121.md) is planned for later delivery. Progress is recorded in the [Phase 121 checklist](phase-121-checklist.md).
 
 Data/report/print integration allocated 2026-11-02:
@@ -799,3 +818,9 @@ new Phase number and adds no requirement that every later integration close
 before EAI's minimum slice can consume a usable upstream handoff. Later status
 synchronizations are identified in the dated inventory notes above; each linked
 Phase owns its live status and evidence.
+
+## Commons owner workstream — 2026-11-15
+
+The [bounded owner plan](../strategy/commons-delivery-plan.md) defines CD-CNCF tasks, dependencies, target dates and acceptance for the December 11 team-restricted reference Web.
+The [Commons register](../../../../Project2026/nict-knowledgehub-commons/docs/strategy/related-project-tracking.md) tracks cross-project handoffs. Workbench owns Information lifecycle, CNCF physical persistence and the NICT foundation common application composition; existing Hub API placement is bound explicitly before changes.
+This workstream is planned and unstarted. Existing numbered Phase states, checkboxes, active work and Studio hold remain unchanged.

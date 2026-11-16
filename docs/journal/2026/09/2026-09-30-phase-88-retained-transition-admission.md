@@ -32,13 +32,6 @@ No production validation was loosened. Final focused-363 passed 241/241 in
 lock=released. Both final summaries/logs read; exact final invocation/cwd/
 unchanged 26-suite argv and per-case outcomes checked. No source edits afterward.
 
-Invocation: SMWF-CNCF-RETAINED-TRANSITION-DIRECT-20260930-363.
-Cwd: /Users/asami/src/dev2025/cloud-native-component-framework.
-Log: /tmp/skill.cncf.d/cncf-sbt-f69e9299b4b321e85505f2bcc7630bc518894cc7eaa440c02f80457fdabc7aa9-0bd6fa63d32e4898b03c95962fdbea15/10243-20260930T145536Z.log
-Adjacent summary: 10243-20260930T145536Z.summary.json.
-Validated ManagedEventObservationIsolationSpec.scala SHA-256:
-6a0add1035786360481e845ce2b25ec3fc37ad11330875b24a857df83b6aa6b4.
-
 No commit/publish/push, skill/agent edits, full review, typed acceptance or Phase
 closure. These six cases are not universal transition/authority proof.
 
@@ -49,3 +42,5 @@ Then common host/runtime routing chooses new/retained/transient branches
 deterministically from its captured EventStore selection, not skills/AI.
 Native cleanup/crash, application/UoW dispatch, production assembly/CLI/MCP/
 restart/management remain open. S12/P2-U15/P2-U16/P2-U05 unchecked; goal active.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-retained-transition-admission.md.gz`

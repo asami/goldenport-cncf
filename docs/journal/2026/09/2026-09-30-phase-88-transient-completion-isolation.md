@@ -37,16 +37,11 @@ lock=released. Both final summaries/logs read; final invocation/cwd/unchanged
 26-suite argv and all eight outcomes checked. No source edits after validation.
 No commit/publish/push, skill/agent edit, full review or typed Phase acceptance.
 
-Invocation: SMWF-CNCF-TRANSIENT-ISOLATION-DIRECT-20261001-367.
-Cwd: /Users/asami/src/dev2025/cloud-native-component-framework.
-Log: /tmp/skill.cncf.d/cncf-sbt-5a7283040cf4280048ed7c09456a44c26cfe508a0eea44008de14344251a3716-16f36569354294fd457bc61ad6a0193c/16874-20260930T150933Z.log
-Adjacent summary: 16874-20260930T150933Z.summary.json.
-Validated ManagedEventObservationIsolationSpec.scala SHA-256:
-9baee8e7550f50a9b0976ecb866786b8679423cbd3c2f0976fd5fbd7f376dc41.
-
 Next: transient-specific authority/unconfigured service, malformed/failed/
 throwing readback and independent writer competition. Then common deterministic
 host/runtime routing from captured EventStore input. Skills/AI never choose
 storage branches. Native cleanup/crash, application/UoW dispatch, production
 assembly/CLI/MCP/restart/management remain open. S12/P2-U15/P2-U16/P2-U05
 unchecked; full Phase goal stays active.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-transient-completion-isolation.md.gz`

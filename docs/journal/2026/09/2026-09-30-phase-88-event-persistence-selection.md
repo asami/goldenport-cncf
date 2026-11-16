@@ -25,15 +25,10 @@ transient-only selection and no opened resource/file, no-declaration and
 unknown-grant rejection, one shared managed resource, split-resource rejection,
 escaped-view rejection, malformed declaration and construction-scope restoration.
 
-Execution: registered cncf_command_runner, gpt-5.6-luna / medium,
-`/root/sbt_receipt_482258f8f3efa574146b`, healthy route. Receipt:
-`/tmp/skill.cncf.d/cncf-command-execution-4dd94129793b8b5f06b38697930330073b3c894a67cf047ba1bda2df0dffb700-74da58ef114dc9a5033c78fec6a3aa5d/command-execution-sha256-ed3582af30e8ee895b00b687be80761dee8435be73ff16c7534aa7bf8c584029`.
-Validated tree SHA-256:
-`449d2f9898a05f0f541c3be15aaa402b98d290891fbf2ede667a69f8d102f1c5`.
-Later changes update evidence/documentation only.
-
 Actual selected-only persistence, cursor/index allocation and dispatch are
 not wired or accepted. The positive S12 provider remains unsupported and
 fail-closed. Pure rollback delivery projection does not prove actual provider
 rollback or dispatch suppression. S12/P2-U15, consumer P2-U16 and P2-U05
 remain open; no full regression, artifact refresh, commit or publication.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-event-persistence-selection.md.gz`

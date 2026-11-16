@@ -231,13 +231,6 @@ regression, not whole-CNCF full test or downstream production acceptance.
   terminal: `[cncf-sbt] completed: invocation=SMWF-P2-CNCF-P88-S5-REGRESSION-20260929-255 sbt_exit=0 wrapper_exit=0 lock=released log=/tmp/skill.cncf.d/cncf-sbt-ce3b794dfba8e857b9322368f7278be824486b5e884d49fc1a4ead0a7836f38d-2a7f35149fe11e49197826066bbdb70d/60019-20260929T070049Z.log summary=/tmp/skill.cncf.d/cncf-sbt-ce3b794dfba8e857b9322368f7278be824486b5e884d49fc1a4ead0a7836f38d-2a7f35149fe11e49197826066bbdb70d/60019-20260929T070049Z.summary.json`
   observed counts: {"tests":{"total":1054,"succeeded":1054,"failed":0,"canceled":8,"ignored":0,"pending":5},"suites":{"completed":127,"aborted":0},"compile_failed":false}
 
-252 rejected execution: SMWF-P2-CNCF-P88-S5-FOCUSED-20260929-252
-runner: /root/sbt_receipt_815a2f07b89bbab1de37
-intake: `/tmp/skill.cncf.d/cncf-command-execution-dc938ffa7c3ebc09bb9b6719c0b83215dea089faa64f4c6b23a02ce1c0d56b14-fc36f856ca29ec89ade4993f20c4ba7b/command-execution-intake-sha256-4d7f36d6d8530cc16e7691b1076def484943ce66d756f20dd098d316930af070.json`
-raw result: `{"code":"COMMAND_EXECUTION_RECEIPT_INVALID","detail":"validation command changed the repository tree; validate the settled tree in a new attempt","status":"rejected"}`
-No command-execution receipt exists or is claimed for 252.
-Raw summary: `/tmp/skill.cncf.d/cncf-sbt-045d38ebc8ea5fc8aff107bbe313129f210b78afeb695588b2eb2b63bdefbf54-d9f30c1ca0b3d8c94d49fb4d0187639b/53896-20260929T065117Z.summary.json`
-
 ## Validated owned source identities
 
 - src/main/scala/org/goldenport/cncf/datastore/EntityConditionalTransition.scala
@@ -258,3 +251,5 @@ Raw summary: `/tmp/skill.cncf.d/cncf-sbt-045d38ebc8ea5fc8aff107bbe313129f210b78a
   8319d2413cc1313470adb4b244aa85eda183043797b00021503426dbcab74c81
 - src/test/scala/org/goldenport/cncf/workflow/WorkflowCompletionDataStorePersistenceSpec.scala
   30bb0cbea14f593b518df3858be69f9b90d4e804e4ac10702a89c6dca182eb6c
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-29-phase-88-guarded-completion.md.gz`

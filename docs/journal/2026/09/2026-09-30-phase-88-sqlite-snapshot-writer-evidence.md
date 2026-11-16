@@ -25,9 +25,6 @@ zero failed/aborted/canceled/ignored/pending. SBT exit=0, wrapper exit=0,
 lock=released. Mandatory serial wrapper, metadata validation and scoped platform
 review were preserved under the user-selected simplified parent execution route.
 
-Log:
-/tmp/skill.cncf.d/cncf-sbt-6b68e6ff6de5fb86ffd730a380aae4ff63f1f03bf37cd5cb4b5c0dc1d34664b9-fd79b2ad5568e9f6b567d7e47d7c9fcc/41326-20260930T061654Z.log
-
 Validated spec SHA-256:
 929b22ecc12eb995db40d978985325e5c4749d946de56262ff0fee3451f8bb27.
 
@@ -37,3 +34,5 @@ production opt-in, cross-owner authority/atomicity and selected cursor/index/eve
 dispatch remain open. No full-suite, independent review or typed Phase/PLAN
 acceptance is claimed. No commit/publication was performed.
 S12/P2-U15/P2-U16/P2-U05 remain open.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-sqlite-snapshot-writer-evidence.md.gz`

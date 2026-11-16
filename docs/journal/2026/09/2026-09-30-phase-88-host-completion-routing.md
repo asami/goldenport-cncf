@@ -45,15 +45,6 @@ and passed 250/250 in 26 suites, with zero failed/aborted/canceled/ignored/pendi
 SBT/wrapper exits 0/0 and lock=released. Complete summaries and relevant log
 scenarios were read. No production/test source edit after final validation.
 
-Final invocation: SMWF-CNCF-HOST-ROUTING-DIRECT-20261001-372.
-Cwd: /Users/asami/src/dev2025/cloud-native-component-framework.
-Log: /tmp/skill.cncf.d/cncf-sbt-245bb6621f6152d473d05faf38e446f38fa6400decf990ec7586a576863b9829-6c4a978007ef4f2045d32845f36d7083/25588-20260930T152956Z.log
-Adjacent summary: 25588-20260930T152956Z.summary.json.
-Validated DataStoreSpace.scala SHA-256:
-3acd53a9f128f3bbfcdbc72000d04ac64897a9eb1f65fe806752af23910b706e.
-Validated ManagedEventObservationIsolationSpec.scala SHA-256:
-48f8211cff38342f68d1f5a0830c9ecb48a4593e810043ec7a24ad39ab280cc3.
-
 This is an internal storage entry, not a public Operation or production runtime
 assembly. Verified grants no UoW completion or transient delivery permission.
 Native cleanup/I/O/crash cases and exhaustive shape/authority coverage remain
@@ -61,3 +52,5 @@ separate. Next is application/runtime integration with one canonical entry,
 active UoW enlistment and original-order delivery only after accepted completion;
 CLI/MCP/restart/management/packaging acceptance remains open.
 S12/P2-U15/P2-U16/P2-U05 remain unchecked; goal/Phase remain incomplete.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-host-completion-routing.md.gz`

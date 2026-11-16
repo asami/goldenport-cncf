@@ -34,15 +34,10 @@ invocation/cwd/unchanged 26-suite argv and all four outcomes checked. No source
 edits after final validation. No commit/publish/push, skill/agent edits, full
 review, typed acceptance or Phase closure.
 
-Invocation: SMWF-CNCF-RETAINED-ABSENCE-DIRECT-20260930-361.
-Cwd: /Users/asami/src/dev2025/cloud-native-component-framework.
-Log: /tmp/skill.cncf.d/cncf-sbt-e419aae4b13237ddf552a04de27f70db3c9d4b7d4f1614c7c02fc787c7f9892f-510f301946c4bf779073ed9419a8d34e/7938-20260930T144948Z.log
-Adjacent summary: 7938-20260930T144948Z.summary.json.
-Validated DataStoreObservationSnapshotSpec.scala SHA-256:
-482530e1000fcee56c46c48fb234cad39e4491773d5a74533e1bb0b0dbb315b1.
-
 Next: retained invalid Workflow transition coverage, then transient-only/empty
 completion without cursor work and deterministic common host/runtime routing.
 Public skills/AI must not choose storage branches. Native cleanup/crash,
 application/UoW dispatch, production assembly/CLI/MCP/restart/management remain
 open. S12/P2-U15/P2-U16/P2-U05 stay unchecked; Phase goal remains active.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-retained-key-free-absence.md.gz`

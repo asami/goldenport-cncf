@@ -2283,6 +2283,18 @@ Future platform development item.
 - Completed, cancelled, archived, or otherwise inactive workflow records should
   be evicted from the Working Set when their state changes.
 
+Delivery registration — 2026-11-13:
+
+[Phase 123](../phase/phase-123.md) / [checklist](../phase/phase-123-checklist.md)
+now owns this candidate's explicit activity-scoped delivery. In addition to active
+business-state selection, include active-user carts and needed user/address data,
+shared membership and activity-end re-evaluation. Related records need not each
+have their own state machine. Reuse the existing residency, persistence and
+authorization foundation; preserve ordinary defaults and bounded memory.
+The Phase is PLANNED, all items OPEN and execution has not started. Coordinate
+Read-only retention with Phase 124 without adding a Phase 108 completion gate.
+See the [planning input](../notes/activity-scoped-working-set-and-readonly-development-scope.md).
+
 Alignment with Phase 64:
 
 - `entityKind = workflow` classifies a stateful business Entity such as
@@ -5417,6 +5429,20 @@ closes Phase 115 only, not whole Workbench migration; no successor is started.
 completion of the November 10 NICT demo. The [demo-boundary inventory](../journal/2026/11/2026-11-06-id-phase-demo-boundary.md)
 separates interim Studio qualification from post-demo ownership and ID migration.
 Progress belongs to the [Phase checklist](../phase/phase-120-checklist.md).
+
+### 9.70 Read-only Operation for Failure and Maintenance
+
+[Phase 124](../phase/phase-124.md) / [checklist](../phase/phase-124-checklist.md)
+is PLANNED, all items OPEN and execution has not started. Add a Subsystem service
+mode that stops ordinary business mutations while continuing authorized, trusted
+and freshness-qualified resident reads during failure or planned maintenance.
+Cover common admission, valid in-flight completion, business-cache retention,
+security/invalidation boundaries, operational observation and explicit recovery.
+
+First qualify a single runtime using existing resident capabilities; consume
+Phase 123 for activity-scoped coverage and Phase 108 for actual qualified cluster
+coordination. Whole Phase 108 closure is not a first-route prerequisite, and its
+acceptance is unchanged. This registration starts no Session or implementation.
 
 ## Status Navigation Erratum — 2026-09-28
 

@@ -36,17 +36,6 @@ Five real host examples prove:
 - A retained legacy record lacking canonical columns rejects before Create,
   preserving its complete physical record without schema expansion.
 
-Validation:
-Focused-324 passed 187/187 in 21 suites before the existing-row preflight
-correction. Focused-325 passed 188/188 in 21 suites after adding that correction
-and legacy-schema example. Both had SBT/wrapper exit=0 and lock=released.
-Final invocation: SMWF-CNCF-CURSOR-HOST-DIRECT-20260930-325.
-Serial locking, fresh helper-owned permission metadata and scoped platform
-review were preserved under the user's simplified parent execution route.
-
-Final log:
-/tmp/skill.cncf.d/cncf-sbt-fe0270bd5af4403542cc906a89da6ccbe6eae257c0a12920a04b012bdd5d097b-02e51f34df627c9440646aa2f58936e3/71298-20260930T072750Z.log
-
 Validated SHA-256:
 - DataStoreConditionalMultiGuardHostPolicy.scala: 69226192a6c7de68d894cbc9bb39d65430e1b73e6f677d4a63d518a69addd888
 - EventStorePersistenceDeclaration.scala: bf97c95f3fd0c128afd4e3859196590b858da3e0970cbd9db9181f376d0eac50
@@ -59,3 +48,5 @@ Managed revocation/competition during progression, full duplicate reconciliation
 all-transient completion and actual dispatch remain open.
 S12/P2-U15/P2-U16/P2-U05 remain open; no full-suite, independent review or typed
 Phase/PLAN acceptance is claimed. No commit/publication occurred.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-event-cursor-host-bootstrap.md.gz`

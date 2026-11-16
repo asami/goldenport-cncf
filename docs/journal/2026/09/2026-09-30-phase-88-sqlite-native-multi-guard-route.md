@@ -50,9 +50,6 @@ zero failed/aborted/canceled/ignored/pending. SBT exit=0, wrapper exit=0,
 lock=released. Parent execution retained the mandatory shared wrapper, fresh
 metadata and scoped platform review under the user's simplified execution route.
 
-Log:
-/tmp/skill.cncf.d/cncf-sbt-1e5b30a6d675442e0f5d5545ea01bda31bf4df4a634109dca86cf48c7c04c654-e6cec653452c11f334f0f22906699c4a/33531-20260930T060450Z.log
-
 Validated SHA-256:
 - SqlDataStore.scala: 58742868b66e4b07f603b8c7a2e1937040c49bd4f27c31711aff0b4d862ea139
 - DataStoreMultiGuardReadback.scala: 957b36ab470ac6b4a1ccac054eec31456d59bfc801f164400c31f54631ab902e
@@ -68,3 +65,5 @@ independent-writer case races write proposals. MySQL/non-SQLite multi-guard is
 unsupported. Full-suite validation, independent review and typed Phase/PLAN
 acceptance are not claimed. No commit/publication was performed.
 S12/P2-U15/P2-U16/P2-U05 remain open.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-sqlite-native-multi-guard-route.md.gz`

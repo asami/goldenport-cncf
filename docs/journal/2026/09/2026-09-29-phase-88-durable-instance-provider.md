@@ -26,12 +26,6 @@ No private SQL or migration/resource lifecycle is implemented.
 
 ## Validation
 
-All SBT invocations used the registered cncf_command_runner (gpt-5.6-luna /
-medium), typed receipt-first standing-authorized route and shared serial wrapper.
-Every attempt completed with lock=released. Existing Cozy changes were preserved;
-only its project-owned cozyExportRuntimeClasspath task was required as an
-SBT-only validation prerequisite after initial generator classpath failure.
-
 - 230: stale Cozy development classpath prevented compilation.
 - 231: Cozy runtime classpath refresh succeeded, no source mutation/publication.
 - 232: non-public datastore helper compile error; repaired to public revision binding.
@@ -51,12 +45,6 @@ Receipt SHA-256:
 `d70bbfa03cc0769c4f28684ca5f6899b49b60b1769c3ad0052199d52f881414a`.
 Validated complete-tree SHA-256:
 `231280bd66aba620990c5636ea27a03d8771154b705d861a5523be36a67f9d8e`.
-
-Receipt:
-`/tmp/skill.cncf.d/cncf-command-execution-99cd1c0310730d6930b34e28a14b9e438f4a319e4c80de99292741f029560627-567e38ff7f323296109e6bdb8bc4f0d5/command-execution-sha256-d70bbfa03cc0769c4f28684ca5f6899b49b60b1769c3ad0052199d52f881414a`.
-
-Log:
-`/tmp/skill.cncf.d/cncf-sbt-623cf31b2793a75e9d5533349b2edf8c242be9cd0672112b95551c68a2081708-9a789102c27774091ba5c8a86a1893ad/1057-20260929T022749Z.log`.
 
 Source SHA-256:
 
@@ -89,3 +77,5 @@ No sm-workflow-specific semantics, semantic-worker dispatch, cncf-* skill change
 skill deployment, publishLocal, commit, push or remote publication occurred.
 
 See [Phase 88](../../../phase/phase-88.md).
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-29-phase-88-durable-instance-provider.md.gz`

@@ -27,10 +27,6 @@ No source edits followed validation. The existing simplified parent recovery
 route retained the shared serial wrapper and scoped platform permissions; no
 runner/history approval loop, agent/skill edit or sandbox relaxation was added.
 
-Final invocation: SMWF-CNCF-HOST-SELECTION-DIRECT-20260930-344.
-Final cwd: /Users/asami/src/dev2025/cloud-native-component-framework.
-Final log: /tmp/skill.cncf.d/cncf-sbt-2db96626f2685ca6b37e357c37c4602229eba6e5f440d43a87e83d2c50a1fd6b-2547b3cd5e7492ead236d02acfc247bf/32974-20260930T111302Z.log
-
 Validated SHA-256:
 - EventStoreConstruction.scala: 2ddfab7a52f6fa90a559e10b273ce72f2df70ac4cc410b25e48b4f201662ca80
 - Subsystem.scala: 3c7dc98f83ab5d3e9725aeb0c0097dc6e38cd68ac1d801789b9641e2781264b8
@@ -46,3 +42,5 @@ publication API, automatic retry, cursor reset, dispatch or application kind
 catalog was introduced. S12/P2-U15/P2-U16/P2-U05 remain open. Production assembly,
 launcher/CLI/MCP, restart and management remain independent requirements.
 No full review, typed acceptance, commit, publication or goal completion claimed.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-host-eventstore-selection.md.gz`

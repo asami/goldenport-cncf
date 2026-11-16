@@ -33,9 +33,6 @@ Validation history:
   and passed 183/183 tests in 21 suites. Zero failures/aborted/canceled/ignored/
   pending, compile coverage confirmed, SBT/wrapper exit=0, lock=released.
 
-Successful log:
-/tmp/skill.cncf.d/cncf-sbt-8bd43804c5767e2b0c08fba8e02183ccf2577a834c7f65fe2c8f4d7c8e3c906a-9f49045865dccb53b14ce998d42a103e/65117-20260930T071622Z.log
-
 Validated SHA-256:
 - EventCursorRecordV1.scala: c14265ed0bf51104692c0e102287907025a017cecbabaf7c6ac95acf120f7db5
 - EventCursorRecordV1Spec.scala: ad0e596d2f43fa0d0d55120d91f60473946fa16732875d1860dd34d59b63984a
@@ -46,3 +43,5 @@ receipt/full-suite/independent review is claimed. No commit/publication occurred
 Next: host-pinned cursor identity and explicit Create-only bootstrap/guarded
 managed composition using this text schema. V2 delivery-key/index codecs and
 actual runtime delivery remain open. S12/P2-U15/P2-U16/P2-U05 remain open.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-event-cursor-codec.md.gz`

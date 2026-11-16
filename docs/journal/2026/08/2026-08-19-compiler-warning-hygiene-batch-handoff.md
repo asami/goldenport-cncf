@@ -102,10 +102,6 @@ Development Candidate.
 
 1. `/Users/asami/src/dev2025/cloud-native-component-framework`: `sbt --batch test`
 
-Validation Evidence: focused SBT invocation `12069-20260819T073108Z`
-(56 succeeded, 5 suites, 0 failed); final full SBT invocation
-`12541-20260819T073205Z` (3,261 succeeded, 443 suites, 0 failed).
-
 ## Completion Contract
 
 - Do not set this batch or HYG-H57-COMPILER-WARNING-004 to `RESOLVED` while
@@ -124,3 +120,5 @@ Acceptance Commit: reported externally after commit execution
 
 - Deprecated API migration, warning suppression, or unreviewed behavioral
   changes.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/08/2026-08-19-compiler-warning-hygiene-batch-handoff.md.gz`

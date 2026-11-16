@@ -41,16 +41,11 @@ and all new scenario outcomes were read. No source edits after final validation.
 Shared serial wrapper, scoped permissions and normal caches retained.
 No commit/publish/push, skill/agent edits, full Phase review or typed acceptance.
 
-Invocation: SMWF-CNCF-RETAINED-ISOLATION-DIRECT-20260930-354.
-Cwd: /Users/asami/src/dev2025/cloud-native-component-framework.
-Log: /tmp/skill.cncf.d/cncf-sbt-1842bb884bd8db9b6d5dd0957bb4ee07dbd3d9558ae7f057a10d3167df5028b7-7d587db2657d2fadccc69d94b95b6fa6/58113-20260930T121854Z.log
-Summary: same directory, 58113-20260930T121854Z.summary.json.
-Validated ManagedEventObservationIsolationSpec.scala SHA-256:
-3d66da254f6dc5696de9120686b050bc6f0cfaa51c7cae7af6f7a40e4e52ba2f.
-
 Next: retained-specific malformed/failed/throwing readback, authority and
 absence/key-free cases. Transient-only/empty completion remains unimplemented.
 Common host/runtime routing must choose branches deterministically from captured
 EventStore selection; public skills and AI must not choose them. Application/UoW
 dispatch, production assembly/CLI/MCP/restart/management remain open.
 S12/P2-U15/P2-U16/P2-U05 remain unchecked; the Phase goal stays active.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-retained-completion-isolation.md.gz`

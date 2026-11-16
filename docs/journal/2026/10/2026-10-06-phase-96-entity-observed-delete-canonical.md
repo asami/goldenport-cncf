@@ -122,14 +122,6 @@ this authoring pass.
 
 ## Parent focused-validation compile failure and frozen CF2 repair
 
-Parent representative phase96-p96-07b2a-representative-001 completed normal
-Information CML generation and production compilation (214 sources, then 72
-incremental sources). Test compilation of 83 sources stopped with one E008 at
-EntityObservedDeleteCanonicalPropertySpec.scala:59:69: Consequence has no
-isFailure member. No suite or test executed. SBT and wrapper exited 1 with
-terminal lock=released; the outer receipt executor's exit 0 means only that
-the failed command result was recorded, not that validation passed.
-
 Frozen CF2 P96-07B2A-CF2-CONSEQUENCE-FAILURE-PREDICATE replaces only that call
 with the existing Consequence.isFaillure predicate, which means !isSuccess.
 The exact stale-entity-revision reason, complete before/after equality, all
@@ -191,3 +183,5 @@ creation-failure safety assessment, P96-07C registered Entity/Aggregate routes
 and contextual committed reload, all four open P96-07 criteria and later
 Step/Phase obligations remain required. No B2B/C completion, P96-07 acceptance
 or Phase closure is claimed.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/10/2026-10-06-phase-96-entity-observed-delete-canonical.md.gz`

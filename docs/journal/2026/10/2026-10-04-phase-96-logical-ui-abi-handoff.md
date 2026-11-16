@@ -153,16 +153,7 @@ argv was `--batch` followed by this single command:
 testOnly org.goldenport.cncf.display.DisplayRuntimeSpec org.goldenport.cncf.component.ComponentFactoryDisplayRuntimeSpec org.goldenport.cncf.entity.view.ViewSpaceSpec org.goldenport.cncf.component.ComponentFactoryLogicalUiBootstrapSpec org.goldenport.cncf.display.DisplayProjectionSpec org.goldenport.cncf.display.DisplayProjectionPropertySpec org.goldenport.cncf.display.GeneratedLogicalUiAbiSpec org.goldenport.cncf.display.GeneratedLogicalUiAbiPropertySpec org.goldenport.cncf.display.DisplayModelSpec org.goldenport.cncf.display.DisplayModelPropertySpec org.goldenport.cncf.workflow.GeneratedWorkflowAbiSpec org.goldenport.cncf.component.ComponentFactoryAggregateViewBootstrapSpec org.goldenport.cncf.component.ComponentFactoryStateMachineProviderBootstrapSpec org.goldenport.cncf.component.ComponentFactoryContinuationRuntimeBootstrapSpec org.goldenport.cncf.component.ComponentFactoryRuntimePlanActivationSpec
 ```
 
-Result: 133/133 tests passed, 15 suites completed, 0 aborted; SBT exit `0`,
-wrapper exit `0`, serial lock released. The log reports total time `71 s`
-and completion `2026-10-04 01:39:31 JST`. Compilation was this command's
-prerequisite, not a separately claimed run.
-
 Operational evidence locations:
-
-- Result: `/private/tmp/skill.cncf.d/a-9106b454-1048-4145-8839-d7cfaab37714/command-result.json`.
-- Log: `/private/tmp/skill.cncf.d/a-1827cead-29b7-4d38-8efa-91761478bb5f/1234-20261003T163817Z.log`.
-- Summary: `/private/tmp/skill.cncf.d/a-1827cead-29b7-4d38-8efa-91761478bb5f/1234-20261003T163817Z.summary.json`.
 
 Coverage includes external public ABI fixture compilation and admission,
 normal factory provider selection and late atomic join, typed projection,
@@ -303,3 +294,5 @@ final reciprocal/full validation, releases and both Phase closures retain their
 existing owners and pending status. All preceding chronological sections,
 including failures and earlier pending facts, remain historical; this entry
 changes no ABI definition, fixture, provenance, source or coordinate contract.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/10/2026-10-04-phase-96-logical-ui-abi-handoff.md.gz`

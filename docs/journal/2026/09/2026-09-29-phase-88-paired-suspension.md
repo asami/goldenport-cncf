@@ -74,16 +74,6 @@ medium, receipt-first intake and the shared SBT serial wrapper.
   Separate platform permission review timed out before process creation;
   no terminal wrapper marker, receipt or regression result exists.
 
-242 runner: /root/sbt_receipt_5a268601195adb84b080.
-Receipt SHA-256:
-5f1390df646eaf796143657f795e10ac3be7e2aa3c458b77a19f854f338ea540.
-Validated complete-tree SHA-256:
-a5dcb212fcdf9b1a1bfa40cdcd877ddefadd376013423bd5572c3f91632a8a0e.
-Receipt:
-`/tmp/skill.cncf.d/cncf-command-execution-bc366f94d53a65b4da8a5be34a4b113f07e0d774e519bdaf206d2d9700694457-f2eb996fc781501dbb30592eb8f23a22/command-execution-sha256-5f1390df646eaf796143657f795e10ac3be7e2aa3c458b77a19f854f338ea540`.
-Log:
-`/tmp/skill.cncf.d/cncf-sbt-1e26a11010dd5ee90e3f16b1cfa7ff217d20859c275b594887c4bcdc96d0b65a-6a846e5d0dfee254e97bf37bbddcb5b3/36727-20260929T031335Z.log`.
-
 Current source SHA-256, verified against receipt 242:
 
 - WorkflowInstanceDataStorePersistence.scala:
@@ -181,15 +171,6 @@ zero-test run. This is a build/generator prerequisite failure, not a product tes
 failure or another permission denial. Focused-242 remains 24/24 historical
 evidence for the unchanged sources.
 
-Receipt SHA-256:
-1e99f5a48c1ccf623eb34524b53a11d28fe7e26f055b5a72a6d813e8a8d8d776.
-Captured complete-tree SHA-256:
-a006602866411fee54690070acab501219dd05f68262caf30fca606d45144621.
-Receipt:
-`/tmp/skill.cncf.d/cncf-command-execution-73bc9f58ebf2809928ce96aedddc948b024ae55291e5093801fb6e6ef43ad469-bd3a22ff9cd64e238be25b8a72d1f834/command-execution-sha256-1e99f5a48c1ccf623eb34524b53a11d28fe7e26f055b5a72a6d813e8a8d8d776`.
-Log:
-`/tmp/skill.cncf.d/cncf-sbt-47c7e6002bc91e398932d3b2f0ab88af7f52aaa759b95c811a4cb9d2bd67b28f-2e1b3d130fa414ea75b43a06362a1a76/61506-20260929T040614Z.log`.
-
 The first permission-review submission never created a process; this limited
 resubmission executed and consumed the original artifacts. Its retry budget is
 now used, with original submission/ledger history preserved. No artifact or
@@ -220,28 +201,6 @@ attempt was never reused.
   two ClientComponent HTTP cases, one SQLite columns case and two UnitOfWork
   placeholder examples. They are not executed acceptance.
 
-244 runner: registered cncf_command_runner, gpt-5.6-luna / medium,
-/root/sbt_receipt_860a12a12b90ddaa80a3.
-244 receipt SHA-256:
-0e862cf9c798c4303ef6aaccbbed993b8b30cb1950765c9b66f4d4fb323a155d.
-244 receipt:
-`/tmp/skill.cncf.d/cncf-command-execution-556525706bf085aeefebee4745f88f72b73fc2b6b71907c76a04b01c73a40f60-7ea6c8349b17a0c54200ea72c3c47c2a/command-execution-sha256-0e862cf9c798c4303ef6aaccbbed993b8b30cb1950765c9b66f4d4fb323a155d`.
-
-245 runner: registered cncf_command_runner, gpt-5.6-luna / medium,
-/root/sbt_receipt_58a676721e41e742ed4f.
-245 logical argv:
-`["--batch", "testOnly org.goldenport.cncf.component.* org.goldenport.cncf.workflow.* org.goldenport.cncf.datastore.* org.goldenport.cncf.unitofwork.*"]`.
-245 terminal marker:
-`[cncf-sbt] completed: invocation=SMWF-P2-CNCF-P88-S3-REGRESSION-20260929-245 sbt_exit=0 wrapper_exit=0 lock=released`.
-245 receipt SHA-256:
-058246828986dedfd6d228c6bc8449c8b01b351b11d19d0740135d7682c0d2e3.
-245 captured complete-tree SHA-256:
-190ead9f39f0d33d6658024857b16990a48950841b131be95a1a0bcaf79d0999.
-245 receipt:
-`/tmp/skill.cncf.d/cncf-command-execution-5176250786ab40cb6067057b44bbd091eae0507956373f671e5082d35c0249cc-32584ba210e6d5e2cf9cbc1e6874dbe7/command-execution-sha256-058246828986dedfd6d228c6bc8449c8b01b351b11d19d0740135d7682c0d2e3`.
-245 log:
-`/tmp/skill.cncf.d/cncf-sbt-2cf6cc491836cf016a3fffb56a22f6358db7115395b12a7c04d23699fedfa557-0bab9ab5869ebe2d07ddfafa27623388/67209-20260929T041213Z.log`.
-
 The parent verified both receipts and observed summary/log counts, then checked
 current S3 sources against receipt 245's captured tree. S2 bootstrap source
 identities and the other-owned SplitPhase definition remain unchanged.
@@ -258,3 +217,5 @@ recovery. No AtomicWorkflowSuspensionEngine capability, full completion/history
 transaction, migration/retention execution or separate-process restart is
 claimed from these record-transaction tests. No publishLocal, new skill
 deployment, commit, push or remote publication occurred.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-29-phase-88-paired-suspension.md.gz`

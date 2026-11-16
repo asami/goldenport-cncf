@@ -129,22 +129,10 @@ fixture bridge parts were invalid. This correction changed no assertions,
 product behavior or product code; the original fifteen selected suites were
 retained.
 
-Command request `phase96-p96-03b2-command-request-005` revision `1` and result
-`phase96-p96-03b2-command-result-005` revision `1` bind validation subject
-`phase96-p96-03b2-validation-subject-001` revision `5`. The actual result was
-133/133 passing tests, 15 completed suites and 0 aborted, SBT/wrapper exits
-`0` and serial lock released. Total time was `71 s`, finishing
-`2026-10-04 01:39:31 JST`. Compilation was the focused command's prerequisite.
-The exact fifteen-suite `testOnly` command, working-tree source dependency
-and evidence locations are recorded in the
-[LUI-ABI-01 handoff](2026-10-04-phase-96-logical-ui-abi-handoff.md#executed-focused-evidence).
-
-Result: `/private/tmp/skill.cncf.d/a-9106b454-1048-4145-8839-d7cfaab37714/command-result.json`.
-Log: `/private/tmp/skill.cncf.d/a-1827cead-29b7-4d38-8efa-91761478bb5f/1234-20261003T163817Z.log`.
-Summary: `/private/tmp/skill.cncf.d/a-1827cead-29b7-4d38-8efa-91761478bb5f/1234-20261003T163817Z.summary.json`.
-
 A/B1/B2 are now authored and focused-validated, not independently accepted.
 LUI-ABI-01 is prepared as CNCF's local working-tree input for the Cozy owner;
 Cozy consumption, actual LUI-GEN-01 generation and P96-03C/LUI-ACCEPT-01
 remain pending. P96-03 stays open. No repository full test, independent Step
 review, Step commit or Phase closure is established by this result.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/10/2026-10-03-phase-96-contextual-display-runtime.md.gz`

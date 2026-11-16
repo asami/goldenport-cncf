@@ -43,10 +43,4 @@ unverified at that point.
 
 ## Commit validation — October 19
 
-Focused validation passed compilation and the Slow-excluding selection over all
-25 changed suites with both PostgreSQL and MySQL live flags enabled. The two
-untagged in-memory/SQLite provider-parity cases passed; no native DB or Docker
-startup occurred. SBT and wrapper exited successfully and the shared lock was
-released. This accepts the exclusion/lifecycle adjustment without claiming a new
-repository-full run or execution of the opt-in HEAVY cases. The original
-real-provider assertions remain unchanged.
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/10/2026-10-19-full-without-external-services.md.gz`

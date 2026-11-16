@@ -49,17 +49,6 @@ pending, SBT/wrapper exits 0/0 and lock=released. Summaries and relevant logs
 read; no source/spec edits after final validation. No full Phase review or
 acceptance/closure is claimed.
 
-Invocation: SMWF-CNCF-TYPED-HOST-COMPLETION-DIRECT-20261001-375.
-Cwd: /Users/asami/src/dev2025/cloud-native-component-framework.
-Log: /tmp/skill.cncf.d/cncf-sbt-79832ede37463d5505bf9439058cb88c8b06f2cb7513af43fa4273f8422cf896-13fe2006c2769877ce629c5c2733e068/31108-20260930T154335Z.log
-Adjacent summary: 31108-20260930T154335Z.summary.json.
-Validated WorkflowPreparedDataStoreTransition.scala SHA-256:
-8f757c4a3243609eeb4ecb85a529ba818da0639e4b9cb14d6e2716f1cf032be7.
-Validated WorkflowCompletionDataStorePersistence.scala SHA-256:
-47ebea7370a6ba99292b2a4a21b2974391fc75e83c1552c225139bade70ba82d.
-Validated WorkflowCompletionDataStorePersistenceSpec.scala SHA-256:
-8e449c2341eda70ef52d31d3f7bad76b12494d1451737d3f61d1ab91aa3711d0.
-
 ## Remaining runtime gap and next integration boundary
 
 Current WorkflowCompletionServiceOperation.afterCommitResponseC still resumes a
@@ -81,3 +70,5 @@ Concrete executable acceptance is required before runtime/Operation activation.
 S12/P2-U15/P2-U16/P2-U05 stay unchecked. Production assembly, normal launcher
 CLI, MCP equivalence, separate-process restart, management and skill packaging
 remain open. Goal and Phase remain incomplete.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-typed-host-completion.md.gz`

@@ -37,6 +37,8 @@ Deferred and intentionally out of this slice:
 
 ## 2. Main Runtime Changes
 
+Execution details are retained in the local archive referenced below.
+
 ### 2.1 Separate Reception Rule Layer
 
 `EventReception` now has a separate rule/policy layer instead of relying only
@@ -176,6 +178,8 @@ Guard rails:
 
 ## 4. Implemented Baseline Semantics
 
+Execution details are retained in the local archive referenced below.
+
 ### 4.1 Same-Subsystem Default
 
 - sync dispatch
@@ -215,6 +219,8 @@ Clarification for the next semantic refinement:
 - default failure policy = `Retry`
 
 ## 5. Deliberate Simplifications
+
+Execution details are retained in the local archive referenced below.
 
 ### 5.1 Saga Identity
 
@@ -268,10 +274,6 @@ Added coverage for:
 
 CNCF:
 
-- `sbt --no-server --batch "testOnly org.goldenport.cncf.event.EventReceptionSpec org.goldenport.cncf.component.ComponentFactoryEventReceptionBootstrapSpec"` passed
-- `sbt --no-server --batch compile` passed
-- `sbt --no-server --batch publishLocal` passed
-
 Sample driver:
 
 - `/Users/asami/src/dev2026/textus-sample-app-event`
@@ -300,3 +302,5 @@ There is an unrelated uncommitted change in:
 - [build.sbt](/Users/asami/src/dev2025/cloud-native-component-framework/build.sbt)
 
 It was intentionally excluded from commit `53dc8b8`.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/04/phase-13-event-reception-baseline-handoff-2026-04-21.md.gz`

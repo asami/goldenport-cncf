@@ -77,11 +77,6 @@ or any selected test. Raw summary reports sbt_exit=1, wrapper_exit=1 and
 lock=released; no suite/test counts exist. This is unaccepted diagnostic evidence,
 not executable acceptance. Repository drift's exact cause/timing is not established.
 
-Raw original summary:
- /tmp/skill.cncf.d/cncf-sbt-68b4b78f187af530474d40d77139a01189567b01a92d22112b367f8da02f4a25-7e8c6808ef9b287cde23c25ed55a7581/62433-20260929T102231Z.summary.json
-Raw original log:
- /tmp/skill.cncf.d/cncf-sbt-68b4b78f187af530474d40d77139a01189567b01a92d22112b367f8da02f4a25-7e8c6808ef9b287cde23c25ed55a7581/62433-20260929T102231Z.log
-
 Read-only process inspection after termination found no SBT/receipt helper/
 serial-wrapper process. Both the environment-selected TMPDIR shared lock and
 /private/tmp alternative were absent. No process was killed, no lock removed,
@@ -170,22 +165,6 @@ live files:
 
 ### Immutable receipts and terminal markers
 
-Attempt 268: success; receipt SHA-256 de45822cb74e57fc61e5fc2e38cc2a165d413e3f11f3c400e1b71d7df724767c.
-Locator: /tmp/skill.cncf.d/cncf-command-execution-40d815781558e8f8367e273f99f38d1801d0925fd9f44db2fc8b4f716b4a5a18-7b65907a099123972bf33d5a4855b26c/command-execution-sha256-de45822cb74e57fc61e5fc2e38cc2a165d413e3f11f3c400e1b71d7df724767c
-Terminal: [cncf-sbt] completed: invocation=SMWF-P2-COZY-P88-S9-CLASSPATH-20260930-268 sbt_exit=0 wrapper_exit=0 lock=released log=/tmp/skill.cncf.d/cncf-sbt-d94457a942947c9e4d1a3152a5fb372500b8778a331379de6590ef72c1e3ca7f-2aa496b71fb669da3f027b4d3439ba33/17284-20260929T160155Z.log summary=/tmp/skill.cncf.d/cncf-sbt-d94457a942947c9e4d1a3152a5fb372500b8778a331379de6590ef72c1e3ca7f-2aa496b71fb669da3f027b4d3439ba33/17284-20260929T160155Z.summary.json
-
-Attempt 269: failure; receipt SHA-256 5fe5935ec3bd6636d7583105829b807f6b897f7094dc418bd58d1395e3526038.
-Locator: /tmp/skill.cncf.d/cncf-command-execution-6322b38e3a7e987faba7a74c3d34558c689e6863ea26820b1ba253d3e691c96b-6d14dbd5f8b1be1f7c8ffa9fb1527d0c/command-execution-sha256-5fe5935ec3bd6636d7583105829b807f6b897f7094dc418bd58d1395e3526038
-Terminal: [cncf-sbt] completed: invocation=SMWF-P2-CNCF-P88-S9-FOCUSED-20260930-269 sbt_exit=1 wrapper_exit=1 lock=released log=/tmp/skill.cncf.d/cncf-sbt-b97c8e81c3071b20d00443686dc077fc7db5c4a3205c5873807cbceaeb895d64-ac116788af698603db46efa9c5b172f1/18394-20260929T160327Z.log summary=/tmp/skill.cncf.d/cncf-sbt-b97c8e81c3071b20d00443686dc077fc7db5c4a3205c5873807cbceaeb895d64-ac116788af698603db46efa9c5b172f1/18394-20260929T160327Z.summary.json
-
-Attempt 270: success; receipt SHA-256 7553643d56d40687bdfc61e3a622f55baa46a6f602bffea307fd2685cd252dd9.
-Locator: /tmp/skill.cncf.d/cncf-command-execution-b4031b9cbcb6a95ea3a641256b0051e6ea23bcf9a069f20c682089a2d42f396e-6dc3e9e58c6be607d7930acf90e84f91/command-execution-sha256-7553643d56d40687bdfc61e3a622f55baa46a6f602bffea307fd2685cd252dd9
-Terminal: [cncf-sbt] completed: invocation=SMWF-P2-CNCF-P88-S9-FOCUSED-20260930-270 sbt_exit=0 wrapper_exit=0 lock=released log=/tmp/skill.cncf.d/cncf-sbt-acedfae3bf1936ef33feb7ba650d7a7ee01f581ce70edeca5a6679ebac448252-53a8345bbbed8e77c8b3f2b3d8cb1a46/25731-20260929T160844Z.log summary=/tmp/skill.cncf.d/cncf-sbt-acedfae3bf1936ef33feb7ba650d7a7ee01f581ce70edeca5a6679ebac448252-53a8345bbbed8e77c8b3f2b3d8cb1a46/25731-20260929T160844Z.summary.json
-
-Attempt 271: success; receipt SHA-256 ad2fa6cae881bfb647f9750fa3f156aff552eee3e10fe2afaee60fd02580c95f.
-Locator: /tmp/skill.cncf.d/cncf-command-execution-f7297ebfc11a70fe7b81b65ebc86b9c8fb8a3c6a72617151366ddef693ebcbe0-a8a641cfb509a1c9e9aea537763c0eff/command-execution-sha256-ad2fa6cae881bfb647f9750fa3f156aff552eee3e10fe2afaee60fd02580c95f
-Terminal: [cncf-sbt] completed: invocation=SMWF-P2-CNCF-P88-S9-REGRESSION-20260930-271 sbt_exit=0 wrapper_exit=0 lock=released log=/tmp/skill.cncf.d/cncf-sbt-7ef3d39003304cf36dab9f4d1ff3f0a1856dde18b8cd58cefba7e74d88f9457c-1fb0fbbd63d9b4e5c81ce952ae6fd1bd/27375-20260929T161133Z.log summary=/tmp/skill.cncf.d/cncf-sbt-7ef3d39003304cf36dab9f4d1ff3f0a1856dde18b8cd58cefba7e74d88f9457c-1fb0fbbd63d9b4e5c81ce952ae6fd1bd/27375-20260929T161133Z.summary.json
-
 Execution profile for all four: gpt-5.6-luna / medium;
 runtime_source=registered; agent_type=cncf_command_runner;
 execution_route=registered-custom-role; runner_health=healthy;
@@ -209,3 +188,5 @@ They are not the complete accepted test tree and grant no current-tree
 release/commit freshness. A future release must consume the canonical
 freshness/validation contract for its then-selected exact tree. The ledger
 retains every consumed attempt through 271 and all historical failure evidence.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-29-phase-88-event-record-storage-codec.md.gz`

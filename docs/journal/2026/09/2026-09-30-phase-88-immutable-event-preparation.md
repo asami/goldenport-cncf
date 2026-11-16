@@ -36,10 +36,6 @@ rejection. This does NOT yet prove populated retained envelope/index projection
 independence, source/hidden-key mutation or direct escaped/wrong-thread access
 to the preparation itself. Add these before publication integration.
 
-Invocation: SMWF-CNCF-IMMUTABLE-PREPARATION-DIRECT-20260930-345.
-Cwd: /Users/asami/src/dev2025/cloud-native-component-framework.
-Log: /tmp/skill.cncf.d/cncf-sbt-de9b3b431f1e5126b2f127c434e5301df0953af84c8c2eb64ba7bc03e573e39d-ab57f295d0e2f0848ce40cafbda8b58e/38180-20260930T112508Z.log
-
 Validated SHA-256:
 - ManagedEventPreparation.scala: 24ef2f5ed37aa136e57e5cac17e7ff5d1d4741b88ff60d26e2913d6652bc6fe2
 - DataStoreObservation.scala: e3a635d30561d78ce5a9576abd4894a146be7e1239b9dab0f3d962334e3a0d38
@@ -52,3 +48,5 @@ All-retained validation-only completion, all-transient completion, complete
 retained/new postcommit readback and application dispatch remain open.
 S12/P2-U15/P2-U16/P2-U05 remain open; no full Phase review, typed acceptance,
 commit, publication, runtime CLI/MCP activation or Phase closure claimed.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-immutable-event-preparation.md.gz`

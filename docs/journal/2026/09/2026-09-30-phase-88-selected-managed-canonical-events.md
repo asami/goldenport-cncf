@@ -39,9 +39,6 @@ wrapper exit=0, lock=released. Persistent summary confirms compile coverage.
 Serial execution, fresh permission metadata and scoped platform review were
 preserved under the user's simplified parent execution route.
 
-Log:
-/tmp/skill.cncf.d/cncf-sbt-3e0b4ea05d5e81523647d3a20a2b5085aeeadbc20b34396131421509b96f676b-fae2c4bf7b7b653ac4baa461911c4590/57017-20260930T065813Z.log
-
 Validated SHA-256:
 - WorkflowSelectedEventRecords.scala: fa6a58912bbda8ad9e7f7ab53606500e15927aa51a0bb958667e490538ebaf7a
 - EventStorePersistenceHostSpec.scala: b7667cffd422a07308531b5e3cb589220f2569701c8b3f48bc52aed1e6f85659
@@ -52,3 +49,5 @@ mixed-order dispatch. Managed competition/revocation, dispatch suppression after
 uncertain outcomes and all-transient completion remain open.
 S12/P2-U15/P2-U16/P2-U05 are not complete. No full-suite, independent review,
 typed Phase/PLAN acceptance, commit or publication is claimed.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-selected-managed-canonical-events.md.gz`

@@ -97,15 +97,6 @@ test, validation script, server or network operation and performed no
 self-review, staging, commit, push or publication. That no-execution claim
 records the initial authoring history; it is not the current validation status.
 
-The parent's representative001 execution of
-`testOnly org.goldenport.cncf.datastore.EntityObservedDeleteProviderSpec`
-completed normal generation, production compilation and Test compilation
-successfully, then ran 13 tests: 11 passed and 2 failed. SBT exit was 1,
-wrapper exit was 1 and the shared lock was released. Original evidence:
-
-- Log: `/private/tmp/skill.cncf.d/a-0e6d8c78-e2aa-4267-9421-89e0274b6783/20016-20261005T222119Z.log`.
-- Summary: `/private/tmp/skill.cncf.d/a-0e6d8c78-e2aa-4267-9421-89e0274b6783/20016-20261005T222119Z.summary.json`.
-
 CF1 follows frozen Fix Manifest
 `phase96-p96-07b1-fixture-fix-manifest-001` revision 1 and addresses:
 
@@ -156,9 +147,6 @@ The actual 27-suite accumulator001 completed 27 suites with zero aborted:
 215 tests ran, 214 passed, 1 failed and 1 baseline test remained pending;
 zero tests were canceled or ignored. Receipt:
 `phase96-p96-07b1-accumulator-result-001` revision 1.
-
-- Log: `/private/tmp/skill.cncf.d/a-e8a31839-921f-4419-8c0c-2e283f192796/33612-20261005T224414Z.log`.
-- Summary: `/private/tmp/skill.cncf.d/a-e8a31839-921f-4419-8c0c-2e283f192796/33612-20261005T224414Z.summary.json`.
 
 SBT exit was 1, wrapper exit was 1 and the shared lock was released. All 30
 new observed-delete cases passed: 13 Provider, 8 SQLite, 3 generated laws and
@@ -253,3 +241,5 @@ oversized source files remain baseline follow-up debt, not authorization for
 refactoring. No new accepted Hygiene finding or empty Development Candidate
 journal is created. Step/Phase reviews, transitions and commits belong to the
 parent.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/10/2026-10-06-phase-96-entity-observed-delete.md.gz`

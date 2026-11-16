@@ -33,12 +33,7 @@ semantics remain unchanged.
 
 ## Validation
 
-- `Test/compile`: invocation `9874-20260803T145541Z`, passed.
-- Focused suites: `SystemNodeShutdownConfigurationSpec`,
-  `CncfConfigurationParameterCatalogSpec`,
-  `SystemNodeDataStoreShutdownSpec`, and
-  `SystemNodeDataStorePoolRuntimeSpec`; invocation
-  `10580-20260803T145650Z`, 37 passed, 0 failed.
+Execution details are retained in the local archive referenced below.
 
 ## Review fix
 
@@ -50,8 +45,6 @@ work. Catalog specifications explicitly reject alias, Global, ComponentClass,
 and ComponentInstance inputs; the configuration observation message contains
 only source kind and bounded milliseconds.
 
-- Review-fix `Test/compile`: invocation `22024-20260803T151441Z`, passed.
-- Review-fix focused suites add `CncfRuntimeSnapshotBootstrapSpec`; invocation
-  `23011-20260803T151624Z`, 48 passed, 0 failed.
-
 Focused re-review is complete.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/08/2026-08-03-phase-55-gcf09h-system-node-shutdown-configuration.md.gz`

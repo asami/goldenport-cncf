@@ -84,34 +84,6 @@ Command routing used cncf-command-execution, cncf-agent-execution,
 cncf-sbt-serial-execution and immutable cncf-workflow-protocol receipt-first
 intakes; normal development caches and the shared serial wrapper were retained.
 
-- initial fixture failure: SMWF-P2-CNCF-P88-S4-FOCUSED-20260929-246; failure / terminal
-  runner: /root/sbt_receipt_734714ebc4336e94a443
-  receipt SHA-256: 949a142f0c37d18923ef0356af5b38106b1c943cb29973db6a58e84f2429a413
-  complete tree SHA-256: 8b0b28cc58db6aa781a3e21dad540b459168bd51ae1c0976bce6076fff0777c0
-  receipt: `/tmp/skill.cncf.d/cncf-command-execution-eab996adfc3e6abde58c0df3b9de63fa8d83169fd69a72d151d94b85f4405714-91ce135b45eaf966c42e2d266647c3a3/command-execution-sha256-949a142f0c37d18923ef0356af5b38106b1c943cb29973db6a58e84f2429a413`
-  terminal: `[cncf-sbt] completed: invocation=SMWF-P2-CNCF-P88-S4-FOCUSED-20260929-246 sbt_exit=1 wrapper_exit=1 lock=released log=/tmp/skill.cncf.d/cncf-sbt-a0ccf87fdf0f5327372562666134c740b1d77518864ae1f438c936a0ba0be252-90ac06ebbc3063932bfbfcc570b96adc/93818-20260929T050529Z.log summary=/tmp/skill.cncf.d/cncf-sbt-a0ccf87fdf0f5327372562666134c740b1d77518864ae1f438c936a0ba0be252-90ac06ebbc3063932bfbfcc570b96adc/93818-20260929T050529Z.summary.json`
-
-- second fixture failure: SMWF-P2-CNCF-P88-S4-FOCUSED-20260929-247; failure / terminal
-  runner: /root/sbt_receipt_d607aa3e3a37a7d69c10
-  receipt SHA-256: 2a2ce01d55a64cc664fb89531c1b37ba1a055e361ec3d29cda26a8398a8f0529
-  complete tree SHA-256: ec6d7f06597e8e8c938d9a692bdd8f2872d0d500a3b6f6d354b8a0328f8a511c
-  receipt: `/tmp/skill.cncf.d/cncf-command-execution-ad12044ae205f5fd07a3ff134a43cd6f12012db6d6cf75da053b48fdd0796325-aa78c5fa930661f8c17c8cc76a3a3cfd/command-execution-sha256-2a2ce01d55a64cc664fb89531c1b37ba1a055e361ec3d29cda26a8398a8f0529`
-  terminal: `[cncf-sbt] completed: invocation=SMWF-P2-CNCF-P88-S4-FOCUSED-20260929-247 sbt_exit=1 wrapper_exit=1 lock=released log=/tmp/skill.cncf.d/cncf-sbt-7c331899210eedb752fc2c17fc205a2f7bfd72f43741c5479f3c993cc7ebc9e8-adc04a0ccfedcfd57b713d014701f9b8/95850-20260929T050745Z.log summary=/tmp/skill.cncf.d/cncf-sbt-7c331899210eedb752fc2c17fc205a2f7bfd72f43741c5479f3c993cc7ebc9e8-adc04a0ccfedcfd57b713d014701f9b8/95850-20260929T050745Z.summary.json`
-
-- focused: SMWF-P2-CNCF-P88-S4-FOCUSED-20260929-248; success / terminal
-  runner: /root/sbt_receipt_a6a5b5a26e5ee6855da7
-  receipt SHA-256: 8579355f382996061bcca2e06d9dbc516deb3f4edbefc70bee5492fedaf31dd1
-  complete tree SHA-256: 549e183d0da95be17b823bf38685ba2fae03774b51ef1495deda61e23b0ddab5
-  receipt: `/tmp/skill.cncf.d/cncf-command-execution-55372b2fc30ef9826d4d7e82f2209c8e14b409dc34d94d27efeca5ba0d32bca4-97cd0f8d90eb0a99ba8512e0b5184dd3/command-execution-sha256-8579355f382996061bcca2e06d9dbc516deb3f4edbefc70bee5492fedaf31dd1`
-  terminal: `[cncf-sbt] completed: invocation=SMWF-P2-CNCF-P88-S4-FOCUSED-20260929-248 sbt_exit=0 wrapper_exit=0 lock=released log=/tmp/skill.cncf.d/cncf-sbt-46f8d58669317735e624ca04666a07f0990319660511bd52b30e1d9ca0dcac8a-73507e6db3260ae4a7e5bd353bfdcdee/98371-20260929T051012Z.log summary=/tmp/skill.cncf.d/cncf-sbt-46f8d58669317735e624ca04666a07f0990319660511bd52b30e1d9ca0dcac8a-73507e6db3260ae4a7e5bd353bfdcdee/98371-20260929T051012Z.summary.json`
-
-- regression: SMWF-P2-CNCF-P88-S4-REGRESSION-20260929-249; success / terminal
-  runner: /root/sbt_receipt_3ea75c80822cb0fb2bb5
-  receipt SHA-256: 16db26474e79fde3de0785c25d266249111a1a19286687a054627ec50cd8980d
-  complete tree SHA-256: 549e183d0da95be17b823bf38685ba2fae03774b51ef1495deda61e23b0ddab5
-  receipt: `/tmp/skill.cncf.d/cncf-command-execution-f4bb01683609e3979b699fc413cdecc6826f08d3b75a98ee864b9f57a7bf0f3a-3ae4ba43195ea9ab6d271233c190fc6b/command-execution-sha256-16db26474e79fde3de0785c25d266249111a1a19286687a054627ec50cd8980d`
-  terminal: `[cncf-sbt] completed: invocation=SMWF-P2-CNCF-P88-S4-REGRESSION-20260929-249 sbt_exit=0 wrapper_exit=0 lock=released log=/tmp/skill.cncf.d/cncf-sbt-c54bf3afb737120c8a6601dfe4c55ad799af81f0b398216a4a41f0a689acae48-ae2b14b232cd478afcac682a88bb650e/533-20260929T051217Z.log summary=/tmp/skill.cncf.d/cncf-sbt-c54bf3afb737120c8a6601dfe4c55ad799af81f0b398216a4a41f0a689acae48-ae2b14b232cd478afcac682a88bb650e/533-20260929T051217Z.summary.json`
-
 Validated S4 source SHA-256 values:
 
 - src/main/scala/org/goldenport/cncf/workflow/WorkflowInstanceDataStorePersistence.scala
@@ -140,3 +112,5 @@ Validations reconstruct SQLite resources within one process; separate-process
 launcher restart, management projections, server/MCP and artifact consumption
 remain open. Store property immutability is enforced by these adapter APIs, not
 a claim of tamper-proof storage against arbitrary direct datastore mutations.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-29-phase-88-issued-work-publication.md.gz`

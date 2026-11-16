@@ -60,24 +60,6 @@ cross-owner support, SQL implementation or independent-writer evidence.
 
 ## Validation ledger
 
-Historical focused-301 passed 65/65 in eight suites with terminal exit 0/0 and
-released serial lock. It predates this candidate and does not validate these
-changes.
-
-Focused attempt 302:
-- ID: SMWF-P2-CNCF-P88-COMPLETE-READBACK-FOCUSED-20260930-302.
-- Registered runner: /root/sbt_receipt_ce48c5be6cf63730a5a8,
-  gpt-5.6-luna / medium.
-- Nine suites selected; no compilation or specs ran.
-- Terminal exit 1/1, serial lock released.
-- Generator error: development classpath stale:
-  /Users/asami/src/dev2025/cozy/target/cozy.d/runtime-classpath.txt.
-  CNCF Information generation exited 2 and requested cozyExportRuntimeClasspath.
-- Receipt:
-  /tmp/skill.cncf.d/cncf-command-execution-c093147fe0af8a4c9afe495e4f2003ec0d82f33676afe3153a7ea458ae7335db-1960617375a2efb1283ff63d4cc9daa2/command-execution-sha256-acba8e32b99526dda9361c2e421673d1115ee8c84161888df7767eb33f961c51.
-- Log:
-  /tmp/skill.cncf.d/cncf-sbt-4fc75bbe6b8742551b7cd42e77ff1e014516786d1fd84553e5d09f23c328f50e-bc165f1e30569ed33843d0ea586972a8/2563-20260930T013721Z.log.
-
 Prerequisite attempt 303:
 - ID: SMWF-P2-COZY-P88-COMPLETE-READBACK-CLASSPATH-20260930-303.
 - Registered runner: /root/sbt_receipt_56611006b81d2d2beaae,
@@ -104,3 +86,5 @@ This source has not compiled or passed the new examples. S12, P2-U15, P2-U16
 and P2-U05 remain open. No production activation, full-suite QA, commit,
 publication, cursor/index managed runtime, cross-owner atomicity or actual
 post-commit mixed dispatch acceptance is claimed.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-eventstore-policy-contract-correction.md.gz`

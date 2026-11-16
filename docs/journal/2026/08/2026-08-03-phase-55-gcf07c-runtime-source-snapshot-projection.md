@@ -19,12 +19,6 @@ paths, and admits one field per spelling within one document.
 
 Validation evidence:
 
-- generic `Test/compile`: `6265-20260802T185501Z` (pass);
-- generic development `publishLocal`: `6736-20260802T185545Z` (pass);
-- CNCF `Test/compile`: `9773-20260802T190131Z` (pass);
-- CNCF focused runtime snapshot/catalog/user-mode suites: 8 succeeded, 0
-  failed, `14382-20260802T191024Z`.
-
 Independent review found two provenance defects and their focused fix is part
 of this slice: final source-vector deduplication now also covers explicit and
 test-descriptor sources, and binding provenance carries `textus`/`cncf` layer
@@ -40,3 +34,5 @@ clean.
 Full suites remain reserved for the Phase 55 release gate. This journal records
 implementation evidence only; it does not promote the provisional Phase 55
 specification or alter Phase 53 CS-01--CS-07.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/08/2026-08-03-phase-55-gcf07c-runtime-source-snapshot-projection.md.gz`

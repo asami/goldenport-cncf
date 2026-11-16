@@ -37,14 +37,6 @@ Each terminal summary was read and its matching lock release observed.
 
 Final evidence summaries:
 
-- Producer focused: /tmp/skill.cncf.d/a-84518e13-16d0-4cab-8481-7e7917d8663b/90103-20261001T142411Z.summary.json
-- Producer regression and local refresh: /tmp/skill.cncf.d/a-cf8e6e42-a508-4091-a464-13bfdaa6a154/90769-20261001T142538Z.summary.json
-- Consumer package and regression: /tmp/skill.cncf.d/a-478fc636-217d-4ece-8ab5-098067eb21a6/91481-20261001T142715Z.summary.json
-
-The refresh was ordinary local dependency-artifact refresh of
-org.goldenport:goldenport-cncf_3:0.5.3-SNAPSHOT, not a release or remote upload.
-All final invocations have sbt_exit=0, wrapper_exit=0 and lock=released.
-
 ## Remaining boundary
 
 This closes the owner-context initialization prerequisite only. The default
@@ -53,3 +45,5 @@ binding, standalone launcher/bootstrap and independent-process/server evidence
 remain unfinished. Composition metadata is neither ingress authentication,
 human approval nor command authority. No pool ownership, grant, issuer/verifier,
 CML/ABI, commit, push or release boundary was changed in this slice.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/10/2026-10-01-factory-owned-composition-context.md.gz`

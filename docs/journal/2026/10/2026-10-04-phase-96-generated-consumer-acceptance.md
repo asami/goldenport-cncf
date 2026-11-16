@@ -167,10 +167,6 @@ zero aborted suites, failures, canceled, ignored or pending tests. SBT exit 0,
 wrapper exit 0, released serial lock and consumed typed permission were
 parent-admitted. Evidence locations:
 
-- [Representative intake](/private/tmp/skill.cncf.d/a-62616a1c-69d0-413a-b6c1-b86940a3f740/command-execution-intake.json).
-- [Representative actual log](/private/tmp/skill.cncf.d/a-ada0aef2-4214-43fe-b905-daa9871e0acb/36122-20261004T092121Z.log).
-- [Representative summary](/private/tmp/skill.cncf.d/a-ada0aef2-4214-43fe-b905-daa9871e0acb/36122-20261004T092121Z.summary.json).
-
 GC1..GC6 passed the actual normal-bootstrap, model/provenance equivalence,
 context/Unicode/order/empty-source, repeat/component-isolation and typed
 negative-publication expectations recorded in the historical scenario table.
@@ -196,10 +192,6 @@ passed 133/133 tests across 15 completed suites, with zero aborted suites,
 failures, canceled, ignored or pending tests. SBT exit 0, wrapper exit 0,
 released serial lock and consumed typed permission were parent-admitted.
 Evidence locations:
-
-- [Accumulator intake](/private/tmp/skill.cncf.d/a-573b8b05-2ff0-4133-96a5-5faccfb8d417/command-execution-intake.json).
-- [Accumulator actual log](/private/tmp/skill.cncf.d/a-602fdce4-ce14-4765-8d3c-f1c2a000b50e/38289-20261004T092543Z.log).
-- [Accumulator summary](/private/tmp/skill.cncf.d/a-602fdce4-ce14-4765-8d3c-f1c2a000b50e/38289-20261004T092543Z.summary.json).
 
 Combined current focused evidence is 140/140 tests across 16 completed suites.
 This is not a repository full-suite run or independent acceptance. Ordinary
@@ -321,3 +313,5 @@ release or closure; Cozy P76-05/06 and both Phase closures remain pending.
 Original authority, base, Goal, PLAN epoch, prior attempts/repairs and later
 acceptance obligations are preserved. This documentary M0 projection adds no
 repair cycle, resets no non-convergence count and changes no Step ownership.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/10/2026-10-04-phase-96-generated-consumer-acceptance.md.gz`

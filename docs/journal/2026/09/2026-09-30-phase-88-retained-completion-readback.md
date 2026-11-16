@@ -41,15 +41,10 @@ final validation. Shared serial wrapper, scoped permissions and normal caches
 retained. No commit/publish/push, skill/agent edit, full Phase review, typed
 acceptance or goal closure.
 
-Invocation: SMWF-CNCF-RETAINED-READBACK-DIRECT-20260930-355.
-Cwd: /Users/asami/src/dev2025/cloud-native-component-framework.
-Log: /tmp/skill.cncf.d/cncf-sbt-b247e63a94e71820da59c3fa0e0dc61039a72a578cb3fce8b07ec0fe39d68f9d-8d79f4931339a2bd90ab5caed01cc248/60038-20260930T122333Z.log
-Summary: same directory, 60038-20260930T122333Z.summary.json.
-Validated ManagedEventObservationIsolationSpec.scala SHA-256:
-3ec2224cf966cb26389d95458c676933c7b185a28605fb2333a4952b62304f36.
-
 Next: retained-specific authority and absence/key-free cases, then transient-only/
 empty completion without cursor work and deterministic common host/runtime
 routing. Skills/AI must not choose storage branches. Native cleanup/crash evidence,
 application/UoW dispatch, production assembly/CLI/MCP/restart/management remain
 open. S12/P2-U15/P2-U16/P2-U05 stay unchecked; Phase goal stays active.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-retained-completion-readback.md.gz`

@@ -24,10 +24,6 @@ passed, zero failed/aborted/canceled/ignored/pending. This includes all seven
 complete multi-guard readback examples and all eight configured EventStore
 persistence-selection examples. SBT exit=0, wrapper exit=0, lock=released.
 
-Invocation: SMWF-CNCF-FOCUSED-DIRECT-20260930-309
-Log:
-/tmp/skill.cncf.d/cncf-sbt-8b33dd7068a7fb9c813244ca9842ee51d15849974cb83cbd4f9b053307e42f15-953964ef352c096f22648b61743363a4/6402-20260930T051610Z.log
-
 This is focused test evidence, not full-suite validation, independent review
 or a typed Phase/PLAN acceptance receipt. No commit/publication was performed.
 No production multi-guard provider opts in. Managed SQLite/cross-owner
@@ -35,3 +31,5 @@ multi-guard integration, selected cursor/index/event atomic writes, actual
 original-order dispatch only after authoritative readback, zero dispatch on
 rollback/uncertainty and transient recovery exclusion remain open.
 S12/P2-U15/P2-U16/P2-U05 stay open.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-focused-validation-resumed.md.gz`

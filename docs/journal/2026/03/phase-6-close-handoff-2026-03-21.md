@@ -45,13 +45,7 @@ for follow-up work after Job Management CQRS.
 
 Focused verification executed on 2026-03-21:
 
-- `sbt "testOnly org.goldenport.cncf.job.JobCommandSyncAndTaskFirstSpec org.goldenport.cncf.event.EventReceptionSpec org.goldenport.cncf.job.JobControlCommandSpec org.goldenport.cncf.job.JobQueryReadModelSpec org.goldenport.cncf.job.SCENARIO.JobLifecycleScenarioSpec"`
-- Result: `31 tests passed, 0 failed`
-
 Additional regression verification (Job/Event + bootstrap path) executed on 2026-03-21:
-
-- `sbt "testOnly org.goldenport.cncf.job.JobControlCommandSpec org.goldenport.cncf.job.JobQueryReadModelSpec org.goldenport.cncf.job.InMemoryJobEngineSpec org.goldenport.cncf.job.SCENARIO.JobLifecycleScenarioSpec org.goldenport.cncf.job.JobEventLogIdempotencySpec org.goldenport.cncf.job.JobObservabilityNoEffectSpec org.goldenport.cncf.job.JobTerminalStateRecordOnlySpec org.goldenport.cncf.event.EventReceptionSpec org.goldenport.cncf.component.ComponentFactoryEventReceptionBootstrapSpec"`
-- Result: `35 tests passed, 0 failed`
 
 ## Out of Scope / Carried Forward
 
@@ -78,3 +72,5 @@ These are not Phase 6 reopen items. They are next-phase candidates:
 - `/Users/asami/src/dev2025/cloud-native-component-framework/docs/journal/2026/03/jm-03-instruction-2026-03-21.md`
 - `/Users/asami/src/dev2025/cloud-native-component-framework/docs/journal/2026/03/jm-04-instruction-2026-03-21.md`
 - `/Users/asami/src/dev2025/cloud-native-component-framework/docs/journal/2026/03/jm-05-instruction-2026-03-21.md`
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/03/phase-6-close-handoff-2026-03-21.md.gz`

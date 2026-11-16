@@ -43,13 +43,6 @@ Initial implementation and cross-repository validation:
 
 Review-fix progression:
 
-- generic resolver specifications passed 5/5, 7/7, and 10/10 at
-  `97857-20260802T153503Z`, `99803-20260802T153849Z`, and
-  `2190-20260802T154311Z`;
-- corresponding generic `Test/compile` runs passed at
-  `98365-20260802T153556Z`, `571-20260802T153949Z`, and
-  `2752-20260802T154413Z`.
-
 Final review-fix validation passed with 11/11 generic resolver examples at
 `7884-20260802T155302Z`; generic `Test/compile` passed at
 `8391-20260802T155356Z`. The independent review and two focused re-review
@@ -57,3 +50,5 @@ passes are clean. `git diff --check` passed in both admitted repositories.
 
 The three intentional CNCF pending scenarios are later-stage work and are not
 GCF-05 failures. Full suites remain reserved for the Phase 55 release gate.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/08/2026-08-03-phase-55-gcf05-deterministic-resolution-override-history.md.gz`

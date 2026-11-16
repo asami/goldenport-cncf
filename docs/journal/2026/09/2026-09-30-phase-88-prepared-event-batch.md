@@ -59,11 +59,6 @@ not a new product test receipt.
 
 Accepted receipt locators:
 
-- Focused:
-  `/tmp/skill.cncf.d/cncf-command-execution-07e52a9ef45bd5676191216edc18481b0d106065cc8c789dfff93132ddffcde7-4a24d153b432e90e74edad1e9d62ae31/command-execution-sha256-65c360f1dcd90e3148578994ee45af2d7d3535ed4e0b7f8a404cfcbd532673a3`
-- Regression:
-  `/tmp/skill.cncf.d/cncf-command-execution-c3f8fe1e2f9ece5a414c0cbc60cae4e810ff5fe1601a75ec519b706886921ee3-3b9c9bbb5838d873b0256201dd45aee1/command-execution-sha256-01abfd3f3d77b89c437c1c9cfdce01a75c6354688155978b53b15b269b12d114`
-
 Owned source identities at accepted test tree:
 
 - `WorkflowPreparedDataStoreTransition.scala`:
@@ -76,3 +71,5 @@ Owned source identities at accepted test tree:
 No source commit, local publication, downstream artifact refresh or full joint
 runtime acceptance occurred. Continue Work B with durable sequence/delivery
 admission and active UoW/closing-program composition; preserve P2-U05 open.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-30-phase-88-prepared-event-batch.md.gz`

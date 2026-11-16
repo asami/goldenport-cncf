@@ -119,10 +119,6 @@ Terminal classification: sbt_exit=1, wrapper_exit=1, lock=released.
 
 Raw unaccepted summary locators:
 
-- 262: `/tmp/skill.cncf.d/cncf-sbt-bb0c87e390a58ea764e0080121acd80371d44541d169b3c147909bf625d5aefa-81dddfe75faa723baadb05420944433d/33863-20260929T093127Z.summary.json`
-- 263: `/tmp/skill.cncf.d/cncf-sbt-c36742c431334b8b1049c8ccdc379f729457f63a913f3fea79244d41a7f59018-de8d3a06facfad0732bac8d8048189ff/35641-20260929T093413Z.summary.json`
-- 264: `/tmp/skill.cncf.d/cncf-sbt-1a5a2512cb756491131a1cbb078472e720bbf228011ef0a3e8d7bf26298a29d2-02b68369187060b300d778359f5023d4/37514-20260929T093732Z.summary.json`
-
 Execution profile: gpt-5.6-luna / medium; runtime_source=registered;
 agent_type=cncf_command_runner. IDs, in command order:
 
@@ -201,3 +197,5 @@ Post-validation changes are documentation-only progress/evidence records.
 They are not the accepted complete test tree; no current-tree release/commit
 freshness authorization is inferred. Before a later release, apply the canonical
 freshness/validation contract for the then-selected exact tree.
+
+> Local execution archive: `~/backup/journal/2026/11/cloud-native-component-framework/cncf-journal-cleanup-20261116/a-46519ec7-ea0d-401b-ac84-b5c5c87060f6/docs/journal/2026/09/2026-09-29-phase-88-create-only-side-records.md.gz`
