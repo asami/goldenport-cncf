@@ -6,6 +6,7 @@ import scala.collection.mutable
 import org.goldenport.Consequence
 import org.goldenport.observation.Descriptor.Facet
 import org.goldenport.cli.parser.ArgsParser
+import org.goldenport.configuration.Configuration
 import org.goldenport.configuration.ConfigurationBindingCandidates
 import org.goldenport.configuration.ConfigurationBindingCollection
 import org.goldenport.configuration.ConfigurationBindingResolver
@@ -94,7 +95,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Aug. 19, 2026
  *  version Sep.  8, 2026
  *  version Oct. 26, 2026
- * @version Nov.  3, 2026
+ * @version Nov. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cli] trait CncfRuntimeInstanceLifecyclePart {
@@ -103,7 +104,8 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
     identity: SubsystemInstanceId,
     candidates: ConfigurationBindingCandidates[CncfConfigurationTarget],
     bindings: ConfigurationBindingCollection[CncfConfigurationTarget],
-    admittedprofiles: Option[Vector[StandaloneUserProfileResolver.Admitted]] = None
+    admittedprofiles: Option[Vector[StandaloneUserProfileResolver.Admitted]] = None,
+    resourcedefaults: Configuration = Configuration.empty
   )
 
   private[cli] val _configuration_application_name = "textus"
@@ -416,7 +418,11 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
       org.goldenport.cncf.config.SubsystemOperationalObservationConfiguration
         .admitC(preflight.bindings, preflight.identity).TAKE
     }
-    val runconfig = RuntimeConfig.from(configuration, runtimehint, executionprofile, iodefaultmaximumbytes)
+    val resourceconfiguration = RuntimeConfig._with_selected_resource_defaults(
+      configuration,
+      runtimeconfigurationpreflight.map(_.resourcedefaults).getOrElse(Configuration.empty)
+    )
+    val runconfig = RuntimeConfig.from(resourceconfiguration, runtimehint, executionprofile, iodefaultmaximumbytes)
     val aliasresolver = AliasLoader.load(configuration.configuration)
     LogBackendHolder.install(runconfig.logBackend)
     ObservabilityEngine.updateVisibilityPolicy(VisibilityPolicy(minLevel = runconfig.logLevel))
@@ -452,7 +458,7 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
         processdriver, processplan.map(_.admission), processplan.flatMap(_.workspaceAdmissionOption),
         httpplan.map(_.admission), observationruntime)
       SystemNodeConstruction.withNode(systemnode) {
-        def assemble() = DefaultSubsystemFactory.runtimeDefaultWithScopeC(
+        def _assemble_() = DefaultSubsystemFactory.runtimeDefaultWithScopeC(
           _runtime_scope_context(),
           Some(mode),
           configuration,
@@ -460,8 +466,8 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
           Some(bootstrap.repositorybootstrappolicy)
         ).TAKE
         storageconfiguration match {
-          case Some(admitted) => admitted.withConstruction(assemble())
-          case None => assemble()
+          case Some(admitted) => admitted.withConstruction(_assemble_())
+          case None => _assemble_()
         }
       }
     } catch {
@@ -651,7 +657,16 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
       context <- CncfConfigurationResolutionContext.forSubsystem(identity)
       bindings <- ConfigurationBindingResolver.resolve(candidates, context.generic)
       preflight <- _admit_runtime_configuration_preflight_for_launch(
-        RuntimeConfigurationPreflight(identity, candidates, bindings),
+        RuntimeConfigurationPreflight(
+          identity,
+          candidates,
+          bindings,
+          resourcedefaults = descriptor.map { selected =>
+            Configuration(selected.configuration.values.filter { case (key, _) =>
+              selected.componentDefaultSources.contains(key)
+            })
+          }.getOrElse(Configuration.empty)
+        ),
         descriptor
       )
     } yield preflight

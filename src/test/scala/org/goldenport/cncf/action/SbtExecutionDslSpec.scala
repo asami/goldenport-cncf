@@ -26,7 +26,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Oct. 15, 2026
  *  version Oct. 24, 2026
  *  version Nov.  5, 2026
- * @version Nov.  6, 2026
+ * @version Nov. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -999,6 +999,172 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
       ProcessExecutionCapture(Vector.empty, 0L, false), Vector.empty, 17L, "project-build")
   }
 
+  "Scoped typed SBT transport" should {
+    "deliver the explicit consumer input and reject foreign or missing inputs before launch" in {
+      Given("an admitted consumer and bounded input with adapter-owned settings")
+      val fixture = _fixture(_result(ProcessExecutionTermination.Exited(0)))
+      val uow = new UnitOfWork(fixture.context)
+      val relative = WorkspaceRelativePath.parseC("selection.json").toOption.get
+      val scoped = SbtScopedInput(_owner, _workspace_id, _workspace_id, "scope-1", "selection-1", relative)
+      val input = fixture.root.resolve("checkout/selection.json")
+      val json = s"""{"schema":"cncf.scoped-sbt-input.v1","kind":"consumer","component":"${_owner.name}","buildWorkspace":"project","ownerWorkspace":"project","scope":"scope-1","selection":"selection-1","pluginSettings":{"future":true}}"""
+      try {
+        Files.writeString(input, json)
+        val target = fixture.target.copy(scopedInput = Some(scoped))
+        val interpreter = new UnitOfWorkInterpreter(uow)
+        When("the native interpreter executes an explicit selected compile")
+        val observed = interpreter.interpret(UnitOfWorkOp.SbtExecAttempt(target, SbtOperation.Compile)).toOption.get
+        Then("the exact input is delivered and invalid explicit selections fail before another launch")
+        observed match {
+          case SbtExecutionAttempt.Observed(result) => result.target.scopedInput shouldBe Some(scoped)
+          case other => fail(s"Expected observed compile: $other")
+        }
+        val args = fixture.profile.driver.executions.head.effectiveArguments
+        args should contain ("-Dsm.artifact.selection=" + input.toString)
+        args.last shouldBe "compile"
+        Files.writeString(input, json.replace("selection-1", "foreign"))
+        interpreter.interpret(UnitOfWorkOp.SbtExecAttempt(target, SbtOperation.Compile)).toOption.get
+          .isInstanceOf[SbtExecutionAttempt.AdmissionRejected] shouldBe true
+        Files.delete(input)
+        interpreter.interpret(UnitOfWorkOp.SbtExecAttempt(target, SbtOperation.Compile)).toOption.get
+          .isInstanceOf[SbtExecutionAttempt.AdmissionRejected] shouldBe true
+        fixture.profile.driver.executions should have size 1
+      } finally { uow.dispose(); _close(fixture.root) }
+    }
+
+    "use the separately granted fixed producer task and retain its process outcome" in {
+      Given("a distinct granted producer operation and its owner-local resources")
+      val fixture = _fixture(_result(ProcessExecutionTermination.Exited(1)), compileoperation = SbtOperation.ScopedPublish)
+      val uow = new UnitOfWork(fixture.context)
+      val root = fixture.root.resolve("checkout")
+      val relative = WorkspaceRelativePath.parseC("input.json").toOption.get
+      val repository = WorkspaceRelativePath.parseC("repository").toOption.get
+      val staging = WorkspaceRelativePath.parseC("staging").toOption.get
+      val scoped = SbtScopedInput(_owner, _workspace_id, _workspace_id, "scope-1", "selection-1", relative,
+        Some(SbtScopedPublication("publication-1", repository, staging)))
+      try {
+        Files.createDirectory(root.resolve("repository"))
+        Files.createDirectory(root.resolve("staging"))
+        Files.writeString(root.resolve("input.json"), s"""{"schema":"cncf.scoped-sbt-input.v1","kind":"producer","component":"${_owner.name}","buildWorkspace":"project","ownerWorkspace":"project","scope":"scope-1","selection":"selection-1","publication":"publication-1","repository":"repository","staging":"staging"}""")
+        val target = fixture.target.copy(scopedInput = Some(scoped))
+        val interpreter = new UnitOfWorkInterpreter(uow)
+        When("the native interpreter executes the scoped producer and a request without input")
+        val observed = interpreter.interpret(UnitOfWorkOp.SbtExecAttempt(target, SbtOperation.ScopedPublish)).toOption.get
+        Then("the nonzero exit and the fixed task remain visible and missing input is rejected")
+        observed match {
+          case SbtExecutionAttempt.Observed(result) => result.outcome shouldBe SbtExecutionOutcome.Failed(1)
+          case other => fail(s"Expected observed producer: $other")
+        }
+        fixture.profile.driver.executions.head.effectiveArguments.last shouldBe "smDevelopmentArtifactPublish"
+        interpreter.interpret(UnitOfWorkOp.SbtExecAttempt(fixture.target, SbtOperation.ScopedPublish)).toOption.get
+          .isInstanceOf[SbtExecutionAttempt.AdmissionRejected] shouldBe true
+        fixture.profile.driver.executions should have size 1
+      } finally { uow.dispose(); _close(fixture.root) }
+    }
+  }
+
+  "Scoped producer qualification" should {
+    "distinguish an exit-zero scoped task from ordinary publishLocal" in {
+      Given("separately granted scoped and ordinary producer capabilities")
+      val scopedfixture = _fixture(_result(ProcessExecutionTermination.Exited(0)), compileoperation = SbtOperation.ScopedPublish)
+      val ordinaryfixture = _fixture(_result(ProcessExecutionTermination.Exited(0)), compileoperation = SbtOperation.PublishLocal)
+      val scopeduow = new UnitOfWork(scopedfixture.context)
+      val ordinaryuow = new UnitOfWork(ordinaryfixture.context)
+      try {
+        val target = _scoped_producer(scopedfixture)
+        When("both operations run through the native interpreter")
+        val scoped = new UnitOfWorkInterpreter(scopeduow).interpret(UnitOfWorkOp.SbtExecAttempt(target, SbtOperation.ScopedPublish)).toOption.get
+        val ordinary = new UnitOfWorkInterpreter(ordinaryuow).interpret(UnitOfWorkOp.SbtExecAttempt(ordinaryfixture.target, SbtOperation.PublishLocal)).toOption.get
+        Then("both preserve process exit while their fixed tasks and typed operations remain distinct")
+        scoped match {
+          case SbtExecutionAttempt.Observed(result) =>
+            result.operation shouldBe SbtOperation.ScopedPublish
+            result.processResult.termination shouldBe ProcessExecutionTermination.Exited(0)
+            result.target.scopedInput shouldBe target.scopedInput
+          case other => fail(s"Expected observed scoped process: $other")
+        }
+        ordinary match {
+          case SbtExecutionAttempt.Observed(result) =>
+            result.operation shouldBe SbtOperation.PublishLocal
+            result.target.scopedInput shouldBe None
+          case other => fail(s"Expected observed ordinary process: $other")
+        }
+        scopedfixture.profile.driver.executions.head.effectiveArguments.last shouldBe "smDevelopmentArtifactPublish"
+        ordinaryfixture.profile.driver.executions.head.effectiveArguments.last shouldBe "publishLocal"
+      } finally {
+        scopeduow.dispose(); ordinaryuow.dispose(); _close(scopedfixture.root); _close(ordinaryfixture.root)
+      }
+    }
+
+    "retain incomplete process observations and uncertain driver failures" in {
+      Given("an admitted producer with a timeout and another whose driver fails before returning a receipt")
+      val conclusion = Consequence.serviceUnavailable("test-owned producer driver failed").conclusion
+      val driver = new ProcessExecutionDriver {
+        val safeIdentity = "test-owned-failing-scoped-sbt"
+        def startC(execution: ResolvedProcessExecution): Consequence[ProcessExecutionHandle] = Consequence.Failure(conclusion)
+      }
+      val incomplete = _fixture(_result(ProcessExecutionTermination.TimedOut), compileoperation = SbtOperation.ScopedPublish)
+      val uncertain = _fixture(_result(ProcessExecutionTermination.Exited(0)), compileoperation = SbtOperation.ScopedPublish, driver = Some(driver))
+      val uows = Vector(new UnitOfWork(incomplete.context), new UnitOfWork(uncertain.context))
+      try {
+        val targets = Vector(_scoped_producer(incomplete), _scoped_producer(uncertain))
+        When("the two typed attempts run")
+        val attempts = uows.zip(targets).map { case (uow, target) =>
+          new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.SbtExecAttempt(target, SbtOperation.ScopedPublish)).toOption.get
+        }
+        Then("timeout stays incomplete and the driver failure stays uncertain")
+        attempts.head match {
+          case SbtExecutionAttempt.Observed(result) => result.outcome shouldBe SbtExecutionOutcome.Incomplete(ProcessExecutionTermination.TimedOut)
+          case other => fail(s"Expected incomplete observation: $other")
+        }
+        attempts(1) shouldBe SbtExecutionAttempt.Uncertain(targets(1), SbtOperation.ScopedPublish, conclusion)
+      } finally { uows.foreach(_.dispose()); _close(incomplete.root); _close(uncertain.root) }
+    }
+
+    "reject unavailable capability, foreign ownership and unavailable or symlinked output before launch" in {
+      Given("a normal compile-only host and a separate scoped host with an ungranted resource workspace")
+      val nohost = _fixture(_result(ProcessExecutionTermination.Exited(0)))
+      val fixture = _fixture(_result(ProcessExecutionTermination.Exited(0)), compileoperation = SbtOperation.ScopedPublish, foreignresource = true)
+      val uows = Vector(new UnitOfWork(nohost.context), new UnitOfWork(fixture.context))
+      try {
+        val nohosttarget = _scoped_producer(nohost)
+        val target = _scoped_producer(fixture)
+        val scoped = target.scopedInput.get
+        val foreign = WorkspaceId.parseC("foreign").toOption.get
+        val foreignowner = target.copy(scopedInput = Some(scoped.copy(component = ComponentId("org.example.Foreign"))))
+        val foreignresource = target.copy(scopedInput = Some(scoped.copy(ownerWorkspace = foreign)))
+        val output = fixture.root.resolve("checkout/staging")
+        When("the interpreter admits each invalid operation or input")
+        val missinghost = new UnitOfWorkInterpreter(uows.head).interpret(UnitOfWorkOp.SbtExecAttempt(nohosttarget, SbtOperation.ScopedPublish)).toOption.get
+        val interpreter = new UnitOfWorkInterpreter(uows(1))
+        val rejectedowner = interpreter.interpret(UnitOfWorkOp.SbtExecAttempt(foreignowner, SbtOperation.ScopedPublish)).toOption.get
+        val rejectedresource = interpreter.interpret(UnitOfWorkOp.SbtExecAttempt(foreignresource, SbtOperation.ScopedPublish)).toOption.get
+        Files.delete(output)
+        val missingoutput = interpreter.interpret(UnitOfWorkOp.SbtExecAttempt(target, SbtOperation.ScopedPublish)).toOption.get
+        Files.createSymbolicLink(output, fixture.root.resolve("checkout/repository"))
+        val linkedoutput = interpreter.interpret(UnitOfWorkOp.SbtExecAttempt(target, SbtOperation.ScopedPublish)).toOption.get
+        Then("each rejection is typed and neither process driver starts")
+        Vector(missinghost, rejectedowner, rejectedresource, missingoutput, linkedoutput).foreach { attempt =>
+          attempt.isInstanceOf[SbtExecutionAttempt.AdmissionRejected] shouldBe true
+        }
+        nohost.profile.driver.executions shouldBe empty
+        fixture.profile.driver.executions shouldBe empty
+      } finally { uows.foreach(_.dispose()); _close(nohost.root); _close(fixture.root) }
+    }
+  }
+
+  private def _scoped_producer(fixture: Fixture): SbtTarget = {
+    val root = fixture.root.resolve("checkout")
+    Files.createDirectory(root.resolve("repository"))
+    Files.createDirectory(root.resolve("staging"))
+    Files.writeString(root.resolve("input.json"), s"""{"schema":"cncf.scoped-sbt-input.v1","kind":"producer","component":"${_owner.name}","buildWorkspace":"project","ownerWorkspace":"project","scope":"scope-1","selection":"selection-1","publication":"publication-1","repository":"repository","staging":"staging"}""")
+    val path = WorkspaceRelativePath.parseC("input.json").toOption.get
+    val repository = WorkspaceRelativePath.parseC("repository").toOption.get
+    val staging = WorkspaceRelativePath.parseC("staging").toOption.get
+    fixture.target.copy(scopedInput = Some(SbtScopedInput(_owner, _workspace_id, _workspace_id,
+      "scope-1", "selection-1", path, Some(SbtScopedPublication("publication-1", repository, staging)))))
+  }
+
   private def _fixture(
     result: ProcessExecutionResult,
     permission: WorkspacePermission = WorkspacePermission.Manage,
@@ -1012,13 +1178,15 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
     driver: Option[ProcessExecutionDriver] = None,
     workspaceid: WorkspaceId = _workspace_id,
     limits: ProcessExecutionLimits = _limits,
-    compileoperation: SbtOperation = SbtOperation.Compile
+    compileoperation: SbtOperation = SbtOperation.Compile,
+    foreignresource: Boolean = false
   ): Fixture = {
     val base = Files.createDirectories(Paths.get("target", "sbt-execution-dsl-spec").toAbsolutePath)
     val root = Files.createTempDirectory(base, "case-")
     val checkout = Files.createDirectory(root.resolve("checkout"))
     val workspacegrants = if (workspacegranted) Vector(WorkspaceGrant(_owner, workspaceid, permission)) else Vector.empty
-    val workspace = WorkspaceExecutionAdmission.createC(Vector(workspaceid -> checkout), workspacegrants).toOption.get
+    val foreignroots = if (foreignresource) Vector(WorkspaceId.parseC("foreign").toOption.get -> Files.createDirectory(root.resolve("foreign"))) else Vector.empty
+    val workspace = WorkspaceExecutionAdmission.createC(Vector(workspaceid -> checkout) ++ foreignroots, workspacegrants).toOption.get
     val binding = workspace.bindingC(workspaceid).toOption.get
     val definitions = Vector(
       compileoperation -> _compile_capability, SbtOperation.Test -> _test_capability,

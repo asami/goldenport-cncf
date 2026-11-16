@@ -10,7 +10,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 
 /*
  * @since   Nov.  3, 2026
- * @version Nov.  3, 2026
+ * @version Nov. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 opaque type ValidationCheckId = String
@@ -85,6 +85,17 @@ private[cncf] final case class ValidationCheckProgramMetadata(
   purpose: ValidationCheckPurpose
 )
 
+private[cncf] final case class PreparedValidationCheckProgram(
+  definition: ProcessProgramDefinition,
+  checkidentity: ValidationCheckId,
+  purpose: ValidationCheckPurpose
+) {
+  def bindC(binding: WorkspaceBinding): Consequence[ProcessProgramDefinition] =
+    if (binding == null) WorkspaceBinding.unavailableC
+    else binding.workingDirectoryC.map(_ => ProcessProgramDefinition.bindPrepared(definition,
+      check = Some(ValidationCheckProgramMetadata(binding, checkidentity, purpose))))
+}
+
 private[cncf] object ValidationCheckProgramDefinition {
   val ADAPTER = "fixed-process"
   private val _launcher_names = Set("sh", "bash", "zsh", "dash", "ksh", "csh", "tcsh", "fish",
@@ -101,18 +112,31 @@ private[cncf] object ValidationCheckProgramDefinition {
     fixedArguments: Vector[String],
     limits: ProcessExecutionLimits,
     environment: Map[String, String]
-  ): Consequence[ProcessProgramDefinition] = for {
-    _ <- if (binding != null && purpose != null && capability != null && limits != null && environment != null &&
+  ): Consequence[ProcessProgramDefinition] =
+    prepareC(checkIdentity, purpose, adapter, capability, safeProgramIdentity, executable,
+      fixedArguments, limits, environment).flatMap(_.bindC(binding))
+
+  def prepareC(
+    checkIdentity: ValidationCheckId,
+    purpose: ValidationCheckPurpose,
+    adapter: String,
+    capability: ProcessCapabilityId,
+    safeProgramIdentity: String,
+    executable: Path,
+    fixedArguments: Vector[String],
+    limits: ProcessExecutionLimits,
+    environment: Map[String, String]
+  ): Consequence[PreparedValidationCheckProgram] = for {
+    _ <- if (Option(checkIdentity).nonEmpty && purpose != null && capability != null && limits != null && environment != null &&
         fixedArguments != null && fixedArguments.forall(x => x != null && !x.contains('\u0000')))
       Consequence.unit else _invalid_c
     _ <- ValidationCheckId.parseC(checkIdentity.value)
     _ <- if (adapter == ADAPTER) Consequence.unit else _invalid_c
-    _ <- binding.workingDirectoryC
     location <- _host_location_c(executable)
     _ <- ProcessArgumentPolicy(Vector.empty, permittedArgumentVectors = Set(fixedArguments)).validateC(fixedArguments, limits)
-    definition <- ProcessProgramDefinition.fromValidationCheckRuntimeC(capability, safeProgramIdentity,
-      location.toString, fixedArguments, limits, environment, ValidationCheckProgramMetadata(binding, checkIdentity, purpose))
-  } yield definition
+    definition <- ProcessProgramDefinition.fromRuntimeC(capability, safeProgramIdentity,
+      location.toString, fixedArguments, ProcessArgumentPolicy(fixedArguments), limits, Set.empty, environment = environment)
+  } yield PreparedValidationCheckProgram(definition, checkIdentity, purpose)
 
   private def _host_location_c(path: Path): Consequence[Path] = try {
     def _launcher_(value: Path): Boolean =

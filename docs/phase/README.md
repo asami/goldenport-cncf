@@ -19,6 +19,14 @@ routes reuse existing capabilities; Phase 108 acceptance and priorities are
 unchanged. GitHub already allocates Phase 122 to typed SBT/lint work; these local
 registrations reserve the next two numbers without starting or syncing work.
 
+Strict Scala integration planned 2026-11-09:
+[Phase 122](phase-122.md) / [checklist](phase-122-checklist.md)
+records CNCF's EXEC-01–EXEC-04 handoff to sm-workflow Phase 6.12, all OPEN.
+Qualify existing typed SBT/UoW/FixCheck and
+later consume the independently reusable shared rules in CNCF's build. No new
+runtime API, new worktree or whole-Phase waiting dependency is assumed; CNCF
+implementation remains owned by CNCF development in canonical main.
+
 [Phase 121 — Firebase notification delivery and ingress attestation](phase-121.md) is planned for later delivery. Progress is recorded in the [Phase 121 checklist](phase-121-checklist.md).
 
 Data/report/print integration allocated 2026-11-02:

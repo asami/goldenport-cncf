@@ -48,6 +48,12 @@ Downstream assembly component entries use exact `namespace`, `id`, and
 Artifact selection may continue to use the artifact name, and admitted Web
 aliases may remain unchanged.
 
+When an installed runtime selector and an explicit assembly are both supplied,
+the selector must match exactly one canonical assembly binding by qualified ID
+and, when specified, version. The assembly supplies identity authority; a
+selector alone cannot create a binding. Missing, malformed, conflicting, or
+ambiguous bindings fail admission.
+
 ## Compatibility ledger
 
 | Surface | Canonical behavior | Compatibility owner / removal gate |

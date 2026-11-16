@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /** Preliminary legacy JVM guards using synthetic receipts; no command or old CAR is executed.
  * @since   Nov.  7, 2026
- * @version Nov.  7, 2026
+ * @version Nov. 12, 2026
  */
 final class SbtExecutionBinaryCompatibilitySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _workspace = WorkspaceId.parseC("abi-project").toOption.get
@@ -28,6 +28,9 @@ final class SbtExecutionBinaryCompatibilitySpec extends AnyWordSpec with Matcher
     validationMode = Some("develop"), validationProvider = Some("fixture"))
   private val _discovery_target = SbtTarget(_workspace, validationDiscovery = true)
   private val _batch_target = SbtTarget(_workspace, validationBatch = Vector(_selected))
+  private val _scoped = SbtScopedInput(org.goldenport.cncf.component.ComponentId("org.example.Owner"),
+    _workspace, _workspace, "scope", "selection",
+    org.goldenport.cncf.workspace.WorkspaceRelativePath.parseC("input.json").toOption.get)
   private val _plain_target = SbtTarget(_workspace)
   private val _target_parameters: Array[Class[?]] =
     Array(classOf[String], classOf[Option[?]], classOf[Option[?]])
@@ -76,7 +79,7 @@ final class SbtExecutionBinaryCompatibilitySpec extends AnyWordSpec with Matcher
 
       "copies the legacy prefix while retaining each current selection form" in {
         Given("separate exact-mode, discovery and exact-batch targets with their current fields")
-        val targets = Vector(_mode_target, _discovery_target, _batch_target)
+        val targets = Vector(_mode_target, _discovery_target, _batch_target, _plain_target.copy(scopedInput = Some(_scoped)))
         val copymethod = classOf[SbtTarget].getMethod("copy", _target_parameters*)
         When("an old caller changes only its three-field prefix")
         val copies = targets.map(target => copymethod.invoke(target,
@@ -90,6 +93,7 @@ final class SbtExecutionBinaryCompatibilitySpec extends AnyWordSpec with Matcher
           copied.validationProvider shouldBe original.validationProvider
           copied.validationDiscovery shouldBe original.validationDiscovery
           copied.validationBatch shouldBe original.validationBatch
+          copied.scopedInput shouldBe original.scopedInput
         }
       }
 
@@ -105,12 +109,15 @@ final class SbtExecutionBinaryCompatibilitySpec extends AnyWordSpec with Matcher
         val constructed = classOf[SbtTarget].getConstructor(parameters*).newInstance(arguments*)
         val applied = SbtTarget.getClass.getMethod("apply", parameters*).invoke(SbtTarget, arguments*)
         val copied = classOf[SbtTarget].getMethod("copy", parameters*).invoke(_plain_target, arguments*)
+        val scopedcopy = classOf[SbtTarget].getMethod("copy", parameters*)
+          .invoke(_plain_target.copy(scopedInput = Some(_scoped)), arguments*).asInstanceOf[SbtTarget]
         val copydefaults = (1 to 7).map(index => classOf[SbtTarget]
           .getMethod("copy$default$" + index).invoke(_mode_target)).toVector
         Then("full entries retain their current meaning and legacy defaults remain absent")
         defaults shouldBe Vector(None, None, None, None, java.lang.Boolean.FALSE, Vector.empty)
         Vector(constructed, applied, copied).foreach(_ shouldBe _mode_target)
         copydefaults shouldBe arguments.toVector
+        scopedcopy.scopedInput shouldBe Some(_scoped)
         _mode_target.copy(validationProvider = Some("live")).validationProvider shouldBe Some("live")
         SbtTarget(_workspace).scenario shouldBe None
       }

@@ -19,7 +19,7 @@ import org.scalacheck.{Gen, Prop, Test}
 /*
  * @since   Oct.  7, 2026
  *  version Oct. 29, 2026
- * @version Nov.  6, 2026
+ * @version Nov. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -40,6 +40,60 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
     Map(_owner -> Vector(ProcessExecutionGrant(_capability)))))
   private val _encoded = _take(RuntimeProcessExecutionPlanCodec.encode(_plan)).asInstanceOf[ConfigurationValue.StringValue]
   private val _root = parse(_encoded.value).toOption.get
+
+  "Candidate-scoped semantic definitions" should {
+    "prepare all semantic families without workspace metadata and attach only the actual admitted binding" in {
+      Given("typed build, Git and check declarations with available executables and no admitted workspace")
+      val root = _directory()
+      val alias = _take(WorkspaceId.parseC("prepared-alias"))
+      val sbt = _take(SbtProgramDefinition.prepareC(SbtOperation.Compile, _capability, "prepared-sbt",
+        Paths.get("/usr/bin/true"), _limits, Map.empty, Vector.empty, None, None, false))
+      val declared = GitExecutionSpecSupport.declaration(GitOperationKind.Root, root.resolve("remote.git").toString)
+      val git = _take(GitProgramDefinition.prepareC(declared.operation, declared.capability, declared.identity,
+        declared.gitExecutable, declared.localBranch, declared.remote, declared.remoteBranch, declared.endpoint,
+        declared.commitIdentity, declared.selectionId, declared.selectedPath, declared.commitMessage,
+        declared.limits, declared.environment, declared.selectedPaths))
+      val check = _take(ValidationCheckProgramDefinition.prepareC(_take(ValidationCheckId.parseC("prepared-check")),
+        ValidationCheckPurpose.Compilation, ValidationCheckProgramDefinition.ADAPTER, _capability, "prepared-check",
+        Paths.get("/usr/bin/true"), Vector.empty, _limits, Map.empty))
+      When("the prepared definitions are retained before actual directory admission")
+      val definitions = Vector(sbt.definition, git.definition, check.definition)
+      Then("they carry no executable workspace metadata and create no prospective root")
+      definitions.forall(p => p._sbt_metadata.isEmpty && p._git_metadata.isEmpty && p._validation_check_metadata.isEmpty) shouldBe true
+      Files.notExists(root.resolve("prospective")) shouldBe true
+      Given("the real existing root is admitted once")
+      val binding = _take(WorkspaceBinding.createC(alias, root))
+      When("each prepared family attaches that binding")
+      val bound = Vector(_take(sbt.bindC(binding)), _take(git.bindC(binding)), _take(check.bindC(binding)))
+      Then("every semantic metadata value retains the exact real binding")
+      bound(0)._sbt_metadata.get.binding should be theSameInstanceAs binding
+      bound(1)._git_metadata.get.binding should be theSameInstanceAs binding
+      bound(2)._validation_check_metadata.get.binding should be theSameInstanceAs binding
+    }
+
+    "retain typed SBT authority while changing only the selected binding" in {
+      Given("two directories bound to the same logical alias and an existing typed build definition")
+      val first = _directory()
+      val second = _directory()
+      val alias = _take(WorkspaceId.parseC("candidate"))
+      val original = _take(WorkspaceBinding.createC(alias, first))
+      val replacement = _take(WorkspaceBinding.createC(alias, second))
+      val definition = _take(SbtProgramDefinition.createC(original, SbtOperation.Test,
+        _capability, "selected-token", Paths.get("/usr/bin/true"), _limits, Map.empty))
+      When("the internal scoped policy derives a replacement")
+      val rebound = ProcessProgramDefinition.rebindWorkspace(definition, original, replacement)
+      Then("only the binding changes and the original remains unchanged")
+      (definition._sbt_metadata.get.binding eq original) shouldBe true
+      (rebound._sbt_metadata.get.binding eq replacement) shouldBe true
+      rebound.capability shouldBe definition.capability
+      rebound.fixedArguments shouldBe definition.fixedArguments
+      rebound.maximumLimits shouldBe definition.maximumLimits
+      rebound._environment shouldBe definition._environment
+      val other = _take(WorkspaceBinding.createC(_take(WorkspaceId.parseC("other")), second))
+      val policy = _take(ProcessExecutionPolicy.createC(Vector(definition)))
+      policy.rebindWorkspaceC(original, other).isFaillure shouldBe true
+    }
+  }
   private def _decode(value: Json) = RuntimeProcessExecutionPlanCodec.decode(ConfigurationValue.StringValue(value.noSpaces))
   private def _changed_program(f: Json => Json): Json = _root.mapObject(_.add("programs",
     Json.arr(f(_root.hcursor.downField("programs").downArray.focus.get))))
@@ -134,6 +188,33 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
       grant.mapObject(_.add("capabilities", Json.arr(Json.fromString("selected-check")))))
 
   "V6 declared validation check host schema" should {
+    "retain the V7 managed parent and eligible alias across codec and IO-default projection" in _with_v6_root { wire =>
+      Given("explicit Manage grants for a managed parent and candidate alias")
+      val root = Paths.get(wire.hcursor.downField("workspaces").downArray.get[String]("root").toOption.get)
+      val parent = Files.createDirectory(root.resolve("managed-candidate-parent"))
+      val workspaces = wire.hcursor.get[Vector[Json]]("workspaces").toOption.get ++ Vector(
+        Json.obj("identity" -> Json.fromString("candidate-parent"), "root" -> Json.fromString(parent.toString)),
+        Json.obj("identity" -> Json.fromString("candidate-alias"), "root" -> Json.fromString(root.toString)))
+      val grants = wire.hcursor.get[Vector[Json]]("workspaceGrants").toOption.get ++ Vector("candidate-parent", "candidate-alias").map(id =>
+        Json.obj("componentId" -> Json.fromString(_owner.name), "workspaceId" -> Json.fromString(id), "access" -> Json.fromString("manage")))
+      val candidate = Json.obj("componentId" -> Json.fromString(_owner.name), "parent" -> Json.fromString("candidate-parent"),
+        "alias" -> Json.fromString("candidate-alias"))
+      val v7 = wire.mapObject(_.add("schema", Json.fromString(RuntimeProcessExecutionPlanCodec.SCHEMA_V7))
+        .add("workspaces", Json.fromValues(workspaces)).add("workspaceGrants", Json.fromValues(grants))
+        .add("sessionCandidateWorkspaces", Json.arr(candidate)))
+      When("the host plan is decoded, defaulted and round-tripped")
+      val first = _take(_decode(v7))
+      val projected = _take(RuntimeProcessExecutionPlanCodec.resolveIoDefaultsC(first, 1024L))
+      val restored = _take(RuntimeProcessExecutionPlanCodec.decode(_take(RuntimeProcessExecutionPlanCodec.encode(projected))))
+      Then("the exact owner, parent and eligible alias remain attached")
+      val expected = SessionCandidateWorkspacePolicy(_owner, _take(WorkspaceId.parseC("candidate-parent")),
+        _take(WorkspaceId.parseC("candidate-alias")))
+      first.candidatePolicies shouldBe Vector(expected)
+      projected.candidatePolicies shouldBe Vector(expected)
+      restored.candidatePolicies shouldBe Vector(expected)
+      _decode(v7.mapObject(_.add("workspaceGrants", Json.fromValues(grants.dropRight(1))))).isFaillure shouldBe true
+    }
+
     "round-trip exact fixed checks with all V5 families and workspace admission" in _with_v6_root { wire =>
       Given("an additive V6 declaration with generic, SBT, selected Git, repository and validation check entries")
       When("the strict host codec decodes, encodes and decodes it")

@@ -102,7 +102,11 @@ rechecked. `WorkspaceBinding.directoryIdentityC` is a minimal identity-check sea
 shared with executable specifications; filesystem mutation stays in the File
 adapter. Existing ordinary directory means `AlreadyPresent`, actual final mkdir
 means `Created`, ordinary file collision means `Conflict`, and linked, rebound
-or nonregular selections fail. No root is created. Created ancestors survive a
+or nonregular selections fail. Ordinary File DSL preparation and legacy runtime
+plans create no root. Selected trusted V8 runtime initialization can separately
+opt in explicit candidate-parent and dormant-alias prefixes under the
+[first-use initialization contract](../spec/workspace-first-use-initialization.md).
+Created ancestors survive a
 later failure; this is a sequence of actual effects with no rollback or replay.
 
 ## Minimal cooperative installation
@@ -120,7 +124,7 @@ bytes, preserves POSIX permissions where supported, resolves/checks expected
 text again and uses only atomic replace. Updated is returned after the real
 move completes. All staged handles and paths close/clean in finally, including
 errors and conflicts. Reads remain unlocked and need no writable lock or
-lockfile. Explicit directory preparation is the only directory creation step;
+lockfile. Within the File DSL, explicit directory preparation is the only directory creation step;
 there is no hidden mkdir or application move/delete step.
 
 The binding monitor covers cooperating writes and directory preparation through that exact shared

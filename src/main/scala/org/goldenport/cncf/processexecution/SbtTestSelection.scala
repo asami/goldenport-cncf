@@ -7,7 +7,7 @@ import org.goldenport.Consequence
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 24, 2026
- * @version Nov.  7, 2026
+ * @version Nov. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 enum SbtTestSelectionFailure {
@@ -65,7 +65,7 @@ private[cncf] object SbtTestSelectionPolicy {
   def validateC(operation: SbtOperation, testClasses: Vector[String]): Consequence[Unit] =
     if ((operation == SbtOperation.TestOnly && validClasses(testClasses)) ||
       ((operation == SbtOperation.Compile || operation == SbtOperation.TestCompile || operation == SbtOperation.Test || operation == SbtOperation.FixCheck ||
-          operation == SbtOperation.PublishLocal) &&
+          operation == SbtOperation.PublishLocal || operation == SbtOperation.ScopedPublish) &&
         testClasses != null && testClasses.isEmpty))
       Consequence.unit
     else Consequence.argumentPolicyViolation(
