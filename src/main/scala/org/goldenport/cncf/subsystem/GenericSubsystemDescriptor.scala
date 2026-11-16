@@ -22,7 +22,8 @@ import org.goldenport.cncf.spi.{SpiCardinality, SpiProviderSelector, SpiRuntimeB
  *  version Apr. 28, 2026
  *  version May.  7, 2026
  *  version Aug. 30, 2026
- * @version Oct. 27, 2026
+ *  version Oct. 27, 2026
+ * @version Nov. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -271,44 +272,44 @@ final case class GenericSubsystemDescriptor(
     * Explicit file/assembly overrides are not templates and retain their values.
     */
   private[cncf] def withComponentDefaultRuntimeRoot(root: Path): GenericSubsystemDescriptor = {
-    def needsEnvironment(value: ConfigurationValue): Boolean = value match {
+    def _needs_environment_(value: ConfigurationValue): Boolean = value match {
       case ConfigurationValue.StringValue(v) => Vector("${repository.", "${git.", "${executable.", "${environment.").exists(v.contains)
-      case ConfigurationValue.ObjectValue(v) => v.values.exists(needsEnvironment)
-      case ConfigurationValue.ListValue(v) => v.exists(needsEnvironment)
+      case ConfigurationValue.ObjectValue(v) => v.values.exists(_needs_environment_)
+      case ConfigurationValue.ListValue(v) => v.exists(_needs_environment_)
       case _ => false
     }
     val needsenvironment = configuration.values.exists { case (key, value) =>
-      componentDefaultSources.contains(key) && needsEnvironment(value) }
+      componentDefaultSources.contains(key) && _needs_environment_(value) }
     val values = if (needsenvironment) ComponentDefaultRuntimeValues.values(root)
-      else Map("runtime.root" -> root.toAbsolutePath.normalize.toString)
-    def json(value: io.circe.Json): io.circe.Json = value
+      else ComponentDefaultRuntimeValues.pathValues(root)
+    def _json_(value: io.circe.Json): io.circe.Json = value
       .mapString(ComponentDefaultRuntimeValues.expand(_, values))
-      .mapArray(_.map(json)).mapObject(_.mapValues(json))
-    def text(value: String): String = io.circe.parser.parse(value).toOption
-      .filter(v => v.isObject || v.isArray).map(v => json(v).noSpaces)
+      .mapArray(_.map(_json_)).mapObject(_.mapValues(_json_))
+    def _text_(value: String): String = io.circe.parser.parse(value).toOption
+      .filter(v => v.isObject || v.isArray).map(v => _json_(v).noSpaces)
       .getOrElse(ComponentDefaultRuntimeValues.expand(value, values))
-    def configured(value: ConfigurationValue): ConfigurationValue = value match {
-      case ConfigurationValue.StringValue(v) => ConfigurationValue.StringValue(text(v))
-      case ConfigurationValue.ObjectValue(v) => ConfigurationValue.ObjectValue(v.view.mapValues(configured).toMap)
-      case ConfigurationValue.ListValue(v) => ConfigurationValue.ListValue(v.map(configured))
+    def _configured_(value: ConfigurationValue): ConfigurationValue = value match {
+      case ConfigurationValue.StringValue(v) => ConfigurationValue.StringValue(_text_(v))
+      case ConfigurationValue.ObjectValue(v) => ConfigurationValue.ObjectValue(v.view.mapValues(_configured_).toMap)
+      case ConfigurationValue.ListValue(v) => ConfigurationValue.ListValue(v.map(_configured_))
       case other => other
     }
-    def missing(value: ConfigurationValue): Boolean = value match {
+    def _missing_(value: ConfigurationValue): Boolean = value match {
       case ConfigurationValue.StringValue(v) => ComponentDefaultRuntimeValues.missing(v, values)
-      case ConfigurationValue.ObjectValue(v) => v.values.exists(missing)
-      case ConfigurationValue.ListValue(v) => v.exists(missing)
+      case ConfigurationValue.ObjectValue(v) => v.values.exists(_missing_)
+      case ConfigurationValue.ListValue(v) => v.exists(_missing_)
       case _ => false
     }
     val processkey = "textus.subsystem.process-execution.plan"
     // An unconfigured/non-repository root must still serve Help. A later run
     // needs actual repository/tool data or an explicit host execution profile.
-    val omitted = if (componentDefaultSources.contains(processkey) && configuration.values.get(processkey).exists(missing))
+    val omitted = if (componentDefaultSources.contains(processkey) && configuration.values.get(processkey).exists(_missing_))
       Set(processkey) else Set.empty[String]
     copy(
       config = (config -- omitted).map { case (key,value) => key ->
-        (if (componentDefaultSources.contains(key)) text(value) else value) },
+        (if (componentDefaultSources.contains(key)) _text_(value) else value) },
       _config_projection = Configuration((_config_projection.values -- omitted).map { case (key,value) => key ->
-        (if (componentDefaultSources.contains(key)) configured(value) else value) }),
+        (if (componentDefaultSources.contains(key)) _configured_(value) else value) }),
       componentDefaultSources = componentDefaultSources -- omitted
     )
   }

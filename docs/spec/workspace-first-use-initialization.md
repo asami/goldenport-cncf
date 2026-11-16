@@ -56,8 +56,17 @@ across policies. No initialized root may equal, contain or lie under any
 noninitialized source root. Every policy explicitly enumerates the complete
 source set; there is no source inference.
 
-For example, `/work` and `/work/source` already exist, while `.sm-workflow`
-and its two children may be absent:
+Selected CAR defaults can use `${runtime.root}` for the absolute, lexically
+normalized RuntimeRoot and `${runtime.parent}` for its normalized parent.
+The parent token is unavailable when RuntimeRoot is a filesystem root; normal
+missing-token treatment applies, with no guessed parent. These are ordinary
+environment path data, computed without filesystem creation, real-path
+resolution, Git reads or tool discovery in the path-only route. Composed
+template suffixes are not automatically normalized.
+
+For example, RuntimeRoot is the existing `/work/source`, its parent `/work`
+already exists, and the sibling `.sm-workflow` and its two children may be
+absent. The packaged CAR default preserves that layout with standard tokens:
 
 ```json
 {
@@ -65,9 +74,9 @@ and its two children may be absent:
   "programs": [],
   "grants": [],
   "workspaces": [
-    {"identity": "source", "root": "/work/source"},
-    {"identity": "candidate-parent", "root": "/work/.sm-workflow/candidates"},
-    {"identity": "candidate-alias", "root": "/work/.sm-workflow/dormant"}
+    {"identity": "source", "root": "${runtime.root}"},
+    {"identity": "candidate-parent", "root": "${runtime.parent}/.sm-workflow/session-candidates"},
+    {"identity": "candidate-alias", "root": "${runtime.parent}/.sm-workflow/candidate-alias"}
   ],
   "workspaceGrants": [
     {"componentId": "org.example.Workflow", "workspaceId": "source", "access": "manage"},
@@ -84,20 +93,24 @@ and its two children may be absent:
   "workspaceInitializations": [
     {
       "componentId": "org.example.Workflow",
-      "anchor": "/work",
+      "anchor": "${runtime.parent}",
       "sources": ["source"],
       "parent": "candidate-parent",
       "alias": "candidate-alias",
-      "parentPath": ".sm-workflow/candidates",
-      "aliasPath": ".sm-workflow/dormant"
+      "parentPath": ".sm-workflow/session-candidates",
+      "aliasPath": ".sm-workflow/candidate-alias"
     }
   ]
 }
 ```
 
-The anchor grants no general workspace authority. Neither `runtime.root.parent`,
-the nearest existing ancestor nor a Manage grant supplies an implicit anchor
-or opts a plan into V8.
+`${runtime.parent}` supplies path data, never creation authority. It expands
+only in surviving component-owned defaults; explicit file and assembly
+overrides retain literal content. The policy must still declare its anchor,
+complete separated source set and matching owner with Manage grants, and pass
+the selected-subsystem and trusted-provenance gates. The anchor grants no
+general workspace authority. Neither the nearest existing ancestor nor a
+Manage grant supplies an implicit anchor or opts a plan into V8.
 
 ## Filesystem effects and retained state
 

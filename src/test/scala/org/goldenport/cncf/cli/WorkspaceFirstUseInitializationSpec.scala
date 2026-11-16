@@ -154,6 +154,73 @@ final class WorkspaceFirstUseInitializationSpec extends AnyWordSpec with Matcher
   }
 
   "Explicit first-use workspace initialization" should {
+    "initialize sibling candidate roots from standard CAR path tokens after selected admission" in _with_root { root =>
+      Given("an existing source RuntimeRoot and CAR defaults declaring sibling roots through runtime.parent")
+      val source = root.resolve("source")
+      Files.writeString(source.resolve("retained"), "source content")
+      val text = s"""{
+        |"schema":"cncf.runtime-process-execution.v8",
+        |"programs":[],"grants":[],
+        |"workspaces":[
+        |  {"identity":"${_source.print}","root":"$${runtime.root}"},
+        |  {"identity":"${_parent.print}","root":"$${runtime.parent}/.sm-workflow/session-candidates"},
+        |  {"identity":"${_alias.print}","root":"$${runtime.parent}/.sm-workflow/candidate-alias"}
+        |],
+        |"workspaceGrants":[
+        |  {"componentId":"${_owner.name}","workspaceId":"${_source.print}","access":"manage"},
+        |  {"componentId":"${_owner.name}","workspaceId":"${_parent.print}","access":"manage"},
+        |  {"componentId":"${_owner.name}","workspaceId":"${_alias.print}","access":"manage"}
+        |],
+        |"sbtPrograms":[],"gitPrograms":[],"gitRepositories":[],"validationChecks":[],
+        |"sessionCandidateWorkspaces":[
+        |  {"componentId":"${_owner.name}","parent":"${_parent.print}","alias":"${_alias.print}"}
+        |],
+        |"workspaceInitializations":[{
+        |  "componentId":"${_owner.name}","anchor":"$${runtime.parent}","sources":["${_source.print}"],
+        |  "parent":"${_parent.print}","alias":"${_alias.print}",
+        |  "parentPath":".sm-workflow/session-candidates","aliasPath":".sm-workflow/candidate-alias"
+        |}]
+        |}""".stripMargin
+      _absent(root)
+      _with_car(root, text) { descriptor =>
+        val configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+        val policy = RepositoryBootstrapPolicy(componentFiles = Vector(descriptor.path.toString),
+          baseDirectory = source, defaultRepositoriesEnabled = false)
+        When("normal CAR resolution and catalog selection expand the path-only defaults")
+        val resolved = _take(GenericSubsystemFactory.runtimeResolveDescriptorC(configuration, Some(policy))).get
+        val admitted = _take(GenericSubsystemFactory.runtimeAdmitDescriptorC(resolved, configuration, Some(policy)))
+        val candidates = _take(CncfDiscoveredAssemblyConfigurationProjection.candidates(Map.empty, None, Some(admitted), _selected))
+        val bindings = _take(ConfigurationBindingResolver.resolve(candidates,
+          _take(CncfConfigurationResolutionContext.forSubsystem(_selected)).generic))
+        Then("the selected declaration contains normalized sibling paths and decoding creates no directory")
+        val binding = _take(bindings.binding(CncfConfigurationParameterCatalog.subsystemProcessExecutionPlan)).get
+        binding.provenance.sourceType shouldBe Some("component-car-defaults")
+        binding.value.workspaceInitializations.head.anchor shouldBe source.getParent
+        binding.value.workspaceDeclarations.map(x => x.identity -> x.root).toMap shouldBe Map(
+          _source -> source, _parent -> root.resolve(".sm-workflow/session-candidates"),
+          _alias -> root.resolve(".sm-workflow/candidate-alias"))
+        _absent(root)
+        When("a different subsystem attempts to activate the selected defaults")
+        val other = SubsystemProcessExecutionConfiguration.admitC(bindings, _take(SubsystemInstanceId.default("other")))
+        Then("the ordinary ownership gate refuses before creating a sibling root")
+        other.isSuccess shouldBe false
+        _absent(root)
+        When("the normal selected-subsystem admission activates the explicit V8 policy")
+        val plan = _take(SubsystemProcessExecutionConfiguration.admitC(bindings, _selected)).get
+        Then("actual workspace bindings use the existing sibling layout and preserve the source")
+        val workspace = plan.workspaceAdmissionOption.get
+        _take(workspace.bindingC(_source).flatMap(_.workingDirectoryC)) shouldBe source
+        _take(workspace.bindingC(_parent).flatMap(_.workingDirectoryC)) shouldBe root.resolve(".sm-workflow/session-candidates")
+        _take(workspace.bindingC(_alias).flatMap(_.workingDirectoryC)) shouldBe root.resolve(".sm-workflow/candidate-alias")
+        Using.resource(Files.list(root.resolve(".sm-workflow")))(_.iterator().asScala.map(_.getFileName.toString).toSet) shouldBe
+          Set("session-candidates", "candidate-alias")
+        Using.resource(Files.list(source))(_.iterator().asScala.map(_.getFileName.toString).toSet) shouldBe Set("retained")
+        Files.readString(source.resolve("retained")) shouldBe "source content"
+        Using.resource(Files.list(root.resolve(".sm-workflow/session-candidates")))(_.count()) shouldBe 0L
+        Using.resource(Files.list(root.resolve(".sm-workflow/candidate-alias")))(_.count()) shouldBe 0L
+      }
+    }
+
     "activate selected trusted CAR defaults only after normal descriptor resolution" in _with_root { root =>
       Given("a selected CAR with V8 defaults and no .sm-workflow, parent or dormant alias")
       _absent(root)

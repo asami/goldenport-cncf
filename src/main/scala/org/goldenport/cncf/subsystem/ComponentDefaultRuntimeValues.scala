@@ -8,17 +8,24 @@ import org.goldenport.cncf.processexecution.SbtExecutableLocation
   * Reads ordinary Git metadata/configuration and locates the existing tool;
   * it never launches a process or creates a repository, identity or grant.
   * @since Oct. 27, 2026
-  * @version Nov.  6, 2026
+  * @version Nov. 16, 2026
   */
 private[cncf] object ComponentDefaultRuntimeValues {
   private val _section = """\[\s*([A-Za-z0-9.-]+)(?:\s+"(.*)")?\s*\]""".r
-  private val _token = """\$\{(runtime\.root|repository\.root|git\.branch|git\.remote|git\.remote-branch|git\.endpoint|git\.user-name|git\.user-email|executable\.sbt|environment\.path|environment\.java-home|environment\.ssh-auth-sock)\}""".r
+  private val _token = """\$\{(runtime\.root|runtime\.parent|repository\.root|git\.branch|git\.remote|git\.remote-branch|git\.endpoint|git\.user-name|git\.user-email|executable\.sbt|environment\.path|environment\.java-home|environment\.ssh-auth-sock)\}""".r
   private type Config = Map[(String, String, String), String]
+
+  /** Lexical path data only; neither value supplies filesystem authority. */
+  def pathValues(root: Path): Map[String, String] = {
+    val normalized = root.toAbsolutePath.normalize
+    Map("runtime.root" -> normalized.toString) ++
+      Option(normalized.getParent).map(parent => "runtime.parent" -> parent.toString)
+  }
 
   def values(root: Path, home: Path = Paths.get(System.getProperty("user.home")),
     executablePath: Vector[Path] = sys.env.getOrElse("PATH", "").split(java.io.File.pathSeparator)
       .filter(_.nonEmpty).toVector.map(Paths.get(_))): Map[String, String] = {
-    val base = Map("runtime.root" -> root.toAbsolutePath.normalize.toString,
+    val base = pathValues(root) ++ Map(
       "environment.path" -> executablePath.map(_.toString).mkString(java.io.File.pathSeparator),
       "environment.java-home" -> sys.env.getOrElse("JAVA_HOME", ""),
       "environment.ssh-auth-sock" -> sys.env.getOrElse("SSH_AUTH_SOCK", ""))
@@ -31,18 +38,18 @@ private[cncf] object ComponentDefaultRuntimeValues {
         head.map { branch =>
           val ordinary = _config(home.resolve(".config/git/config"), home) ++ _config(home.resolve(".gitconfig"), home) ++
             _config(common.resolve("config"), home)
-          val worktreeConfig = ordinary.get(("extensions", "", "worktreeconfig"))
+          val worktreeconfig = ordinary.get(("extensions", "", "worktreeconfig"))
             .exists(value => Set("true", "yes", "on", "1")(value.toLowerCase(java.util.Locale.ROOT)))
-          val config = ordinary ++ (if (worktreeConfig) _config(gitdir.resolve("config.worktree"), home) else Map.empty)
-          def get(section: String, subsection: String, key: String) = config.get((section, subsection, key)).filter(_.nonEmpty)
+          val config = ordinary ++ (if (worktreeconfig) _config(gitdir.resolve("config.worktree"), home) else Map.empty)
+          def _get_(section: String, subsection: String, key: String) = config.get((section, subsection, key)).filter(_.nonEmpty)
           val remotes = config.keys.collect { case ("remote", name, "url") => name }.toVector.distinct
-          val remote = get("branch", branch, "remote").orElse(if (remotes.contains("origin")) Some("origin")
+          val remote = _get_("branch", branch, "remote").orElse(if (remotes.contains("origin")) Some("origin")
             else if (remotes.size == 1) remotes.headOption else None)
-          val remoteBranch = get("branch", branch, "merge").filter(_.startsWith("refs/heads/"))
+          val remotebranch = _get_("branch", branch, "merge").filter(_.startsWith("refs/heads/"))
             .map(_.stripPrefix("refs/heads/")).getOrElse(branch)
-          Map("repository.root" -> worktree.toString, "git.branch" -> branch, "git.remote-branch" -> remoteBranch) ++
-            remote.map("git.remote" -> _) ++ remote.flatMap(get("remote", _, "url")).map("git.endpoint" -> _) ++
-            get("user", "", "name").map("git.user-name" -> _) ++ get("user", "", "email").map("git.user-email" -> _)
+          Map("repository.root" -> worktree.toString, "git.branch" -> branch, "git.remote-branch" -> remotebranch) ++
+            remote.map("git.remote" -> _) ++ remote.flatMap(_get_("remote", _, "url")).map("git.endpoint" -> _) ++
+            _get_("user", "", "name").map("git.user-name" -> _) ++ _get_("user", "", "email").map("git.user-email" -> _)
         }
       }.getOrElse(Map.empty)
       base ++ executable ++ repository
