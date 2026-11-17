@@ -10,7 +10,7 @@ import org.goldenport.cncf.workspace.*
 /*
  * @since   Oct.  7, 2026
  *  version Oct. 28, 2026
- * @version Nov. 16, 2026
+ * @version Nov. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] final case class WorkspaceRuntimeDeclaration(identity: WorkspaceId, root: Path)
@@ -101,7 +101,7 @@ private[cncf] final class RuntimeProcessExecutionPlan private (
 private[cncf] object RuntimeProcessExecutionPlan {
   // Deliberately closed: a future Git kind requires an explicit family contract update.
   private val _repository_kinds = Vector(
-    GitOperationKind.Branch, GitOperationKind.Root, GitOperationKind.RemoteTip, GitOperationKind.Head,
+    GitOperationKind.Branch, GitOperationKind.Root, GitOperationKind.Worktrees, GitOperationKind.RemoteTip, GitOperationKind.Head,
     GitOperationKind.Tree, GitOperationKind.Status, GitOperationKind.Shallow, GitOperationKind.Replacements,
     GitOperationKind.MergeHead, GitOperationKind.TrackingTip, GitOperationKind.Relation, GitOperationKind.MergeBase,
     GitOperationKind.StageFullState, GitOperationKind.IndexTree, GitOperationKind.UnmergedIndex, GitOperationKind.Fetch,

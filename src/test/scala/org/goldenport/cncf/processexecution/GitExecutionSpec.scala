@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 28, 2026
- * @version Nov.  6, 2026
+ * @version Nov. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -382,6 +382,30 @@ final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThe
           Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe content
         } finally { driver.close(); fixture.close() }
       }
+    }
+  }
+
+  "Worktree porcelain" should {
+    "preserve no-main, ambiguous and unavailable observations and reject incomplete records" in {
+      Given("NUL-delimited worktree identities including paths with spaces")
+      val fixture = GitExecutionSpecSupport.create(checkoutName = "source checkout")
+      try {
+        val source = fixture.checkout.toRealPath().toString
+        val oid = GitExecutionSpecSupport.objectId.value
+        val prefix = s"worktree $source\u0000HEAD $oid\u0000branch refs/heads/feature\u0000\u0000"
+        val main = s"worktree /tmp/main checkout\u0000HEAD $oid\u0000branch refs/heads/main\u0000prunable missing\u0000\u0000"
+        val other = s"worktree /tmp/other\u0000HEAD $oid\u0000branch refs/heads/main\u0000\u0000"
+        When("the parser observes no main, stale main or multiple candidates")
+        val none = GitExecutionSpecSupport.parse(fixture, GitOperation.Worktrees, prefix).toOption.get
+        val stale = GitExecutionSpecSupport.parse(fixture, GitOperation.Worktrees, prefix + main).toOption.get
+        val ambiguous = GitExecutionSpecSupport.parse(fixture, GitOperation.Worktrees, prefix + main + other).toOption.get
+        Then("the caller receives each distinct observation without an invented selection")
+        none.count(_.branch.exists(_.value == "main")) shouldBe 0
+        stale.last.prunable shouldBe true
+        ambiguous.count(_.branch.exists(_.value == "main")) shouldBe 2
+        GitExecutionSpecSupport.parse(fixture, GitOperation.Worktrees, prefix.dropRight(1)).isLeft shouldBe true
+        GitExecutionSpecSupport.parse(fixture, GitOperation.Worktrees, main).isLeft shouldBe true
+      } finally fixture.close()
     }
   }
 
@@ -1701,13 +1725,14 @@ final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThe
       } finally fixture.close()
     }
 
-    "render the complete thirty-three-operation table with only fixed host inputs and canonical OID slots" in {
-      Given("one admitted workspace and all thirty-three fixed runtime Git declarations")
+    "render the complete thirty-four-operation table with only fixed host inputs and canonical OID slots" in {
+      Given("one admitted workspace and all thirty-four fixed runtime Git declarations")
       val fixture = create()
       val oid = objectId.value
       val tracking = "refs/remotes/origin/main"
       val expected = Vector(
         Vector("symbolic-ref", "--quiet", "--short", "HEAD"), Vector("rev-parse", "--show-toplevel"),
+        Vector("worktree", "list", "--porcelain", "-z"),
         Vector("ls-remote", "--exit-code", "--heads", "--", fixture.endpoint, "refs/heads/main"),
         Vector("rev-parse", "--verify", "HEAD^{commit}"), Vector("rev-parse", "--verify", "HEAD^{tree}"),
         Vector("status", "--porcelain=v1", "-z", "--untracked-files=all"), Vector("rev-parse", "--is-shallow-repository"),
@@ -1970,7 +1995,7 @@ private[cncf] object GitExecutionSpecSupport {
   val limits = ProcessExecutionLimits(Some(5000L), Some(5000L), Some(100L), Some(65536L), Some(65536L),
     Some(65536L), Some(32L), Some(65536L), Some(16L), Some(65536L), Some(65536L))
   val identityArguments = Vector("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "user.useConfigOnly=true")
-  val operations: Vector[GitOperation[?]] = Vector(GitOperation.Branch, GitOperation.Root, GitOperation.RemoteTip,
+  val operations: Vector[GitOperation[?]] = Vector(GitOperation.Branch, GitOperation.Root, GitOperation.Worktrees, GitOperation.RemoteTip,
     GitOperation.Head, GitOperation.Tree, GitOperation.Status, GitOperation.Shallow, GitOperation.Replacements,
     GitOperation.MergeHead, GitOperation.TrackingTip, GitOperation.Relation, GitOperation.MergeBase, GitOperation.StageFullState,
     GitOperation.IndexTree, GitOperation.UnmergedIndex, GitOperation.Fetch, GitOperation.FastForward(objectId),
@@ -2009,6 +2034,7 @@ private[cncf] object GitExecutionSpecSupport {
   def sample(kind: GitOperationKind, checkout: Path): String = kind match {
     case GitOperationKind.Branch => "main\n"
     case GitOperationKind.Root => checkout.toRealPath().toString + "\n"
+    case GitOperationKind.Worktrees => s"worktree ${checkout.toRealPath()}\u0000HEAD ${objectId.value}\u0000branch refs/heads/main\u0000\u0000"
     case GitOperationKind.RemoteTip => objectId.value + "\trefs/heads/main\n"
     case GitOperationKind.Head | GitOperationKind.Tree | GitOperationKind.IndexTree | GitOperationKind.CreateCheckpoint |
         GitOperationKind.MergeHead | GitOperationKind.TrackingTip | GitOperationKind.MergeBase => objectId.value + "\n"
@@ -2126,6 +2152,7 @@ private[cncf] final class GitSpecBehavior(val behaviorCore: Behavior.Core) exten
   def program[A](target: GitTarget, operation: GitOperation[A]): ExecUowM[GitExecutionResult[A]] = operation match {
     case GitOperation.Branch => git_branch(target)
     case GitOperation.Root => git_root(target)
+    case GitOperation.Worktrees => git_worktrees(target)
     case GitOperation.RemoteTip => git_remote_tip(target)
     case GitOperation.Head => git_head(target)
     case GitOperation.Tree => git_tree(target)

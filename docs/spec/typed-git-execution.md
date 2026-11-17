@@ -612,3 +612,18 @@ Git result proof and eight remaining original main methods (one of the original
 nine already removed) remain mandatory unfinished parent work. Producer
 qualification does not close the Step, Phase, original-nine-main obligation,
 or whole-workflow proof and makes no publication claim.
+
+### Linked worktree observation
+
+`GitOperation.Worktrees` (UoW DSL `git_worktrees`) executes the fixed read-only
+`git worktree list --porcelain -z` under the existing repository workspace and
+Git capability admission. It returns `Vector[GitWorktree]` in Git order: absolute
+path, optional HEAD and branch, bare/detached flags, and locked/prunable flags.
+Paths are observations, not workspace grants or identity proofs for separate
+clones. A prunable entry may be unavailable. The caller selects the requested
+branch only when its candidates are suitable and unambiguous; no candidate,
+multiple candidates and a prunable candidate remain distinguishable. The
+selected admitted checkout must appear and not be prunable. Invalid, incomplete,
+non-UTF-8 or inconsistent output fails rather than yielding partial metadata.
+The operation neither creates worktrees nor changes refs, index or worktree.
+See `GitRepositoryExecutionSpec` and `GitExecutionSpec`.

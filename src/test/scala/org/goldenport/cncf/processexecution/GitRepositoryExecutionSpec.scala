@@ -10,7 +10,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 26, 2026
- * @version Oct. 27, 2026
+ *  version Oct. 27, 2026
+ * @version Nov. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitRepositoryExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -44,6 +45,51 @@ final class GitRepositoryExecutionSpec extends AnyWordSpec with Matchers with Gi
     typed.processResult.safeProgramIdentity shouldBe "repository-" + operation.kind.wireName
     typed.selectedPaths shouldBe empty
     typed.valueC.toOption.get
+  }
+
+  "Worktree metadata" should {
+    "observe linked checkouts without changing their refs, index or contents" in {
+      Given("a main checkout and a linked branch with spaces in its path")
+      val driver = new LocalProcessExecutionDriver()
+      val original = create(driver = Some(driver), checkoutName = "main checkout")
+      try {
+        initialize(original, Map("tracked.txt" -> "original\n"))
+        val linked = original.root.resolve("linked checkout")
+        setup(original.checkout, "worktree", "add", "-b", "feature", linked.toString)
+        Files.writeString(original.checkout.resolve("tracked.txt"), "dirty\n")
+        val fixture = _configured(original, _plan(original).toOption.get, driver)
+        val head = _value(fixture, GitOperation.Head)
+        val index = Files.readAllBytes(original.checkout.resolve(".git/index")).toVector
+        When("the admitted read-only Git UoW lists native worktrees")
+        val entries = _value(fixture, GitOperation.Worktrees)
+        val linkedfixture = original.copy(checkout = linked)
+        val linkedentries = _value(_configured(linkedfixture, _plan(linkedfixture).toOption.get, driver), GitOperation.Worktrees)
+        Then("both identities are retained and the source state remains unchanged")
+        entries.map(x => (x.path, x.branch.map(_.value))).toSet shouldBe
+          Set((original.checkout.toRealPath().toString, Some("main")), (linked.toRealPath().toString, Some("feature")))
+        linkedentries shouldBe entries
+        _value(fixture, GitOperation.Head) shouldBe head
+        Files.readAllBytes(original.checkout.resolve(".git/index")).toVector shouldBe index
+        Files.readString(original.checkout.resolve("tracked.txt")) shouldBe "dirty\n"
+        Files.readString(linked.resolve("tracked.txt")) shouldBe "original\n"
+      } finally { driver.close(); original.close() }
+    }
+
+    "refuse missing workspace and capability grants" in {
+      Given("a repository with independently missing workspace or process authority")
+      val driver = new LocalProcessExecutionDriver()
+      val original = create(driver = Some(driver))
+      try {
+        val noaccess = _configured(original, _plan(original, granted = false).toOption.get, driver)
+        val noworkspace = _plan(original, workspacegranted = false)
+        When("the caller requests the metadata operation")
+        val denied = GitExecutionSpecSupport.execute(noaccess, GitOperation.Worktrees)
+        val absent = noworkspace
+        Then("both requests fail admission")
+        denied.isSuccess shouldBe false
+        absent.isSuccess shouldBe false
+      } finally { driver.close(); original.close() }
+    }
   }
 
   "Run-selected Git data" should {
@@ -124,11 +170,11 @@ final class GitRepositoryExecutionSpec extends AnyWordSpec with Matchers with Gi
 
   "E1 Repository Git family route" must afterWord(
     "in spec:typed-git-execution, example:E1, rules:R1,R2,R3, phase:GIT-ROUTE-20261026-01") {
-    "resolve exactly the current closed 28 nonselected kinds through the existing typed admission" in {
+    "resolve exactly the current closed 29 nonselected kinds through the existing typed admission" in {
       Given("R1 R2: a single repository declaration with a deliberately closed operation family")
       val fixture = create()
       try {
-        val expected = Set("branch", "root", "remote-tip", "head", "tree", "status", "shallow", "replacements",
+        val expected = Set("branch", "root", "worktrees", "remote-tip", "head", "tree", "status", "shallow", "replacements",
           "merge-head", "tracking-tip", "relation", "merge-base", "stage-full-state", "index-tree", "unmerged-index",
           "fetch", "fast-forward", "pending-merge", "commit-pending", "push", "create-checkpoint", "install-checkpoint",
           "commit-metadata", "blob-content", "check-pending-index", "pending-diff", "pending-paths", "tree-changes")
@@ -140,8 +186,8 @@ final class GitRepositoryExecutionSpec extends AnyWordSpec with Matchers with Gi
         val configured = _configured(fixture, _plan(fixture).toOption.get, profile.driver)
         When("each fixed family member is interpreted using a bounded deterministic process receipt")
         val results = operations.map(operation => GitExecutionSpecSupport.execute(configured, operation))
-        Then("all 28 current members retain derived identities and the family contract is explicitly enumerated")
-        expected should have size 28
+        Then("all 29 current members retain derived identities and the family contract is explicitly enumerated")
+        expected should have size 29
         operations.map(_.kind.wireName).toSet shouldBe expected
         GitOperationKind.values.toVector.filterNot(_.selected).map(_.wireName).toSet shouldBe expected
         results.foreach(_.toOption.get.outcome shouldBe GitExecutionOutcome.Succeeded)

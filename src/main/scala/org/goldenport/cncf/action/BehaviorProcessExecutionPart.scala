@@ -135,7 +135,7 @@ import org.goldenport.cncf.config.{
 }
 import org.goldenport.cncf.processexecution.{
   GitTarget, GitOperation, GitPurposeRequest, GitPurposeCandidate, GitExecutionResult, GitObjectId, GitPath, GitBranchName, GitSelectionId,
-  GitRemoteTip, GitHistoryCounts, GitCommitMetadata, GitStatusEntry, GitIndexEntry, GitBlobContent, GitDiff, GitIndexCheck, GitTreeChange, GitSelectedTreeEntry,
+  GitWorktree, GitRemoteTip, GitHistoryCounts, GitCommitMetadata, GitStatusEntry, GitIndexEntry, GitBlobContent, GitDiff, GitIndexCheck, GitTreeChange, GitSelectedTreeEntry,
   ProcessExecutionAdmission,
   ProcessExecutionRequest,
   ProcessExecutionResult,
@@ -150,7 +150,8 @@ import org.goldenport.cncf.processexecution.{ValidationCheckExecutionAttempt, Va
 
 /*
  * @since   Sep. 28, 2026
- * @version Oct. 28, 2026
+ *  version Oct. 28, 2026
+ * @version Nov. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -172,6 +173,9 @@ trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.
 
   protected final def git_branch(target: GitTarget): ExecUowM[GitExecutionResult[String]] =
     _git_exec(target, GitOperation.Branch)
+
+  protected final def git_worktrees(target: GitTarget): ExecUowM[GitExecutionResult[Vector[GitWorktree]]] =
+    _git_exec(target, GitOperation.Worktrees)
 
   protected final def git_root(target: GitTarget): ExecUowM[GitExecutionResult[String]] =
     _git_exec(target, GitOperation.Root)

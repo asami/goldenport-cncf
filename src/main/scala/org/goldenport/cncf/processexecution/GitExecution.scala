@@ -11,7 +11,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 28, 2026
- * @version Nov. 16, 2026
+ * @version Nov. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 /** Per-call selected data within an already granted program's fixed scope.
@@ -119,6 +119,7 @@ enum GitOperationKind(val wireName: String) {
   case PreparePurposeCandidate extends GitOperationKind("prepare-purpose-candidate")
   case MaterializePurposeCandidate extends GitOperationKind("materialize-purpose-candidate")
   case CommitPurposeCandidate extends GitOperationKind("commit-purpose-candidate")
+  case Worktrees extends GitOperationKind("worktrees")
 
   private[cncf] def permission: WorkspacePermission = this match {
     case StageFullState | IndexTree | Fetch | FastForward | PendingMerge | CommitPending | Push |
@@ -179,10 +180,12 @@ enum GitOperation[A] {
   case PreparePurposeCandidate(selectionId: GitSelectionId, request: GitPurposeRequest) extends GitOperation[GitPurposeCandidate]
   case MaterializePurposeCandidate(selectionId: GitSelectionId, candidate: GitPurposeCandidate, workspace: WorkspaceId) extends GitOperation[Unit]
   case CommitPurposeCandidate(selectionId: GitSelectionId, candidate: GitPurposeCandidate) extends GitOperation[Unit]
+  case Worktrees extends GitOperation[Vector[GitWorktree]]
 
   def kind: GitOperationKind = this match {
     case Branch => GitOperationKind.Branch
     case Root => GitOperationKind.Root
+    case Worktrees => GitOperationKind.Worktrees
     case RemoteTip => GitOperationKind.RemoteTip
     case Head => GitOperationKind.Head
     case Tree => GitOperationKind.Tree
@@ -267,6 +270,10 @@ final case class GitStatusEntry(indexCode: Char, worktreeCode: Char, path: GitPa
 enum GitIndexStage {
   case Merged, Base, Local, Remote
 }
+/** Native Git worktree observation; prunable entries may refer to unavailable paths. */
+final case class GitWorktree(path: String, head: Option[GitObjectId], branch: Option[GitBranchName],
+  bare: Boolean, detached: Boolean, locked: Boolean, prunable: Boolean)
+
 final case class GitIndexEntry(mode: String, blob: GitObjectId, stage: GitIndexStage, path: GitPath)
 final case class GitBlobContent(bytes: Vector[Byte], text: Option[String])
 final case class GitDiff(text: String, isBinary: Boolean)
@@ -579,6 +586,7 @@ private[cncf] object GitProgramDefinition {
       case GitOperationKind.PreparePurposeCandidate | GitOperationKind.MaterializePurposeCandidate | GitOperationKind.CommitPurposeCandidate => _l_("rev-parse", "--verify", "HEAD")
       case GitOperationKind.Branch => _l_("symbolic-ref", "--quiet", "--short", "HEAD")
       case GitOperationKind.Root => _l_("rev-parse", "--show-toplevel")
+      case GitOperationKind.Worktrees => _l_("worktree", "list", "--porcelain", "-z")
       case GitOperationKind.RemoteTip => _l_("ls-remote", "--exit-code", "--heads", "--", metadata.endpoint, s"refs/heads/${metadata.remotebranch.value}")
       case GitOperationKind.Head => _l_("rev-parse", "--verify", "HEAD^{commit}")
       case GitOperationKind.Tree => _l_("rev-parse", "--verify", "HEAD^{tree}")
@@ -783,6 +791,51 @@ private[cncf] object GitOutputParser {
   private def _sequence[A](values: Vector[Either[String, A]]): Either[String, Vector[A]] =
     values.foldLeft[Either[String, Vector[A]]](Right(Vector.empty))((prior, next) => for { p <- prior; n <- next } yield p :+ n)
 
+  private def _worktrees(text: String, metadata: GitProgramMetadata): Either[String, Vector[GitWorktree]] = for {
+    fields <- _nul_fields(text)
+    _ <- Either.cond(fields.nonEmpty && fields.last == "", (), "Missing worktree record terminator")
+    records = fields.foldLeft(Vector(Vector.empty[String])) { (acc, field) =>
+      if (field.isEmpty) acc :+ Vector.empty else acc.init :+ (acc.last :+ field)
+    }
+    _ <- Either.cond(records.last.isEmpty && records.dropRight(1).forall(_.nonEmpty), (), "Invalid worktree records")
+    entries <- _sequence(records.dropRight(1).map(_worktree))
+    admitted <- metadata.binding.workingDirectoryC.toOption.toRight("Unavailable Git workspace")
+    _ <- Either.cond(entries.map(_.path).distinct.size == entries.size &&
+      entries.exists(entry => Paths.get(entry.path) == admitted && !entry.prunable), (), "Git workspace missing from worktrees")
+  } yield entries
+
+  private def _worktree(fields: Vector[String]): Either[String, GitWorktree] = {
+    def _flag_(name: String): Boolean = fields.exists(x => x == name || x.startsWith(name + " "))
+    val paths = fields.filter(_.startsWith("worktree ")).map(_.substring(9))
+    val heads = fields.filter(_.startsWith("HEAD ")).map(_.substring(5))
+    val branches = fields.filter(_.startsWith("branch ")).map(_.substring(7))
+    val bare = fields.contains("bare")
+    val detached = fields.contains("detached")
+    val known = fields.forall(x => x.startsWith("worktree ") || x.startsWith("HEAD ") ||
+      x.startsWith("branch ") || x == "bare" || x == "detached" || x == "locked" ||
+      x.startsWith("locked ") || x == "prunable" || x.startsWith("prunable "))
+    for {
+      _ <- Either.cond(known && paths.size == 1 && fields.head == "worktree " + paths.head &&
+        heads.size <= 1 && branches.size <= 1 && fields.count(_ == "bare") <= 1 &&
+        fields.count(_ == "detached") <= 1 && fields.count(x => x == "locked" || x.startsWith("locked ")) <= 1 &&
+        fields.count(x => x == "prunable" || x.startsWith("prunable ")) <= 1, (), "Invalid worktree fields")
+      _ <- try Either.cond(paths.head.nonEmpty && Paths.get(paths.head).isAbsolute, (), "Invalid worktree path")
+        catch { case NonFatal(_) => Left("Invalid worktree path") }
+      head <- heads.headOption match {
+        case Some(value) => _oid(value).map(Some(_))
+        case None => Right(None)
+      }
+      branch <- branches.headOption match {
+        case Some(value) if value.startsWith("refs/heads/") =>
+          GitBranchName.parseC(value.substring(11)).toOption.map(Some(_)).toRight("Invalid worktree branch")
+        case Some(_) => Left("Invalid worktree branch")
+        case None => Right(None)
+      }
+      _ <- Either.cond(if (bare) head.isEmpty && branch.isEmpty && !detached
+        else head.nonEmpty && (branch.nonEmpty != detached), (), "Inconsistent worktree identity")
+    } yield GitWorktree(paths.head, head, branch, bare, detached, _flag_("locked"), _flag_("prunable"))
+  }
+
   private def _parse_text(kind: GitOperationKind, metadata: GitProgramMetadata, text: String): Either[String, Any] = kind match {
     case GitOperationKind.Branch => _line(text).flatMap(x => GitBranchName.parseC(x).toOption.map(_.value).toRight("Invalid Git branch"))
     case GitOperationKind.Root => for {
@@ -792,6 +845,7 @@ private[cncf] object GitOutputParser {
       _ <- try Either.cond(root.nonEmpty && Paths.get(root).isAbsolute && Paths.get(root) == admitted, (), "Git root mismatch")
         catch { case NonFatal(_) => Left("Invalid Git root") }
     } yield root
+    case GitOperationKind.Worktrees => _worktrees(text, metadata)
     case GitOperationKind.Head | GitOperationKind.Tree | GitOperationKind.IndexTree | GitOperationKind.CreateCheckpoint => _line(text).flatMap(_oid)
     case GitOperationKind.RemoteTip => for {
       line <- _line(text)
