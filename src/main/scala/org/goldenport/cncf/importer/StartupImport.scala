@@ -8,7 +8,7 @@ import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.{DataStoreContext, EntityStoreContext, ExecutionContext, RuntimeContext, ScopeContext, ScopeKind}
-import org.goldenport.cncf.datastore.{DataStore, DataStoreSeed, DataStoreSeedEntry, DataStoreSpace}
+import org.goldenport.cncf.datastore.{DataStore, DataStoreSeed, DataStoreSeedEntry}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityStoreSeed, EntityStoreSeedEntry, EntityStoreSpace}
 import org.goldenport.cncf.entity.runtime.EntityCollection
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
@@ -21,7 +21,8 @@ import org.simplemodeling.model.datatype.EntityCollectionId
  *  version Mar. 28, 2026
  *  version Apr. 14, 2026
  *  version Aug.  4, 2026
- * @version Oct. 17, 2026
+ *  version Oct. 17, 2026
+ * @version Nov. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 object StartupImport {
@@ -45,24 +46,34 @@ object StartupImport {
     configuration: StartupImportConfiguration,
     runtimeConfig: RuntimeConfig,
     entityCollectionResolver: EntityCollectionResolver
+  ): Consequence[Unit] =
+    _run_with_store_c(cwd, configuration, runtimeConfig, entityCollectionResolver,
+      (collection, use) => runtimeConfig.dataStoreSpace.dataStore(collection).flatMap(use))
+
+  private[cncf] def _run_with_store_c(
+    cwd: Path,
+    configuration: StartupImportConfiguration,
+    runtimeconfig: RuntimeConfig,
+    entitycollectionresolver: EntityCollectionResolver,
+    withstore: (DataStore.CollectionId, DataStore => Consequence[Unit]) => Consequence[Unit]
   ): Consequence[Unit] = {
-    val context = _bootstrap_execution_context(runtimeConfig)
+    val context = _bootstrap_execution_context(runtimeconfig)
     given ExecutionContext = context
-    given StartupImportReader = new StartupImportReader(runtimeConfig)
+    given StartupImportReader = new StartupImportReader(runtimeconfig)
     for {
-      _ <- _import_data(cwd, configuration.dataSource, runtimeConfig.dataStoreSpace)
-      _ <- _import_entity(cwd, configuration.entitySource, runtimeConfig.entityStoreSpace, entityCollectionResolver)
+      _ <- _import_data(cwd, configuration.dataSource, withstore)
+      _ <- _import_entity(cwd, configuration.entitySource, runtimeconfig.entityStoreSpace, entitycollectionresolver)
     } yield ()
   }
 
   private def _import_data(
     cwd: Path,
     configuredsource: Option[String],
-    datastorespace: DataStoreSpace
+    withstore: (DataStore.CollectionId, DataStore => Consequence[Unit]) => Consequence[Unit]
   )(using ctx: ExecutionContext, reader: StartupImportReader): Consequence[Unit] =
     _resolve_data_sources(cwd, configuredsource).flatMap { paths =>
       paths.foldLeft(Consequence.unit) { (z, path) =>
-        z.flatMap(_ => _import_data_file(path, datastorespace))
+        z.flatMap(_ => _import_data_file(path, withstore))
       }
     }
 
@@ -122,13 +133,13 @@ object StartupImport {
 
   private def _import_data_file(
     source: ImportSource,
-    datastorespace: DataStoreSpace
+    withstore: (DataStore.CollectionId, DataStore => Consequence[Unit]) => Consequence[Unit]
   )(using ctx: ExecutionContext, reader: StartupImportReader): Consequence[Unit] =
     source match {
       case ImportSource.Local(path) =>
-        _load_data_seed(path).flatMap(seed => _store_data_seed(datastorespace, seed))
+        _load_data_seed(path).flatMap(seed => _store_data_seed(withstore, seed))
       case ImportSource.Url(url) =>
-        _load_text_from_url(url).flatMap(text => _decode_data_seed(url, text)).flatMap(seed => _store_data_seed(datastorespace, seed))
+        _load_text_from_url(url).flatMap(text => _decode_data_seed(url, text)).flatMap(seed => _store_data_seed(withstore, seed))
     }
 
   private def _import_entity_file(
@@ -144,25 +155,23 @@ object StartupImport {
     }
 
   private def _store_data_seed(
-    datastorespace: DataStoreSpace,
+    withstore: (DataStore.CollectionId, DataStore => Consequence[Unit]) => Consequence[Unit],
     seed: DataStoreSeed
   )(using ctx: ExecutionContext): Consequence[Unit] =
     seed.entries.foldLeft(Consequence.unit) { (z, entry) =>
-      z.flatMap(_ => _store_data_entry(datastorespace, entry))
+      z.flatMap(_ => _store_data_entry(withstore, entry))
     }
 
   private def _store_data_entry(
-    datastorespace: DataStoreSpace,
+    withstore: (DataStore.CollectionId, DataStore => Consequence[Unit]) => Consequence[Unit],
     entry: DataStoreSeedEntry
   )(using ctx: ExecutionContext): Consequence[Unit] = {
     val cid = entry.collection
     val id = _entry_id(entry.record, cid)
-    for {
-      ds <- datastorespace.dataStore(cid)
-      r <- ds.save(cid, id, entry.record).recoverWith { case _ =>
+    withstore(cid, ds =>
+      ds.save(cid, id, entry.record).recoverWith { case _ =>
         ds.create(cid, id, entry.record)
-      }
-    } yield r
+      })
   }
 
   private def _load_data_seed(

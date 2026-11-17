@@ -81,7 +81,7 @@ import org.goldenport.bag.Bag
  *  version Aug. 15, 2026
  *  version Sep.  8, 2026
  *  version Oct. 31, 2026
- * @version Nov.  6, 2026
+ * @version Nov. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -397,6 +397,19 @@ final class Subsystem(
     new StartupImport.EntityCollectionResolver {
       override def entityCollection(collectionId: org.simplemodeling.model.datatype.EntityCollectionId): Option[org.goldenport.cncf.entity.runtime.EntityCollection[?]] =
         components.iterator.flatMap(_.entitySpace.entityOption(collectionId)).toSeq.headOption
+    }
+
+  private[cncf] def _run_startup_import_c(cwd: Path, runtimeconfig: RuntimeConfig): Consequence[Unit] =
+    runtimeStartupImportConfigurationC.flatMap { startup =>
+      StartupImport._run_with_store_c(cwd, startup, runtimeconfig, startupImportEntityCollectionResolver,
+        (collection, use) =>
+          _component_record_storage_declaration.toVector.flatMap(_.grants).find(_.collection == collection) match {
+            case Some(grant) => _with_managed_datastore_lease_c { _ =>
+              _component_record_storage_binding._with_startup_store_c(
+                grant.componentId, grant.storeName, grant.collection)(use)
+            }
+            case None => runtimeconfig.dataStoreSpace.dataStore(collection).flatMap(use)
+          })
     }
 
   private def _web_execution_resolution_policy(

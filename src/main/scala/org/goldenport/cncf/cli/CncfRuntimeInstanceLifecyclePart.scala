@@ -70,7 +70,6 @@ import org.goldenport.cncf.bootstrap.CncfHandle
 import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.component.ComponentActivation
 import org.goldenport.cncf.component.repository.ComponentRepository
-import org.goldenport.cncf.importer.StartupImport
 import org.goldenport.cncf.path.AliasLoader
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.cli.help.CommandProtocolHelp
@@ -95,7 +94,7 @@ import org.goldenport.cncf.spi.SpiResolver
  *  version Aug. 19, 2026
  *  version Sep.  8, 2026
  *  version Oct. 26, 2026
- * @version Nov. 16, 2026
+ * @version Nov. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cli] trait CncfRuntimeInstanceLifecyclePart {
@@ -530,12 +529,7 @@ private[cli] trait CncfRuntimeInstanceLifecyclePart {
       }
       _verify_descriptor_components_available(subsystem, runtimespecs)
       _resolve_runtime_spi(subsystem)
-      StartupImport.run(
-        cwd,
-        subsystem.runtimeStartupImportConfigurationC.TAKE,
-        runconfig,
-        subsystem.startupImportEntityCollectionResolver
-      ) match {
+      subsystem._run_startup_import_c(cwd, runconfig) match {
         case Consequence.Success(_) =>
           ()
         case Consequence.Failure(conclusion) =>
