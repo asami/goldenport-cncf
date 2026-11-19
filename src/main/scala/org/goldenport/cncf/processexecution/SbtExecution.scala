@@ -12,7 +12,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 24, 2026
- * @version Nov. 16, 2026
+ * @version Nov. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection] = None,
@@ -20,7 +20,20 @@ final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenari
   validationMode: Option[String] = None,
   validationProvider: Option[String] = None,
   validationDiscovery: Boolean = false, validationBatch: Vector[SbtValidationMode.Case] = Vector.empty,
-  scopedInput: Option[SbtScopedInput] = None) {
+  scopedInput: Option[SbtScopedInput] = None, lintInput: Option[SbtLintInput] = None) {
+  // Retain the former eight-field JVM entries.
+  def this(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection],
+    validationEstimate: Option[SbtValidationEstimate], validationMode: Option[String],
+    validationProvider: Option[String], validationDiscovery: Boolean, validationBatch: Vector[SbtValidationMode.Case],
+    scopedInput: Option[SbtScopedInput]) =
+    this(workspaceId, scenario, validationEstimate, validationMode, validationProvider, validationDiscovery, validationBatch, scopedInput, None)
+
+  def copy(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection],
+    validationEstimate: Option[SbtValidationEstimate], validationMode: Option[String],
+    validationProvider: Option[String], validationDiscovery: Boolean, validationBatch: Vector[SbtValidationMode.Case],
+    scopedInput: Option[SbtScopedInput]): SbtTarget =
+    new SbtTarget(workspaceId, scenario, validationEstimate, validationMode, validationProvider, validationDiscovery, validationBatch, scopedInput, lintInput)
+
   // Retain the operational three-field JVM entries without adding overloaded defaults.
   def this(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection],
     validationEstimate: Option[SbtValidationEstimate]) =
@@ -29,7 +42,7 @@ final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenari
   def copy(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection],
     validationEstimate: Option[SbtValidationEstimate]): SbtTarget =
     new SbtTarget(workspaceId, scenario, validationEstimate, validationMode,
-      validationProvider, validationDiscovery, validationBatch, scopedInput)
+      validationProvider, validationDiscovery, validationBatch, scopedInput, lintInput)
 
   def this(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection],
     validationEstimate: Option[SbtValidationEstimate], validationMode: Option[String],
@@ -39,9 +52,15 @@ final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenari
   def copy(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection],
     validationEstimate: Option[SbtValidationEstimate], validationMode: Option[String],
     validationProvider: Option[String], validationDiscovery: Boolean, validationBatch: Vector[SbtValidationMode.Case]): SbtTarget =
-    new SbtTarget(workspaceId, scenario, validationEstimate, validationMode, validationProvider, validationDiscovery, validationBatch, scopedInput)
+    new SbtTarget(workspaceId, scenario, validationEstimate, validationMode, validationProvider, validationDiscovery, validationBatch, scopedInput, lintInput)
 }
 object SbtTarget {
+  def apply(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection],
+    validationEstimate: Option[SbtValidationEstimate], validationMode: Option[String],
+    validationProvider: Option[String], validationDiscovery: Boolean, validationBatch: Vector[SbtValidationMode.Case],
+    scopedInput: Option[SbtScopedInput]): SbtTarget =
+    new SbtTarget(workspaceId, scenario, validationEstimate, validationMode, validationProvider, validationDiscovery, validationBatch, scopedInput)
+
   def apply(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection],
     validationEstimate: Option[SbtValidationEstimate], validationMode: Option[String],
     validationProvider: Option[String], validationDiscovery: Boolean, validationBatch: Vector[SbtValidationMode.Case]): SbtTarget =
@@ -51,6 +70,9 @@ object SbtTarget {
     validationEstimate: Option[SbtValidationEstimate]): SbtTarget =
     new SbtTarget(workspaceId, scenario, validationEstimate)
 }
+
+/** Exact upstream-resolved JSON object; CNCF neither resolves nor merges it. */
+final case class SbtLintInput(identity: String, revision: String, configJson: String)
 
 final case class SbtScopedPublication(publication: String, repository: WorkspaceRelativePath, staging: WorkspaceRelativePath)
 
@@ -86,8 +108,21 @@ final case class SbtExecutionResult(
   testObservation: Option[SbtTestObservation] = None,
   validationMode: Option[SbtValidationMode.Result] = None,
   discovery: Option[SbtValidationDiscovery.Result] = None,
-  batch: Option[Vector[SbtValidationMode.CaseResult]] = None
+  batch: Option[Vector[SbtValidationMode.CaseResult]] = None,
+  lintInput: Option[SbtLintInput] = None
 ) {
+  def this(target: SbtTarget, operation: SbtOperation, processResult: ProcessExecutionResult,
+    testSelection: Option[SbtTestSelectionResult], testObservation: Option[SbtTestObservation],
+    validationMode: Option[SbtValidationMode.Result], discovery: Option[SbtValidationDiscovery.Result],
+    batch: Option[Vector[SbtValidationMode.CaseResult]]) =
+    this(target, operation, processResult, testSelection, testObservation, validationMode, discovery, batch, None)
+
+  def copy(target: SbtTarget, operation: SbtOperation, processResult: ProcessExecutionResult,
+    testSelection: Option[SbtTestSelectionResult], testObservation: Option[SbtTestObservation],
+    validationMode: Option[SbtValidationMode.Result], discovery: Option[SbtValidationDiscovery.Result],
+    batch: Option[Vector[SbtValidationMode.CaseResult]]): SbtExecutionResult =
+    new SbtExecutionResult(target, operation, processResult, testSelection, testObservation, validationMode, discovery, batch, lintInput)
+
   // The legacy fifth field is reporter observation, never B2 mode evidence.
   def this(target: SbtTarget, operation: SbtOperation, processResult: ProcessExecutionResult,
     testSelection: Option[SbtTestSelectionResult]) =
@@ -100,12 +135,12 @@ final case class SbtExecutionResult(
   def copy(target: SbtTarget, operation: SbtOperation, processResult: ProcessExecutionResult,
     testSelection: Option[SbtTestSelectionResult]): SbtExecutionResult =
     new SbtExecutionResult(target, operation, processResult, testSelection, testObservation,
-      validationMode, discovery, batch)
+      validationMode, discovery, batch, lintInput)
 
   def copy(target: SbtTarget, operation: SbtOperation, processResult: ProcessExecutionResult,
     testSelection: Option[SbtTestSelectionResult], testObservation: Option[SbtTestObservation]): SbtExecutionResult =
     new SbtExecutionResult(target, operation, processResult, testSelection, testObservation,
-      validationMode, discovery, batch)
+      validationMode, discovery, batch, lintInput)
 
   def outcome: SbtExecutionOutcome = processResult.termination match {
     case ProcessExecutionTermination.NotStarted => SbtExecutionOutcome.NotExecuted
@@ -143,6 +178,12 @@ final case class SbtExecutionResult(
 
 object SbtExecutionResult {
   def apply(target: SbtTarget, operation: SbtOperation, processResult: ProcessExecutionResult,
+    testSelection: Option[SbtTestSelectionResult], testObservation: Option[SbtTestObservation],
+    validationMode: Option[SbtValidationMode.Result], discovery: Option[SbtValidationDiscovery.Result],
+    batch: Option[Vector[SbtValidationMode.CaseResult]]): SbtExecutionResult =
+    new SbtExecutionResult(target, operation, processResult, testSelection, testObservation, validationMode, discovery, batch)
+
+  def apply(target: SbtTarget, operation: SbtOperation, processResult: ProcessExecutionResult,
     testSelection: Option[SbtTestSelectionResult]): SbtExecutionResult =
     new SbtExecutionResult(target, operation, processResult, testSelection)
 
@@ -158,7 +199,8 @@ private[cncf] final case class SbtProgramMetadata(
   testClasses: Vector[String] = Vector.empty,
   scenario: Option[SbtScenarioSelection] = None,
   validationMode: Option[SbtValidationMode.Binding] = None,
-  discovery: Option[SbtValidationDiscovery.Binding] = None, discoveredTests: Boolean = false
+  discovery: Option[SbtValidationDiscovery.Binding] = None, discoveredTests: Boolean = false,
+  lintEnabled: Boolean = false, lintInput: Option[SbtLintInput] = None
 ) {
   def effect: ExternalEffect = ExternalEffect(ExternalEffectKind.Build, binding.workspaceId)
 }
@@ -169,13 +211,14 @@ private[cncf] final case class PreparedSbtProgram(
   testclasses: Vector[String],
   validationmode: Option[SbtValidationMode.Binding],
   discovery: Option[SbtValidationDiscovery.Binding],
-  discoveredtests: Boolean
+  discoveredtests: Boolean,
+  lintenabled: Boolean
 ) {
   def bindC(binding: WorkspaceBinding): Consequence[ProcessProgramDefinition] =
     if (binding == null) WorkspaceBinding.unavailableC
     else binding.workingDirectoryC.map(_ => ProcessProgramDefinition.bindPrepared(definition,
       sbt = Some(SbtProgramMetadata(binding, operation, testclasses,
-        validationMode = validationmode, discovery = discovery, discoveredTests = discoveredtests))))
+        validationMode = validationmode, discovery = discovery, discoveredTests = discoveredtests, lintEnabled = lintenabled))))
 }
 
 private[cncf] object SbtProgramDefinition {
@@ -189,10 +232,10 @@ private[cncf] object SbtProgramDefinition {
     environment: Map[String, String],
     testClasses: Vector[String] = Vector.empty,
     validationMode: Option[SbtValidationMode.Binding] = None,
-    discovery: Option[SbtValidationDiscovery.Binding] = None, discoveredTests: Boolean = false
+    discovery: Option[SbtValidationDiscovery.Binding] = None, discoveredTests: Boolean = false, lintEnabled: Boolean = false
   ): Consequence[ProcessProgramDefinition] =
     prepareC(operation, capability, safeProgramIdentity, sbtExecutable, limits, environment,
-      testClasses, validationMode, discovery, discoveredTests).flatMap(_.bindC(binding))
+      testClasses, validationMode, discovery, discoveredTests, lintEnabled).flatMap(_.bindC(binding))
 
   def prepareC(
     operation: SbtOperation,
@@ -204,7 +247,7 @@ private[cncf] object SbtProgramDefinition {
     testClasses: Vector[String],
     validationMode: Option[SbtValidationMode.Binding],
     discovery: Option[SbtValidationDiscovery.Binding],
-    discoveredTests: Boolean
+    discoveredTests: Boolean, lintEnabled: Boolean = false
   ): Consequence[PreparedSbtProgram] =
     for {
       _ <- if (operation != null) Consequence.unit else _invalid_operation_c
@@ -219,6 +262,7 @@ private[cncf] object SbtProgramDefinition {
         else validationMode.fold(Consequence.unit)(_.validateC.map(_ => ()))
       _ <- if (validationMode.isEmpty || operation == SbtOperation.TestOnly) Consequence.unit
         else Consequence.configurationInvalid("Mode binding requires exact TestOnly selection")
+      _ <- if (!lintEnabled || operation == SbtOperation.FixCheck) Consequence.unit else Consequence.configurationInvalid("Lint input binding requires FixCheck")
       executable <- SbtExecutableLocation.resolveC(sbtExecutable, environment)
       basearguments = Vector(
         "--batch",
@@ -241,7 +285,7 @@ private[cncf] object SbtProgramDefinition {
         capability, safeProgramIdentity, executable.toString, arguments,
         ProcessArgumentPolicy(arguments), limits, Set.empty, environment = environment
       )
-    } yield PreparedSbtProgram(definition, operation, testClasses, validationMode, discovery, discoveredTests)
+    } yield PreparedSbtProgram(definition, operation, testClasses, validationMode, discovery, discoveredTests, lintEnabled)
 
   private def _invalid_operation_c: Consequence[Unit] =
     Consequence.argumentPolicyViolation("operation", "sbt.execution.operation", "Compile, TestCompile, Test, TestOnly, FixCheck or PublishLocal", "unknown")
@@ -262,7 +306,8 @@ private[cncf] object SbtExecutionAdmission {
       .getOrElse(SbtValidationDiscovery.Result.Unavailable("ordinary discovery binding is unavailable")))
     val batch = Option.when(target.validationBatch.nonEmpty)(SbtValidationMode.decodeBatch(target.validationBatch, result, metadata.flatMap(_.validationMode).map(_.provider)))
     SbtExecutionResult(target, operation, result, assessed.flatMap(_.testSelection), assessed.flatMap(_.testObservation),
-      validationMode = SbtValidationMode.decode(target, execution, result), discovery = discovery, batch = batch)
+      validationMode = SbtValidationMode.decode(target, execution, result), discovery = discovery, batch = batch,
+      lintInput = metadata.flatMap(_.lintInput))
   }
 
   def validateGenericExecutionC(execution: ResolvedProcessExecution): Consequence[Unit] =
@@ -294,7 +339,8 @@ private[cncf] object SbtExecutionAdmission {
       batched <- SbtValidationMode.specializeBatchC(execution, target, operation)
       mode <- SbtValidationMode.specializeC(batched, target)
       scoped <- SbtScopedInputAdmission.applyC(context, workspace, target, operation, mode)
-      jvm <- SbtJvmParameters.applyC(context.resolvedParameters, scoped)
+      lint <- SbtLintInputAdmission.applyC(target, operation, scoped)
+      jvm <- SbtJvmParameters.applyC(context.resolvedParameters, lint)
       limits <- SbtTestOutputParameters.applyC(context.resolvedParameters, operation, jvm.effectiveLimits)
       estimated <- SbtValidationEstimate.applyC(target, operation,
         jvm.definition._sbt_metadata.map(_.testClasses).getOrElse(Vector.empty), limits)
@@ -372,4 +418,40 @@ private[cncf] object SbtScopedInputAdmission {
       }
     }
   } catch { case NonFatal(_) => _invalid_c }
+}
+
+/** Specialize only the host-opted fixed FixCheck, retaining the admitted immutable value. */
+private[cncf] object SbtLintInputAdmission {
+  private val _parser = JawnParser(allowDuplicateKeys = false)
+  private def _invalid_c[A]: Consequence[A] = Consequence.configurationInvalid("Invalid or unavailable typed lint input")
+
+  def applyC(target: SbtTarget, operation: SbtOperation, execution: ResolvedProcessExecution): Consequence[ResolvedProcessExecution] = {
+    val metadata = execution.definition._sbt_metadata.get
+    if (target.lintInput == null) _invalid_c
+    else (metadata.lintEnabled, target.lintInput) match {
+      case (false, None) => Consequence.success(execution)
+      case (true, Some(input)) if operation == SbtOperation.FixCheck && input != null =>
+        val valid = input.identity != null && input.identity.matches("[A-Za-z0-9_.-]{1,128}") &&
+          input.revision != null && input.revision.matches("[A-Za-z0-9_.-]{1,128}") &&
+          input.configJson != null && java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(input.configJson) &&
+          input.configJson.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 65536 &&
+          _parser.parse(input.configJson).toOption.exists(_.isObject)
+        if (!valid) _invalid_c
+        else {
+          val envelope = io.circe.Json.obj("identity" -> io.circe.Json.fromString(input.identity),
+            "revision" -> io.circe.Json.fromString(input.revision),
+            "config" -> _parser.parse(input.configJson).toOption.get).noSpaces
+          val encoded = java.util.Base64.getUrlEncoder.withoutPadding().encodeToString(envelope.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+          val definition = execution.definition
+          val arguments = definition.fixedArguments.dropRight(1) ++ Vector("-Dcncf.sbt.lint.input=" + encoded, definition.fixedArguments.last)
+          val bytes = arguments.map(_.getBytes(java.nio.charset.StandardCharsets.UTF_8).length.toLong).sum
+          if (definition.maximumLimits.argumentCount.exists(arguments.size.toLong > _) ||
+              definition.maximumLimits.argumentBytes.exists(bytes > _)) _invalid_c
+          else ProcessProgramDefinition.fromSbtRuntimeC(definition.capability, definition.safeProgramIdentity,
+            definition._executable_location, arguments, definition.maximumLimits, definition._environment.values,
+            metadata.copy(lintInput = Some(input))).map(value => execution.copy(definition = value))
+        }
+      case _ => _invalid_c
+    }
+  }
 }

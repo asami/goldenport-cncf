@@ -25,8 +25,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 24, 2026
- *  version Nov.  5, 2026
- * @version Nov. 12, 2026
+ * @version Nov. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -999,6 +998,68 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
       ProcessExecutionCapture(Vector.empty, 0L, false), Vector.empty, 17L, "project-build")
   }
 
+  "Typed FixCheck lint input" should {
+    "preserve the operational target and result JVM descriptors" in {
+      Given("the erased parameter types of the previously published entry points")
+      val option = classOf[Option[?]]
+      val vector = classOf[Vector[?]]
+      val target = Vector(classOf[String], option, option, option, option, java.lang.Boolean.TYPE, vector, option)
+      val result = Vector(classOf[SbtTarget], classOf[SbtOperation], classOf[ProcessExecutionResult], option, option, option, option, option)
+      When("the JVM constructor, apply and copy parameter types are inspected")
+      Then("all old descriptors remain available")
+      Vector((classOf[SbtTarget], SbtTarget.getClass, Vector(target.take(3), target.take(7), target)),
+        (classOf[SbtExecutionResult], SbtExecutionResult.getClass, Vector(result.take(4), result.take(5), result))).foreach {
+        case (value, companion, signatures) => signatures.foreach { signature =>
+          value.getConstructors.exists(_.getParameterTypes.toVector == signature) shouldBe true
+          value.getMethods.exists(method => method.getName == "copy" && method.getParameterTypes.toVector == signature) shouldBe true
+          companion.getMethods.exists(method => method.getName == "apply" && method.getParameterTypes.toVector == signature) shouldBe true
+        }
+      }
+    }
+
+    "bind only valid explicit input to the opted-in fixed process and retain admitted provenance" in {
+      Given("an opted-in FixCheck and an otherwise identical legacy declaration")
+      val enabled = _fixture(_result(ProcessExecutionTermination.Exited(0)), lintenabled = true)
+      val legacy = _fixture(_result(ProcessExecutionTermination.Exited(0)))
+      val bounded = _fixture(_result(ProcessExecutionTermination.Exited(0)), lintenabled = true,
+        limits = _limits.copy(argumentBytes = Some(200L)))
+      val uows = Vector(new UnitOfWork(enabled.context), new UnitOfWork(legacy.context), new UnitOfWork(bounded.context))
+      val input = SbtLintInput("shared-profile", "v1", """{"rules":["Example"],"test":true}""")
+      val target = enabled.target.copy(lintInput = Some(input))
+      try {
+        When("native attempts execute admitted and invalid inputs")
+        val interpreter = new UnitOfWorkInterpreter(uows.head)
+        val observed = interpreter.interpret(UnitOfWorkOp.SbtExecAttempt(target, SbtOperation.FixCheck)).toOption.get
+        val invalid = Vector(enabled.target, target.copy(lintInput = Some(input.copy(configJson = "[]"))),
+          target.copy(lintInput = Some(input.copy(configJson = "{"))),
+          target.copy(lintInput = Some(input.copy(identity = "bad id"))),
+          target.copy(lintInput = Some(input.copy(configJson = "{\"x\":\"" + ("x" * 65536) + "\"}"))))
+        val rejected = invalid.map(value => interpreter.interpret(UnitOfWorkOp.SbtExecAttempt(value, SbtOperation.FixCheck)).toOption.get) :+
+          interpreter.interpret(UnitOfWorkOp.SbtExecAttempt(target, SbtOperation.Compile)).toOption.get :+
+          new UnitOfWorkInterpreter(uows(1)).interpret(UnitOfWorkOp.SbtExecAttempt(legacy.target.copy(lintInput = Some(input)), SbtOperation.FixCheck)).toOption.get :+
+          new UnitOfWorkInterpreter(uows(2)).interpret(UnitOfWorkOp.SbtExecAttempt(bounded.target.copy(lintInput = Some(input.copy(configJson = "{\"x\":\"" + ("x" * 200) + "\"}"))), SbtOperation.FixCheck)).toOption.get
+        val old = new UnitOfWorkInterpreter(uows(1)).interpret(UnitOfWorkOp.SbtExecAttempt(legacy.target, SbtOperation.FixCheck)).toOption.get
+        Then("only the admitted fixed task runs and its observed result identifies the bound value")
+        observed match {
+          case SbtExecutionAttempt.Observed(result) => result.lintInput shouldBe Some(input)
+          case other => fail(s"Expected observed FixCheck: $other")
+        }
+        val args = enabled.profile.driver.executions.head.effectiveArguments
+        args.last shouldBe "fixCheck"
+        val encoded = args(args.size - 2).stripPrefix("-Dcncf.sbt.lint.input=")
+        val json = new String(java.util.Base64.getUrlDecoder.decode(encoded), java.nio.charset.StandardCharsets.UTF_8)
+        io.circe.parser.parse(json).toOption.get.hcursor.get[String]("identity").toOption shouldBe Some(input.identity)
+        io.circe.parser.parse(json).toOption.get.hcursor.downField("config").get[Boolean]("test").toOption shouldBe Some(true)
+        rejected.foreach(_.isInstanceOf[SbtExecutionAttempt.AdmissionRejected] shouldBe true)
+        enabled.profile.driver.executions should have size 1
+        old.isInstanceOf[SbtExecutionAttempt.Observed] shouldBe true
+        legacy.profile.driver.executions.head.effectiveArguments.last shouldBe "fixCheck"
+        legacy.profile.driver.executions.head.effectiveArguments.exists(_.startsWith("-Dcncf.sbt.lint.input=")) shouldBe false
+        bounded.profile.driver.executions shouldBe empty
+      } finally { uows.foreach(_.dispose()); _close(enabled.root); _close(legacy.root); _close(bounded.root) }
+    }
+  }
+
   "Scoped typed SBT transport" should {
     "deliver the explicit consumer input and reject foreign or missing inputs before launch" in {
       Given("an admitted consumer and bounded input with adapter-owned settings")
@@ -1179,7 +1240,8 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
     workspaceid: WorkspaceId = _workspace_id,
     limits: ProcessExecutionLimits = _limits,
     compileoperation: SbtOperation = SbtOperation.Compile,
-    foreignresource: Boolean = false
+    foreignresource: Boolean = false,
+    lintenabled: Boolean = false
   ): Fixture = {
     val base = Files.createDirectories(Paths.get("target", "sbt-execution-dsl-spec").toAbsolutePath)
     val root = Files.createTempDirectory(base, "case-")
@@ -1195,7 +1257,7 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
     ).map { case (operation, capability) =>
       SbtProgramDefinition.createC(binding, operation, capability, capability.print,
         _sbt_path, limits, Map("TEXTUS_BUILD_PROFILE" -> "test"),
-        if (operation == SbtOperation.TestOnly) testclasses else Vector.empty).toOption.get
+        if (operation == SbtOperation.TestOnly) testclasses else Vector.empty, lintEnabled = lintenabled && operation == SbtOperation.FixCheck).toOption.get
     }
     val policy = ProcessExecutionPolicy.createC(definitions).toOption.get
     val grants = if (capabilitygranted) Vector(_compile_capability, _test_capability, _test_only_capability, _fix_check_capability).map(ProcessExecutionGrant(_)) else Vector.empty

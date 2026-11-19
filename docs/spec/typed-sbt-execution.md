@@ -218,6 +218,33 @@ read-only. The consumer owns lint implementation, a nonempty syntactic rule
 profile and separate durable check-result storage. No test-suite or test-count
 evidence is synthesized from a check result.
 
+### Opt-in resolved lint input
+
+A host may add `"lintInput": true` to its fixed FixCheck declaration. The field
+must be absent for legacy behavior; false, other values, or use on another
+operation are invalid. The enabled declaration requires `SbtTarget.lintInput`
+with `SbtLintInput(identity, revision, configJson)`. Identity and revision are
+1–128 ASCII letters, digits, `_`, `.` or `-`. `configJson` is an already
+resolved JSON object, at most 65,536 UTF-8 bytes, with no duplicate keys. CNCF
+checks its shape and bounds; it does not resolve profiles, merge settings,
+expand includes, or read a project fallback. Missing or malformed input and
+input on a legacy or non-FixCheck binding fail admission before execution.
+Existing workspace, capability and process limits continue to apply.
+
+The fixed process receives one additional argument immediately before `fixCheck`:
+`-Dcncf.sbt.lint.input=<value>`. The value is unpadded URL-safe Base64 of a
+UTF-8 JSON object with `identity`, `revision` and `config` fields, where `config`
+is the supplied JSON object. The host-selected build must decode that property
+and use `config` for its check; the consumer owns that build integration. It
+must not fall back to ambient settings when the property is present. The target
+workspace, fixed task and other request restrictions do not change.
+
+An observed `SbtExecutionResult.lintInput` is taken from the admitted process
+definition and retains the input bound to that attempt. It does not attest that
+arbitrary build code honored the property. An admission rejection has no process
+receipt; an uncertain attempt retains its existing uncertainty semantics. No
+consumer activation or actual Scalafix execution is implied by this contract.
+
 TestOnly retains those same four flags and uses one final argv item containing
 literal `testOnly ` followed by the trusted names joined with one space.
 Class-only intent supplies no classes, tasks, options or additional arguments.

@@ -10,7 +10,7 @@ import org.goldenport.cncf.workspace.*
 /*
  * @since   Oct.  7, 2026
  *  version Oct. 28, 2026
- * @version Nov. 17, 2026
+ * @version Nov. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] final case class WorkspaceRuntimeDeclaration(identity: WorkspaceId, root: Path)
@@ -38,7 +38,8 @@ private[cncf] final case class SbtRuntimeDeclaration(
   environment: Map[String, String],
   testClasses: Vector[String] = Vector.empty,
   validationMode: Option[SbtValidationMode.Binding] = None,
-  validationDiscovery: Option[SbtValidationDiscovery.Binding] = None, discoveredTests: Boolean = false
+  validationDiscovery: Option[SbtValidationDiscovery.Binding] = None, discoveredTests: Boolean = false,
+  lintInput: Boolean = false
 )
 
 private[cncf] final case class GitRuntimeDeclaration(
@@ -277,7 +278,7 @@ private[cncf] object RuntimeProcessExecutionPlan {
             case _ => Consequence.configurationInvalid("Dynamic TestOnly requires exactly one same-workspace opted-in TestCompile owner")
           }
       definition <- SbtProgramDefinition.prepareC(declaration.operation, declaration.capability,
-        declaration.identity, declaration.sbtExecutable, declaration.limits, declaration.environment, declaration.testClasses, declaration.validationMode, discovery, declaration.discoveredTests)
+        declaration.identity, declaration.sbtExecutable, declaration.limits, declaration.environment, declaration.testClasses, declaration.validationMode, discovery, declaration.discoveredTests, declaration.lintInput)
     } yield values :+ (declaration.target -> definition) }
     gittagged <- allgit.foldLeft(Consequence.success(Vector.empty[(WorkspaceId, PreparedGitProgram)])) { (prior, declaration) => for {
       values <- prior

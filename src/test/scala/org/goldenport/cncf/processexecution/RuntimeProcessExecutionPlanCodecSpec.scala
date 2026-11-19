@@ -19,7 +19,7 @@ import org.scalacheck.{Gen, Prop, Test}
 /*
  * @since   Oct.  7, 2026
  *  version Oct. 29, 2026
- * @version Nov. 16, 2026
+ * @version Nov. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -887,6 +887,24 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
         (tagged._sbt_metadata.get.binding eq binding) shouldBe true
         tagged.fixedArguments.last shouldBe "testOnly org.example.SelectedSpec org.other.OtherSpec"
       }
+    }
+
+    "admit lint input opt-in only on a fixed FixCheck host declaration" in {
+      Given("a legacy declaration and an explicit FixCheck lint input binding")
+      val base = _changed_entry(_v2_root(_directory()), "sbtPrograms", _.mapObject(
+        _.add("operation", Json.fromString("fix-check"))))
+      val enabled = _changed_entry(base, "sbtPrograms", _.mapObject(_.add("lintInput", Json.True)))
+      When("the plan is decoded and encoded, and invalid bindings are decoded")
+      val plan = _take(_decode(enabled))
+      val encoded = _take(RuntimeProcessExecutionPlanCodec.encode(plan))
+      val invalid = Vector(Json.False, Json.Null, Json.fromString("true")).map(value =>
+        _decode(_changed_entry(base, "sbtPrograms", _.mapObject(_.add("lintInput", value))))) :+
+        _decode(_changed_entry(enabled, "sbtPrograms", _.mapObject(_.add("operation", Json.fromString("compile")))))
+      Then("the opt-in round trips and malformed or wrong-operation declarations fail")
+      plan.sbtDeclarations.head.lintInput shouldBe true
+      parse(encoded.asInstanceOf[ConfigurationValue.StringValue].value).toOption.get shouldBe enabled
+      invalid.foreach(_.toOption shouldBe None)
+      _take(_decode(base)).sbtDeclarations.head.lintInput shouldBe false
     }
 
     "round-trip exact seven-field Compile, Test and FixCheck declarations and reject selectors or argv" in {

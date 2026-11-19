@@ -14,7 +14,7 @@ import org.goldenport.configuration.{ConfigurationValue, ConfigurationValueCodec
 /*
  * @since   Oct.  7, 2026
  *  version Oct. 28, 2026
- * @version Nov. 16, 2026
+ * @version Nov. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValueCodec[RuntimeProcessExecutionPlan] {
@@ -265,7 +265,8 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
     val discovery = x.validationDiscovery.fold(modes)(binding => modes.mapObject(_.add("validationDiscovery", Json.obj(
       "componentIdentity" -> Json.fromString(binding.componentIdentity), "artifactIdentity" -> Json.fromString(binding.artifactIdentity),
       "artifactRevision" -> Json.fromString(binding.artifactRevision), "packagePrefix" -> Json.fromString(binding.packagePrefix)))))
-    if (x.discoveredTests) discovery.mapObject(_.add("discoveredTests", Json.True)) else discovery
+    val dynamic = if (x.discoveredTests) discovery.mapObject(_.add("discoveredTests", Json.True)) else discovery
+    if (x.lintInput) dynamic.mapObject(_.add("lintInput", Json.True)) else dynamic
   }
 
   private def _workspace(json: Json, gitroot: Boolean): Either[String, WorkspaceRuntimeDeclaration] = for {
@@ -298,7 +299,7 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
     names = Set("target", "operation", "capability", "identity", "sbtExecutable", "limits", "environment") ++
       (if (operationtext == "test-only") Set("testClasses") else Set.empty[String]) ++
       (if (json.asObject.exists(_.contains("validationMode"))) Set("validationMode") else Set.empty[String]) ++
-      Set("validationDiscovery", "discoveredTests").filter(name => json.asObject.exists(_.contains(name)))
+      Set("validationDiscovery", "discoveredTests", "lintInput").filter(name => json.asObject.exists(_.contains(name)))
     obj <- _fields(json, names)
     targettext <- _string(obj, "target")
     target <- _valid(WorkspaceId.parseC(targettext))
@@ -326,6 +327,11 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
     }
     _ <- if (dynamic && operation == SbtOperation.TestOnly && classes.isEmpty) Right(())
       else _valid(SbtTestSelectionPolicy.validateC(operation, classes))
+    lint <- obj("lintInput") match {
+      case None => Right(false)
+      case Some(value) => value.asBoolean.filter(_ == true).filter(_ => operation == SbtOperation.FixCheck)
+        .toRight("lintInput requires true and FixCheck")
+    }
     discovery <- obj("validationDiscovery") match {
       case None => Right(None)
       case Some(value) => for {
@@ -348,7 +354,7 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
         _ <- Either.cond(modes == modes.distinct.sorted, (), "Noncanonical execution mode set")
       } yield Some(binding)
     }
-  } yield SbtRuntimeDeclaration(target, operation, capability, identity, executable, limits, environment, classes, mode, discovery, dynamic)
+  } yield SbtRuntimeDeclaration(target, operation, capability, identity, executable, limits, environment, classes, mode, discovery, dynamic, lint)
 
   private def _git_program(json: Json): Either[String, GitRuntimeDeclaration] = for {
     operationtext <- json.hcursor.get[String]("operation").left.map(_ => "Invalid typed Git operation")

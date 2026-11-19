@@ -15,7 +15,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for deterministic UnitOfWork program recording.
  *
  * @since   Sep.  8, 2026
- * @version Oct. 30, 2026
+ *  version Oct. 30, 2026
+ * @version Nov. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkProgramRecordingSpec
@@ -179,7 +180,8 @@ final class UnitOfWorkProgramRecordingSpec
       } yield path
 
       When("each of the six typed SBT operations is selected in turn as the StubProvider failure")
-      val recordings = SbtOperation.values.toVector.map { failing =>
+      val recordings = Vector(SbtOperation.Compile, SbtOperation.TestCompile, SbtOperation.Test,
+        SbtOperation.TestOnly, SbtOperation.FixCheck, SbtOperation.PublishLocal).map { failing =>
         val provider = new UnitOfWorkProgramStubProvider {
           def resultFor[A](ordinal: Int, operation: UnitOfWorkOp[A]): Consequence[A] = operation match {
             case UnitOfWorkOp.SbtExec(target, operation) =>
