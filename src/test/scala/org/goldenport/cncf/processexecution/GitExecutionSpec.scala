@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 28, 2026
- * @version Nov. 17, 2026
+ * @version Nov. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -133,6 +133,54 @@ final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThe
         GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption shouldBe Some(parent)
         Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector shouldBe indexbytes
         Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe text
+      } finally { driver.close(); fixture.close() }
+    }
+  }
+
+  "E6 Same-hunk repair of a complete staged candidate" should afterWord(
+    "in spec:typed-git-execution, example:E6, rules:Purpose-specific-candidates") {
+    "install the repaired candidate and preserve independent work" in {
+      Given("a fully staged failed candidate and unrelated staged and unstaged changes")
+      val driver = new LocalProcessExecutionDriver()
+      val fixture = create(driver = Some(driver))
+      val prior = "candidate broken\n"
+      val repaired = "candidate repaired\n"
+      val path = GitPath.parseC("selected.txt").toOption.get
+      try {
+        initialize(fixture, Map("selected.txt" -> "original\n", "unrelated.txt" -> "base\n", "ongoing.txt" -> "base\n"))
+        Files.writeString(fixture.checkout.resolve("selected.txt"), prior)
+        Files.writeString(fixture.checkout.resolve("unrelated.txt"), "independent staged\n")
+        setup(fixture.checkout, "add", "--", "selected.txt", "unrelated.txt")
+        Files.writeString(fixture.checkout.resolve("ongoing.txt"), "independent unstaged\n")
+        val parent = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        val index = GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption.get
+        val initial = GitExecutionSpecSupport.execute(fixture, GitOperation.PreparePurposeCandidate(selectionId,
+          GitPurposeRequest(parent, index, Vector(GitPurposeChange(path, Some(prior), Some(prior)))))).toOption.get.valueC.toOption.get
+        val indexbytes = Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector
+        When("the same-hunk repair is prepared against the actual prior candidate")
+        val candidate = GitExecutionSpecSupport.execute(fixture, GitOperation.PreparePurposeCandidate(selectionId,
+          GitPurposeRequest(parent, index, Vector(GitPurposeChange(path, Some(prior), Some(repaired))), Some(initial.tree))))
+          .toOption.get.valueC.toOption.get
+        Then("preparation leaves HEAD, the index and worktree unchanged")
+        GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption shouldBe Some(parent)
+        Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector shouldBe indexbytes
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe prior
+        Files.readString(fixture.checkout.resolve("unrelated.txt")) shouldBe "independent staged\n"
+        Files.readString(fixture.checkout.resolve("ongoing.txt")) shouldBe "independent unstaged\n"
+        When("the repaired candidate is installed")
+        GitExecutionSpecSupport.execute(fixture, GitOperation.CommitPurposeCandidate(selectionId, candidate)).toOption.get.outcome shouldBe GitExecutionOutcome.Succeeded
+        Then("the commit and index contain the repair and independent work remains")
+        val entry = GitExecutionSpecSupport.execute(fixture, GitOperation.TreeEntries(candidate.tree, selectionId))
+          .toOption.get.valueC.toOption.get.find(_.path == path).get.entry.get
+        GitExecutionSpecSupport.execute(fixture, GitOperation.BlobContent(entry.blob)).toOption.get.valueC.toOption.get.text shouldBe Some(repaired)
+        GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption shouldBe Some(candidate.projectedIndex)
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe repaired
+        Files.readString(fixture.checkout.resolve("unrelated.txt")) shouldBe "independent staged\n"
+        Files.readString(fixture.checkout.resolve("ongoing.txt")) shouldBe "independent unstaged\n"
+        val remaining = GitExecutionSpecSupport.execute(fixture, GitOperation.Status).toOption.get.valueC.toOption.get
+        remaining.map(_.path.value).toSet shouldBe Set("unrelated.txt", "ongoing.txt")
+        remaining.find(_.path.value == "unrelated.txt").get.indexCode shouldBe 'M'
+        remaining.find(_.path.value == "ongoing.txt").get.worktreeCode shouldBe 'M'
       } finally { driver.close(); fixture.close() }
     }
   }

@@ -6,7 +6,7 @@ import org.goldenport.cncf.context.ExecutionContext
 /*
  * @since   Oct. 24, 2026
  *  version Oct. 29, 2026
- * @version Nov.  6, 2026
+ * @version Nov. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object GitSelectedCommitExecution {
@@ -198,7 +198,12 @@ private[cncf] object GitPurposeCandidateExecution {
         Consequence.unit else Consequence.stateConflict("Purpose candidate mode changes require explicit semantic resolution"))
       before <- _content_c(execution, run, original)
       indexed <- _content_c(execution, run, staged)
-      remainder <- _project_c(execution, run, directory, before, indexed, change.content,
+      baseline <- request.baselineTree match {
+        case None => _success(None)
+        case Some(tree) => _entry_c(execution, run, tree, change.path).flatMap(_content_c(execution, run, _))
+      }
+      remainderbase = if (baseline.nonEmpty && baseline == indexed && baseline == worktree) baseline else before
+      remainder <- _project_c(execution, run, directory, remainderbase, indexed, change.content,
         wholeselected = change.content.exists(_.nonEmpty) && change.content == change.expectedWorktree)
       mode = original.orElse(staged).fold("100644")(_.mode)
     } yield values :+ Projection(change.path, mode, change.content, remainder) }

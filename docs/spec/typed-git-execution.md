@@ -197,6 +197,14 @@ independent staged changes. An optional baseline tree allows a selected repair
 to be projected onto the existing worktree while retaining its other content.
 Candidate values and object IDs express observations, not human acceptance.
 
+For a repair, when the existing baseline text exactly matches both the actual
+staged text and the captured worktree text, staged-remainder projection uses
+that baseline as its merge base. The repaired selection then replaces that
+prior candidate in the projected index. Otherwise projection retains the
+parent as its base, including for independent staged overlap and partial staging.
+[GitExecutionSpec E6](../../src/test/scala/org/goldenport/cncf/processexecution/GitExecutionSpec.scala)
+covers same-hunk repair and preservation of unrelated staged and unstaged work.
+
 For an added regular text file absent from the expected parent but present in
 the index, explicit selection of the complete current worktree text replaces
 the older staged version in both the candidate and projected index. This
