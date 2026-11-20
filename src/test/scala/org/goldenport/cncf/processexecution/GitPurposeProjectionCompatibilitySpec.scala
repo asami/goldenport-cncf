@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Nov.  4, 2026
- * @version Nov. 12, 2026
+ * @version Nov. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitPurposeProjectionCompatibilitySpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -172,6 +172,29 @@ final class GitPurposeProjectionCompatibilitySpec extends AnyWordSpec with Match
       val unapplymethod = GitPurposeChange.getClass.getMethod("unapply", classOf[GitPurposeChange])
       unapplymethod.getReturnType shouldBe classOf[GitPurposeChange]
       unapplymethod.invoke(GitPurposeChange, projected) shouldBe projected
+    }
+    "retain the request ABI and bind repair copies to their provenance" in {
+      Given("the legacy four-field request and its retained JVM signatures")
+      val id = GitExecutionSpecSupport.objectId
+      val change = GitPurposeChange(GitPath.parseC("selected.txt").toOption.get, Some("before\n"), Some("after\n"))
+      val args = Array(classOf[GitObjectId], classOf[GitObjectId], classOf[Vector[?]], classOf[Option[?]])
+      val ctor = classOf[GitPurposeRequest].getConstructor(args*)
+      val applymethod = GitPurposeRequest.getClass.getMethod("apply", args*)
+      val copymethod = classOf[GitPurposeRequest].getMethod("copy", args*)
+      When("legacy construction, extraction and a provenance-bearing copy are used")
+      val original = ctor.newInstance(id, id, Vector(change), None)
+      applymethod.invoke(GitPurposeRequest, id, id, Vector(change), None) shouldBe original
+      val GitPurposeRequest(parent, index, changes, baseline) = original
+      (parent, index, changes, baseline) shouldBe ((id, id, Vector(change), None))
+      val candidate = GitPurposeCandidate(original, id, id, id, "message", Some(id), Some(id))
+      val repair = GitPurposeRepairRequest(original, candidate)
+      val copied = copymethod.invoke(repair, id, id, Vector(change), None).asInstanceOf[GitPurposeRepairRequest]
+      Then("the legacy shape remains available and repair equality and copying retain provenance")
+      copied.priorCandidate shouldBe candidate
+      copied shouldBe repair
+      (original == repair) shouldBe false
+      (repair == original) shouldBe false
+      GitPurposeRepairRequest(original, candidate.copy(message = "other")) should not be repair
     }
   }
 

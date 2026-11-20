@@ -232,6 +232,20 @@ parent as its base, including for independent staged overlap and partial staging
 [GitExecutionSpec E6](../../src/test/scala/org/goldenport/cncf/processexecution/GitExecutionSpec.scala)
 covers same-hunk repair and preservation of unrelated staged and unstaged work.
 
+For successive repairs, the caller supplies `GitPurposeRepairRequest(request,
+priorCandidate)` to the same purpose operations. The request's baseline is the
+prior candidate tree; its parent, original index, prior paths and captured
+worktree must match the prior request. The complete prior candidate, including
+any earlier repair request, must be retained and rehydrated by the consumer.
+Preparation reconstructs and verifies that chain and its native commit and
+projected trees against the current checkout. For prior paths it projects the
+new selection against the prior candidate text and its verified projected index
+and worktree; independent staged and worktree changes remain subject to normal
+merge conflict checks. New paths and plain historic requests use the original
+projection rules. Explicit worktree projection does not bypass staged conflicts.
+Preparation and materialization do not install changes; normal commit repeats
+verification before installing the projected index and worktree.
+
 For an added regular text file absent from the expected parent but present in
 the index, explicit selection of the complete current worktree text replaces
 the older staged version in both the candidate and projected index. This

@@ -11,7 +11,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 28, 2026
- * @version Nov. 20, 2026
+ * @version Nov. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 /** Per-call selected data within an already granted program's fixed scope.
@@ -259,7 +259,33 @@ object GitPurposeChange {
   def apply(path: GitPath, expectedWorktree: Option[String], content: Option[String]): GitPurposeChange =
     new GitPurposeChange(path, expectedWorktree, content, None)
 }
-final case class GitPurposeRequest(parent: GitObjectId, index: GitObjectId, changes: Vector[GitPurposeChange], baselineTree: Option[GitObjectId] = None)
+sealed case class GitPurposeRequest(parent: GitObjectId, index: GitObjectId, changes: Vector[GitPurposeChange], baselineTree: Option[GitObjectId] = None) {
+  override def canEqual(other: Any): Boolean = other != null && other.getClass == classOf[GitPurposeRequest]
+  override def equals(other: Any): Boolean = other match {
+    case that: GitPurposeRequest => that.canEqual(this) && canEqual(that) && parent == that.parent &&
+      index == that.index && changes == that.changes && baselineTree == that.baselineTree
+    case _ => false
+  }
+  override def hashCode: Int = scala.util.hashing.MurmurHash3.productHash(this)
+}
+
+final class GitPurposeRepairRequest private (request: GitPurposeRequest, val priorCandidate: GitPurposeCandidate)
+  extends GitPurposeRequest(request.parent, request.index, request.changes, request.baselineTree) {
+  override def copy(parent: GitObjectId, index: GitObjectId, changes: Vector[GitPurposeChange],
+    baselineTree: Option[GitObjectId]): GitPurposeRepairRequest =
+    GitPurposeRepairRequest(GitPurposeRequest(parent, index, changes, baselineTree), priorCandidate)
+  override def canEqual(other: Any): Boolean = other.isInstanceOf[GitPurposeRepairRequest]
+  override def equals(other: Any): Boolean = other match {
+    case that: GitPurposeRepairRequest => parent == that.parent && index == that.index && changes == that.changes &&
+      baselineTree == that.baselineTree && priorCandidate == that.priorCandidate
+    case _ => false
+  }
+  override def hashCode: Int = 31 * super.hashCode + priorCandidate.##
+}
+object GitPurposeRepairRequest {
+  def apply(request: GitPurposeRequest, priorCandidate: GitPurposeCandidate): GitPurposeRepairRequest =
+    new GitPurposeRepairRequest(request, priorCandidate)
+}
 final case class GitPurposeCandidate(request: GitPurposeRequest, commit: GitObjectId, tree: GitObjectId,
   projectedIndex: GitObjectId, message: String, worktreeBefore: Option[GitObjectId] = None, worktreeAfter: Option[GitObjectId] = None)
 

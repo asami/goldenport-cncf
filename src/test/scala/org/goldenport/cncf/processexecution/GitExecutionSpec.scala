@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 28, 2026
- * @version Nov. 20, 2026
+ * @version Nov. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -368,6 +368,99 @@ final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThe
         val remaining = GitExecutionSpecSupport.execute(fixture, GitOperation.PendingDiff(candidate.commit)).toOption.get.valueC.toOption.get.text
         remaining should include("+staged A")
         remaining should not include("+broken B")
+      } finally { driver.close(); fixture.close() }
+    }
+
+    "retain the prior projection through a second repair of the first purpose" in {
+      Given("two fully staged paths, a first repair and an unrelated staged file")
+      val driver = new LocalProcessExecutionDriver()
+      val fixture = create(driver = Some(driver), selectedScopes = Vector("selected.txt", "test.txt"))
+      try {
+        initialize(fixture, Map("selected.txt" -> "old source\n", "test.txt" -> "old test\n", "other.txt" -> "base\n"))
+        Files.writeString(fixture.checkout.resolve("selected.txt"), "staged source\n")
+        Files.writeString(fixture.checkout.resolve("test.txt"), "staged test\n")
+        Files.writeString(fixture.checkout.resolve("other.txt"), "independent\n")
+        setup(fixture.checkout, "add", "--", "selected.txt", "test.txt", "other.txt")
+        val parent = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        val index = GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption.get
+        val source = GitPath.parseC("selected.txt").toOption.get
+        val test = GitPath.parseC("test.txt").toOption.get
+        val first = Vector(GitPurposeChange(source, Some("staged source\n"), Some("staged source\n")),
+          GitPurposeChange(test, Some("staged test\n"), Some("staged test\n")))
+        def _prepare_(request: GitPurposeRequest) = GitExecutionSpecSupport.execute(fixture,
+          GitOperation.PreparePurposeCandidate(selectionId, request))
+        val initial = _prepare_(GitPurposeRequest(parent, index, first)).toOption.get.valueC.toOption.get
+        val corrected = Vector(first(0).copy(content = Some("fixed source\n")), first(1).copy(content = Some("fixed test\n")))
+        val prior = _prepare_(GitPurposeRequest(parent, index, corrected, Some(initial.tree))).toOption.get.valueC.toOption.get
+        val latest = corrected.updated(1, corrected(1).copy(content = Some("fixed test again\n")))
+        val plain = GitPurposeRequest(parent, index, latest, Some(prior.tree))
+        val before = Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector
+        When("the same source is prepared through the retained prior candidate")
+        _prepare_(plain).toOption.get.outcome should not be GitExecutionOutcome.Succeeded
+        val request = GitPurposeRepairRequest(plain, prior)
+        val candidate = _prepare_(request).toOption.get.valueC.toOption.get
+        val third = latest.updated(1, latest(1).copy(content = Some("fixed test third\n")))
+        val nested = GitPurposeRepairRequest(GitPurposeRequest(parent, index, third, Some(candidate.tree)), candidate)
+        _prepare_(nested).toOption.get.outcome shouldBe GitExecutionOutcome.Succeeded
+        Then("preparation leaves the live checkout intact and rejects misbound projected facts")
+        Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector shouldBe before
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe "staged source\n"
+        Files.readString(fixture.checkout.resolve("test.txt")) shouldBe "staged test\n"
+        GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption shouldBe Some(parent)
+        _prepare_(GitPurposeRepairRequest(plain, prior.copy(projectedIndex = index))).isSuccess shouldBe false
+        val wrong = plain.copy(baselineTree = Some(initial.tree))
+        _prepare_(GitPurposeRepairRequest(wrong, prior)).isSuccess shouldBe false
+        When("the normal typed commit installs the verified projection")
+        GitExecutionSpecSupport.execute(fixture, GitOperation.CommitPurposeCandidate(selectionId, candidate)).toOption.get.outcome shouldBe GitExecutionOutcome.Succeeded
+        Then("both repairs are installed and independent staging survives")
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe "fixed source\n"
+        Files.readString(fixture.checkout.resolve("test.txt")) shouldBe "fixed test again\n"
+        val remaining = GitExecutionSpecSupport.execute(fixture, GitOperation.PendingDiff(candidate.commit)).toOption.get.valueC.toOption.get.text
+        remaining should include("+independent")
+        remaining should not include("staged source")
+        remaining should not include("staged test")
+      } finally { driver.close(); fixture.close() }
+    }
+
+    "preserve disjoint same-path remainder and refuse a subsequent overlapping repair or source drift" in {
+      Given("a selected purpose with separate staged and worktree changes")
+      val driver = new LocalProcessExecutionDriver()
+      val fixture = create(driver = Some(driver))
+      val original = "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve\nthirteen\n"
+      val staged = original.replace("one\n", "staged\n")
+      val selected = original.replace("seven\n", "broken\n")
+      val captured = staged.replace("seven\n", "broken\n").replace("thirteen\n", "worktree\n")
+      try {
+        initialize(fixture, Map("selected.txt" -> original))
+        Files.writeString(fixture.checkout.resolve("selected.txt"), staged)
+        setup(fixture.checkout, "add", "--", "selected.txt")
+        Files.writeString(fixture.checkout.resolve("selected.txt"), captured)
+        val parent = GitExecutionSpecSupport.execute(fixture, GitOperation.Head).toOption.get.valueC.toOption.get
+        val index = GitExecutionSpecSupport.execute(fixture, GitOperation.IndexTree).toOption.get.valueC.toOption.get
+        val path = GitPath.parseC("selected.txt").toOption.get
+        def _request_(content: String, baseline: Option[GitObjectId] = None) =
+          GitPurposeRequest(parent, index, Vector(GitPurposeChange(path, Some(captured), Some(content))), baseline)
+        def _prepare_(value: GitPurposeRequest) = GitExecutionSpecSupport.execute(fixture,
+          GitOperation.PreparePurposeCandidate(selectionId, value))
+        val initial = _prepare_(_request_(selected)).toOption.get.valueC.toOption.get
+        val first = selected.replace("broken", "first")
+        val prior = _prepare_(_request_(first, Some(initial.tree))).toOption.get.valueC.toOption.get
+        val second = first.replace("first", "second")
+        val valid = GitPurposeRepairRequest(_request_(second, Some(prior.tree)), prior)
+        val candidate = _prepare_(valid).toOption.get.valueC.toOption.get
+        When("a repair also changes the independently staged hunk")
+        val overlap = GitPurposeRepairRequest(_request_(second.replace("one\n", "overlap\n"), Some(prior.tree)), prior)
+        _prepare_(overlap).toOption.get.outcome should not be GitExecutionOutcome.Succeeded
+        When("the captured source drifts")
+        Files.writeString(fixture.checkout.resolve("selected.txt"), captured + "drift\n")
+        _prepare_(valid).isSuccess shouldBe false
+        Files.writeString(fixture.checkout.resolve("selected.txt"), captured)
+        GitExecutionSpecSupport.execute(fixture, GitOperation.CommitPurposeCandidate(selectionId, candidate)).toOption.get.outcome shouldBe GitExecutionOutcome.Succeeded
+        Then("the committed correction and both independent deltas survive")
+        Files.readString(fixture.checkout.resolve("selected.txt")) shouldBe captured.replace("broken", "second")
+        val remaining = GitExecutionSpecSupport.execute(fixture, GitOperation.PendingDiff(candidate.commit)).toOption.get.valueC.toOption.get.text
+        remaining should include("+staged")
+        remaining should not include("+worktree")
       } finally { driver.close(); fixture.close() }
     }
 

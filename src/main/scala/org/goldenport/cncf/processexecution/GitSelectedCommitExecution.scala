@@ -6,7 +6,7 @@ import org.goldenport.cncf.context.ExecutionContext
 /*
  * @since   Oct. 24, 2026
  *  version Oct. 29, 2026
- * @version Nov. 20, 2026
+ * @version Nov. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object GitSelectedCommitExecution {
@@ -196,6 +196,19 @@ private[cncf] object GitPurposeCandidateExecution {
     _ <- _admit_c(if (head == request.parent && index == request.index &&
         branch == execution.definition._git_metadata.get.localBranch.value + "\n") Consequence.unit
       else Consequence.stateConflict("Purpose candidate expected HEAD/index/branch differs from its actual source"))
+    previouscandidate <- request match {
+      case repair: GitPurposeRepairRequest => for {
+        candidate <- _admit_c(if (repair.priorCandidate != null && repair.priorCandidate.request != null)
+          Consequence.success(repair.priorCandidate) else GitProgramDefinition.invalidC)
+        _ <- _admit_c(_validate_c(execution, candidate.request))
+        _ <- _admit_c(if (request.baselineTree.contains(candidate.tree) && candidate.request.parent == request.parent &&
+            candidate.request.index == request.index && candidate.request.changes.forall(old =>
+              request.changes.exists(current => current.path == old.path && current.expectedWorktree == old.expectedWorktree)))
+          Consequence.unit else Consequence.stateConflict("Purpose repair prior candidate is not bound to the current source"))
+        _ <- _candidate_c(execution, run, root, directory, candidate)
+      } yield Some(candidate)
+      case _ => _success(None)
+    }
     projections <- request.changes.foldLeft(_success(Vector.empty[Projection])) { (prior, change) => for {
       values <- prior
       worktree <- _admit_c(_worktree_c(root, change.path, execution.effectiveLimits.workAreaBytes.get / 8))
@@ -211,9 +224,17 @@ private[cncf] object GitPurposeCandidateExecution {
         case None => _success(None)
         case Some(tree) => _entry_c(execution, run, tree, change.path).flatMap(_content_c(execution, run, _))
       }
-      remainderbase = if (baseline.nonEmpty && baseline == indexed && baseline == worktree) baseline else before
-      remainder <- _project_c(execution, run, directory, remainderbase, indexed, change.content,
-        wholeselected = change.content.exists(_.nonEmpty) && change.content == change.expectedWorktree)
+      previous = previouscandidate.filter(_.request.changes.exists(_.path == change.path))
+      remainder <- previous match {
+        case Some(candidate) => for {
+          projected <- _entry_c(execution, run, candidate.projectedIndex, change.path).flatMap(_content_c(execution, run, _))
+          result <- _project_c(execution, run, directory, baseline, projected, change.content)
+        } yield result
+        case None =>
+          val remainderbase = if (baseline.nonEmpty && baseline == indexed && baseline == worktree) baseline else before
+          _project_c(execution, run, directory, remainderbase, indexed, change.content,
+            wholeselected = change.content.exists(_.nonEmpty) && change.content == change.expectedWorktree)
+      }
       mode = original.orElse(staged).fold("100644")(_.mode)
     } yield values :+ Projection(change.path, mode, change.content, remainder) }
     tree <- _tree_c(execution, run, directory.resolve("candidate-index"), request.parent, projections, false)
@@ -228,7 +249,16 @@ private[cncf] object GitPurposeCandidateExecution {
       after <- change.worktreeProjection match {
         case Some(projection) => _success(projection.content)
         case None if request.baselineTree.isEmpty => _success(change.expectedWorktree)
-        case None => _project_c(execution, run, directory, baseline, change.expectedWorktree, change.content)
+        case None => previouscandidate.filter(_.request.changes.exists(_.path == change.path)) match {
+          case Some(candidate) => candidate.worktreeAfter match {
+            case Some(tree) => for {
+              projected <- _entry_c(execution, run, tree, change.path).flatMap(_content_c(execution, run, _))
+              result <- _project_c(execution, run, directory, baseline, projected, change.content)
+            } yield result
+            case None => _admit_c(GitProgramDefinition.invalidC)
+          }
+          case None => _project_c(execution, run, directory, baseline, change.expectedWorktree, change.content)
+        }
       }
     } yield values :+ Projection(change.path, original.fold("100644")(_.mode), change.expectedWorktree, after) }
     beforeworktree <- _tree_c(execution, run, directory.resolve("worktree-before-index"), request.parent, working, false)
