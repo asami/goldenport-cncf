@@ -15,7 +15,16 @@ private[cncf] object GitSelectedCommitExecution {
     GitExecutionAdmission.resolveC(context, target, operation).flatMap { execution =>
       if (GitPurposeCandidateExecution.isPurpose(operation.kind))
         GitPurposeCandidateExecution.executeC(context, target, operation, execution, run)
-      else if (operation.kind != GitOperationKind.CommitSelected)
+      else if (operation.kind == GitOperationKind.CheckIgnore) {
+        val request = execution.request.copy(input = ProcessExecutionInput.Bytes(
+          GitProgramDefinition.ignoreInput(execution.definition._git_metadata.get)))
+        val selected = execution.copy(request = request)
+        for {
+          _ <- request.validateC
+          _ <- selected.definition.validateRequestC(request, selected.effectiveLimits)
+          result <- run(selected)
+        } yield GitExecutionAdmission.decode(target, operation, selected, result)
+      } else if (operation.kind != GitOperationKind.CommitSelected)
         run(execution).map(GitExecutionAdmission.decode(target, operation, execution, _))
       else for {
         probe <- ProcessProgramDefinition.gitSelectionProbeC(execution.definition)

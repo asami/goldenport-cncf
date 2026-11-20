@@ -11,7 +11,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 28, 2026
- * @version Nov. 17, 2026
+ * @version Nov. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 /** Per-call selected data within an already granted program's fixed scope.
@@ -120,6 +120,7 @@ enum GitOperationKind(val wireName: String) {
   case MaterializePurposeCandidate extends GitOperationKind("materialize-purpose-candidate")
   case CommitPurposeCandidate extends GitOperationKind("commit-purpose-candidate")
   case Worktrees extends GitOperationKind("worktrees")
+  case CheckIgnore extends GitOperationKind("check-ignore")
 
   private[cncf] def permission: WorkspacePermission = this match {
     case StageFullState | IndexTree | Fetch | FastForward | PendingMerge | CommitPending | Push |
@@ -135,7 +136,7 @@ enum GitOperationKind(val wireName: String) {
   }
 
   private[cncf] def selected: Boolean = this match {
-    case StageSelected | StageSelectedAll | CommitSelected | CheckSelectedIndex | SelectedIndexChanges | TreeEntries |
+    case StageSelected | StageSelectedAll | CommitSelected | CheckSelectedIndex | SelectedIndexChanges | TreeEntries | CheckIgnore |
         PreparePurposeCandidate | MaterializePurposeCandidate | CommitPurposeCandidate => true
     case _ => false
   }
@@ -181,6 +182,7 @@ enum GitOperation[A] {
   case MaterializePurposeCandidate(selectionId: GitSelectionId, candidate: GitPurposeCandidate, workspace: WorkspaceId) extends GitOperation[Unit]
   case CommitPurposeCandidate(selectionId: GitSelectionId, candidate: GitPurposeCandidate) extends GitOperation[Unit]
   case Worktrees extends GitOperation[Vector[GitWorktree]]
+  case CheckIgnore(selectionId: GitSelectionId) extends GitOperation[Vector[GitIgnoreObservation]]
 
   def kind: GitOperationKind = this match {
     case Branch => GitOperationKind.Branch
@@ -218,6 +220,7 @@ enum GitOperation[A] {
     case SelectedIndexChanges(_, _) => GitOperationKind.SelectedIndexChanges
     case TreeChanges(_, _) => GitOperationKind.TreeChanges
     case TreeEntries(_, _) => GitOperationKind.TreeEntries
+    case CheckIgnore(_) => GitOperationKind.CheckIgnore
     case PreparePurposeCandidate(_, _) => GitOperationKind.PreparePurposeCandidate
     case MaterializePurposeCandidate(_, _, _) => GitOperationKind.MaterializePurposeCandidate
     case CommitPurposeCandidate(_, _) => GitOperationKind.CommitPurposeCandidate
@@ -230,6 +233,7 @@ enum GitOperation[A] {
     case CheckSelectedIndex(id, _) => Some(id)
     case SelectedIndexChanges(id, _) => Some(id)
     case TreeEntries(_, id) => Some(id)
+    case CheckIgnore(id) => Some(id)
     case PreparePurposeCandidate(id, _) => Some(id)
     case MaterializePurposeCandidate(id, _, _) => Some(id)
     case CommitPurposeCandidate(id, _) => Some(id)
@@ -263,6 +267,13 @@ final case class GitRemoteTip(branch: GitBranchName, tip: GitObjectId)
 final case class GitHistoryCounts(localAhead: Long, remoteAhead: Long)
 final case class GitRegularTreeEntry(mode: String, blob: GitObjectId)
 final case class GitSelectedTreeEntry(path: GitPath, entry: Option[GitRegularTreeEntry])
+final case class GitIgnoreRule(source: String, line: Int, pattern: String)
+enum GitIgnoreDisposition {
+  case NoRule
+  case IncludedByException(rule: GitIgnoreRule)
+  case Excluded(rule: GitIgnoreRule)
+}
+final case class GitIgnoreObservation(path: GitPath, disposition: GitIgnoreDisposition)
 final case class GitCommitMetadata(commit: GitObjectId, tree: GitObjectId, parents: Vector[GitObjectId])
 final case class GitStatusEntry(indexCode: Char, worktreeCode: Char, path: GitPath, renamedFrom: Option[GitPath]) {
   def unmerged: Boolean = GitOutputParser.unmergedPairs.contains(s"$indexCode$worktreeCode")
@@ -556,7 +567,7 @@ private[cncf] object GitProgramDefinition {
     _ <- selection.fold(Consequence.unit)(x => if (x == null) invalidC else GitSelectionId.parseC(x.value).map(_ => ()))
     _ <- path.fold(Consequence.unit)(x => if (x == null) invalidC else GitPath.parseC(x.value).map(_ => ()))
     _ <- if (paths != null && (kind match {
-      case GitOperationKind.CommitSelected | GitOperationKind.CheckSelectedIndex | GitOperationKind.SelectedIndexChanges | GitOperationKind.TreeEntries |
+      case GitOperationKind.CommitSelected | GitOperationKind.CheckSelectedIndex | GitOperationKind.SelectedIndexChanges | GitOperationKind.TreeEntries | GitOperationKind.CheckIgnore |
           GitOperationKind.PreparePurposeCandidate | GitOperationKind.MaterializePurposeCandidate | GitOperationKind.CommitPurposeCandidate =>
         paths.nonEmpty && paths.size <= 256 && paths.distinct.size == paths.size &&
           paths.forall(x => x != null && GitPath.parseC(x.value).isSuccess)
@@ -626,11 +637,15 @@ private[cncf] object GitProgramDefinition {
         Vector(oid, Literal("--")) ++ metadata.selectedpaths.map(x => Literal(x.value))
       case GitOperationKind.TreeChanges => _l_("diff-tree", "--no-commit-id", "--no-ext-diff", "--no-textconv", "--raw", "--no-abbrev", "--no-renames", "-r", "-z") ++
         Vector(oid, oid, Literal("--"))
+      case GitOperationKind.CheckIgnore => _l_("check-ignore", "--no-index", "--verbose", "--non-matching", "-z", "--stdin")
       case GitOperationKind.TreeEntries => _l_("--literal-pathspecs", "ls-tree", "--full-tree", "-z") ++
         Vector(oid, Literal("--")) ++ metadata.selectedpaths.map(x => Literal(x.value))
     }
     prefix.map(Literal.apply) ++ command
   }
+
+  private[processexecution] def ignoreInput(metadata: GitProgramMetadata): Vector[Byte] =
+    metadata.selectedPaths.flatMap(path => ("./" + path.value + "\u0000").getBytes(StandardCharsets.UTF_8).toVector)
 
   private[processexecution] def physicalCommitArguments(metadata: GitProgramMetadata,
     paths: Vector[GitPath]): Vector[String] =
@@ -679,6 +694,7 @@ private[cncf] object GitExecutionAdmission {
     admission <- context.cncfCore.scope.processExecutionAdmissionOption.map(Consequence.success).getOrElse(
       Consequence.serviceUnavailable("Process Execution admission is not configured"))
     execution <- admission.admitGitForScopeC(context.cncfCore.scope, binding, operation, target.selection)
+    _ <- if (operation.kind == GitOperationKind.CheckIgnore && target.selection.nonEmpty) GitProgramDefinition.invalidC else Consequence.unit
     bounded <- if (operation.kind == GitOperationKind.PendingDiff)
       GitDiffParameters.resolveC(context).map { bytes =>
         execution.copy(effectiveLimits = execution.effectiveLimits.copy(
@@ -707,6 +723,11 @@ private[cncf] object GitExecutionAdmission {
               result.stderr.truncated || result.stderr.byteCount != result.stderr.content.size.toLong))
           GitExecutionOutcome.InvalidOutput(if (operation.kind == GitOperationKind.PendingDiff)
             "Incomplete Git diff capture" else "Incomplete Git tree-entry capture") -> None
+        else if (operation.kind == GitOperationKind.CheckIgnore && (code == 0 || code == 1))
+          GitOutputParser.parseIgnore(result.stdout, result.stderr, metadata.selectedPaths, code) match {
+            case Right(value) => GitExecutionOutcome.Succeeded -> Some(value.asInstanceOf[A])
+            case Left(reason) => GitExecutionOutcome.InvalidOutput(reason) -> None
+          }
         else if ((operation.kind == GitOperationKind.CheckPendingIndex || operation.kind == GitOperationKind.CheckSelectedIndex) && (code == 0 || code == 2))
           GitOutputParser.parseIndexCheck(result.stdout, result.stderr, code) match {
             case Right(value) => GitExecutionOutcome.Succeeded -> Some(value.asInstanceOf[A])
@@ -752,6 +773,29 @@ private[cncf] object GitOutputParser {
       }
     result.map(_.asInstanceOf[A])
   }
+
+  def parseIgnore(stdout: ProcessExecutionCapture, stderr: ProcessExecutionCapture,
+    paths: Vector[GitPath], exitCode: Int): Either[String, Vector[GitIgnoreObservation]] = for {
+    _ <- Either.cond(!stdout.truncated && stdout.byteCount == stdout.content.size.toLong &&
+      !stderr.truncated && stderr.byteCount == stderr.content.size.toLong && stderr.content.isEmpty,
+      (), "Incomplete or unexpected Git ignore capture")
+    text <- utf8(stdout.content).toRight("Invalid UTF-8 Git ignore output")
+    fields <- _nul_fields(text)
+    _ <- Either.cond(fields.size == paths.size * 4, (), "Invalid Git ignore record count")
+    rows <- _sequence(fields.grouped(4).toVector.zip(paths).map { (row, path) =>
+      for {
+        _ <- Either.cond(row(3) == "./" + path.value, (), "Unexpected Git ignore path")
+        disposition <- if (row(0).isEmpty && row(1).isEmpty && row(2).isEmpty)
+          Right(GitIgnoreDisposition.NoRule)
+        else for {
+          _ <- Either.cond(row(0).nonEmpty && row(2).nonEmpty && row(1).matches("[1-9][0-9]*"), (), "Invalid Git ignore rule")
+          line <- scala.util.Try(row(1).toInt).toOption.toRight("Invalid Git ignore line")
+          rule = GitIgnoreRule(row(0), line, row(2))
+        } yield if (row(2).startsWith("!")) GitIgnoreDisposition.IncludedByException(rule) else GitIgnoreDisposition.Excluded(rule)
+      } yield GitIgnoreObservation(path, disposition)
+    })
+    _ <- Either.cond((exitCode == 1) == rows.forall(_.disposition == GitIgnoreDisposition.NoRule), (), "Inconsistent Git ignore exit")
+  } yield rows
 
   def parseIndexCheck(stdout: ProcessExecutionCapture, stderr: ProcessExecutionCapture,
     exitCode: Int): Either[String, GitIndexCheck] = for {

@@ -1,5 +1,32 @@
 # Typed Git Execution
 
+## Selected ignore observations
+
+`GitOperation.CheckIgnore(selectionId)` and `git_check_ignore(target, selectionId)`
+observe the exact ordered `selectedPaths` in a dedicated `check-ignore` Git
+program for the target workspace. The host grants that program's capability
+and read-only workspace access. Callers cannot supply paths or input. The
+repository-family declaration does not grant this operation.
+
+For example, a candidate workspace's `gitPrograms` entry uses `operation`:
+`"check-ignore"`, `capability`: `"git-check-ignore"`, `identity`:
+`"git-check-ignore"`, `selectionId`: `"cozy-lint-config-ignore"`,
+`selectedPaths`: `[".scalafix.conf"]`, and `selectedPath`, `commitIdentity`,
+and `commitMessage` set to `null`. Supply the ordinary absolute Git executable,
+branch and endpoint fields, finite stdin/stdout/stderr and deadline limits and minimal environment; grant that
+capability and read-only workspace access to the caller component.
+
+Each `GitIgnoreObservation` carries its selected `GitPath` and either `NoRule`,
+`IncludedByException(rule)`, or `Excluded(rule)`. A `GitIgnoreRule` preserves
+the literal source text, positive line and pattern reported by Git; the source
+is diagnostic data, not authority to open a file. Git runs with fixed
+`check-ignore --no-index --verbose --non-matching -z --stdin` arguments and
+host-derived NUL-delimited paths prefixed by `./`. Complete records are
+correlated to every selected path in order. Exit 1 is valid only when every
+record has no rule; exit 0 requires a matching rule. Incomplete capture,
+unconfirmed termination, failed exit, malformed output or unexpected paths
+cannot produce a typed value.
+
 ## Explicit selected committed-tree entries
 
 `GitOperation.TreeEntries(tree, selectionId)` is a read-only operation returning
@@ -473,7 +500,7 @@ endpoint, commitIdentity, selectionId, selectedPath, commitMessage, limits
 and environment. commitIdentity is null or exactly {name,email}, required
 only for PendingMerge, CommitPending, CreateCheckpoint, CommitSelected and the
 three purpose operations.
-Exactly CommitSelected, CheckSelectedIndex, SelectedIndexChanges, TreeEntries,
+Exactly CommitSelected, CheckSelectedIndex, SelectedIndexChanges, TreeEntries, CheckIgnore,
 PreparePurposeCandidate, MaterializePurposeCandidate and CommitPurposeCandidate also
 require selectedPaths: a nonnull array of 1..256 unique valid literal GitPaths.
 The operation is decoded before selecting its strict allowed and required
@@ -494,7 +521,7 @@ capabilities, workspace/kind/selection keys, owners or grants fail.
 Each process grant requires corresponding same-owner workspace permission.
 Workspace permission alone creates no process grant. Per workspace, at most
 128 StageSelected, 256 StageSelectedAll, 64 CommitSelected,
-64 CheckSelectedIndex, 64 SelectedIndexChanges, 64 TreeEntries and 64 of each
+64 CheckSelectedIndex, 64 SelectedIndexChanges, 64 TreeEntries, 64 CheckIgnore and 64 of each
 purpose operation declarations
 are admitted, using the existing conflict-path/goal-path/goal-step bounds.
 A selection token carries no application-specific prefix or new family field.

@@ -643,6 +643,74 @@ final class GitExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThe
       } finally { driver.close(); fixture.close() }
     }
 
+    "observe actual ignore rules for tracked literal filenames without modifying the index" in {
+      Given("tracked literal paths and a read-only selected Git operation")
+      val driver = new LocalProcessExecutionDriver()
+      val names = Vector(".scalafix.conf", ":literal")
+      val fixture = create(driver = Some(driver), permission = WorkspacePermission.ReadOnly, selectedScopes = names)
+      try {
+        initialize(fixture, names.map(_ -> "tracked\n").toMap)
+        val index = Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector
+        When("the same selected paths are checked with no rule, an exclusion, and an exception")
+        val none = GitExecutionSpecSupport.execute(fixture, GitOperation.CheckIgnore(selectionId)).toOption.get
+        Files.writeString(fixture.checkout.resolve(".gitignore"), ".*\n")
+        val excluded = GitExecutionSpecSupport.execute(fixture, GitOperation.CheckIgnore(selectionId)).toOption.get
+        Files.writeString(fixture.checkout.resolve(".gitignore"), ".*\n!/.scalafix.conf\n")
+        val included = GitExecutionSpecSupport.execute(fixture, GitOperation.CheckIgnore(selectionId)).toOption.get
+        Then("the result preserves the exact ordered paths and reported rule while the index remains unchanged")
+        none.valueC.toOption.get.map(_.disposition) shouldBe Vector.fill(2)(GitIgnoreDisposition.NoRule)
+        excluded.valueC.toOption.get.head.disposition shouldBe GitIgnoreDisposition.Excluded(GitIgnoreRule(".gitignore", 1, ".*"))
+        included.valueC.toOption.get.head.disposition shouldBe GitIgnoreDisposition.IncludedByException(GitIgnoreRule(".gitignore", 2, "!/.scalafix.conf"))
+        included.valueC.toOption.get.map(_.path.value) shouldBe names
+        Files.readAllBytes(fixture.checkout.resolve(".git/index")).toVector shouldBe index
+      } finally { driver.close(); fixture.close() }
+    }
+
+    "deny ignore observations outside the exact declared selection and authority" in {
+      Given("the selected operation, an unknown selection, dynamic paths, and missing grants")
+      val fixture = create()
+      val denied = create(capabilityGranted = false)
+      val workspace = create(workspaceGranted = false)
+      try {
+        val unknown = GitOperation.CheckIgnore(GitSelectionId.parseC("unknown").toOption.get)
+        val dynamic = fixture.target.copy(selection = Some(GitSelectionParameters(selectionId,
+          Vector(GitPath.parseC("outside").toOption.get))))
+        When("admission is requested for each unauthorized intent")
+        val results = Vector(GitExecutionAdmission.resolveC(fixture.context, fixture.target, unknown),
+          GitExecutionAdmission.resolveC(fixture.context, dynamic, GitOperation.CheckIgnore(selectionId)),
+          GitExecutionAdmission.resolveC(denied.context, denied.target, GitOperation.CheckIgnore(selectionId)),
+          GitExecutionAdmission.resolveC(workspace.context, workspace.target, GitOperation.CheckIgnore(selectionId)))
+        Then("none is admitted and no process starts")
+        results.foreach(_.isFaillure shouldBe true)
+        fixture.profile.driver.executions shouldBe empty
+        denied.profile.driver.executions shouldBe empty
+        workspace.profile.driver.executions shouldBe empty
+      } finally { fixture.close(); denied.close(); workspace.close() }
+    }
+
+    "reject incomplete malformed failed and unconfirmed ignore observations" in {
+      Given("a host selected path and receipts that cannot support a positive observation")
+      val valid = result(".gitignore\u00001\u0000.*\u0000./selected.txt\u0000")
+      val receipts = Vector(result(".gitignore\u00001\u0000.*\u0000./foreign\u0000"),
+        result(".gitignore\u00001\u0000.*\u0000./selected.txt"),
+        result(".gitignore\u00001\u0000.*\u0000./selected.txt\u0000.gitignore\u00001\u0000.*\u0000./selected.txt\u0000"),
+        result(".gitignore\u00001\u0000.*\u0000./selected.txt\u0000", ProcessExecutionTermination.Exited(1)),
+        valid.copy(stdout = valid.stdout.copy(truncated = true)),
+        valid.copy(stderr = valid.stderr.copy(truncated = true)),
+        result("", ProcessExecutionTermination.Exited(128)),
+        result("", ProcessExecutionTermination.TerminationUnconfirmed))
+      val fixtures = receipts.map(raw => create(outputs = Map(GitOperationKind.CheckIgnore -> raw)))
+      try {
+        When("the typed UoW consumes each receipt")
+        val observed = fixtures.map(GitExecutionSpecSupport.execute(_, GitOperation.CheckIgnore(selectionId)).toOption.get)
+        Then("none exposes a typed value")
+        observed.foreach(_.value shouldBe None)
+        observed.take(6).foreach(_.outcome shouldBe a[GitExecutionOutcome.InvalidOutput])
+        observed(6).outcome shouldBe GitExecutionOutcome.Failed(128)
+        observed(7).outcome shouldBe GitExecutionOutcome.Incomplete(ProcessExecutionTermination.TerminationUnconfirmed)
+      } finally fixtures.foreach(_.close())
+    }
+
     "refuse real directories symlinks and gitlinks rather than projecting them as regular files or absence" in {
       Given("ordinary committed trees containing each unsupported entry kind at the exact selected path")
       Vector("directory", "symlink", "gitlink").foreach { kind =>
@@ -2063,7 +2131,7 @@ private[cncf] object GitExecutionSpecSupport {
     if (kind.selected) Some(selectionId) else None,
     if (kind == GitOperationKind.StageSelected || kind == GitOperationKind.StageSelectedAll) Some(GitPath.parseC("selected.txt").toOption.get) else None,
     if (kind == GitOperationKind.CommitSelected || GitPurposeCandidateExecution.isPurpose(kind)) Some("selected checkpoint") else None, limits, Map("PATH" -> "/usr/bin:/bin"),
-    if (Set(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges, GitOperationKind.TreeEntries, GitOperationKind.PreparePurposeCandidate, GitOperationKind.MaterializePurposeCandidate, GitOperationKind.CommitPurposeCandidate).contains(kind))
+    if (Set(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges, GitOperationKind.TreeEntries, GitOperationKind.CheckIgnore, GitOperationKind.PreparePurposeCandidate, GitOperationKind.MaterializePurposeCandidate, GitOperationKind.CommitPurposeCandidate).contains(kind))
       Vector(GitPath.parseC("selected.txt").toOption.get) else Vector.empty)
 
   def definition(binding: WorkspaceBinding, declaration: GitRuntimeDeclaration): Consequence[ProcessProgramDefinition] =
@@ -2233,6 +2301,7 @@ private[cncf] final class GitSpecBehavior(val behaviorCore: Behavior.Core) exten
     case GitOperation.SelectedIndexChanges(selectionid, parent) => git_selected_index_changes(target, selectionid, parent)
     case GitOperation.TreeChanges(before, after) => git_tree_changes(target, before, after)
     case GitOperation.TreeEntries(tree, selectionid) => git_tree_entries(target, tree, selectionid)
+    case GitOperation.CheckIgnore(selectionid) => git_check_ignore(target, selectionid)
     case GitOperation.PreparePurposeCandidate(id, request) => git_prepare_purpose_candidate(target, id, request)
     case GitOperation.MaterializePurposeCandidate(id, candidate, workspace) => git_materialize_purpose_candidate(target, id, candidate, workspace)
     case GitOperation.CommitPurposeCandidate(id, candidate) => git_commit_purpose_candidate(target, id, candidate)

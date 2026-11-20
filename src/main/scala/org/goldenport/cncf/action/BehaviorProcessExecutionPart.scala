@@ -135,7 +135,7 @@ import org.goldenport.cncf.config.{
 }
 import org.goldenport.cncf.processexecution.{
   GitTarget, GitOperation, GitPurposeRequest, GitPurposeCandidate, GitExecutionResult, GitObjectId, GitPath, GitBranchName, GitSelectionId,
-  GitWorktree, GitRemoteTip, GitHistoryCounts, GitCommitMetadata, GitStatusEntry, GitIndexEntry, GitBlobContent, GitDiff, GitIndexCheck, GitTreeChange, GitSelectedTreeEntry,
+  GitIgnoreObservation, GitWorktree, GitRemoteTip, GitHistoryCounts, GitCommitMetadata, GitStatusEntry, GitIndexEntry, GitBlobContent, GitDiff, GitIndexCheck, GitTreeChange, GitSelectedTreeEntry,
   ProcessExecutionAdmission,
   ProcessExecutionRequest,
   ProcessExecutionResult,
@@ -151,7 +151,7 @@ import org.goldenport.cncf.processexecution.{ValidationCheckExecutionAttempt, Va
 /*
  * @since   Sep. 28, 2026
  *  version Oct. 28, 2026
- * @version Nov. 17, 2026
+ * @version Nov. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.Core.Holder =>
@@ -269,6 +269,9 @@ trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.
 
   protected final def git_selected_index_changes(target: GitTarget, selectionId: GitSelectionId, parent: GitObjectId): ExecUowM[GitExecutionResult[Vector[GitTreeChange]]] =
     _git_exec(target, GitOperation.SelectedIndexChanges(selectionId, parent))
+
+  protected final def git_check_ignore(target: GitTarget, selectionId: GitSelectionId): ExecUowM[GitExecutionResult[Vector[GitIgnoreObservation]]] =
+    _git_exec(target, GitOperation.CheckIgnore(selectionId))
 
   protected final def git_tree_entries(target: GitTarget, tree: GitObjectId, selectionId: GitSelectionId): ExecUowM[GitExecutionResult[Vector[GitSelectedTreeEntry]]] =
     _git_exec(target, GitOperation.TreeEntries(tree, selectionId))

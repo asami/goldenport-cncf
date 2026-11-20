@@ -9,7 +9,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceExecutionAdmiss
  * @since   Jul. 17, 2026
  *  version Jul. 22, 2026
  *  version Oct. 28, 2026
- * @version Nov. 16, 2026
+ * @version Nov. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ProcessCapabilityId private (value: String) {
@@ -369,7 +369,10 @@ final class ProcessProgramDefinition private (
     } yield ()
 
   private[processexecution] def validateGitRequestC(request: ProcessExecutionRequest): Consequence[Unit] =
-    if (_git_purpose_input) request.input match {
+    if (_git_metadata.exists(_.kind == GitOperationKind.CheckIgnore) &&
+      request.input == ProcessExecutionInput.Bytes(GitProgramDefinition.ignoreInput(_git_metadata.get)))
+      GitExecutionAdmission.validateRequestC(request.copy(input = ProcessExecutionInput.Empty))
+    else if (_git_purpose_input) request.input match {
       case ProcessExecutionInput.Empty | ProcessExecutionInput.Bytes(_) =>
         GitExecutionAdmission.validateRequestC(request.copy(input = ProcessExecutionInput.Empty))
       case _ => GitProgramDefinition.invalidC

@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 28, 2026
- * @version Nov. 17, 2026
+ * @version Nov. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -321,7 +321,7 @@ final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
       val behavior = new GitSpecBehavior(Behavior.Core(fixture.context, None, None))
       val selected: Vector[GitOperation[?]] = Vector(GitOperation.CheckSelectedIndex(selectionId, objectId),
         GitOperation.SelectedIndexChanges(selectionId, objectId), GitOperation.TreeChanges(objectId, objectId),
-        GitOperation.TreeEntries(objectId, selectionId))
+        GitOperation.TreeEntries(objectId, selectionId), GitOperation.CheckIgnore(selectionId))
       val provider = new UnitOfWorkProgramStubProvider {
         def resultFor[A](ordinal: Int, operation: UnitOfWorkOp[A]): Consequence[A] = operation match {
           case UnitOfWorkOp.GitExec(target, GitOperation.CheckSelectedIndex(id, parent)) =>
@@ -336,6 +336,9 @@ final class GitExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
           case UnitOfWorkOp.GitExec(target, GitOperation.TreeEntries(tree, id)) =>
             Consequence.success(GitExecutionResult(target, GitOperation.TreeEntries(tree, id),
               GitExecutionOutcome.Succeeded, Some(Vector(GitSelectedTreeEntry(GitPath.parseC("selected.txt").toOption.get, None))), result()))
+          case UnitOfWorkOp.GitExec(target, GitOperation.CheckIgnore(id)) =>
+            Consequence.success(GitExecutionResult(target, GitOperation.CheckIgnore(id),
+              GitExecutionOutcome.Succeeded, Some(Vector.empty[GitIgnoreObservation]), result()))
           case _ => Consequence.notImplemented("unexpected selected Git recording operation")
         }
       }

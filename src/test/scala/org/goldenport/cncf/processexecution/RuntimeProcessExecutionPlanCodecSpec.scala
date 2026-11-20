@@ -19,7 +19,7 @@ import org.scalacheck.{Gen, Prop, Test}
 /*
  * @since   Oct.  7, 2026
  *  version Oct. 29, 2026
- * @version Nov. 19, 2026
+ * @version Nov. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -507,6 +507,41 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
             GitOperation.TreeEntries(GitExecutionSpecSupport.objectId, GitExecutionSpecSupport.selectionId)))
           admitted.effectiveArguments shouldBe GitProgramDefinition.prefix ++ Vector("--literal-pathspecs", "ls-tree",
             "--full-tree", "-z", GitExecutionSpecSupport.objectId.value, "--", "selected.txt")
+          GitExecutionAdmission.resolveC(context, fixture.target, GitOperation.Head).isFaillure shouldBe true
+          GitExecutionAdmission.resolveC(context, fixture.target,
+            GitOperation.StageSelectedAll(GitExecutionSpecSupport.selectionId)).isFaillure shouldBe true
+        }
+        fixture.profile.driver.executions shouldBe empty
+      } finally fixture.close()
+    }
+
+    "round-trip a sole read-only CheckIgnore declaration through V3 and V5 without granting repository-family access" in {
+      Given("an explicit finite selected-tree host declaration with no generic, SBT or repository-family grant")
+      val fixture = GitExecutionSpecSupport.create()
+      try {
+        val wires = Vector(_v3_root(fixture.checkout), _v5_root(fixture.checkout)).map { wire =>
+          val entry = wire.hcursor.get[Vector[Json]]("gitPrograms").toOption.get.find(
+            _.hcursor.get[String]("operation").toOption.contains("check-ignore")).get
+          val minimal = wire.mapObject(_.add("programs", Json.arr()).add("sbtPrograms", Json.arr())
+            .add("gitPrograms", Json.arr(entry)).add("grants", Json.arr(Json.obj(
+              "componentId" -> Json.fromString(_owner.name),
+              "capabilities" -> Json.arr(Json.fromString("git-check-ignore"))))))
+          val selected = if (wire.asObject.get.contains("gitRepositories"))
+            minimal.mapObject(_.add("gitRepositories", Json.arr())) else minimal
+          _changed_entry(selected, "workspaceGrants", _.mapObject(_.add("access", Json.fromString("read-only"))))
+        }
+        When("both strict host codecs install and restore that read-only selection")
+        val plans = wires.map(wire => _take(RuntimeProcessExecutionPlanCodec.decode(
+          _take(RuntimeProcessExecutionPlanCodec.encode(_take(_decode(wire)))))))
+        Then("only the explicit read operation resolves and its literal ordered selection remains host-owned")
+        plans.foreach { plan =>
+          plan.gitDeclarations.map(_.operation) shouldBe Vector(GitOperationKind.CheckIgnore)
+          plan.gitDeclarations.head.selectedPaths.map(_.value) shouldBe Vector("selected.txt")
+          val context = GitExecutionSpecSupport.contextFor(fixture.root, plan.workspaceAdmissionOption, Some(plan.admission),
+            fixture.profile.driver, _owner)
+          val admitted = _take(GitExecutionAdmission.resolveC(context, fixture.target,
+            GitOperation.CheckIgnore(GitExecutionSpecSupport.selectionId)))
+          admitted.effectiveArguments shouldBe GitProgramDefinition.prefix ++ Vector("check-ignore", "--no-index", "--verbose", "--non-matching", "-z", "--stdin")
           GitExecutionAdmission.resolveC(context, fixture.target, GitOperation.Head).isFaillure shouldBe true
           GitExecutionAdmission.resolveC(context, fixture.target,
             GitOperation.StageSelectedAll(GitExecutionSpecSupport.selectionId)).isFaillure shouldBe true
@@ -1004,10 +1039,10 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
       GitExecutionAdmission.validateGenericExecutionC(git).isFaillure shouldBe true
     }
 
-    "round-trip only the seven operation-specific bounded selected path arrays" in {
+    "round-trip only the eight operation-specific bounded selected path arrays" in {
       Given("all V3 Git declarations and fixed literal paths containing colon, backslash and LF")
       val wire = _v3_root(_directory())
-      val kinds = Set(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges, GitOperationKind.TreeEntries,
+      val kinds = Set(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges, GitOperationKind.TreeEntries, GitOperationKind.CheckIgnore,
         GitOperationKind.PreparePurposeCandidate, GitOperationKind.MaterializePurposeCandidate, GitOperationKind.CommitPurposeCandidate)
       val paths = Vector("selected.txt", "C:literal\\name\n.txt")
       val selected = kinds.foldLeft(wire)((root, kind) => _changed_git(root, kind,
@@ -1031,8 +1066,8 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
     "E1 Selected Git declarations with a shared selection ID" should afterWord(
       "in spec:runtime-git-selection-binding, example:E1, rules:R1, phase:CC-02") {
       "reject different paths or vector order between the selected commit and read declarations" in {
-        Given("R1: seven V3 declarations share a workspace, selection ID and ordered two-path selection")
-        val kinds = Vector(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges, GitOperationKind.TreeEntries,
+        Given("R1: eight V3 declarations share a workspace, selection ID and ordered two-path selection")
+        val kinds = Vector(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges, GitOperationKind.TreeEntries, GitOperationKind.CheckIgnore,
           GitOperationKind.PreparePurposeCandidate, GitOperationKind.MaterializePurposeCandidate, GitOperationKind.CommitPurposeCandidate)
         val paths = Vector("selected.txt", "other.txt")
         val wire = kinds.foldLeft(_v3_root(_directory()))((root, kind) => _changed_git(root, kind,
@@ -1092,9 +1127,9 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
     }
 
     "reject absent null empty duplicate escaping or widened selectedPaths for each bounded kind" in {
-      Given("a V3 host plan with the seven exact applicable operations and strict nonapplicable operations")
+      Given("a V3 host plan with the eight exact applicable operations and strict nonapplicable operations")
       val wire = _v3_root(_directory())
-      val kinds = Vector(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges, GitOperationKind.TreeEntries,
+      val kinds = Vector(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges, GitOperationKind.TreeEntries, GitOperationKind.CheckIgnore,
         GitOperationKind.PreparePurposeCandidate, GitOperationKind.MaterializePurposeCandidate, GitOperationKind.CommitPurposeCandidate)
       val invalidpaths = Vector(Json.Null, Json.arr(), Json.True, Json.arr(Json.Null), Json.arr(Json.True),
         Json.arr(Json.fromString("")), Json.arr(Json.fromString("../escape")), Json.arr(Json.fromString("/absolute")),
@@ -1191,12 +1226,12 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
     }
 
     "enforce each fixed selected-declaration count per workspace without introducing a selector-family field" in {
-      Given("all nine selected kinds at and above their individual per-workspace bounds")
+      Given("all ten selected kinds at and above their individual per-workspace bounds")
       val root = _directory()
       val id = GitExecutionSpecSupport.workspaceId
       val cases = Vector(GitOperationKind.StageSelected -> 128, GitOperationKind.StageSelectedAll -> 256,
         GitOperationKind.CommitSelected -> 64, GitOperationKind.CheckSelectedIndex -> 64, GitOperationKind.SelectedIndexChanges -> 64,
-        GitOperationKind.TreeEntries -> 64, GitOperationKind.PreparePurposeCandidate -> 64,
+        GitOperationKind.TreeEntries -> 64, GitOperationKind.CheckIgnore -> 64, GitOperationKind.PreparePurposeCandidate -> 64,
         GitOperationKind.MaterializePurposeCandidate -> 64, GitOperationKind.CommitPurposeCandidate -> 64)
       When("V3 assembly receives unique declarations at each bound and one additional unique selection")
       val results = cases.map { case (kind, bound) =>
@@ -1210,7 +1245,7 @@ final class RuntimeProcessExecutionPlanCodecSpec extends AnyWordSpec with Matche
         _plan_(declarations.take(bound)).isSuccess -> _plan_(declarations).isFaillure
       }
       Then("each exact bound is admitted and each excess fails for that logical workspace")
-      results shouldBe Vector.fill(9)(true -> true)
+      results shouldBe Vector.fill(10)(true -> true)
     }
 
     "round-trip fixed programs, exact templates, finite limits and independently selected component grants" in {

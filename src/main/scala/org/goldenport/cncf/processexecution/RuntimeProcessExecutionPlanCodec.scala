@@ -14,7 +14,7 @@ import org.goldenport.configuration.{ConfigurationValue, ConfigurationValueCodec
 /*
  * @since   Oct.  7, 2026
  *  version Oct. 28, 2026
- * @version Nov. 19, 2026
+ * @version Nov. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValueCodec[RuntimeProcessExecutionPlan] {
@@ -359,7 +359,7 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
   private def _git_program(json: Json): Either[String, GitRuntimeDeclaration] = for {
     operationtext <- json.hcursor.get[String]("operation").left.map(_ => "Invalid typed Git operation")
     operation <- GitOperationKind.values.find(_.wireName == operationtext).toRight("Invalid typed Git operation")
-    bounded = Set(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges, GitOperationKind.TreeEntries, GitOperationKind.PreparePurposeCandidate, GitOperationKind.MaterializePurposeCandidate, GitOperationKind.CommitPurposeCandidate).contains(operation)
+    bounded = Set(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges, GitOperationKind.TreeEntries, GitOperationKind.CheckIgnore, GitOperationKind.PreparePurposeCandidate, GitOperationKind.MaterializePurposeCandidate, GitOperationKind.CommitPurposeCandidate).contains(operation)
     names = Set("target", "operation", "capability", "identity", "gitExecutable", "localBranch",
       "remote", "remoteBranch", "endpoint", "commitIdentity", "selectionId", "selectedPath", "commitMessage", "limits", "environment") ++
       (if (bounded) Set("selectedPaths") else Set.empty[String])
@@ -448,7 +448,7 @@ private[cncf] object RuntimeProcessExecutionPlanCodec extends ConfigurationValue
     "selectedPath" -> value.selectedPath.fold(Json.Null)(x => Json.fromString(x.value)),
     "commitMessage" -> value.commitMessage.fold(Json.Null)(Json.fromString),
     "limits" -> _limits_json(value.limits), "environment" -> Json.obj(value.environment.toVector.map { case (k, v) => k -> Json.fromString(v) }*))
-    if (Set(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges, GitOperationKind.TreeEntries, GitOperationKind.PreparePurposeCandidate, GitOperationKind.MaterializePurposeCandidate, GitOperationKind.CommitPurposeCandidate).contains(value.operation))
+    if (Set(GitOperationKind.CommitSelected, GitOperationKind.CheckSelectedIndex, GitOperationKind.SelectedIndexChanges, GitOperationKind.TreeEntries, GitOperationKind.CheckIgnore, GitOperationKind.PreparePurposeCandidate, GitOperationKind.MaterializePurposeCandidate, GitOperationKind.CommitPurposeCandidate).contains(value.operation))
       base.mapObject(_.add("selectedPaths", _strings(value.selectedPaths.map(_.value)))) else base
   }
 
