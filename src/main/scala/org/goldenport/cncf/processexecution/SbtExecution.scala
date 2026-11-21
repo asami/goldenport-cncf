@@ -12,7 +12,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 24, 2026
- * @version Nov. 21, 2026
+ * @version Nov. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection] = None,
@@ -339,12 +339,12 @@ private[cncf] object SbtExecutionAdmission {
       batched <- SbtValidationMode.specializeBatchC(execution, target, operation)
       mode <- SbtValidationMode.specializeC(batched, target)
       scoped <- SbtScopedInputAdmission.applyC(context, workspace, target, operation, mode)
-      lint <- SbtLintInputAdmission.applyC(target, operation, scoped)
-      jvm <- SbtJvmParameters.applyC(context.resolvedParameters, lint)
-      limits <- SbtTestOutputParameters.applyC(context.resolvedParameters, operation, jvm.effectiveLimits)
+      jvm <- SbtJvmParameters.applyC(context.resolvedParameters, scoped)
+      lint <- SbtLintInputAdmission.applyC(target, operation, jvm)
+      limits <- SbtTestOutputParameters.applyC(context.resolvedParameters, operation, lint.effectiveLimits)
       estimated <- SbtValidationEstimate.applyC(target, operation,
-        jvm.definition._sbt_metadata.map(_.testClasses).getOrElse(Vector.empty), limits)
-    } yield jvm.copy(effectiveLimits = estimated)
+        lint.definition._sbt_metadata.map(_.testClasses).getOrElse(Vector.empty), limits)
+    } yield lint.copy(effectiveLimits = estimated)
 
   /** Tagged executions have no WorkArea projections or caller-provided process input. */
   def validateRequestC(request: ProcessExecutionRequest): Consequence[Unit] =
@@ -422,17 +422,16 @@ private[cncf] object SbtScopedInputAdmission {
   } catch { case NonFatal(_) => _invalid_c }
 }
 
-/** Specialize only the host-opted fixed FixCheck, retaining the admitted immutable value. */
+/** Specialize an admitted fixed FixCheck only when it carries explicit lint input. */
 private[cncf] object SbtLintInputAdmission {
   private val _parser = JawnParser(allowDuplicateKeys = false)
   private def _invalid_c[A]: Consequence[A] = Consequence.configurationInvalid("Invalid or unavailable typed lint input")
 
   def applyC(target: SbtTarget, operation: SbtOperation, execution: ResolvedProcessExecution): Consequence[ResolvedProcessExecution] = {
-    val metadata = execution.definition._sbt_metadata.get
     if (target.lintInput == null) _invalid_c
-    else (metadata.lintEnabled, target.lintInput) match {
-      case (false, None) => Consequence.success(execution)
-      case (true, Some(input)) if operation == SbtOperation.FixCheck && input != null =>
+    else target.lintInput match {
+      case None => Consequence.success(execution)
+      case Some(input) if operation == SbtOperation.FixCheck && input != null =>
         val valid = input.identity != null && input.identity.matches("[A-Za-z0-9_.-]{1,128}") &&
           input.revision != null && input.revision.matches("[A-Za-z0-9_.-]{1,128}") &&
           input.configJson != null && java.nio.charset.StandardCharsets.UTF_8.newEncoder().canEncode(input.configJson) &&
@@ -447,11 +446,11 @@ private[cncf] object SbtLintInputAdmission {
           val definition = execution.definition
           val arguments = definition.fixedArguments.dropRight(1) ++ Vector("-Dcncf.sbt.lint.input=" + encoded, definition.fixedArguments.last)
           val bytes = arguments.map(_.getBytes(java.nio.charset.StandardCharsets.UTF_8).length.toLong).sum
-          if (definition.maximumLimits.argumentCount.exists(arguments.size.toLong > _) ||
-              definition.maximumLimits.argumentBytes.exists(bytes > _)) _invalid_c
+          val limits = execution.effectiveLimits
+          if (limits.argumentCount.exists(arguments.size.toLong > _) || limits.argumentBytes.exists(bytes > _)) _invalid_c
           else ProcessProgramDefinition.fromSbtRuntimeC(definition.capability, definition.safeProgramIdentity,
             definition._executable_location, arguments, definition.maximumLimits, definition._environment.values,
-            metadata.copy(lintInput = Some(input))).map(value => execution.copy(definition = value))
+            definition._sbt_metadata.get.copy(lintInput = Some(input))).map(value => execution.copy(definition = value))
         }
       case _ => _invalid_c
     }

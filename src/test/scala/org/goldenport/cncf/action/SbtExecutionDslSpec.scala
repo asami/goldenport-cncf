@@ -1,5 +1,6 @@
 package org.goldenport.cncf.action
 
+import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.{Files, Path, Paths}
 import java.util.Comparator
 import scala.jdk.CollectionConverters.*
@@ -25,7 +26,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 24, 2026
- * @version Nov. 21, 2026
+ * @version Nov. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -1016,48 +1017,188 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
         }
       }
     }
+  }
 
-    "bind only valid explicit input to the opted-in fixed process and retain admitted provenance" in {
-      Given("an opted-in FixCheck and an otherwise identical legacy declaration")
-      val enabled = _fixture(_result(ProcessExecutionTermination.Exited(0)), lintenabled = true)
-      val legacy = _fixture(_result(ProcessExecutionTermination.Exited(0)))
-      val bounded = _fixture(_result(ProcessExecutionTermination.Exited(0)), lintenabled = true,
-        limits = _limits.copy(argumentBytes = Some(200L)))
-      val uows = Vector(new UnitOfWork(enabled.context), new UnitOfWork(legacy.context), new UnitOfWork(bounded.context))
-      val input = SbtLintInput("shared-profile", "v1", """{"rules":["Example"],"test":true}""")
-      val target = enabled.target.copy(lintInput = Some(input))
+  "E-LINT1 Optional resolved input for fixed FixCheck" must afterWord(
+    "in spec:typed-sbt-execution, example:E-LINT1, rules:LINT-INPUT-01, phase:SHARED-SCALA-LINT-SESSION-CHECKOUT-CNCF-01") {
+    "run with explicit and omitted input under both compatible host declarations" in {
+      Given("docs/spec/typed-sbt-execution.md LINT-INPUT-01 E-LINT1: equally admitted fixed FixCheck programs with the legacy host lint field present or absent")
+      val fixtures = Vector(true, false).map(enabled =>
+        _fixture(_result(ProcessExecutionTermination.Exited(0)), lintenabled = enabled))
+      val input = SbtLintInput("shared-profile", "v1", """{"rules":["Example"],"note":"設計"}""")
       try {
-        When("native attempts execute admitted and invalid inputs")
-        val interpreter = new UnitOfWorkInterpreter(uows.head)
-        val observed = interpreter.interpret(UnitOfWorkOp.SbtExecAttempt(target, SbtOperation.FixCheck)).toOption.get
-        val invalid = Vector(enabled.target, target.copy(lintInput = Some(input.copy(configJson = "[]"))),
-          target.copy(lintInput = Some(input.copy(configJson = "{"))),
-          target.copy(lintInput = Some(input.copy(identity = "bad id"))),
-          target.copy(lintInput = Some(input.copy(configJson = "{\"x\":\"" + ("x" * 65536) + "\"}"))))
-        val rejected = invalid.map(value => interpreter.interpret(UnitOfWorkOp.SbtExecAttempt(value, SbtOperation.FixCheck)).toOption.get) :+
-          interpreter.interpret(UnitOfWorkOp.SbtExecAttempt(target, SbtOperation.Compile)).toOption.get :+
-          new UnitOfWorkInterpreter(uows(1)).interpret(UnitOfWorkOp.SbtExecAttempt(legacy.target.copy(lintInput = Some(input)), SbtOperation.FixCheck)).toOption.get :+
-          new UnitOfWorkInterpreter(uows(2)).interpret(UnitOfWorkOp.SbtExecAttempt(bounded.target.copy(lintInput = Some(input.copy(configJson = "{\"x\":\"" + ("x" * 200) + "\"}"))), SbtOperation.FixCheck)).toOption.get
-        val old = new UnitOfWorkInterpreter(uows(1)).interpret(UnitOfWorkOp.SbtExecAttempt(legacy.target, SbtOperation.FixCheck)).toOption.get
-        Then("only the admitted fixed task runs and its observed result identifies the bound value")
-        observed match {
-          case SbtExecutionAttempt.Observed(result) => result.lintInput shouldBe Some(input)
-          case other => fail(s"Expected observed FixCheck: $other")
+        When("each fixed program runs once with omitted input and once with resolved input")
+        val attempts = fixtures.map(fixture => Vector(None, Some(input)).map(value =>
+          _sbt_attempt(fixture.context, fixture.target.copy(lintInput = value))))
+
+        Then("only explicit input adds the property and the corresponding observed receipt")
+        fixtures.zip(attempts).foreach { case (fixture, results) =>
+          results.map(_observed_sbt_result(_).lintInput) shouldBe Vector(None, Some(input))
+          val executions = fixture.profile.driver.executions
+          executions should have size 2
+          val definition = fixture.definitions.find(_.capability == _fix_check_capability).get
+          _expect_heap_definitions(executions.take(1), Vector(definition))
+          _expect_lint_argument(executions.last.effectiveArguments, executions.head.effectiveArguments, input)
         }
-        val args = enabled.profile.driver.executions.head.effectiveArguments
-        args.last shouldBe "fixCheck"
-        val encoded = args(args.size - 2).stripPrefix("-Dcncf.sbt.lint.input=")
-        val json = new String(java.util.Base64.getUrlDecoder.decode(encoded), java.nio.charset.StandardCharsets.UTF_8)
-        io.circe.parser.parse(json).toOption.get.hcursor.get[String]("identity").toOption shouldBe Some(input.identity)
-        io.circe.parser.parse(json).toOption.get.hcursor.downField("config").get[Boolean]("test").toOption shouldBe Some(true)
-        rejected.foreach(_.isInstanceOf[SbtExecutionAttempt.AdmissionRejected] shouldBe true)
-        enabled.profile.driver.executions should have size 1
-        old.isInstanceOf[SbtExecutionAttempt.Observed] shouldBe true
-        legacy.profile.driver.executions.head.effectiveArguments.last shouldBe "fixCheck"
-        legacy.profile.driver.executions.head.effectiveArguments.exists(_.startsWith("-Dcncf.sbt.lint.input=")) shouldBe false
-        bounded.profile.driver.executions shouldBe empty
-      } finally { uows.foreach(_.dispose()); _close(enabled.root); _close(legacy.root); _close(bounded.root) }
+      } finally fixtures.foreach(fixture => _close(fixture.root))
     }
+
+    "reject malformed, oversized or misplaced input before driver execution" in {
+      Given("docs/spec/typed-sbt-execution.md LINT-INPUT-01 E-LINT1: admitted FixCheck and Compile declarations and a bounded JSON payload contract")
+      val fixture = _fixture(_result(ProcessExecutionTermination.Exited(0)))
+      val input = SbtLintInput("shared-profile", "v1", "{}")
+      val multibyte = "設" * 22000
+      val surrogate = 0xd800.toChar
+      val invalid = Vector[Option[SbtLintInput]](null, Some(null)) ++ Vector(
+        input.copy(configJson = "{"),
+        input.copy(configJson = "[]"),
+        input.copy(configJson = """{"nested":{"rule":true,"rule":false}}"""),
+        input.copy(configJson = s"""{"x":"$multibyte"}"""),
+        input.copy(configJson = s"""{"x":"$surrogate"}"""),
+        input.copy(identity = "bad id"),
+        input.copy(revision = "invalid/revision")
+      ).map(Some(_))
+      try {
+        When("the interpreter receives the invalid values or valid input for Compile")
+        val rejected = invalid.map(value => _sbt_attempt(fixture.context, fixture.target.copy(lintInput = value))) :+
+          _sbt_attempt(fixture.context, fixture.target.copy(lintInput = Some(input)), SbtOperation.Compile)
+
+        Then("each attempt is rejected without invoking the driver")
+        rejected.foreach(_ shouldBe a[SbtExecutionAttempt.AdmissionRejected])
+        fixture.profile.driver.executions shouldBe empty
+      } finally _close(fixture.root)
+    }
+
+    "require existing FixCheck grants and keep the final argument vector within admitted limits" in {
+      Given("docs/spec/typed-sbt-execution.md LINT-INPUT-01 E-LINT1: a byte ceiling, a tighter capability grant, and independently missing workspace or capability authority")
+      val result = _result(ProcessExecutionTermination.Exited(0))
+      val bounded = _fixture(result, limits = _limits.copy(argumentBytes = Some(200L)))
+      val workspace = _fixture(result, workspacegranted = false)
+      val capability = _fixture(result, capabilitygranted = false)
+      val capped = _fixture(result)
+      val cappedgrant = ProcessExecutionGrant(_fix_check_capability,
+        maximumLimits = ProcessExecutionLimits(argumentCount = Some(6L)))
+      val admission = ProcessExecutionAdmission.forComponentsC(capped.policy, Map(_owner -> Vector(cappedgrant))).toOption.get
+      val context = _context(Some(capped.workspace), Some(admission), capped.profile, _owner)
+      val input = SbtLintInput("shared-profile", "v1", "{}")
+      val longer = input.copy(configJson = "{\"x\":\"" + ("x" * 200) + "\"}")
+      val blocked = Vector((bounded.context, bounded.target, longer), (workspace.context, workspace.target, input),
+        (capability.context, capability.target, input), (context, capped.target, input))
+      try {
+        When("explicit input is supplied in each constrained context and omitted under the count cap")
+        val rejected = blocked.map { case (ctx, target, value) =>
+          _sbt_attempt(ctx, target.copy(lintInput = Some(value)))
+        }
+        val ordinary = _sbt_attempt(context, capped.target)
+
+        Then("only the ordinary six-argument FixCheck including its heap flag runs")
+        rejected.foreach(_ shouldBe a[SbtExecutionAttempt.AdmissionRejected])
+        Vector(bounded, workspace, capability).foreach(_.profile.driver.executions shouldBe empty)
+        _observed_sbt_result(ordinary).lintInput shouldBe None
+        val executions = capped.profile.driver.executions
+        executions should have size 1
+        executions.head.effectiveArguments should have size 6
+        executions.head.effectiveArguments.head should startWith("-J-Xmx")
+      } finally Vector(bounded, workspace, capability, capped).foreach(fixture => _close(fixture.root))
+    }
+  }
+
+  "E-LINT2 Fixed FixCheck on the retained candidate alias" must afterWord(
+    "in spec:typed-sbt-execution, example:E-LINT2, rules:LINT-INPUT-01, phase:SHARED-SCALA-LINT-SESSION-CHECKOUT-CNCF-01") {
+    "run the same fixed executable in the selected directory with either input value" in {
+      Given("docs/spec/typed-sbt-execution.md LINT-INPUT-01 E-LINT2: separate source, candidate parent and alias bootstrap roots with one fixed FixCheck on the alias")
+      val base = Files.createDirectories(Paths.get("target", "sbt-execution-dsl-spec").toAbsolutePath)
+      val root = Files.createTempDirectory(base, "candidate-")
+      val driver = new LocalProcessExecutionDriver()
+      try {
+        val source = WorkspaceId.parseC("source").toOption.get
+        val parent = WorkspaceId.parseC("candidate-parent").toOption.get
+        val alias = WorkspaceId.parseC("candidate-alias").toOption.get
+        val checkout = Files.createDirectory(root.resolve("source"))
+        val managed = Files.createDirectory(root.resolve("managed"))
+        val bootstrap = Files.createDirectory(root.resolve("bootstrap"))
+        val roots = Vector(source -> checkout, parent -> managed, alias -> bootstrap)
+        val grants = roots.map { case (id, _) => WorkspaceGrant(_owner, id, WorkspacePermission.Manage) }
+        val workspace = WorkspaceExecutionAdmission.createC(roots, grants,
+          Vector(SessionCandidateWorkspacePolicy(_owner, parent, alias))).toOption.get
+        val executable = Files.writeString(root.resolve("record-fix-check"),
+          """#!/bin/sh
+            |pwd -P
+            |printf '%s\n' "$@"
+            |""".stripMargin)
+        executable.toFile.setExecutable(true) shouldBe true
+        val binding = workspace.bindingC(alias).toOption.get
+        val environment = Map("SBT_ETC_FILE" -> root.resolve("absent-sbtopts").toString)
+        val definition = SbtProgramDefinition.createC(binding, SbtOperation.FixCheck, _fix_check_capability,
+          _fix_check_capability.print, executable, _limits, environment).toOption.get
+        val policy = ProcessExecutionPolicy.createC(Vector(definition)).toOption.get
+        val admission = ProcessExecutionAdmission.forComponentsC(policy,
+          Map(_owner -> Vector(ProcessExecutionGrant(_fix_check_capability)))).toOption.get
+        val host = _context(Some(workspace), Some(admission), ProcessExecutionTestProfile(Map.empty), _owner, driver = Some(driver))
+        val input = SbtLintInput("shared-profile", "v1", """{"rules":["Example"]}""")
+        val target = SbtTarget(alias)
+
+        When("the typed candidate preparation and reacquisition scope the normal FixCheck attempts")
+        val uow = new UnitOfWork(host)
+        val prepared = try new UnitOfWorkInterpreter(uow).interpret(
+          UnitOfWorkOp.SessionCandidatePrepare(source, parent, alias, "lint-session", "candidate-1")).toOption.get
+        finally uow.dispose()
+        val record = prepared.reference.record
+        val reference = SessionCandidateWorkspaceReference.fromRecordC(record).toOption.get
+        val selected = SessionCandidateWorkspace.reacquireC(host, reference, record, SessionCandidateWorkspaceState.Empty).toOption.get
+        val explicit = target.copy(lintInput = Some(input))
+        val ordinary = _observed_sbt_result(_sbt_attempt(selected.context, target))
+        val resolved = _observed_sbt_result(_sbt_attempt(selected.context, explicit))
+        val wrong = _sbt_attempt(selected.context, explicit.copy(workspaceId = source))
+
+        Then("the executable observes the same selected cwd and fixed task while only explicit input adds a property and receipt")
+        val selectedpath = selected.context.workspaceExecutionAdmissionOption.get.bindingC(alias).toOption.get.workingDirectoryC.toOption.get
+        selectedpath.startsWith(managed.toRealPath()) shouldBe true
+        selectedpath should not be (checkout.toRealPath())
+        selectedpath should not be (bootstrap.toRealPath())
+        val captures = Vector(ordinary, resolved).map { observed =>
+          observed.processResult.termination shouldBe ProcessExecutionTermination.Exited(0)
+          observed.processResult.safeProgramIdentity shouldBe _fix_check_capability.print
+          observed.processResult.stdout.truncated shouldBe false
+          val lines = new String(observed.processResult.stdout.content.toArray, UTF_8).linesIterator.toVector
+          lines.head shouldBe selectedpath.toString
+          lines.tail
+        }
+        captures.head shouldBe ("-J-Xmx4294967296" +: definition.fixedArguments)
+        _expect_lint_argument(captures.last, captures.head, input)
+        ordinary.lintInput shouldBe None
+        resolved.lintInput shouldBe Some(input)
+        wrong shouldBe a[SbtExecutionAttempt.AdmissionRejected]
+      } finally {
+        try driver.close() finally _close(root)
+      }
+    }
+  }
+
+  private def _sbt_attempt(context: ExecutionContext, target: SbtTarget, operation: SbtOperation = SbtOperation.FixCheck): SbtExecutionAttempt = {
+    val uow = new UnitOfWork(context)
+    try new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.SbtExecAttempt(target, operation)).toOption.get
+    finally uow.dispose()
+  }
+
+  private def _observed_sbt_result(attempt: SbtExecutionAttempt): SbtExecutionResult = attempt match {
+    case SbtExecutionAttempt.Observed(result) => result
+    case other => fail(s"Expected observed FixCheck: $other")
+  }
+
+  private def _expect_lint_argument(arguments: Vector[String], fixedarguments: Vector[String], input: SbtLintInput): Unit = {
+    val prefix = "-Dcncf.sbt.lint.input="
+    arguments should have size (fixedarguments.size + 1)
+    arguments.patch(arguments.size - 2, Nil, 1) shouldBe fixedarguments
+    arguments.last shouldBe "fixCheck"
+    val property = arguments(arguments.size - 2)
+    property should startWith(prefix)
+    val encoded = property.stripPrefix(prefix)
+    encoded.matches("[A-Za-z0-9_-]+") shouldBe true
+    val json = new String(java.util.Base64.getUrlDecoder.decode(encoded), UTF_8)
+    val expected = io.circe.Json.obj("identity" -> io.circe.Json.fromString(input.identity),
+      "revision" -> io.circe.Json.fromString(input.revision), "config" -> io.circe.parser.parse(input.configJson).toOption.get)
+    io.circe.parser.parse(json).toOption shouldBe Some(expected)
   }
 
   "Scoped typed SBT transport" should {

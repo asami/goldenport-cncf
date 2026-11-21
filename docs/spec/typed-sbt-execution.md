@@ -218,32 +218,51 @@ read-only. The consumer owns lint implementation, a nonempty syntactic rule
 profile and separate durable check-result storage. No test-suite or test-count
 evidence is synthesized from a check result.
 
-### Opt-in resolved lint input
+### Optional resolved lint input
 
-A host may add `"lintInput": true` to its fixed FixCheck declaration. The field
-must be absent for legacy behavior; false, other values, or use on another
-operation are invalid. The enabled declaration requires `SbtTarget.lintInput`
-with `SbtLintInput(identity, revision, configJson)`. Identity and revision are
-1–128 ASCII letters, digits, `_`, `.` or `-`. `configJson` is an already
-resolved JSON object, at most 65,536 UTF-8 bytes, with no duplicate keys. CNCF
-checks its shape and bounds; it does not resolve profiles, merge settings,
-expand includes, or read a project fallback. Missing or malformed input and
-input on a legacy or non-FixCheck binding fail admission before execution.
-Existing workspace, capability and process limits continue to apply.
+**LINT-INPUT-01.** An already admitted fixed FixCheck accepts either omitted
+`SbtTarget.lintInput` or `Some(SbtLintInput(identity, revision, configJson))`.
+Both forms work when the host declaration omits `"lintInput"` or retains the
+compatible `"lintInput": true` field. Explicit `false`, other values and use of
+the host field on another operation remain invalid. Omission runs the ordinary
+fixed task. Malformed input or an explicit payload on another operation fails
+admission before execution.
 
-The fixed process receives one additional argument immediately before `fixCheck`:
-`-Dcncf.sbt.lint.input=<value>`. The value is unpadded URL-safe Base64 of a
-UTF-8 JSON object with `identity`, `revision` and `config` fields, where `config`
-is the supplied JSON object. The host-selected build must decode that property
-and use `config` for its check; the consumer owns that build integration. It
-must not fall back to ambient settings when the property is present. The target
-workspace, fixed task and other request restrictions do not change.
+Identity and revision are 1–128 ASCII letters, digits, `_`, `.` or `-`.
+`configJson` is an already resolved JSON object, at most 65,536 UTF-8 bytes,
+with no duplicate keys. CNCF validates and transports that object. The
+consumer resolves profiles and policy, including any `project.yaml` settings
+that decide whether to supply input, and integrates the resolved input with
+its build task. Workspace and component capability grants apply to both
+forms. The complete rendered argument vector for explicit input must fit the
+admitted argument count and byte limits.
 
-An observed `SbtExecutionResult.lintInput` is taken from the admitted process
-definition and retains the input bound to that attempt. It does not attest that
-arbitrary build code honored the property. An admission rejection has no process
-receipt; an uncertain attempt retains its existing uncertainty semantics. No
-consumer activation or actual Scalafix execution is implied by this contract.
+For explicit input the process receives one additional argument
+`-Dcncf.sbt.lint.input=<value>` immediately before `fixCheck`. The value is
+unpadded URL-safe Base64 of a UTF-8 JSON object with `identity`, `revision`
+and `config` fields, where `config` is the supplied JSON object. The
+host-selected build must decode the property and use `config` for its check
+when the property is present. An observed `SbtExecutionResult.lintInput`
+records the input admitted for that attempt, or `None` for omission. It
+provides transport evidence. The build owns evidence of rule execution and
+the runtime retains its existing semantics for rejected and uncertain attempts.
+
+To run against a Session candidate, the host configures the existing
+`sessionCandidateWorkspaces` policy for the component, parent and alias. The
+component needs Manage grants on the source, parent and alias, plus the
+capability grant for a fixed FixCheck declared on that alias. The owning
+runtime prepares the selection with `UnitOfWorkOp.SessionCandidatePrepare`
+and retains its reference and effect state. After materialization, it uses
+that retained selection and materialized Git evidence with
+`SessionCandidateWorkspace.reacquireC`. In the returned scoped context,
+`SbtTarget(alias)` and `SbtTarget(alias, lintInput = Some(input))` select the
+same fixed FixCheck and candidate directory. The observation-only context
+admits the host-granted Git Root and Head operations used to verify
+materialization. [Session candidate workspace](session-candidate-workspace.md)
+
+Executable examples E-LINT1 and E-LINT2 in `SbtExecutionDslSpec` cover both
+declaration forms, prelaunch rejection, and the effective candidate directory
+and arguments observed by a fixture executable.
 
 TestOnly retains those same four flags and uses one final argv item containing
 literal `testOnly ` followed by the trusted names joined with one space.
