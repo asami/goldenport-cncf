@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 30, 2026
- * @version Nov.  5, 2026
+ * @version Nov. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SbtTestSelectionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -364,7 +364,7 @@ logback diagnostic
     "preserve three-argument callers while requiring a verified TestOnly selection for zero exit" in {
       Given("one complete raw zero-exit process result and the existing three-argument result constructor")
       val raw = _process(_report(_classes, 7L, false))
-      When("Compile, TestCompile, Test, TestOnly, FixCheck and PublishLocal interpret the same unmodified process result")
+      When("Compile, TestCompile, Test, TestOnly, FixCheck, PublishLocal and ScopedPublish interpret the same unmodified process result")
       val results = SbtOperation.values.toVector.map(operation => operation -> SbtExecutionResult(_target, operation, raw))
       Then("Class-free operations retain success while TestOnly without a supplied selection is unverified")
       results.map { case (operation, result) => operation -> result.outcome } shouldBe Vector(
@@ -373,11 +373,187 @@ logback diagnostic
         SbtOperation.Test -> SbtExecutionOutcome.Succeeded,
         SbtOperation.TestOnly -> SbtExecutionOutcome.UnverifiedTests(SbtTestSelectionFailure.MissingSelection),
         SbtOperation.FixCheck -> SbtExecutionOutcome.Succeeded,
-        SbtOperation.PublishLocal -> SbtExecutionOutcome.Succeeded)
+        SbtOperation.PublishLocal -> SbtExecutionOutcome.Succeeded,
+        SbtOperation.ScopedPublish -> SbtExecutionOutcome.Succeeded)
       results.foreach { case (_, result) => result.processResult shouldBe raw }
       results.foreach { case (_, result) => result.testSelection shouldBe None }
     }
   }
+
+  "Retained FULL ScalaTest reports" should {
+    "aggregate the observed passing blocks of a single or multi-project execution" in {
+      Given("an ordinary named report and a fixture assembled from three per-project summaries of one run")
+      val single = _process(_report(_classes, 7L, false))
+      val full = _process(Vector(
+        "[info] Run completed in 8 minutes, 49 seconds.",
+        _full_summary(290L, 3060L),
+        "[success] completed the first project",
+        "[info] Run completed in 1 second, 549 milliseconds.",
+        _full_summary(5L, 58L),
+        "[info] compiling sources",
+        "[info] Run completed in 180 milliseconds.",
+        _full_summary(1L, 7L)
+      ).mkString("\n"))
+      When("the fixture captures are reassessed as FULL")
+      val ordinary = SbtTestReassessment.assessFull(single)
+      val aggregated = SbtTestReassessment.assessFull(full)
+      Then("the verified totals include every complete report block")
+      ordinary shouldBe Right(SbtFullTestReport(2L, 7L, 1))
+      aggregated shouldBe Right(SbtFullTestReport(296L, 3125L, 3))
+    }
+
+    "sum generated partitions with complete distinct literal suite names" in {
+      Given("partitions with positive test counts, including ties, and one unique suite per report")
+      val partitions = Gen.choose(1, 8).flatMap(size => Gen.listOfN(size, Gen.choose(1L, 5L)))
+      When("FULL reassessment reads the generated report blocks")
+      val property = Prop.forAll(partitions) { counts =>
+        val output = counts.zipWithIndex.map { case (count, index) =>
+          _report(Vector(s"org.example.Suite$index"), count, false)
+        }.mkString("\n[info] next project\n")
+        SbtTestReassessment.assessFull(_process(output)) ==
+          Right(SbtFullTestReport(counts.size.toLong, counts.sum, counts.size))
+      }
+      val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(48), property)
+      Then("the suite, test and report totals follow the complete partition")
+      checked.passed shouldBe true
+    }
+
+    "reject orphan, malformed, misplaced and unfinished report records" in {
+      Given("complete passing output alongside inconsistent or incomplete report framing")
+      import SbtTestSelectionFailure.*
+      val report = _full_summary(2L, 7L)
+      val records = report.linesIterator.toVector
+      val isolated = Vector(
+        "", records.last, records(1), records(2),
+        records.take(3).mkString("\n"),
+        Vector(records(1), records.head, records(2), records.last).mkString("\n"),
+        report.replace("Suites:", "Suites"),
+        report.replace("Tests:", "Tests"),
+        "[info] Suites:\n" + report,
+        "[info] Tests:\n" + report,
+        report.replace("All tests passed.", "All tests passed"),
+        report.replace("completed 2", "completed -1"),
+        report.replace("succeeded 7", "succeeded 6"),
+        report.replace(records(1), records(1) + "\n" + records(1)),
+        report.replace(records(1), "[info] StraySuite:\n" + records(1)),
+        "[info] Run completed in .\n" + report,
+        "[info] Run completed in 1 second.\n[info] Run completed in 1 second.\n" + report
+      )
+      val tails = Vector(records.head, records(1), records(2), records.last,
+        "[info] Total number of tests run:", "[info] Run completed in 1 second.",
+        "[info] UnfinishedSuite:")
+      val cases = isolated ++ tails.map(report + "\n" + _)
+      When("the captured text is interpreted as FULL evidence")
+      val decoded = cases.map(x => SbtTestReassessment.assessFull(_process(x)))
+      Then("every malformed, orphan or unfinished record prevents verification")
+      decoded.foreach(_ shouldBe Left(InvalidReport))
+    }
+
+    "require distinct complete suite names to distinguish identical numeric reports" in {
+      Given("equal-count passing reports whose literal suite evidence is absent, partial, repeated or disjoint")
+      import SbtTestSelectionFailure.*
+      val headerless = _full_summary(2L, 7L)
+      val first = _report(_classes, 7L, false)
+      val second = _report(Vector("org.other.ThirdSpec", "org.other.FourthSpec"), 7L, false)
+      val partial = "[info] ThirdSpec:\n" + headerless
+      val overlap = _report(Vector(_classes.head, "org.other.ThirdSpec"), 7L, false)
+      val repeated = _report(_classes.reverse, 9L, false)
+      val duplicateheader = _report(Vector(_classes.head, _classes.head), 7L, false)
+      val single = _full_summary(1L, 7L)
+      val cases = Vector(
+        headerless + "\n[info] Run completed in 2 seconds.\n" + headerless,
+        first + "\n" + partial, first + "\n" + overlap,
+        first + "\n" + repeated, duplicateheader,
+        "[info] Tests:\n" + single + "\n[info] Suites:\n" + single
+      )
+      When("FULL reassessment reads all blocks")
+      val admitted = SbtTestReassessment.assessFull(_process(first + "\n" + second))
+      val refused = cases.map(x => SbtTestReassessment.assessFull(_process(x)))
+      Then("only disjoint complete names distinguish the equal numeric counts")
+      admitted shouldBe Right(SbtFullTestReport(4L, 14L, 2))
+      refused.foreach(_ shouldBe Left(InvalidReport))
+    }
+
+    "reject nonpositive counts, overflow and observed test failures" in {
+      Given("captures containing zero-test, overflowing or failed report evidence")
+      import SbtTestSelectionFailure.*
+      val report = _full_summary(2L, 7L)
+      val overflow = "9223372036854775808"
+      val fields = Vector("run: 7", "completed 2", "aborted 0", "succeeded 7",
+        "failed 0", "canceled 0", "ignored 0", "pending 0")
+      val outofrange = fields.map(x => report.replace(x, x.dropRight(1) + overflow) -> InvalidReport)
+      val counts = Vector(
+        "[info] No tests were executed." -> ZeroTests,
+        _full_summary(1L, 0L) -> ZeroTests,
+        _full_summary(0L, 7L) -> ZeroTests,
+        (report + "\n" + _full_summary(1L, Long.MaxValue)) -> InvalidReport,
+        (report + "\n" + _full_summary(Long.MaxValue, 5L)) -> InvalidReport,
+        report.replace("aborted 0", "aborted 1") -> FailedTests,
+        report.replace("failed 0", "failed 1") -> FailedTests,
+        report.replace("canceled 0", "canceled 1") -> FailedTests
+      )
+      When("the reports are reassessed against observed counts")
+      val decoded = (counts ++ outofrange).map { case (output, reason) =>
+        SbtTestReassessment.assessFull(_process(output)) -> reason
+      }
+      Then("verification refuses every invalid numeric field and aggregate")
+      decoded.foreach { case (result, reason) => result shouldBe Left(reason) }
+    }
+
+    "require a zero exit and complete strict UTF8 with no failure markers in either stream" in {
+      Given("an otherwise passing summary with varying terminations and capture defects")
+      import SbtTestSelectionFailure.*
+      val report = _full_summary(2L, 7L)
+      val raw = _process(report)
+      val malformed = ProcessExecutionCapture(Vector(0xc3.toByte, 0x28.toByte), 2L, false)
+      val markers = Vector("FAILED", "ABORTED", "CANCELED").flatMap { word =>
+        val diagnostic = s"[warn] *** $word ***"
+        Vector(_process(report + "\n" + diagnostic), raw.copy(stderr = _process(diagnostic).stdout))
+      }
+      val captures = Vector(
+        raw.copy(stdout = raw.stdout.copy(truncated = true)) -> IncompleteCapture,
+        raw.copy(stderr = raw.stderr.copy(truncated = true)) -> IncompleteCapture,
+        raw.copy(stdout = raw.stdout.copy(byteCount = raw.stdout.byteCount + 1L)) -> IncompleteCapture,
+        raw.copy(stderr = raw.stderr.copy(byteCount = -1L)) -> IncompleteCapture,
+        raw.copy(stdout = malformed) -> InvalidReport,
+        raw.copy(stderr = malformed) -> InvalidReport
+      )
+      import ProcessExecutionTermination.*
+      val terminations = Vector(NotStarted, LaunchFailed, TimedOut, Cancelled, TerminationUnconfirmed,
+        OutputLimitExceeded(ProcessExecutionStream.Stdout), ArtifactLimitExceeded)
+        .map(x => raw.copy(termination = x) -> IncompleteCapture)
+      val cases = captures ++ markers.map(_ -> FailedTests) ++ terminations ++ Vector(
+        raw.copy(termination = Exited(1)) -> FailedTests
+      )
+      When("FULL reassessment reads the recorded termination and captures")
+      val decoded = cases.map { case (process, reason) => SbtTestReassessment.assessFull(process) -> reason }
+      Then("passing stdout cannot override a recorded failure or incomplete evidence")
+      decoded.foreach { case (result, reason) => result shouldBe Left(reason) }
+    }
+
+    "keep exact TestOnly reassessment separate from FULL" in {
+      Given("two independently valid reports for the same exact selection shape")
+      val raw = _process(_full_summary(2L, 7L) + "\n" + _full_summary(2L, 9L))
+      When("the retained process is assessed through each public API")
+      val assessed = SbtTestReassessment.assess(_classes, raw)
+      val reassessed = SbtTestReassessment.reassess(_target, _classes, raw)
+      val full = SbtTestReassessment.assessFull(raw)
+      Then("FULL accounts for both reports and exact TestOnly still requires one report")
+      assessed.selection shouldBe SbtTestSelectionResult.Rejected(SbtTestSelectionFailure.InvalidReport)
+      assessed.observation.testsRun shouldBe None
+      reassessed.outcome shouldBe SbtExecutionOutcome.UnverifiedTests(SbtTestSelectionFailure.InvalidReport)
+      reassessed.processResult shouldBe raw
+      full shouldBe Right(SbtFullTestReport(4L, 16L, 2))
+    }
+  }
+
+  private def _full_summary(completed: Long, total: Long): String =
+    Vector(
+      s"[info] Total number of tests run: $total",
+      s"[info] Suites: completed $completed, aborted 0",
+      s"[info] Tests: succeeded $total, failed 0, canceled 0, ignored 0, pending 0",
+      "[info] All tests passed."
+    ).mkString("\n")
 
   private def _report(classes: Vector[String], count: Long, simple: Boolean): String =
     (classes.map(x => s"[info] ${if (simple) x.split('.').last else x}:") ++ Vector(

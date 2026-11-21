@@ -419,6 +419,33 @@ for providing the original exact admitted selection. `assess` exposes the same
 report interpretation and supplementary observation independently; process outcome
 is determined by `reassess` and the retained termination.
 
+### Retained FULL ScalaTest report assessment
+
+`SbtTestReassessment.assessFull(processResult)` evaluates retained process
+evidence from an admitted FULL run. It returns either an
+`SbtTestSelectionFailure` or an `SbtFullTestReport(completedSuites, testsRun,
+reportCount)` with the sum of observed completed suites and executed tests
+across the passing report blocks.
+
+Verification requires a zero exit and complete, byte-accurate, strictly
+decoded UTF-8 captures on both streams. ScalaTest failure markers on either
+stream refuse verification. Each recognized stdout report must contain an
+ordered total, suite counts, test counts and the exact `All tests passed.`
+line. Literal suite headers and the ordinary run-completed timing line can
+precede the summary. Each block needs positive suite and test counts, zero
+aborted suites and zero failed or canceled tests, and a succeeded count equal
+to the test total. Unrelated logs are ignored. Malformed or unfinished
+reports, zero-test reports, and overflow in numeric fields or totals fail.
+
+Identical numeric summaries require disjoint complete literal suite headers
+to count as distinct blocks. A complete set has one unique header per
+completed suite. Repeating the same complete suite set is ambiguous even
+when counts differ. Distinct numeric summaries can verify with missing
+headers. The result describes evidence in the captured reporter output. A
+caller requiring proof of which projects or suites ran needs separate
+inventory and provenance evidence. TestOnly continues to use the exact
+selection API and its single-summary rules.
+
 ### Legacy JVM entry points — CNCF-OLD-SBT-ABI-01
 
 The old compiled operational CAR413 caller failed with

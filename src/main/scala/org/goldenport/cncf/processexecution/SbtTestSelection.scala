@@ -7,7 +7,7 @@ import org.goldenport.Consequence
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 24, 2026
- * @version Nov. 12, 2026
+ * @version Nov. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 enum SbtTestSelectionFailure {
@@ -35,11 +35,17 @@ final case class SbtTestObservation(
 
 final case class SbtTestAssessment(selection: SbtTestSelectionResult, observation: SbtTestObservation)
 
-/** Pure interpretation of an existing receipt with the original exact selection. */
+/** Aggregate counts from the verified passing ScalaTest blocks of a retained FULL run. */
+final case class SbtFullTestReport(completedSuites: Long, testsRun: Long, reportCount: Int)
+
+/** Pure interpretation of retained test process evidence. */
 object SbtTestReassessment {
   def assess(testClasses: Vector[String], result: ProcessExecutionResult,
     scenario: Option[SbtScenarioSelection] = None): SbtTestAssessment =
     SbtTestSelectionDecoder.assess(testClasses, result, scenario)
+
+  def assessFull(result: ProcessExecutionResult): Either[SbtTestSelectionFailure, SbtFullTestReport] =
+    SbtTestSelectionDecoder.assessFull(result)
 
   def reassess(target: SbtTarget, testClasses: Vector[String], result: ProcessExecutionResult): SbtExecutionResult = {
     val assessment = assess(testClasses, result, target.scenario)
@@ -79,6 +85,111 @@ private[cncf] object SbtTestSelectionDecoder {
   private val _suites = "Suites: completed ([0-9]+), aborted ([0-9]+)".r
   private val _tests = "Tests: succeeded ([0-9]+), failed ([0-9]+), canceled ([0-9]+), ignored ([0-9]+), pending ([0-9]+)".r
   private val _header = "([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*):".r
+  private val _duration = "[0-9]+ (?:days?|hours?|minutes?|seconds?|milliseconds?)"
+  private val _run_completed = s"Run completed in ${_duration}(?:, ${_duration})*\\.".r
+  private val _full_summary_prefixes = Vector("Run completed", "Total number of tests run",
+    "Suites:", "Suites completed", "Tests:", "Tests succeeded", "All tests passed", "No tests were executed")
+
+  private final case class FullTestBlock(completed: Long, total: Long, ignored: Long, pending: Long, headers: Vector[String])
+
+  def assessFull(result: ProcessExecutionResult): Either[SbtTestSelectionFailure, SbtFullTestReport] = {
+    import SbtTestSelectionFailure.*
+    result.termination match {
+      case ProcessExecutionTermination.Exited(0) =>
+        for {
+          stdout <- _capture(result.stdout)
+          stderr <- _capture(result.stderr)
+          _ <- Either.cond(!Iterator(stdout, stderr).flatMap(_.linesIterator).exists(line =>
+            line.contains("***") && (line.contains("FAILED") || line.contains("ABORTED") ||
+              line.contains("CANCELED"))), (), FailedTests)
+          report <- _full_report(stdout)
+        } yield report
+      case ProcessExecutionTermination.Exited(_) => Left(FailedTests)
+      case _ => Left(IncompleteCapture)
+    }
+  }
+
+  private def _full_summary_marker(line: String): Boolean =
+    _full_summary_prefixes.exists(line.startsWith)
+
+  private def _full_report(stdout: String): Either[SbtTestSelectionFailure, SbtFullTestReport] = {
+    val lines = _lines(stdout).iterator
+      .filter(line => _full_summary_marker(line) || _header.matches(line))
+      .buffered
+    val reports = Vector.newBuilder[FullTestBlock]
+    while (lines.hasNext) {
+      _full_block(lines) match {
+        case Right(block) => reports += block
+        case Left(reason) => return Left(reason)
+      }
+    }
+    _sum_full_report(reports.result())
+  }
+
+  private def _full_block(lines: BufferedIterator[String]): Either[SbtTestSelectionFailure, FullTestBlock] = {
+    import SbtTestSelectionFailure.*
+    val headers = Vector.newBuilder[String]
+    while (lines.hasNext && !_full_summary_marker(lines.head) && _header.matches(lines.head))
+      headers += lines.next().stripSuffix(":")
+    val names = headers.result()
+    if (lines.hasNext && lines.head.startsWith("Run completed") && !_run_completed.matches(lines.next()))
+      return Left(InvalidReport)
+    if (lines.hasNext && lines.head == "No tests were executed.")
+      return Left(ZeroTests)
+
+    (lines.nextOption(), lines.nextOption(), lines.nextOption()) match {
+      case (Some(_total(all)), Some(_suites(suites, aborted)),
+          Some(_tests(succeeded, failed, canceled, ignored, pending))) =>
+        for {
+          total <- _number(all)
+          completed <- _number(suites)
+          abortedcount <- _number(aborted)
+          successes <- _number(succeeded)
+          failures <- _number(failed)
+          cancelations <- _number(canceled)
+          ignoredcount <- _number(ignored)
+          pendingcount <- _number(pending)
+          _ <- Either.cond(abortedcount == 0L && failures == 0L && cancelations == 0L, (), FailedTests)
+          _ <- Either.cond(completed > 0L && total > 0L, (), ZeroTests)
+          _ <- Either.cond(successes == total && names.size.toLong <= completed && names.distinct.size == names.size,
+            (), InvalidReport)
+          _ <- Either.cond(lines.nextOption().contains("All tests passed."), (), InvalidReport)
+        } yield FullTestBlock(completed, total, ignoredcount, pendingcount, names)
+      case _ => Left(InvalidReport)
+    }
+  }
+
+  private def _sum_full_report(blocks: Vector[FullTestBlock]): Either[SbtTestSelectionFailure, SbtFullTestReport] = {
+    import SbtTestSelectionFailure.*
+    val completesets = blocks.collect {
+      case block if block.headers.size.toLong == block.completed => block.headers.toSet
+    }
+    if (blocks.isEmpty || completesets.distinct.size != completesets.size)
+      return Left(InvalidReport)
+
+    val countgroups = blocks.groupBy(x => (x.completed, x.total, x.ignored, x.pending))
+    val distinct = countgroups.valuesIterator.forall { group =>
+      if (group.size == 1) true
+      else {
+        val names = group.flatMap(_.headers)
+        group.forall(x => x.headers.size.toLong == x.completed) && names.distinct.size == names.size
+      }
+    }
+    if (!distinct)
+      return Left(InvalidReport)
+
+    var completed = 0L
+    var total = 0L
+    val reports = blocks.iterator
+    while (reports.hasNext) {
+      val block = reports.next()
+      if (Long.MaxValue - completed < block.completed || Long.MaxValue - total < block.total)
+        return Left(InvalidReport)
+      completed += block.completed
+      total += block.total
+    }
+    Right(SbtFullTestReport(completed, total, blocks.size))
+  }
 
   def assess(testClasses: Vector[String], result: ProcessExecutionResult,
     scenario: Option[SbtScenarioSelection] = None): SbtTestAssessment = {
