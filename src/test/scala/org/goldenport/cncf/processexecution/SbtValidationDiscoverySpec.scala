@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /** Exact supported export framing and complete per-variant batch observations.
  * @since   Nov.  6, 2026
- * @version Nov.  7, 2026
+ * @version Nov. 21, 2026
  */
 class SbtValidationDiscoverySpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _workspace = WorkspaceId.parseC("ordinary-project").toOption.get
@@ -114,6 +114,181 @@ class SbtValidationDiscoverySpec extends AnyWordSpec with Matchers with GivenWhe
       val checked = Test.check(Test.Parameters.default.withMinSuccessfulTests(32), property)
       Then("a successful process or selected label never supplies actual mode evidence")
       checked.passed shouldBe true
+    }
+  }
+
+  "Scoped managed discovery and FULL selection" should {
+    "use one immutable consumer selection for the actual compile, discovery and selected test" taggedAs(org.scalatest.tagobjects.Slow) in {
+      import java.net.URLClassLoader
+      import java.nio.file.{Files, Paths}
+      import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId, ComponentOrigin}
+      import org.goldenport.cncf.context.{ExecutionContext, GlobalContext, ScopeContext, ScopeKind}
+      import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
+      import org.goldenport.cncf.validation.{ValidationDiscoveryV1 as D, ValidationMetadataV1 as V}
+      import org.goldenport.cncf.workarea.{FileWorkArea, WorkArea, WorkAreaGroup, WorkAreaId, WorkAreaSpace}
+      import org.goldenport.cncf.workspace.{WorkspaceExecutionAdmission, WorkspaceGrant, WorkspaceId, WorkspacePermission, WorkspaceRelativePath}
+      import org.goldenport.protocol.Protocol
+
+      Given("a private managed build and one consumer selection owned by a separately granted workspace")
+      val base = Files.createDirectories(Paths.get("target", "p7d-scoped-discovery").toAbsolutePath)
+      val root = Files.createTempDirectory(base, "observation-")
+      val checkout = Files.createDirectory(root.resolve("checkout"))
+      val ownerroot = Files.createDirectory(root.resolve("selection-owner"))
+      val project = Files.createDirectories(checkout.resolve("project"))
+      val source = Files.createDirectories(checkout.resolve("src/test/scala/project/spec"))
+      val owner = ComponentId("org.goldenport.spec.ScopedRealBuildOwner")
+      val workspaceid = WorkspaceId.parseC("real-build").toOption.get
+      val ownerid = WorkspaceId.parseC("selection-owner").toOption.get
+      val selectionpath = ownerroot.resolve("selection.json")
+      val selection = SbtScopedInput(owner, workspaceid, ownerid, "scope-1", "selection-1",
+        WorkspaceRelativePath.parseC("selection.json").toOption.get)
+      val envelope = s"""{"schema":"cncf.scoped-sbt-input.v1","kind":"consumer","component":"${owner.name}","buildWorkspace":"real-build","ownerWorkspace":"selection-owner","scope":"scope-1","selection":"selection-1","pluginSettings":{"fixture":true}}"""
+      Files.writeString(selectionpath, envelope)
+      Files.writeString(project.resolve("build.properties"), "sbt.version=1.9.7\n")
+      val runtimepaths = _runtime_classpath
+      val quotedpath = io.circe.Json.fromString(selectionpath.toString).noSpaces
+      val unmanaged = runtimepaths.map(path => s"file(${io.circe.Json.fromString(path.toString).noSpaces})").mkString(", ")
+      Files.writeString(checkout.resolve("build.sbt"), s"""scalaVersion := "3.3.8"
+        |libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.18" % Test
+        |Test / unmanagedClasspath ++= {
+        |  require(sys.props.get("sm.artifact.selection").contains($quotedpath), "wrong selected consumer envelope")
+        |  Seq($unmanaged).map(Attributed.blank)
+        |}
+        |""".stripMargin)
+      Files.writeString(source.resolve("SelectedSpec.scala"), s"""package project.spec
+        |import org.scalatest.wordspec.AnyWordSpec
+        |import org.scalatest.Outcome
+        |import org.goldenport.cncf.config.OperationMode
+        |import org.goldenport.cncf.validation.{ValidationDeclarationProvider, ValidationExecutionModeV1 as M}
+        |import org.goldenport.cncf.validation.ValidationMetadataV1.{Declaration, Purpose}
+        |import org.goldenport.cncf.validation.annotation.ValidationSpecification
+        |class FullDeclaration extends ValidationDeclarationProvider {
+        |  def declaration: Declaration = Declaration(purposes = Some(Set(Purpose.FULL)),
+        |    requiredSemantics = Set("executionModes"), executionModes = Some(Set("test")))
+        |}
+        |@ValidationSpecification(declaration = classOf[FullDeclaration])
+        |class SelectedSpec extends AnyWordSpec {
+        |  "selected consumer" should { "run the full case" in {
+        |    assert(sys.props.get("sm.artifact.selection").contains($quotedpath))
+        |    val input = scala.io.Source.fromFile($quotedpath)
+        |    try assert(input.mkString.contains("selection-1")) finally input.close()
+        |  }}
+        |  override protected def withFixture(test: NoArgTest): Outcome = {
+        |    val actual = M.consumeC(test.configMap.toMap, getClass.getName, test.name, OperationMode.Test, "fixture")
+        |    assert(actual.isSuccess)
+        |    println(actual.toOption.get.line)
+        |    super.withFixture(test)
+        |  }
+        |}
+        |""".stripMargin)
+      val workspace = WorkspaceExecutionAdmission.createC(Vector(workspaceid -> checkout, ownerid -> ownerroot),
+        Vector(WorkspaceGrant(owner, workspaceid, WorkspacePermission.Manage),
+          WorkspaceGrant(owner, ownerid, WorkspacePermission.ReadOnly))).toOption.get
+      val binding = workspace.bindingC(workspaceid).toOption.get
+      val compilecap = ProcessCapabilityId.parseC("scoped-test-compile").toOption.get
+      val testcap = ProcessCapabilityId.parseC("scoped-test-only").toOption.get
+      val limits = ProcessExecutionLimits(Some(60000L), Some(600000L), Some(5000L), Some(65536L),
+        Some(67108864L), Some(8388608L), Some(64L), Some(65536L), Some(16L), Some(65536L), Some(65536L))
+      val environment = Vector("PATH", "HOME", "JAVA_HOME").flatMap(key => Option(System.getenv(key)).map(key -> _)).toMap
+      val declaration = SbtValidationDiscovery.Binding("project", "project-tests", "1", "project.spec")
+      val compile = SbtProgramDefinition.createC(binding, SbtOperation.TestCompile, compilecap,
+        "scoped-test-compile", Paths.get("sbt"), limits, environment, discovery = Some(declaration)).toOption.get
+      val test = SbtProgramDefinition.createC(binding, SbtOperation.TestOnly, testcap,
+        "scoped-test-only", Paths.get("sbt"), limits, environment,
+        validationMode = Some(SbtValidationMode.Binding(Set("test"), "fixture")),
+        discovery = Some(declaration), discoveredTests = true).toOption.get
+      val policy = ProcessExecutionPolicy.createC(Vector(compile, test)).toOption.get
+      val admission = ProcessExecutionAdmission.forComponentsC(policy,
+        Map(owner -> Vector(ProcessExecutionGrant(compilecap), ProcessExecutionGrant(testcap)))).toOption.get
+      val space = new WorkAreaSpace(WorkAreaGroup(new FileWorkArea(WorkAreaId("scoped_real_build_spec"),
+        WorkArea.Limit(None, None, None), Files.createDirectory(root.resolve("workareas")))))
+      GlobalContext.set(GlobalContext(space))
+      val execution = ExecutionContext.create()
+      val runtime = ScopeContext(ScopeKind.Runtime, "scoped-real-build-spec", None, execution.observability,
+        processexecutiondriveroption = Some(new LocalProcessExecutionDriver()),
+        processexecutionadmissionoption = Some(admission), workspaceExecutionAdmissionOption = Some(workspace))
+      val component = Component.create(owner.name, owner, ComponentInstanceId.default(owner), Protocol.empty)
+      val scope = Component.Context(owner.name, runtime, component, ComponentOrigin.Unknown)
+        .createChildScope(ScopeKind.Service, "build").createChildScope(ScopeKind.Action, "test")
+      val context = execution.withScope(scope)
+      val uow = new UnitOfWork(context)
+      var loader: Option[URLClassLoader] = None
+      try {
+        When("the real typed UoW runs TestCompile and the metadata-selected FULL case")
+        val compiletarget = SbtTarget(workspaceid, validationDiscovery = true, scopedInput = Some(selection))
+        val compileargs = SbtExecutionAdmission.resolveC(context, compiletarget, SbtOperation.TestCompile).toOption.get.effectiveArguments
+        val compiled = new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.SbtExec(compiletarget, SbtOperation.TestCompile)).toOption.get
+        Files.write(root.resolve("compile-stdout.bin"), compiled.processResult.stdout.content.toArray)
+        Files.write(root.resolve("compile-stderr.bin"), compiled.processResult.stderr.content.toArray)
+        compiled.processResult.termination shouldBe ProcessExecutionTermination.Exited(0)
+        compiled.outcome shouldBe SbtExecutionOutcome.Succeeded
+        compiled.target.scopedInput shouldBe Some(selection)
+        val build = compiled.discovery.get.asInstanceOf[SbtValidationDiscovery.Result.Available].build
+        val product = build.products.find(path => Files.exists(path.resolve("project/spec/SelectedSpec.class"))).get.toRealPath()
+        build.fullClasspath should contain (product)
+        val actualLoader = new URLClassLoader(build.fullClasspath.map(_.toUri.toURL).toArray, getClass.getClassLoader)
+        loader = Some(actualLoader)
+        val artifacts = Vector(D.ArtifactScope(declaration.componentIdentity, declaration.artifactIdentity,
+          declaration.artifactRevision, "source-1", product, declaration.packagePrefix))
+        val inventory = D.discoverC(D.DiscoveryScope("scoped-real-build", "1", artifacts), actualLoader).toOption.get
+        inventory.completeness shouldBe D.Completeness.COMPLETE
+        inventory.diagnostics shouldBe empty
+        val selected = D.selectC(inventory, D.SelectionQuery(purposes = Set(V.Purpose.FULL), standardFramework = true)).toOption.get
+        selected.map(_.selector.testName) shouldBe Vector("selected consumer should run the full case")
+        val operation = selected.head
+        operation.metadata.get.executionModes shouldBe Some(Set("test"))
+        val exact = SbtScenarioSelection(operation.selector.suiteClassName, operation.selector.testName)
+        val variant = SbtValidationMode.Case(exact, "test", Some("fixture"))
+        val testtarget = SbtTarget(workspaceid, validationBatch = Vector(variant), scopedInput = Some(selection))
+        val testargs = SbtExecutionAdmission.resolveC(context, testtarget, SbtOperation.TestOnly).toOption.get.effectiveArguments
+        val tested = new UnitOfWorkInterpreter(uow).interpret(UnitOfWorkOp.SbtExec(testtarget, SbtOperation.TestOnly)).toOption.get
+        Files.write(root.resolve("test-stdout.bin"), tested.processResult.stdout.content.toArray)
+        Files.write(root.resolve("test-stderr.bin"), tested.processResult.stderr.content.toArray)
+        Files.writeString(root.resolve("result.txt"), s"compile=$compileargs\ntest=$testargs\ndiscovery=${compiled.discovery}\nselected=$selected\ncompileTermination=${compiled.processResult.termination}\ntestTermination=${tested.processResult.termination}\nbatch=${tested.batch}\n")
+        Then("the exact selected path precedes all tasks and both real processes retain their results")
+        val property = "-Dsm.artifact.selection=" + selectionpath.toString
+        compileargs.count(_ == property) shouldBe 1
+        compileargs.indexOf(property) should be < compileargs.indexOf("Test / compile")
+        compileargs.takeRight(3) shouldBe SbtValidationDiscovery.tasks
+        testargs.count(_ == property) shouldBe 1
+        testargs.indexOf(property) should be < testargs.indexWhere(_.startsWith(";testOnly "))
+        tested.target.scopedInput shouldBe Some(selection)
+        tested.processResult.termination shouldBe ProcessExecutionTermination.Exited(0)
+        tested.outcome shouldBe SbtExecutionOutcome.Succeeded
+        tested.batch.get.map(_.selected) shouldBe Vector(variant)
+        tested.batch.get.map(_.status) shouldBe Vector("passed")
+        Files.readString(selectionpath) shouldBe envelope
+        info(s"Scoped managed SBT evidence: $root; selected=${operation.selector}; compile=${compiled.processResult.termination}; test=${tested.processResult.termination}; batch=${tested.batch}")
+      } finally {
+        loader.foreach(_.close())
+        uow.dispose()
+      }
+    }
+  }
+
+  private def _runtime_classpath: Vector[Path] = {
+    import java.io.File
+    import java.net.URLClassLoader
+    import java.nio.file.{Files, Paths}
+    val properties = Option(System.getProperty("java.class.path")).toVector
+      .flatMap(_.split(java.util.regex.Pattern.quote(File.pathSeparator)).toVector).filter(_.nonEmpty)
+      .map(value => Paths.get(value).toAbsolutePath.normalize())
+    var current = Option(getClass.getClassLoader)
+    var entries = Vector.empty[Path]
+    while (current.nonEmpty) {
+      current.foreach {
+        case loader: URLClassLoader => entries ++= loader.getURLs.toVector.filter(_.getProtocol == "file")
+          .flatMap(url => scala.util.Try(Paths.get(url.toURI).toAbsolutePath.normalize()).toOption)
+        case _ => ()
+      }
+      current = current.flatMap(value => Option(value.getParent))
+    }
+    val main = Paths.get(classOf[org.goldenport.cncf.validation.ValidationDeclarationProvider]
+      .getProtectionDomain.getCodeSource.getLocation.toURI).toAbsolutePath.normalize()
+    (Vector(main) ++ properties ++ entries).distinct.filter(path => Files.exists(path)).filterNot { path =>
+      val name = path.getFileName.toString
+      name.startsWith("sbt-launch") || name.startsWith("scala-library-2.12") ||
+        name.startsWith("scala-reflect-2.12") || name.startsWith("scala-compiler-2.12")
     }
   }
 

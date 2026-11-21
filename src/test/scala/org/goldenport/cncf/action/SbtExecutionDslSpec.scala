@@ -25,7 +25,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 24, 2026
- * @version Nov. 19, 2026
+ * @version Nov. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -1091,6 +1091,36 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
           .isInstanceOf[SbtExecutionAttempt.AdmissionRejected] shouldBe true
         fixture.profile.driver.executions should have size 1
       } finally { uow.dispose(); _close(fixture.root) }
+    }
+
+    "transport the selected consumer through typed test operations" in {
+      Given("an admitted consumer envelope and separately declared test operations")
+      Vector(SbtOperation.TestCompile, SbtOperation.TestOnly).foreach { operation =>
+        val fixture = _fixture(_selection_process(Vector("org.example.SelectedSpec")),
+          compileoperation = SbtOperation.TestCompile)
+        val uow = new UnitOfWork(fixture.context)
+        val relative = WorkspaceRelativePath.parseC("selection.json").toOption.get
+        val input = fixture.root.resolve("checkout/selection.json")
+        val scoped = SbtScopedInput(_owner, _workspace_id, _workspace_id, "scope-1", "selection-1", relative)
+        val json = s"""{"schema":"cncf.scoped-sbt-input.v1","kind":"consumer","component":"${_owner.name}","buildWorkspace":"project","ownerWorkspace":"project","scope":"scope-1","selection":"selection-1"}"""
+        try {
+          Files.writeString(input, json)
+          val target = fixture.target.copy(scopedInput = Some(scoped))
+          val interpreter = new UnitOfWorkInterpreter(uow)
+          When("the owning UoW executes the selected test operation")
+          val result = interpreter.interpret(UnitOfWorkOp.SbtExecAttempt(target, operation)).toOption.get
+          Then("the exact selection occurs once before the task and a foreign envelope is rejected")
+          result shouldBe a[SbtExecutionAttempt.Observed]
+          val args = fixture.profile.driver.executions.head.effectiveArguments
+          val property = "-Dsm.artifact.selection=" + input.toString
+          args.count(_ == property) shouldBe 1
+          args.indexOf(property) should be < (args.size - 1)
+          args.last shouldBe (if (operation == SbtOperation.TestCompile) "Test / compile" else "testOnly org.example.SelectedSpec")
+          Files.writeString(input, json.replace("selection-1", "foreign"))
+          interpreter.interpret(UnitOfWorkOp.SbtExecAttempt(target, operation)).toOption.get shouldBe a[SbtExecutionAttempt.AdmissionRejected]
+          fixture.profile.driver.executions should have size 1
+        } finally { uow.dispose(); _close(fixture.root) }
+      }
     }
 
     "use the separately granted fixed producer task and retain its process outcome" in {

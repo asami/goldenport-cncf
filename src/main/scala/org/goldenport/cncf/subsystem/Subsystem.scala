@@ -81,7 +81,7 @@ import org.goldenport.bag.Bag
  *  version Aug. 15, 2026
  *  version Sep.  8, 2026
  *  version Oct. 31, 2026
- * @version Nov. 17, 2026
+ * @version Nov. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -131,6 +131,10 @@ final class Subsystem(
   // Node configuration is supplied by the runtime factory before this
   // Subsystem exists. Direct construction deliberately receives only the
   // typed default and never grants raw ResolvedConfiguration node authority.
+  private val _job_worker_count = _find_global_runtime_context(scopeContext).map { x =>
+    RuntimeConfig.jobSchedulerWorkerCountC(x.resolvedConfiguration)
+      .getOrElse(throw new IllegalArgumentException("Invalid textus.job.scheduler.worker-count"))
+  }
   private val _system_node = Option(systemnode).orElse(SystemNodeConstruction.current).getOrElse(SystemNode.create())
   private val _datastore_binding = _system_node.bind()
   private val _active_datastore_lease = new ThreadLocal[SystemNodeResourceLease]()
@@ -140,7 +144,7 @@ final class Subsystem(
   private var _resolver: OperationResolver = OperationResolver.empty
   private val _job_engine: JobEngine =
     _find_global_runtime_context(scopeContext)
-      .map(x => InMemoryJobEngine.create(x.executionProfileRuntime))
+      .map(x => InMemoryJobEngine.create(x.executionProfileRuntime, _job_worker_count.get))
       .getOrElse(InMemoryJobEngine.create())
   private val _event_store: EventStore = EventStoreConstruction.current.getOrElse(EventStore.inMemory)
   private val _event_store_persistence_declaration = EventStorePersistenceConstruction.current

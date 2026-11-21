@@ -10,7 +10,8 @@ import org.goldenport.cncf.event.{EventBus, EventStore}
 
 /*
  * @since   Sep. 28, 2026
- * @version Oct. 3, 2026
+ *  version Oct.  3, 2026
+ * @version Nov. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InMemoryJobEngine(
@@ -71,6 +72,7 @@ final class InMemoryJobEngine(
 }
 
 object InMemoryJobEngine {
+  val MaximumWorkerCount: Int = JobResourcePolicy.default.maxexecutingwork
   val CallTreeVarcharThresholdBytes: Int = 8 * 1024
   val DefaultSlowCallTreeThresholdMillis: Long = 1000L
 
@@ -351,11 +353,15 @@ object InMemoryJobEngine {
       scala.concurrent.ExecutionContext.global
     )
 
-  def create(runtime: ExecutionProfileRuntime): InMemoryJobEngine = {
+  def create(runtime: ExecutionProfileRuntime): InMemoryJobEngine =
+    create(runtime, SchedulerConfig.default.workerCount)
+
+  def create(runtime: ExecutionProfileRuntime, workerCount: Int): InMemoryJobEngine = {
+    require(workerCount >= 1 && workerCount <= MaximumWorkerCount, "invalid worker count")
     val manual = runtime.profile.control.schedulerMode == ExecutionSchedulerMode.Manual
     val config =
       if (manual) SchedulerConfig(workerCount = 1, autoStartWorkers = false)
-      else SchedulerConfig.default
+      else SchedulerConfig.default.copy(workerCount = workerCount)
     val timer =
       if (manual) Some(new ExecutionSchedulerJobTimer(runtime))
       else None

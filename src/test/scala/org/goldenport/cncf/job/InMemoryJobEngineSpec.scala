@@ -22,11 +22,34 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan.  4, 2026
  *  version Apr. 22, 2026
- * @version Jul. 25, 2026
+ *  version Jul. 25, 2026
+ * @version Nov. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen with JobEngineTestFixture {
   "InMemoryJobEngine" should {
+    "respect the bounded trusted worker count and preserve the legacy factory" in {
+      import org.goldenport.cncf.config.RuntimeConfig
+      import org.goldenport.cncf.context.IdGenerationContext
+      import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
+      val key = "textus.job.scheduler.worker-count"
+      def config(values: Map[String, ConfigurationValue]) = ResolvedConfiguration(Configuration(values), ConfigurationTrace.empty)
+      RuntimeConfig.jobSchedulerWorkerCountC(config(Map.empty)).toOption shouldBe Some(1)
+      RuntimeConfig.jobSchedulerWorkerCountC(config(Map(key -> ConfigurationValue.NumberValue(BigDecimal(2))))).toOption shouldBe Some(2)
+      Vector("0", "65", "1.5", "bad").foreach { value =>
+        RuntimeConfig.jobSchedulerWorkerCountC(config(Map(key -> ConfigurationValue.StringValue(value)))).isFaillure shouldBe true
+      }
+      val runtime = RuntimeConfig.DEFAULT_EXECUTION_PROFILE.newRuntime(IdGenerationContext.DEFAULT_NAMESPACE)
+      val original = InMemoryJobEngine.create(runtime)
+      val parallel = InMemoryJobEngine.create(runtime, 2)
+      try {
+        original.schedulerConfig.workerCount shouldBe 1
+        parallel.schedulerConfig.workerCount shouldBe 2
+        intercept[IllegalArgumentException](InMemoryJobEngine.create(runtime, 0))
+        intercept[IllegalArgumentException](InMemoryJobEngine.create(runtime, 65))
+      } finally { original.shutdown(); parallel.shutdown() }
+    }
+
     "execute a Command as a Job and store the result" in {
       val action = new CommandAction() {
         // val name = "test"

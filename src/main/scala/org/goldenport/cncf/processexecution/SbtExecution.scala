@@ -12,7 +12,7 @@ import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePe
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 24, 2026
- * @version Nov. 19, 2026
+ * @version Nov. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection] = None,
@@ -375,23 +375,25 @@ private[cncf] object SbtScopedInputAdmission {
         _ <- if (input.component == owner && input.buildWorkspace == target.workspaceId &&
           _valid_id(input.scope) && _valid_id(input.selection) && input.input.value != null &&
           input.publication != null && !input.publication.exists(_ == null) &&
-          ((operation == SbtOperation.Compile && input.publication.isEmpty) ||
+          ((Set(SbtOperation.Compile, SbtOperation.TestCompile, SbtOperation.TestOnly).contains(operation) && input.publication.isEmpty) ||
            (operation == SbtOperation.ScopedPublish && input.publication.nonEmpty))) Consequence.unit else _invalid_c
         binding <- workspace.admitC(context.cncfCore.scope, input.ownerWorkspace,
           if (input.publication.nonEmpty) WorkspacePermission.Manage else WorkspacePermission.ReadOnly)
-        path <- binding.resolveRelativeC(input.input)
+        relative <- WorkspaceRelativePath.parseC(input.input.value)
+        path <- binding.resolveRelativeC(relative)
         _ <- input.publication.fold(Consequence.unit) { p => for {
           _ <- if (_valid_id(p.publication) && p.repository.value != null && p.staging.value != null && p.repository != p.staging) Consequence.unit else _invalid_c
-          repository <- binding.resolveRelativeC(p.repository)
-          staging <- binding.resolveRelativeC(p.staging)
+          repositoryRelative <- WorkspaceRelativePath.parseC(p.repository.value)
+          stagingRelative <- WorkspaceRelativePath.parseC(p.staging.value)
+          repository <- binding.resolveRelativeC(repositoryRelative)
+          staging <- binding.resolveRelativeC(stagingRelative)
           _ <- if (Files.isDirectory(repository, LinkOption.NOFOLLOW_LINKS) && Files.isDirectory(staging, LinkOption.NOFOLLOW_LINKS) &&
             !repository.startsWith(staging) && !staging.startsWith(repository)) Consequence.unit else _invalid_c
         } yield () }
         _ <- _validate_file_c(path, input)
         definition = execution.definition
         updated <- ProcessProgramDefinition.fromSbtRuntimeC(definition.capability, definition.safeProgramIdentity,
-          definition._executable_location, definition.fixedArguments.dropRight(1) ++
-            Vector("-Dsm.artifact.selection=" + path.toString, definition.fixedArguments.last),
+          definition._executable_location, Vector("-Dsm.artifact.selection=" + path.toString) ++ definition.fixedArguments,
           definition.maximumLimits, definition._environment.values, definition._sbt_metadata.get)
       } yield execution.copy(definition = updated)
     }
@@ -400,7 +402,7 @@ private[cncf] object SbtScopedInputAdmission {
   private def _validate_file_c(path: Path, input: SbtScopedInput): Consequence[Unit] = try {
     if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) || Files.size(path) > 65536) _invalid_c
     else {
-      val stream = Files.newInputStream(path)
+      val stream = Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS)
       val bytes = try stream.readNBytes(65537) finally stream.close()
       if (bytes.length > 65536) _invalid_c
       else {

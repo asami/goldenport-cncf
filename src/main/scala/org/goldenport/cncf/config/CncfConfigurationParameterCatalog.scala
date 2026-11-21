@@ -17,7 +17,7 @@ import org.goldenport.configuration.{CanonicalParameterId, ConfigurationParamete
  * @since   Aug.  3, 2026
  *  version Aug.  4, 2026
  *  version Oct. 31, 2026
- * @version Nov. 16, 2026
+ * @version Nov. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CncfConfigurationParameterCatalog private[config] (
@@ -508,8 +508,32 @@ object CncfConfigurationParameterCatalog {
   private val _io_default_maximum_bytes_parameter = _take(ConfigurationParameter.create(
     _take(CanonicalParameterId.parse(IoDefaultParameters.KEY)), IoDefaultParameters.codec))
 
+  val JOB_SCHEDULER_WORKER_COUNT_KEY = "textus.job.scheduler.worker-count"
+  val jobSchedulerWorkerCount: ConfigurationParameter[Int] = _take(ConfigurationParameter.create(
+    _take(CanonicalParameterId.parse(JOB_SCHEDULER_WORKER_COUNT_KEY)),
+    new ConfigurationValueCodec[Int] {
+      private def _checked_c(value: Int): Consequence[Int] =
+        if (value >= 1 && value <= org.goldenport.cncf.job.InMemoryJobEngine.MaximumWorkerCount)
+          Consequence.success(value)
+        else Consequence.configurationInvalid(s"$JOB_SCHEDULER_WORKER_COUNT_KEY requires an integer in 1..64")
+      def decode(value: ConfigurationValue): Consequence[Int] = value match {
+        case ConfigurationValue.NumberValue(n) if n.isWhole && n.isValidInt => _checked_c(n.toInt)
+        case ConfigurationValue.StringValue(s) if s != null && s.matches("[0-9]+") =>
+          scala.util.Try(s.toInt).toOption.fold[Consequence[Int]](
+            Consequence.configurationInvalid(s"$JOB_SCHEDULER_WORKER_COUNT_KEY requires an integer in 1..64"))(_checked_c)
+        case _ => Consequence.configurationInvalid(s"$JOB_SCHEDULER_WORKER_COUNT_KEY requires an integer in 1..64")
+      }
+      def encode(value: Int): Consequence[ConfigurationValue] =
+        _checked_c(value).map(x => ConfigurationValue.NumberValue(BigDecimal(x)))
+    }
+  ))
+
   private val _definitions =
     Vector(
+      _take(CncfConfigurationParameterDefinition.registered(
+        JOB_SCHEDULER_WORKER_COUNT_KEY, Vector.empty, jobSchedulerWorkerCount,
+        Vector("shared job scheduler capacity"), isConfidential = false,
+        Set(CncfConfigurationTargetKind.SubsystemInstance))),
       _take(CncfConfigurationParameterDefinition.registered(
         IoDefaultParameters.KEY, Vector.empty, _io_default_maximum_bytes_parameter,
         Vector("common finite I/O default"), isConfidential = false,

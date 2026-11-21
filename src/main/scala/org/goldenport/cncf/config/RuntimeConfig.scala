@@ -27,7 +27,7 @@ import org.goldenport.cncf.resource.{ResourceReadLimits, ResourceTreePolicy, Res
  *  version Jun. 19, 2026
  *  version Jul. 30, 2026
  *  version Oct. 23, 2026
- * @version Nov. 16, 2026
+ * @version Nov. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -74,6 +74,24 @@ final case class RuntimeConfig(
 }
 
 object RuntimeConfig {
+  /** Reads only the already resolved, trusted host configuration. */
+  private[cncf] def jobSchedulerWorkerCountC(configuration: ResolvedConfiguration): Consequence[Int] = {
+    val key = CncfConfigurationParameterCatalog.JOB_SCHEDULER_WORKER_COUNT_KEY
+    def _lookup_(values: Map[String, org.goldenport.configuration.ConfigurationValue], path: List[String]): Option[org.goldenport.configuration.ConfigurationValue] = path match {
+      case head :: Nil => values.get(head)
+      case head :: tail => values.get(head) match {
+        case Some(org.goldenport.configuration.ConfigurationValue.ObjectValue(nested)) => _lookup_(nested, tail)
+        case _ => None
+      }
+      case Nil => None
+    }
+    val values = configuration.configuration.values
+    values.get(key).orElse(_lookup_(values, key.split('.').toList)) match {
+      case Some(value) => CncfConfigurationParameterCatalog.jobSchedulerWorkerCount.codec.decode(value)
+      case None => Consequence.success(org.goldenport.cncf.job.InMemoryJobEngine.SchedulerConfig.default.workerCount)
+    }
+  }
+
   /** Parsed runtime settings, without owning any storage resources. */
   private[cncf] final case class Settings(
     logBackend: LogBackend,
