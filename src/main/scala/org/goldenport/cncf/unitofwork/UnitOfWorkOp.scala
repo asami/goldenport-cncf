@@ -26,7 +26,7 @@ import org.goldenport.cncf.operation.evaluation.OperationEvaluationSupplementalI
 import org.goldenport.cncf.oauth.OAuthConnectionRequest
 import org.goldenport.cncf.workflow.{ActionExecution, ProviderExecutionRequest, StateMachineProvidedApiRequest}
 import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
-import org.goldenport.cncf.workspace.{FileReadPolicy, FileWritePolicy, FileSnapshotLimits, FileReadSnapshotResult, FilePrepareDirectoryResult, FileReadBytesResult, FileReadTextResult, FileRepresentation, FileTarget, FileWriteBytesResult, FileWriteMode, FileWriteTextResult, WorkspaceFilePath}
+import org.goldenport.cncf.workspace.{FileDeleteResult, FileReadPolicy, FileWritePolicy, FileSnapshotLimits, FileReadSnapshotResult, FilePrepareDirectoryResult, FileReadBytesResult, FileReadTextResult, FileRepresentation, FileTarget, FileWriteBytesResult, FileWriteMode, FileWriteTextResult, WorkspaceFilePath}
 import org.goldenport.cncf.workspace.{SessionCandidateWorkspaceSelection, WorkspaceId}
 
 import org.goldenport.cncf.resource.{ResourceTreeSelection, ResourceTreeQueryLimits}
@@ -48,7 +48,7 @@ import org.goldenport.cncf.resource.{ResourceTreeSelection, ResourceTreeQueryLim
  *  version Jul. 26, 2026
  *  version Oct. 27, 2026
  *  version Oct. 29, 2026
- * @version Nov.  9, 2026
+ * @version Nov. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -197,6 +197,10 @@ object UnitOfWorkOp {
   final case class FileReadSnapshot(target: FileTarget, selection: ResourceTreeSelection,
     limits: ResourceTreeQueryLimits = FileSnapshotLimits.default) extends UnitOfWorkOp[FileReadSnapshotResult] {
     override def toString: String = s"FileReadSnapshot($target,FileRead)"
+  }
+
+  final case class FileDelete(target: FileTarget, path: WorkspaceFilePath) extends UnitOfWorkOp[FileDeleteResult] {
+    override def toString: String = s"FileDelete($target,FileWrite)"
   }
 
   final case class FilePrepareDirectory(

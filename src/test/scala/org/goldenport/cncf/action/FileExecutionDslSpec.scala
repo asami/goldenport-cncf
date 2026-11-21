@@ -28,7 +28,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Oct. 15, 2026
  *  version Oct. 21, 2026
  *  version Oct. 29, 2026
- * @version Nov.  9, 2026
+ * @version Nov. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class FileExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -38,6 +38,36 @@ final class FileExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhe
   private val _id = WorkspaceId.parseC("project").toOption.get
   private val _target = FileTarget(_id)
   private val _path = WorkspaceFilePath.parseC("message\n\\.txt").toOption.get
+
+  "File delete DSL" should {
+    "record an external intent and use the interpreting UoW owner" in {
+      Given("a program constructed under A and a separate owning workspace B")
+      val a = _fixture()
+      val b = _fixture()
+      try {
+        Files.writeString(a.checkout.resolve(_path.value), "A")
+        Files.writeString(b.checkout.resolve(_path.value), "B")
+        val behavior = new FileDslBehavior(Behavior.Core(a.context, None, None))
+        val program = behavior.delete(_target, _path)
+        val provider = new UnitOfWorkProgramStubProvider {
+          def resultFor[A](ordinal: Int, operation: UnitOfWorkOp[A]): Consequence[A] = operation match {
+            case UnitOfWorkOp.FileDelete(_, _) => Consequence.success(FileDeleteResult(_target, _path, FileDeleteOutcome.Deleted))
+            case _ => Consequence.notImplemented("unexpected File operation")
+          }
+        }
+        When("the intent is recorded and interpreted by B")
+        val recording = UnitOfWorkProgramRecorder.record(program, provider)
+        val result = new UnitOfWorkInterpreter(new UnitOfWork(b.context)).run(program)
+        Then("the external occurrence remains private and B alone loses its selected file")
+        recording.occurrences.map(_.effectClass) shouldBe Vector(UnitOfWorkEffectClass.External)
+        recording.occurrences.map(_.operation) shouldBe Vector(UnitOfWorkOp.FileDelete(_target, _path))
+        recording.occurrences.mkString should not include _path.value
+        result.toOption.get.outcome shouldBe FileDeleteOutcome.Deleted
+        Files.exists(a.checkout.resolve(_path.value)) shouldBe true
+        Files.exists(b.checkout.resolve(_path.value)) shouldBe false
+      } finally { _close(b); _close(a) }
+    }
+  }
 
   "Purpose-specific File budgets" should {
     "acquire a complete large artifact while both ordinary limits remain in force" in {
@@ -526,6 +556,7 @@ object FileExecutionDslSpec {
 private final class FileDslBehavior(val behaviorCore: Behavior.Core) extends Behavior {
   def snapshot(target: FileTarget, selection: ResourceTreeSelection,
     limits: ResourceTreeQueryLimits = FileSnapshotLimits.default) = file_read_snapshot(target, selection, limits)
+  def delete(target: FileTarget, path: WorkspaceFilePath) = file_delete(target, path)
   def prepare(target: FileTarget, path: WorkspaceFilePath) = file_prepare_directory(target, path)
   def writeBytes(target: FileTarget, path: WorkspaceFilePath, bytes: Vector[Byte], representation: FileRepresentation) =
     file_write_bytes(target, path, bytes, representation)

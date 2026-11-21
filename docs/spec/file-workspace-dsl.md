@@ -347,3 +347,27 @@ not count lines, acquire usage or prescribe workflow closure policy.
 ## Purpose-specific File I/O budgets
 
 File reads may explicitly select `FileReadPolicy(ResourceReadLimits(...))` for text or bytes, including both stored and expanded Gzip bytes. File writes may independently select `FileWritePolicy(ResourceReadLimits(...))` for text or bytes. The finite limits use the same validated bounds as Resource limits. Selection is immutable and applies only to that operation; it does not alter generic runtime defaults or confer workspace authority. Unselected operations retain their existing limits. A selected write policy does not change the read limit used for `UpdateExisting` comparison. All existing path, permission, encoding, atomicity and outcome rules apply.
+
+## Scoped file deletion
+
+`file_delete(target: FileTarget, path: WorkspaceFilePath): ExecUowM[FileDeleteResult]`
+lifts `UnitOfWorkOp.FileDelete` as an External operation. The interpreter uses
+the executing UoW's actual Component context and its trusted workspace Manage
+grant. The path is a literal workspace-relative filename, revalidated at
+execution; no physical root or ambient target is accepted. The result carries
+the target, path, `FileDeleteOutcome` and a `FileWrite` effect. Generic display
+redacts the path.
+
+Only an ordinary regular file may be removed. Invalid paths, unsafe initial
+symlinks, missing parents, invalid bindings and denied or foreign authority are
+rejected before effects. A successful result is `Deleted` only after unlink;
+`Absent` means a stable missing leaf under checked ordinary parents. A directory,
+special file or observed identity change is `Conflict`; operational filesystem
+errors are `Failed`. Neither result implies overlay prune acceptance.
+
+The binding synchronizes cooperating operations and checks root, ancestors and
+leaf identity before unlink. NIO does not provide atomic identity-compare and
+delete here: uncoordinated native writers can replace an entry between the last
+check and unlink. Callers must coordinate participating mutators and protect
+active, pinned and in-use files. There is no automatic retry or rollback; after
+a failure or uncertain interruption, inspect state before deciding to replay.

@@ -65,7 +65,7 @@ import org.simplemodeling.model.directive.Update
  *  version Sep. 19, 2026
  *  version Oct. 27, 2026
  *  version Oct. 29, 2026
- * @version Nov.  9, 2026
+ * @version Nov. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -1389,6 +1389,11 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     case UnitOfWorkOp.SessionCandidatePrepare(source, parent, alias, session, candidate) =>
       _with_calltree("uow:workspace:prepare-session-candidate") {
         org.goldenport.cncf.workspace.SessionCandidateWorkspace.prepareC(uow.executionContext, source, parent, alias, session, candidate)
+      }
+
+    case UnitOfWorkOp.FileDelete(target, path) =>
+      _with_calltree("uow:file:delete") {
+        org.goldenport.cncf.workspace.WorkspaceFileExecution.deleteC(uow.executionContext, target, path)
       }
 
     case UnitOfWorkOp.FilePrepareDirectory(target, path) =>

@@ -19,7 +19,7 @@ import org.goldenport.cncf.resource.{ResourceReadAcquisition, ResourceReadLimits
  *  version Oct. 21, 2026
  *  version Oct. 29, 2026
  *  version Oct. 31, 2026
- * @version Nov.  9, 2026
+ * @version Nov. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class FileTarget(workspaceId: WorkspaceId)
@@ -53,6 +53,15 @@ final case class FileWritePolicy(limits: ResourceReadLimits) {
 
 enum FileRepresentation {
   case Identity, Gzip
+}
+
+enum FileDeleteOutcome {
+  case Deleted, Absent, Conflict, Failed
+}
+
+final case class FileDeleteResult(target: FileTarget, path: WorkspaceFilePath, outcome: FileDeleteOutcome) {
+  def effect: ExternalEffect = ExternalEffect(ExternalEffectKind.FileWrite, target.workspaceId)
+  override def toString: String = s"FileDeleteResult($target,$outcome,FileWrite)"
 }
 
 enum FilePrepareDirectoryOutcome {
@@ -164,6 +173,71 @@ private[cncf] object WorkspaceFileExecution {
         }
       }
     }
+
+  def deleteC(context: ExecutionContext, target: FileTarget, path: WorkspaceFilePath): Consequence[FileDeleteResult] =
+    _admit_workspace_c(context, target, path, WorkspacePermission.Manage).flatMap { case (binding, validpath) =>
+      binding.synchronized {
+        // Initial resolution and parent checks reject unsafe paths before any effect.
+        for {
+          root <- binding.workingDirectoryC
+          rootattrs <- _directory_identity_c(root)
+          destination <- binding.resolveFileC(validpath)
+          parents <- _delete_parents_c(binding, validpath)
+        } yield {
+          val outcome = try {
+            def _stable_(): Boolean = {
+              val currentroot = binding.workingDirectoryC.toOption
+              val currentpath = binding.resolveFileC(validpath).toOption
+              val rootkey = _directory_identity_c(root).toOption
+              val currentparents = _delete_parents_c(binding, validpath).toOption
+              currentroot.contains(root) && currentpath.contains(destination) &&
+                rootkey.contains(rootattrs) && currentparents.contains(parents)
+            }
+            def _leaf_(): Option[BasicFileAttributes] =
+              try Some(Files.readAttributes(destination, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS))
+              catch { case _: NoSuchFileException => None }
+            val first = _leaf_()
+            first match {
+              case Some(a) if a.isSymbolicLink => FileDeleteOutcome.Conflict
+              case Some(a) if !a.isRegularFile => FileDeleteOutcome.Conflict
+              case Some(a) if a.fileKey() == null => FileDeleteOutcome.Conflict
+              case None =>
+                if (_leaf_().nonEmpty || !_stable_()) FileDeleteOutcome.Conflict else FileDeleteOutcome.Absent
+              case Some(a) =>
+                if (!_stable_()) FileDeleteOutcome.Conflict
+                else _leaf_() match {
+                  case Some(b) if b.isRegularFile && !b.isSymbolicLink && b.fileKey() != null &&
+                      a.fileKey() == b.fileKey() && a.size() == b.size() &&
+                      a.lastModifiedTime() == b.lastModifiedTime() && a.creationTime() == b.creationTime() && _stable_() =>
+                    try { Files.delete(destination); FileDeleteOutcome.Deleted }
+                    catch { case _: NoSuchFileException => FileDeleteOutcome.Conflict }
+                  case _ => FileDeleteOutcome.Conflict
+                }
+            }
+          } catch { case NonFatal(_) => FileDeleteOutcome.Failed }
+          FileDeleteResult(target, validpath, outcome)
+        }
+      }
+    }
+
+  private def _directory_identity_c(path: Path): Consequence[AnyRef] = try {
+    val attrs = Files.readAttributes(path, classOf[BasicFileAttributes], LinkOption.NOFOLLOW_LINKS)
+    if (attrs.isDirectory && !attrs.isSymbolicLink && attrs.fileKey() != null)
+      Consequence.success(attrs.fileKey())
+    else _unavailable_c
+  } catch { case NonFatal(_) => _unavailable_c }
+
+  private def _delete_parents_c(binding: WorkspaceBinding, path: WorkspaceFilePath): Consequence[Vector[(WorkspaceFilePath, AnyRef)]] = {
+    val parts = path.value.split("/", -1).toVector.dropRight(1)
+    parts.indices.foldLeft(Consequence.success(Vector.empty[(WorkspaceFilePath, AnyRef)])) { (acc, index) =>
+      for {
+        previous <- acc
+        prefix <- WorkspaceFilePath.parseC(parts.take(index + 1).mkString("/"))
+        identity <- binding.directoryIdentityC(prefix)
+        key <- identity.map(Consequence.success).getOrElse(_unavailable_c[AnyRef])
+      } yield previous :+ (prefix -> key)
+    }
+  }
 
   def readBytesC(
     context: ExecutionContext,
@@ -322,12 +396,8 @@ private[cncf] object WorkspaceFileExecution {
       }
     } yield FileWriteTextResult(target, validpath, outcome)
 
-  private def _admit_c(
-    context: ExecutionContext,
-    target: FileTarget,
-    path: WorkspaceFilePath,
-    permission: WorkspacePermission
-  ): Consequence[(WorkspaceBinding, ResourceReadLimits, WorkspaceFilePath)] =
+  private def _admit_workspace_c(context: ExecutionContext, target: FileTarget, path: WorkspaceFilePath,
+    permission: WorkspacePermission): Consequence[(WorkspaceBinding, WorkspaceFilePath)] =
     if (target == null || path == null || WorkspaceId.parseC(target.workspaceId.value).isFaillure)
       _invalid_intent_c
     else for {
@@ -335,6 +405,13 @@ private[cncf] object WorkspaceFileExecution {
       admission <- Option(context).flatMap(_.workspaceExecutionAdmissionOption)
         .map(Consequence.success).getOrElse(Consequence.serviceUnavailable("Workspace execution service is unavailable"))
       binding <- admission.admitC(context.cncfCore.scope, target.workspaceId, permission)
+    } yield (binding, validpath)
+
+  private def _admit_c(context: ExecutionContext, target: FileTarget, path: WorkspaceFilePath,
+    permission: WorkspacePermission): Consequence[(WorkspaceBinding, ResourceReadLimits, WorkspaceFilePath)] =
+    for {
+      admitted <- _admit_workspace_c(context, target, path, permission)
+      (binding, validpath) = admitted
       limits <- context.resourceReadLimitsC
     } yield (binding, limits, validpath)
 

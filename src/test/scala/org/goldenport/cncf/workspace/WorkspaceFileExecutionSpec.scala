@@ -30,13 +30,61 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Oct. 21, 2026
  *  version Oct. 29, 2026
  *  version Oct. 31, 2026
- * @version Nov.  9, 2026
+ * @version Nov. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkspaceFileExecutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   private val _id = WorkspaceId.parseC("project").toOption.get
   private val _target = FileTarget(_id)
   private val _owner = ComponentId("org.goldenport.spec.FileOwner")
+
+  "Scoped File deletion" should {
+    "remove only the selected regular file and distinguish stable absence, conflict and failure" in {
+      Given("a nested owner workspace with a selected file and sibling")
+      _with_root { root =>
+        val dir = Files.createDirectory(root.resolve("nested"))
+        val file = Files.writeString(dir.resolve("selected"), "selected")
+        val sibling = Files.writeString(dir.resolve("sibling"), "keep")
+        val context = _context(root)
+        val behavior = new FilePolicyBehavior(Behavior.Core(context, None, None))
+        val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(context))
+        When("the real UoW deletes, repeats, selects a directory and encounters an overlong filename")
+        val deleted = interpreter.run(behavior.delete(_target, _path("nested/selected")))
+        val absent = interpreter.run(behavior.delete(_target, _path("nested/selected")))
+        val conflict = interpreter.run(behavior.delete(_target, _path("nested")))
+        val failed = interpreter.run(behavior.delete(_target, _path("nested/" + ("x" * 1024))))
+        Then("only the selected file is removed and each outcome describes the observed result")
+        deleted.toOption.get.outcome shouldBe FileDeleteOutcome.Deleted
+        deleted.toOption.get.effect.kind shouldBe ExternalEffectKind.FileWrite
+        absent.toOption.get.outcome shouldBe FileDeleteOutcome.Absent
+        conflict.toOption.get.outcome shouldBe FileDeleteOutcome.Conflict
+        failed.toOption.get.outcome shouldBe FileDeleteOutcome.Failed
+        Files.exists(file) shouldBe false
+        Files.readString(sibling) shouldBe "keep"
+      }
+    }
+
+    "reject unsafe paths and contexts before deletion" in {
+      Given("a real file, links and denied workspace contexts")
+      _with_root { root =>
+        val file = Files.writeString(root.resolve("selected"), "keep")
+        val directory = Files.createDirectory(root.resolve("dir"))
+        Files.createSymbolicLink(root.resolve("link"), file)
+        Files.createSymbolicLink(root.resolve("ancestor"), directory)
+        val allowed = _context(root)
+        val denied = Vector(_context(root, permission = WorkspacePermission.ReadOnly),
+          _context(root, owner = ComponentId("org.goldenport.spec.OtherFileOwner")), ExecutionContext.create())
+        When("deletion selects ungranted, unsafe, missing-parent and forged paths")
+        val attempts = denied.map(WorkspaceFileExecution.deleteC(_, _target, _path("selected"))) ++
+          Vector("link", "ancestor/selected", "missing/selected").map(p => WorkspaceFileExecution.deleteC(allowed, _target, _path(p))) ++
+          Vector("", ".", "../selected").map(p => WorkspaceFileExecution.deleteC(allowed, _target, _forged_path(p))) :+
+          WorkspaceFileExecution.deleteC(allowed, FileTarget(WorkspaceId.parseC("unknown").toOption.get), _path("selected"))
+        Then("all are refused and the original remains")
+        attempts.foreach(_.isFaillure shouldBe true)
+        Files.readString(file) shouldBe "keep"
+      }
+    }
+  }
 
   "Explicit File policies" should {
     "bound identity, gzip and UTF-8 independently of generic reads and writes" in {
@@ -912,6 +960,7 @@ final class WorkspaceFileExecutionSpec extends AnyWordSpec with Matchers with Gi
   }
 
   private final class FilePolicyBehavior(val behaviorCore: Behavior.Core) extends Behavior {
+    def delete(target: FileTarget, path: WorkspaceFilePath): ExecUowM[FileDeleteResult] = file_delete(target, path)
     def readText(target: FileTarget, path: WorkspaceFilePath): ExecUowM[FileReadTextResult] =
       file_read_text(target, path)
     def writeText(target: FileTarget, path: WorkspaceFilePath, text: String, mode: FileWriteMode): ExecUowM[FileWriteTextResult] =
