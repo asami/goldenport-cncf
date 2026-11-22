@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Oct. 20, 2026
- * @version Oct. 20, 2026
+ * @version Nov. 22, 2026
  */
 final class GoogleDriveFileStoreSpec extends AnyWordSpec with Matchers with GivenWhenThen {
   import GoogleDriveFixture.*
@@ -627,14 +627,13 @@ final class GoogleDriveFileStoreSpec extends AnyWordSpec with Matchers with Give
         fixture.requests.map(_.method) shouldBe Vector("POST", "PUT")
       }
 
-      "documents native 429 fallback and the actual 308 redirection representation" in {
+      "preserves native 429 and 308 response codes" in {
         Given("the existing public HttpStatus representation used by the production HTTP driver")
         val codes = Vector(429, 308)
         When("the native driver-compatible conversion represents these provider statuses")
         val represented = codes.map(code => textResponse("", code).code)
-        Then("429 has the existing 500 fallback while 308 retains its actual non-success redirection code")
-        represented shouldBe codes.map(code => HttpStatus.fromInt(code).getOrElse(HttpStatus.InternalServerError).code)
-        represented shouldBe Vector(500, 308)
+        Then("429 retains its rate-limit code and 308 retains its non-success redirection code")
+        represented shouldBe codes
       }
     }
   }

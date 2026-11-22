@@ -28,7 +28,8 @@ import scala.util.Try
 
 /*
  * @since   Oct. 16, 2026
- * @version Oct. 17, 2026
+ *  version Oct. 17, 2026
+ * @version Nov. 22, 2026
  */
 final class BoundedHttpDriverSpec
   extends AnyWordSpec
@@ -684,6 +685,38 @@ final class BoundedHttpDriverSpec
             result.TAKE.code shouldBe code
             result.TAKE.getString shouldBe Some(s"status-$code")
             fixture.hits(s"/status/$code") shouldBe 1
+          }
+        }
+      }
+
+      "retains rate-limit and server error responses through ordinary and bounded UoW GET and POST" in {
+        Given("actual 429 and 500 responses through ordinary and bounded UoW dispatch")
+        _with_fixture { fixture =>
+          val policies = Vector("ordinary" -> Vector.empty[Property], "bounded" -> _policy())
+          policies.foreach { case (policy, properties) =>
+            Vector(429, 500).foreach { code =>
+              val path = s"/$policy/status/$code"
+              val body = s"fixture response $code: café 日本"
+              val requestid = s"fixture-$policy-$code"
+              fixture.register(path) { exchange =>
+                _respond(exchange, code, _utf8(body), headers = Vector("X-Request-Id" -> requestid))
+              }
+
+              When(s"ordinary and bounded UoW sends GET and POST for HTTP $code")
+              val operations = Vector(
+                UnitOfWorkOp.HttpGet(path, properties = properties),
+                UnitOfWorkOp.HttpPost(path, Some("fixture"), Map.empty, properties)
+              )
+              operations.foreach { operation =>
+                val response = _dispatch(fixture.driver, operation, fixture.baseUrl).TAKE
+
+                Then("the exact status, body, and request identifier are preserved")
+                response.code shouldBe code
+                response.getString shouldBe Some(body)
+                response.headerValue("x-request-id") shouldBe Some(requestid)
+              }
+              fixture.hits(path) shouldBe 2
+            }
           }
         }
       }

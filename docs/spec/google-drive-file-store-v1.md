@@ -302,13 +302,9 @@ uncertainty and keep incomplete attempts out of accepted Material state. They
 must not automatically submit a new object, replay, probe status, or delete as
 rollback on this library's behalf.
 
-The existing production HTTP driver represents statuses with
-`HttpStatus.fromInt(code).getOrElse(HttpStatus.InternalServerError)`. Unsupported
-codes such as the currently unrepresented 429 therefore arrive as 500; specs
-use that actual API and disclose this limitation instead of inventing an HTTP
-status value. The public API represents 308 as a redirection with its original
-code; it is an invalid, unconfirmed create completion. Both outcomes remain
-unaccepted and unreplayed.
+The HTTP driver preserves 429 as Too Many Requests and 308 as a redirection.
+A 429 maps to service unavailable. A 308 is an invalid, unconfirmed create
+completion. Neither outcome is accepted or automatically replayed.
 
 S3 adapter, VFS, actual server credential provisioning and actual cloud account
 changes are not supplied by this adapter. Managed BlobStore semantics remain
