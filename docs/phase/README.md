@@ -1,5 +1,11 @@
 # docs/phase — Engineering Work Management
 
+Local CAR expansion reclamation planned 2026-11-24:
+[Phase 116.1](phase-116.1.md) / [checklist](phase-116.1-checklist.md)
+adds bounded automatic retirement of obsolete local CAR expansions after
+successful publication, with alias and live-reader protection. Phase 116 stays
+CLOSED. All new items are OPEN; no execution or cache cleanup has started.
+
 HA implementation priority updated 2026-11-12:
 [Phase 108](phase-108.md#implementation-priority---2026-11-12) prioritizes the
 first operational immutable-replacement route: planned Switchover with admitted
