@@ -246,7 +246,7 @@ Phase 114.1 closes only when:
 - implementation journal and architecture feedback;
 - recommendation for the later ABI/productization phase.
 
-The existing Phase 114 checklist is historical input; derive a Phase 114.1 checklist before execution.
+See [Phase 114.1 checklist](phase-114.1-checklist.md).
 
 ## Split decision (2026-11-26)
 
