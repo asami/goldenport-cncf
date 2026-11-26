@@ -9,6 +9,10 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.effect.{ExternalEffect, ExternalEffectKind}
 import org.goldenport.cncf.workspace.{WorkspaceBinding, WorkspaceId, WorkspacePermission, WorkspaceRelativePath, WorkspaceExecutionAdmission}
 
+enum SbtTestScope {
+  case Full, Admission
+}
+
 /*
  * @since   Oct. 15, 2026
  *  version Oct. 24, 2026
@@ -20,7 +24,19 @@ final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenari
   validationMode: Option[String] = None,
   validationProvider: Option[String] = None,
   validationDiscovery: Boolean = false, validationBatch: Vector[SbtValidationMode.Case] = Vector.empty,
-  scopedInput: Option[SbtScopedInput] = None, lintInput: Option[SbtLintInput] = None) {
+  scopedInput: Option[SbtScopedInput] = None, lintInput: Option[SbtLintInput] = None,
+  testScope: SbtTestScope = SbtTestScope.Full) {
+  def this(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection],
+    validationEstimate: Option[SbtValidationEstimate], validationMode: Option[String],
+    validationProvider: Option[String], validationDiscovery: Boolean, validationBatch: Vector[SbtValidationMode.Case],
+    scopedInput: Option[SbtScopedInput], lintInput: Option[SbtLintInput]) =
+    this(workspaceId, scenario, validationEstimate, validationMode, validationProvider, validationDiscovery, validationBatch, scopedInput, lintInput, SbtTestScope.Full)
+
+  def copy(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection],
+    validationEstimate: Option[SbtValidationEstimate], validationMode: Option[String],
+    validationProvider: Option[String], validationDiscovery: Boolean, validationBatch: Vector[SbtValidationMode.Case],
+    scopedInput: Option[SbtScopedInput], lintInput: Option[SbtLintInput]): SbtTarget =
+    new SbtTarget(workspaceId, scenario, validationEstimate, validationMode, validationProvider, validationDiscovery, validationBatch, scopedInput, lintInput, testScope)
   // Retain the former eight-field JVM entries.
   def this(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection],
     validationEstimate: Option[SbtValidationEstimate], validationMode: Option[String],
@@ -32,7 +48,7 @@ final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenari
     validationEstimate: Option[SbtValidationEstimate], validationMode: Option[String],
     validationProvider: Option[String], validationDiscovery: Boolean, validationBatch: Vector[SbtValidationMode.Case],
     scopedInput: Option[SbtScopedInput]): SbtTarget =
-    new SbtTarget(workspaceId, scenario, validationEstimate, validationMode, validationProvider, validationDiscovery, validationBatch, scopedInput, lintInput)
+    new SbtTarget(workspaceId, scenario, validationEstimate, validationMode, validationProvider, validationDiscovery, validationBatch, scopedInput, lintInput, testScope)
 
   // Retain the operational three-field JVM entries without adding overloaded defaults.
   def this(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection],
@@ -42,7 +58,7 @@ final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenari
   def copy(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection],
     validationEstimate: Option[SbtValidationEstimate]): SbtTarget =
     new SbtTarget(workspaceId, scenario, validationEstimate, validationMode,
-      validationProvider, validationDiscovery, validationBatch, scopedInput, lintInput)
+      validationProvider, validationDiscovery, validationBatch, scopedInput, lintInput, testScope)
 
   def this(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection],
     validationEstimate: Option[SbtValidationEstimate], validationMode: Option[String],
@@ -52,9 +68,15 @@ final case class SbtTarget(workspaceId: WorkspaceId, scenario: Option[SbtScenari
   def copy(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection],
     validationEstimate: Option[SbtValidationEstimate], validationMode: Option[String],
     validationProvider: Option[String], validationDiscovery: Boolean, validationBatch: Vector[SbtValidationMode.Case]): SbtTarget =
-    new SbtTarget(workspaceId, scenario, validationEstimate, validationMode, validationProvider, validationDiscovery, validationBatch, scopedInput, lintInput)
+    new SbtTarget(workspaceId, scenario, validationEstimate, validationMode, validationProvider, validationDiscovery, validationBatch, scopedInput, lintInput, testScope)
 }
 object SbtTarget {
+  def apply(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection],
+    validationEstimate: Option[SbtValidationEstimate], validationMode: Option[String],
+    validationProvider: Option[String], validationDiscovery: Boolean, validationBatch: Vector[SbtValidationMode.Case],
+    scopedInput: Option[SbtScopedInput], lintInput: Option[SbtLintInput]): SbtTarget =
+    new SbtTarget(workspaceId, scenario, validationEstimate, validationMode, validationProvider, validationDiscovery, validationBatch, scopedInput, lintInput)
+
   def apply(workspaceId: WorkspaceId, scenario: Option[SbtScenarioSelection],
     validationEstimate: Option[SbtValidationEstimate], validationMode: Option[String],
     validationProvider: Option[String], validationDiscovery: Boolean, validationBatch: Vector[SbtValidationMode.Case],
@@ -82,6 +104,65 @@ final case class SbtScopedInput(component: ComponentId, buildWorkspace: Workspac
 
 enum SbtOperation {
   case Compile, TestCompile, Test, TestOnly, FixCheck, PublishLocal, ScopedPublish
+}
+
+/** Evidence from the versioned build-owned admission selection and retained reports. */
+final case class SbtAdmissionTestReport(selected: Vector[(String, String)], disposition: Option[SbtTestSelectionFailure])
+object SbtAdmissionTestReport {
+  private val prefix = "CNCF-ADMISSION-V1 selected "
+  private val completed = "CNCF-ADMISSION-V1 completed"
+  private val succeeded = "CNCF-ADMISSION-V1 succeeded "
+  def assess(result: ProcessExecutionResult): SbtAdmissionTestReport = {
+    def rejected(rows: Vector[(String, String)], reason: SbtTestSelectionFailure) = SbtAdmissionTestReport(rows, Some(reason))
+    try {
+      val captures = Vector(result.stdout, result.stderr)
+      if (captures.exists(c => c == null || c.content == null || c.truncated || c.byteCount != c.content.size.toLong))
+        rejected(Vector.empty, SbtTestSelectionFailure.IncompleteCapture)
+      else {
+        def decode(c: ProcessExecutionCapture): String = java.nio.charset.StandardCharsets.UTF_8.newDecoder()
+          .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT).onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+          .decode(java.nio.ByteBuffer.wrap(c.content.toArray)).toString
+        def normalized(line: String): String = line.stripPrefix("[info] ").stripPrefix("[error] ")
+        val lines = decode(result.stdout).linesIterator.map(normalized).toVector
+        val stderr = decode(result.stderr)
+        val failures = (lines ++ stderr.linesIterator.map(normalized)).filter(line =>
+          line == "CNCF-ADMISSION-V1 empty" || line == "CNCF-ADMISSION-V1 unavailable")
+        val selectedLines = lines.zipWithIndex.filter(_._1.startsWith(prefix))
+        val ends = lines.zipWithIndex.filter(_._1 == completed)
+        def token(s: String): String = {
+          val bytes = java.util.Base64.getUrlDecoder.decode(s)
+          val value = java.nio.charset.StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+            .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT).decode(java.nio.ByteBuffer.wrap(bytes)).toString
+          require(java.util.Base64.getUrlEncoder.withoutPadding().encodeToString(bytes) == s && value.nonEmpty)
+          value
+        }
+        val rows = if (selectedLines.size == 1) selectedLines.head._1.stripPrefix(prefix).split(",", -1).toVector.map { item =>
+          val pair = item.split(":", -1); require(pair.length == 2); (token(pair(0)), token(pair(1)))
+        } else Vector.empty
+        val eventLines = lines.zipWithIndex.filter(_._1.startsWith(succeeded))
+        val observed = eventLines.map { case (line, _) =>
+          val pair = line.stripPrefix(succeeded).split(":", -1)
+          require(pair.length == 2)
+          (token(pair(0)), token(pair(1)))
+        }
+        val markersValid = rows.nonEmpty && rows.distinct == rows && ends.size == 1 && selectedLines.size == 1 &&
+          selectedLines.head._2 < ends.head._2 && !stderr.contains("CNCF-ADMISSION-V1 ") &&
+          lines.count(_.startsWith("CNCF-ADMISSION-V1 ")) == 2 + eventLines.size &&
+          eventLines.forall { case (_, i) => i > selectedLines.head._2 && i < ends.head._2 } &&
+          lines.zipWithIndex.filter(_._1 == "All tests passed.").forall { case (_, i) => i > selectedLines.head._2 && i < ends.head._2 }
+        if (failures == Vector("CNCF-ADMISSION-V1 empty")) rejected(rows, SbtTestSelectionFailure.ZeroTests)
+        else if (failures == Vector("CNCF-ADMISSION-V1 unavailable")) rejected(rows, SbtTestSelectionFailure.DiscoveryUnavailable)
+        else if (failures.nonEmpty || !markersValid) rejected(rows, SbtTestSelectionFailure.InvalidReport)
+        else SbtTestReassessment.assessFull(result) match {
+          case Right(report) if observed.distinct == observed && observed.toSet == rows.toSet &&
+              report.testsRun == rows.size.toLong && report.completedSuites == rows.map(_._1).distinct.size.toLong &&
+              report.reportCount == rows.map(_._1).distinct.size => SbtAdmissionTestReport(rows, None)
+          case Left(reason) => rejected(rows, reason)
+          case _ => rejected(rows, SbtTestSelectionFailure.InventoryMismatch)
+        }
+      }
+    } catch { case NonFatal(_) => rejected(Vector.empty, SbtTestSelectionFailure.InvalidReport) }
+  }
 }
 
 /** Admission failure carries no process receipt; admitted failures never imply safe replay. */
@@ -142,8 +223,16 @@ final case class SbtExecutionResult(
     new SbtExecutionResult(target, operation, processResult, testSelection, testObservation,
       validationMode, discovery, batch, lintInput)
 
+  def admissionTestReport: Option[SbtAdmissionTestReport] =
+    Option.when(target.testScope == SbtTestScope.Admission)(SbtAdmissionTestReport.assess(processResult))
+
   def outcome: SbtExecutionOutcome = processResult.termination match {
     case ProcessExecutionTermination.NotStarted => SbtExecutionOutcome.NotExecuted
+    case ProcessExecutionTermination.Exited(0) if target.testScope == SbtTestScope.Admission =>
+      admissionTestReport.get.disposition match {
+        case Some(reason) => SbtExecutionOutcome.UnverifiedTests(reason)
+        case None => SbtExecutionOutcome.Succeeded
+      }
     case ProcessExecutionTermination.Exited(0) if target.validationDiscovery &&
         !discovery.exists(_.isInstanceOf[SbtValidationDiscovery.Result.Available]) =>
       SbtExecutionOutcome.UnverifiedTests(SbtTestSelectionFailure.DiscoveryUnavailable)
@@ -326,6 +415,8 @@ private[cncf] object SbtExecutionAdmission {
     for {
       _ <- if (target != null && operation != null) Consequence.unit else
         Consequence.argumentPolicyViolation("sbt", "sbt.execution.intent", "typed target and operation", "invalid")
+      _ <- if (target.testScope != null && (target.testScope == SbtTestScope.Full || operation == SbtOperation.Test)) Consequence.unit
+        else Consequence.configurationInvalid("Admission scope requires typed Test")
       _ <- SbtScenarioSelection.validateOptionC(target.scenario, operation)
       workspace <- context.workspaceExecutionAdmissionOption.map(Consequence.success).getOrElse(
         Consequence.serviceUnavailable("Workspace Execution admission is not configured")
@@ -335,8 +426,15 @@ private[cncf] object SbtExecutionAdmission {
         Consequence.serviceUnavailable("Process Execution admission is not configured")
       )
       execution <- admission.admitSbtForScopeC(context.cncfCore.scope, binding, operation, target.scenario)
-      _ <- SbtValidationDiscovery.admitC(target, operation, execution)
-      batched <- SbtValidationMode.specializeBatchC(execution, target, operation)
+      scopedTest <- if (target.testScope == SbtTestScope.Full) Consequence.success(execution) else {
+        val definition = execution.definition
+        if (definition.fixedArguments.lastOption != Some("test")) Consequence.serviceUnavailable("Admission requires the fixed Test definition")
+        else ProcessProgramDefinition.fromSbtRuntimeC(definition.capability, definition.safeProgramIdentity,
+          definition._executable_location, definition.fixedArguments.dropRight(1) :+ "testAdmission",
+          definition.maximumLimits, definition._environment.values, definition._sbt_metadata.get).map(value => execution.copy(definition = value))
+      }
+      _ <- SbtValidationDiscovery.admitC(target, operation, scopedTest)
+      batched <- SbtValidationMode.specializeBatchC(scopedTest, target, operation)
       mode <- SbtValidationMode.specializeC(batched, target)
       scoped <- SbtScopedInputAdmission.applyC(context, workspace, target, operation, mode)
       jvm <- SbtJvmParameters.applyC(context.resolvedParameters, scoped)

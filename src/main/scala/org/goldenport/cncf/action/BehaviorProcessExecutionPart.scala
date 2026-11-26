@@ -144,7 +144,8 @@ import org.goldenport.cncf.processexecution.{
   SbtExecutionAttempt,
   SbtExecutionResult,
   SbtOperation,
-  SbtTarget
+  SbtTarget,
+  SbtTestScope
 }
 import org.goldenport.cncf.processexecution.{ValidationCheckExecutionAttempt, ValidationCheckExecutionResult, ValidationCheckOperation, ValidationCheckTarget}
 
@@ -308,7 +309,10 @@ trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.
     _sbt_exec(target, SbtOperation.TestCompile)
 
   protected final def sbt_test(target: SbtTarget): ExecUowM[SbtExecutionResult] =
-    _sbt_exec(target, SbtOperation.Test)
+    _sbt_exec(target.copy(testScope = SbtTestScope.Full), SbtOperation.Test)
+
+  protected final def sbt_test(target: SbtTarget, scope: SbtTestScope): ExecUowM[SbtExecutionResult] =
+    _sbt_exec(target.copy(testScope = scope), SbtOperation.Test)
 
   protected final def sbt_test_only(target: SbtTarget): ExecUowM[SbtExecutionResult] =
     _sbt_exec(target, SbtOperation.TestOnly)
@@ -329,7 +333,10 @@ trait BehaviorProcessExecutionPart extends BehaviorFeaturePart { self: Behavior.
     _sbt_exec_attempt(target, SbtOperation.TestCompile)
 
   protected final def sbt_test_attempt(target: SbtTarget): ExecUowM[SbtExecutionAttempt] =
-    _sbt_exec_attempt(target, SbtOperation.Test)
+    _sbt_exec_attempt(target.copy(testScope = SbtTestScope.Full), SbtOperation.Test)
+
+  protected final def sbt_test_attempt(target: SbtTarget, scope: SbtTestScope): ExecUowM[SbtExecutionAttempt] =
+    _sbt_exec_attempt(target.copy(testScope = scope), SbtOperation.Test)
 
   protected final def sbt_test_only_attempt(target: SbtTarget): ExecUowM[SbtExecutionAttempt] =
     _sbt_exec_attempt(target, SbtOperation.TestOnly)

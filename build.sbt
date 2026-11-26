@@ -12,13 +12,26 @@ lazy val admissionTestSelection = taskKey[Seq[String]]("Inspect canonical ADMISS
 lazy val testAdmission = taskKey[Unit]("Run canonical ADMISSION operations; one-minute body time is a guideline, not a timeout")
 
 admissionTestSelection := {
-  val arguments = AdmissionTests.arguments((Test / fullClasspath).value.files,
-    (Test / classDirectory).value, version.value, (Test / definedTests).value)
-  arguments.foreach(value => streams.value.log.info("ADMISSION testOnly" + value))
-  arguments
+  val log = streams.value.log
+  val classpath = (Test / fullClasspath).value.files
+  val classes = (Test / classDirectory).value
+  val revision = version.value
+  val definitions = (Test / definedTests).value
+  val selection = try AdmissionTests.arguments(classpath, classes, revision, definitions)
+  catch {
+    case scala.util.control.NonFatal(error) =>
+      val kind = if (Option(error.getMessage).exists(_.contains("No ADMISSION operation selected"))) "empty" else "unavailable"
+      log.error("CNCF-ADMISSION-V1 " + kind)
+      throw error
+  }
+  log.info(selection.marker)
+  selection.arguments.foreach(value => log.info("ADMISSION testOnly" + value))
+  selection.arguments
 }
 testAdmission := Def.taskDyn {
-  Def.sequential(admissionTestSelection.value.map(arguments => (Test / testOnly).toTask(arguments)))
+  val arguments = admissionTestSelection.value
+  val done = Def.task { streams.value.log.info("CNCF-ADMISSION-V1 completed") }
+  Def.sequential(arguments.map(value => (Test / testOnly).toTask(value)) :+ done)
 }.value
 
 lazy val cncfCoreModule = "org.goldenport" %% "goldenport-core" % goldenportCoreVersion

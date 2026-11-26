@@ -44,6 +44,52 @@ final class SbtExecutionDslSpec extends AnyWordSpec with Matchers with GivenWhen
   )
 
   "Typed SBT internal DSL" should {
+    "retain FULL compatibility and qualify the fixed Admission receipt" in {
+      val token = (value: String) => java.util.Base64.getUrlEncoder.withoutPadding().encodeToString(value.getBytes(UTF_8))
+      val marker = "CNCF-ADMISSION-V1 selected " + token("org.example.SelectedSpec") + ":" + token("fixture case")
+      val success = "CNCF-ADMISSION-V1 succeeded " + token("org.example.SelectedSpec") + ":" + token("fixture case")
+      val report = Vector(marker, success, "[info] org.example.SelectedSpec:", "[info] Total number of tests run: 1",
+        "[info] Suites: completed 1, aborted 0", "[info] Tests: succeeded 1, failed 0, canceled 0, ignored 0, pending 0",
+        "[info] All tests passed.", "CNCF-ADMISSION-V1 completed").mkString("\n")
+      val bytes = report.getBytes(UTF_8).toVector
+      val process = ProcessExecutionResult(ProcessExecutionTermination.Exited(0), ProcessExecutionCapture(bytes, bytes.size.toLong, false),
+        ProcessExecutionCapture(Vector.empty, 0L, false), Vector.empty, 17L, "project-build")
+      val fixture = _fixture(process)
+      try {
+        val behavior = new SbtDslBehavior(Behavior.Core(fixture.context, None, None))
+        def inUnitOfWork[A](f: UnitOfWorkInterpreter => A): A = {
+          val uow = new UnitOfWork(fixture.context)
+          try f(new UnitOfWorkInterpreter(uow)) finally uow.dispose()
+        }
+        val implicitFull = inUnitOfWork(_.run(behavior.testAttempt(fixture.target)).toOption.get)
+        val explicitFull = inUnitOfWork(_.run(behavior.testAttempt(fixture.target, SbtTestScope.Full)).toOption.get)
+        implicitFull shouldBe explicitFull
+        val admitted = inUnitOfWork(_.run(behavior.testAttempt(fixture.target, SbtTestScope.Admission)).toOption.get)
+          .asInstanceOf[SbtExecutionAttempt.Observed].result
+        admitted.target.workspaceId shouldBe fixture.target.workspaceId
+        admitted.operation shouldBe SbtOperation.Test
+        admitted.outcome shouldBe SbtExecutionOutcome.Succeeded
+        admitted.admissionTestReport.get.selected shouldBe Vector(("org.example.SelectedSpec", "fixture case"))
+        fixture.profile.driver.executions.map(_.effectiveArguments.last) shouldBe Vector("test", "test", "testAdmission")
+        val wrong = report.replace(success, "CNCF-ADMISSION-V1 succeeded " + token("org.example.OtherSpec") + ":" + token("fixture case"))
+        val wrongBytes = wrong.getBytes(UTF_8).toVector
+        admitted.copy(processResult = process.copy(stdout = ProcessExecutionCapture(wrongBytes, wrongBytes.size.toLong, false)))
+          .outcome shouldBe SbtExecutionOutcome.UnverifiedTests(SbtTestSelectionFailure.InventoryMismatch)
+        val empty = process.copy(stdout = ProcessExecutionCapture(Vector.empty, 0L, false))
+        admitted.copy(processResult = empty).outcome shouldBe SbtExecutionOutcome.UnverifiedTests(SbtTestSelectionFailure.InvalidReport)
+        val truncated = process.copy(stdout = process.stdout.copy(truncated = true))
+        admitted.copy(processResult = truncated).outcome shouldBe SbtExecutionOutcome.UnverifiedTests(SbtTestSelectionFailure.IncompleteCapture)
+        def marked(value: String): ProcessExecutionResult = {
+          val data = value.getBytes(UTF_8).toVector
+          process.copy(stdout = ProcessExecutionCapture(data, data.size.toLong, false))
+        }
+        admitted.copy(processResult = marked("[error] CNCF-ADMISSION-V1 empty")).admissionTestReport.get.disposition shouldBe Some(SbtTestSelectionFailure.ZeroTests)
+        admitted.copy(processResult = marked("[error] CNCF-ADMISSION-V1 unavailable")).admissionTestReport.get.disposition shouldBe Some(SbtTestSelectionFailure.DiscoveryUnavailable)
+        val denied = inUnitOfWork(_.interpret(UnitOfWorkOp.SbtExecAttempt(fixture.target.copy(testScope = SbtTestScope.Admission), SbtOperation.Compile)).toOption.get)
+        denied shouldBe a[SbtExecutionAttempt.AdmissionRejected]
+      } finally _close(fixture.root)
+    }
+
     "compile test classes through one admitted UoW intent without running test bodies" in {
       Given("a host declaration for the fixed TestCompile operation")
       val fixture = _fixture(_result(ProcessExecutionTermination.Exited(0)), compileoperation = SbtOperation.TestCompile)
@@ -1499,6 +1545,7 @@ private final class SbtDslBehavior(val behaviorCore: Behavior.Core) extends Beha
   def fixCheck(target: SbtTarget) = sbt_fix_check(target)
   def compileAttempt(target: SbtTarget) = sbt_compile_attempt(target)
   def testAttempt(target: SbtTarget) = sbt_test_attempt(target)
+  def testAttempt(target: SbtTarget, scope: SbtTestScope) = sbt_test_attempt(target, scope)
   def testOnlyAttempt(target: SbtTarget) = sbt_test_only_attempt(target)
   def fixCheckAttempt(target: SbtTarget) = sbt_fix_check_attempt(target)
   def generic(request: ProcessExecutionRequest) = process_exec(request)
