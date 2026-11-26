@@ -15,4 +15,6 @@ Deliver a reusable typed Domain Rule evaluation mechanism during sm-workflow Pha
 - Coordinate sm-workflow requirements, CNCF release, Textus AI integration and sm-workflow consumption within Phase 25.5. No temporary duplicate rule engine. Value is supported by CNCF; initial sm-workflow use prioritizes Predicate and Selection.
 
 ## Acceptance
-Deterministic fixtures for all three result types, invalid output, decline, authorization, provenance and provider substitution; Phase 32 regressions; reviewed SPI and integration contract. Coordinate live structured-output qualification in Textus AI and end-to-end sm-workflow qualification without requiring live AI for deterministic tests. No measured savings claimed before experiment. The original checklist must be split before execution; full SIE/RDF/embedding/analytics and Entity Space evidence integration belongs to Phase 114.1.
+Deterministic fixtures for all three result types, invalid output, decline, authorization, provenance and provider substitution; Phase 32 regressions; reviewed SPI and integration contract. Coordinate live structured-output qualification in Textus AI and end-to-end sm-workflow qualification without requiring live AI for deterministic tests. No measured savings claimed before experiment. See [acceptance checklist](phase-114-checklist.md); full SIE/RDF/embedding/analytics and Entity Space evidence integration belongs to Phase 114.1.
+
+Textus AI [Phase 9](https://github.com/asami/textus-ai-core/blob/main/docs/phase/phase-9.md) consumes the released SPI.
