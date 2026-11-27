@@ -1,83 +1,44 @@
-# Test selection with standard annotations
+# CNCF test selection and framework bindings
 
 Date: 2026-10-31
-Status: approved target contract; bounded standard discovery/selection source connection authored on 2026-11-06; catalogue migration and qualification pending.
+Status: CNCF supplement to the test policy. The bounded discovery and
+selection connection dates to 2026-11-06. Catalogue migration and qualification
+across consumers remain pending.
 
-## One custom classification
+Follow the [CNCF test policy](test-policy.md#scala-test-classification-and-default-execution)
+for classification, default execution and this repository's test scenarios.
+The [CNCF implementation plan](../phase/test-classification-metadata-plan.md)
+tracks exclusion-reason declarations and migration of the existing tags.
 
-ADMISSION is the only custom test classification label. Retire SMOKE, FOCUSED,
-FULL, HEAVY and ON_DEMAND purpose declarations and their active query values.
-Do not map Slow back into a renamed HEAVY purpose or introduce aliases for retired
-labels. Existing evidence remains readable as historical facts, not active input.
-This supersedes earlier multi-purpose and ON_DEMAND authoring guidance; it does
-not claim that current binaries have already migrated.
+## Metadata and framework selection
 
-| Concern | Authoring / selection |
-| --- | --- |
-| Short basic acceptance coverage | Custom ADMISSION declaration |
-| Ordinary full regression coverage | Normal discovery/selection, no FULL label |
-| Long-running tests | ScalaTest `@org.scalatest.tags.Slow`, or per-test `taggedAs org.scalatest.tagobjects.Slow` |
-| Low-frequency or special-environment suite | ScalaTest `@org.scalatest.DoNotDiscover`; explicit suite selection when required |
-| Changed-scope validation | A concrete focused selection of suites/tests, features and applicable framework tag filters; no FOCUSED label |
-| Duration estimate | Existing expectedDuration metadata, separate from classification |
+CNCF owns validation metadata, discovery, exact operation resolution and
+framework bindings. Preserve the source's classifications and framework facts
+alongside feature, expected duration, execution requirements, logical identity,
+provenance and result attribution. Framework adapters expose the tags and
+annotations they actually observe. The canonical metadata ABI and its
+implemented queries are described in [Validation/Test Metadata V1](validation-test-metadata.md).
 
-FULL and focused may remain user-facing run modes and result-scope descriptions;
-they are not test memberships. A request for heavy tests means selecting the
-standard Slow tag, not consulting another purpose or maintained class list.
-An existing SMOKE case with basic acceptance value may receive ADMISSION after
-coverage assessment; do not bulk relabel every SMOKE case as ADMISSION.
-
-## Selection and prerequisites
-
-Normal test/FULL excludes Slow and does not automatically discover DoNotDiscover
-suites. ADMISSION also retains these ordinary exclusions; an explicit specialized
-selection may include them but must report its actual scope rather than silently
-broadening routine admission. The ADMISSION target remains at most one minute of
-aggregate test-body time, excluding preparation/cleanup; it is not a timeout.
-
-Selecting the Slow tag does not by itself opt into DoNotDiscover suites. Name
-those suites explicitly through the supported framework path; selecting a named
-suite without a case/tag restriction can run all its cases. Focused may select
-Slow tests or explicit-only suites when the affected requirement needs them.
-Record exact selected operations and standard tags, without inventing purpose
-membership. A generic wildcard/feature query must not re-enroll excluded suites.
-Do not add a manual discovery registry to circumvent the framework annotation.
-
-Inspect enough metadata to select before resource preparation; exclude a suite
-before its lifecycle setup can start a service. Keep external-environment and
-Docker suites explicit-only, with actual prerequisites separate from Slow.
-An external-service dependency alone is not a duration classification. SQLite
-and small same-JVM test-owned loopback fixtures remain eligible for normal FULL.
-The annotations do not provision resources or grant execution permissions.
-
-CNCF owns common metadata, discovery/explicit resolution and framework bindings;
-framework adapters retain standard tag/annotation facts rather than a duplicate
-purpose vocabulary. Keep feature, expectedDuration, execution requirements,
-logical identities, provenance and result attribution. Do not force a framework
-without ScalaTest annotations into a fabricated cross-framework HEAVY category.
-Address concrete adapter needs through existing bindings.
+Resolve the selected operations before resource preparation or suite lifecycle
+setup. CNCF consumers use the same framework discovery and exact resolution
+without maintaining a second suite registry. Execution requirements carry
+actual provider and environment prerequisites through the existing capability
+checks. Labels and framework facts describe a test. Execution authority comes
+from those checks and the selected operation.
 
 ## Low-frequency maintenance
 
-DoNotDiscover suites are active execution targets, not disabled tests or archives.
-Keep their explicit invocation, prerequisites, expected results and cleanup usable
-for occasional or selected nighttime execution. Fix environment/specification
-drift when exercised; distinguish actual product regressions and do not weaken
-assertions to hide them. Preserve old results, original failures and repaired
-reruns with their versions. No catalogue-wide continuous qualification, scheduler,
-AI polling or automatic AI repair is required. Reserve scripted for the actual
-sbt scripted mechanism; retain genuine scripts and their execution history.
+For CNCF recovery and acceptance scenarios, retain the exact prerequisites,
+invocation, expected result, cleanup and versioned execution evidence.
+Qualification covers the selected scenario and its actual prerequisites.
 
 ## Migration and evidence
 
-Remove obsolete source/config declarations and update their real call sites,
-CML mapping, generated metadata, framework selection and documentation together.
-No compatibility aliases or silent reinterpretation of obsolete active labels.
-A supported adoption changes future selection; it does not rewrite captured live
-checks, restart Sessions, replay accepted Submit, reset counts or erase evidence.
-Classify former HEAVY/ON_DEMAND cases by their real duration and explicit-only
-needs; they are not mechanically identical to Slow/DoNotDiscover in every case.
-Preserve assertions, workloads and prior accepted commits.
+Coordinate any metadata or selection implementation change with its CML
+mapping, generated inventory and actual consumers. Historical receipts retain
+their original vocabulary, selectors and results. Apply the common authoring
+rule when the source is classified. Label-based invocation and any related ABI
+changes are separate work.
 
 Acceptance: bounded normal/ADMISSION/Slow/explicit-suite/named-focused selection
 checks, class and per-test tags, both annotations together, inherited metadata,
@@ -93,8 +54,9 @@ variants, not custom classifications or replacements for Slow/DoNotDiscover.
 Source metadata owns class/per-test requirements; build.sbt wires shared
 execution and sm-workflow selects/collects variants. Excluded or explicit-only
 tests are not re-enrolled merely because a requested mode matches.
-Coordinate [TM-01..04](../phase/test-execution-mode-plan.md) with TA-C1..5
-without restoring retired purpose labels or claiming either migration complete.
+Coordinate [TM-01..04](../phase/test-execution-mode-plan.md) with the
+[classification migration](../phase/test-classification-metadata-plan.md)
+and qualify the applicable build and discovery paths before claiming delivery.
 
 ## Bounded discovery connection — 2026-11-06
 
@@ -103,9 +65,8 @@ actual discovered operations. Automatic discovery inspects DoNotDiscover before
 suite construction. An exact `explicitSuites` request may enroll the named suite;
 feature/wildcard queries and Slow selection alone do not enroll it. The opt-in
 `standardFramework` query applies ordinary exclusions, with `includeSlow`
-reserved for explicit selected scope. Existing purpose queries remain readable
-legacy behavior during this bounded change; they do not claim the new standard
-FULL semantics or catalogue-wide retirement.
+reserved for explicit selected scope. Existing purpose queries retain the
+behavior of their deployed adapter.
 
 Source-authored executable specifications cover class/per-test Slow,
 DoNotDiscover construction exclusion, exact focused mode variants and real

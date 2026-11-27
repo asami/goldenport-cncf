@@ -1,5 +1,12 @@
 # docs/phase — Engineering Work Management
 
+Test classification metadata planned 2026-11-25:
+[CNCF test classification and legacy tag migration](test-classification-metadata-plan.md)
+records exclusion reasons through the existing validation declarations and
+migrates ManualSpec, TimingSpec and ForkSpec. The catalogue migration is
+planned. CNCF delivered the bounded TCM-05 ADMISSION work in `9c6d86d6`.
+Phase 103 remains closed.
+
 Local CAR expansion reclamation planned 2026-11-24:
 [Phase 116.1](phase-116.1.md) / [checklist](phase-116.1-checklist.md)
 adds bounded automatic retirement of obsolete local CAR expansions after

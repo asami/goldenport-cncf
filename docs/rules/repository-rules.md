@@ -2323,11 +2323,8 @@ def resumeProcessing(): IO[Unit]
 
 # Test Policy
 
-This project follows a documented test policy.
-
-The authoritative specification is defined in:
-
-    docs/spec/test-policy.md
+Follow the [CNCF test policy](../spec/test-policy.md), including
+[classification and default execution](../spec/test-policy.md#scala-test-classification-and-default-execution).
 
 
 ## Rationale for Private and Method‑Local Naming

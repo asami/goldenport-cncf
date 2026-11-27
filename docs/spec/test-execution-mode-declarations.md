@@ -16,9 +16,9 @@ Authorities: [validation metadata](validation-test-metadata.md),
 | build.sbt and shared SBT integration | Bind the selected test/mode to actual target configuration and execute through the framework |
 | sm-workflow | Select tests/mode variants, prepare permitted prerequisites, invoke the normal execution path and collect per-variant results |
 
-No second membership/mode registry is maintained in build.sbt or sm-workflow.
-Classification remains ADMISSION plus standard framework tags/annotations;
-execution mode is an independent dimension, not another purpose/tag taxonomy.
+Use the [CNCF test policy](test-policy.md#scala-test-classification-and-default-execution)
+for classification. CNCF records required execution modes separately and the
+build and sm-workflow consume those declarations through the shared inventory.
 
 ## Declaration semantics
 

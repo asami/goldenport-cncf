@@ -5444,6 +5444,14 @@ Phase 123 for activity-scoped coverage and Phase 108 for actual qualified cluste
 coordination. Whole Phase 108 closure is not a first-route prerequisite, and its
 acceptance is unchanged. This registration starts no Session or implementation.
 
+### 9.71 Test classification metadata and legacy tag migration
+
+The [CNCF follow-up plan](../phase/test-classification-metadata-plan.md) tracks
+the remaining catalogue migration. Record exclusion reasons through the existing validation
+declarations, migrate ManualSpec, TimingSpec and ForkSpec, and preserve the
+ordinary test selection. CNCF delivered the bounded TCM-05 ADMISSION work in
+`9c6d86d6`. Phase 103 stays closed and label-based invocation remains separate.
+
 ## Status Navigation Erratum — 2026-09-28
 
 The `Process Status Pointers` and `Current Phase Status Snapshot` sections

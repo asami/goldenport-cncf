@@ -1,9 +1,7 @@
-Current classification policy (2026-10-31):
-[ADMISSION plus standard annotations](test-selection-standard-annotations.md).
-ADMISSION is the sole custom label. FULL/focused are selection modes; "heavy"
-means standard Slow-tag selection, never a second HEAVY metadata membership.
-Existing framework behavior below is retained while producer/consumer metadata
-migrates. Standard DoNotDiscover explicit-suite operation remains supported.
+For classification and ordinary execution, see
+[Scala test classification and default execution](#scala-test-classification-and-default-execution).
+See [CNCF test selection and framework bindings](test-selection-standard-annotations.md)
+for metadata and discovery responsibilities.
 
 ======================================================================
 Test Specification — Cloud Native Component Framework (CNCF)
@@ -168,35 +166,17 @@ metadata and should be removed from the semantic comparison. Reusing one
 mutable runtime is not sufficient replay evidence.
 
 ----------------------------------------------------------------------
-5. Normal FULL and opt-in HEAVY (updated 2026-10-31)
+5. CNCF regression and explicit acceptance
 ----------------------------------------------------------------------
 
-Normal repository `test` is FULL for its declared selection, not exhaustive Job
-or external-service acceptance. FULL must not depend on an independently running
-server or start/stop Docker containers, including MySQL and PostgreSQL. An
-environment variable enabling live tests must not change this FULL boundary.
-Keep in-memory providers, embedded SQLite and small test-owned loopback HTTP
-servers running in the same JVM in FULL; loopback fixtures own their ports and
-cleanup and must not assume a separately running server. Pure protocol/dialect
-tests using fake providers remain FULL even when they mention an external DB.
-This execution policy does not exclude HEAVY sources from Test compilation or
-claim that normal build dependency resolution is offline.
-
-External-service and Docker dependencies are environment requirements, not
-execution-time classifications. Suites that require a special external-service
-or Docker environment must use ScalaTest's `@DoNotDiscover` and run only when
-explicitly selected. Declare their environment prerequisites separately and
-retain any existing explicit live-environment opt-in; `@DoNotDiscover` does not
-prepare or verify those prerequisites. Use `@Slow` for long-running tests only:
-an external database or Docker dependency alone does not require it. Combine
-`@DoNotDiscover` and `@Slow` when both conditions apply.
-
-Exclude whole environment-dependent suites before lifecycle setup, not after
-contacting the service. Separate live cases from ordinary SQLite/in-memory cases
-into an explicitly selected suite so its `beforeAll` cannot start Docker during
-ordinary validation. A scenario comparing several real database providers stays
-explicit-only as a whole; standalone SQLite coverage stays FULL. Preserve
-real-provider assertions and report unexecuted coverage as NOT RUN.
+Separate CNCF provider integration cases from the ordinary SQLite,
+in-memory and fake-provider cases. Place CNCF suites that require independently
+running MySQL, PostgreSQL or Docker in explicitly named `@DoNotDiscover` suites
+and apply the shared external-service classification. Retain provider opt-ins
+and provision only after suite selection so `beforeAll` cannot start a container
+during ordinary validation. Keep a scenario that compares several real
+database providers together in an explicit suite. Preserve real-provider
+assertions and report unexecuted coverage as NOT RUN.
 
 Job management uses
 five representative suites: InMemoryJobEngineSpec, JobPrimaryResultSpec,
@@ -204,12 +184,11 @@ JobQueryReadModelSpec, DurableJobLifecycleWriteBridgeSpec and JobControlComponen
 These cover submission/completion, primary versus async results, queries, durable
 lifecycle writes and the public control component.
 
-Detailed Job suites that were previously opt-in solely for coverage/budget reasons
-use `@DoNotDiscover`; this does not claim that their cases are long-running.
-Retain the five ordinary representatives. Use `@Slow` only where execution cost
-is long, including the existing 5,000-level and 2,048-level individual cases in
-DurableJobRecordSpec and DurableJobTerminalProjectionSpec. Keep all assertions,
-depths and property counts intact. No manual suite registry is introduced.
+Detailed Job suites that were previously opt-in solely for coverage and budget
+reasons use `@DoNotDiscover`. Retain the five ordinary representatives. Apply Slow
+to the existing 5,000-level and 2,048-level individual cases in DurableJobRecordSpec
+and DurableJobTerminalProjectionSpec for their execution cost. Keep their
+assertions, depths and property counts intact.
 
 Use the standard SBT commands below through the repository's prescribed SBT
 execution route:
@@ -221,33 +200,23 @@ testOnly org.goldenport.cncf.job.DurableJobRecordSpec
 testOnly org.goldenport.cncf.job.DurableJobRecordSpec -- -n org.scalatest.tags.Slow
 ```
 
-`test` excludes Slow as well as the existing ManualSpec/TimingSpec tags.
-`testOnly` retains its existing empty default testOptions: selecting a suite
-without tag arguments runs all its cases, including HEAVY. `-n` selects tagged
-cases; `-l` excludes them. A tag selection may match zero tests, so report actual
-executed counts rather than treating a zero-test success as HEAVY coverage.
-Selecting Slow/HEAVY does not by itself select environment-dependent suites
-annotated with `@DoNotDiscover`.
+`test` also excludes the existing CNCF ManualSpec/TimingSpec tags. The current
+`testOnly` configuration uses empty default test options. A named suite can run
+all its cases when the invocation omits case filters. Report actual executed
+counts for the selected Job coverage.
 
-Run explicitly named affected suites for Job contract changes and the selected detailed Job suites
-for Job-wide acceptance or changes spanning engine/durability/recovery/process
-boundaries. HEAVY is never an automatic follow-up after FULL or every repair.
-Unrelated routine FULL checks need not run it. Report omitted HEAVY as NOT RUN,
-never passed or complete Job coverage. Explicit affected heavy acceptance
-obligations remain applicable. This build policy is not a new metadata ABI or
-an implementation of CNCF Phase 103 discovery.
+Run explicitly named affected suites for Job contract changes and the selected
+detailed Job suites for Job-wide acceptance or changes spanning engine,
+durability, recovery and process boundaries. Report detailed Job acceptance
+as NOT RUN when it was outside the actual selection.
 
 ----------------------------------------------------------------------
 6. ADMISSION labels (updated 2026-10-26)
 ----------------------------------------------------------------------
 
-ADMISSION uses canonical Validation/Test Metadata at the executable specification,
-not a class-name registry or an inference from measured duration. Initial local
-specifications cover metadata interpretation, discovery selection and exact
-operation binding. The target declaration includes only ADMISSION; existing FOCUSED/FULL
-memberships are removed by the coordinated metadata migration.
-This additive classification does not change existing FULL/HEAVY tags, exclusions,
-fixtures, assertions or default `test`/explicit `testOnly` behavior.
+The existing CNCF ADMISSION route reads canonical Validation/Test Metadata at
+the executable specification. Local specifications cover metadata interpretation,
+discovery selection and exact operation binding.
 
 Through the prescribed SBT execution owner, use:
 
@@ -260,8 +229,7 @@ The first command inspects the selected suite/operation arguments. The second
 uses the same canonical discovery/composition/query and standard `testOnly` with
 exact operation names. Adding a labelled specification requires no second manual
 registration. Intentional DoNotDiscover helpers stay excluded. An empty selection
-does not constitute a successful acceptance run. These commands do not migrate
-legacy FULL/HEAVY selection to a new mechanism.
+does not constitute a successful acceptance run.
 
 Existing runnable metadata fixtures with valid ADMISSION declarations also follow
 their declared membership. Deliberately malformed discovery fixtures can produce
@@ -313,3 +281,25 @@ specifications when the contract is promoted to design/spec.
   CNCF-owned async ordering
 
 ======================================================================
+
+## Scala Test Classification and Default Execution
+
+CNCF defines its test policy here under [Test Policy in RULE.md](../../RULE.md#test-policy)
+while the shared ai-directive classification section awaits adoption.
+
+Ordinary `sbt test` excludes Slow tests, `@DoNotDiscover` suites and the legacy
+ManualSpec and TimingSpec tags. Routine `ADMISSION` selects short local
+acceptance cases and applies the ordinary exclusions. Resolve selection before
+fixture setup. Explicitly named suites can run with their declared prerequisites.
+Keep real external services out of ordinary setup. In-memory, embedded SQLite
+and small test-owned loopback fixtures remain eligible for ordinary runs.
+
+Use ScalaTest Slow for costly or real external-service tests and
+`@DoNotDiscover` for suites that require deliberate selection. Use both when
+both reasons apply. Record actual prerequisites separately and configure
+process isolation in the build. The
+[migration plan](../phase/test-classification-metadata-plan.md) tracks how to
+record `HEAVY`, `EXTERNAL_SERVICE`, `MANUAL`, `TIMING` and `FORK` as reasons
+through the existing suite and case declaration providers. The
+[implemented V1 purpose vocabulary](validation-test-metadata.md#explicit-only-suites-and-duration)
+continues to apply to the existing ABI.

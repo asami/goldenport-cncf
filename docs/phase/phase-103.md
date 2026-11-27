@@ -197,6 +197,10 @@ that plan nor duplicates its policy or test declarations in another registry.
 
 ## Follow-up: standard annotations and ADMISSION only — 2026-10-31
 
+The [test classification and legacy tag migration plan](test-classification-metadata-plan.md)
+records the later shared authoring decision and owns the CNCF migration.
+The original follow-up below records the earlier plan.
+
 This is a new bounded follow-up, not a reopening of closed Phase 103 or its
 accepted checklist. Owner: sm-workflow development, with CNCF producer work first.
 Contract: [standard annotations](../spec/test-selection-standard-annotations.md).

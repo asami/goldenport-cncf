@@ -1,9 +1,7 @@
-> Migration target (2026-10-31): [standard test annotations](test-selection-standard-annotations.md)
-> adopts ADMISSION as the sole custom classification. The current implementation
-> has completed the first ON_DEMAND-removal increment; removal of the other legacy
-> purpose values and coordinated consumer adoption remain pending. Existing ABI
-> examples below describe that retained implementation, not new authoring guidance
-> or acceptance of TA-C1–5.
+> Test authoring follows the [CNCF test policy](test-policy.md#scala-test-classification-and-default-execution).
+> The examples below describe the implemented V1 ABI. See
+> [CNCF test selection and framework bindings](test-selection-standard-annotations.md)
+> for consumer integration and qualification.
 
 # Validation/Test Metadata V1
 
@@ -552,17 +550,12 @@ suite registry or sm-workflow time-budget policy belongs to this ABI.
 
 ## Explicit-only suites and duration
 
-The canonical purposes remain SMOKE, FOCUSED, ADMISSION, FULL and HEAVY.
-Use ScalaTest `@DoNotDiscover` for suites requiring explicit selection, including
-special external environments. Use `@Slow` only for long-running work; combine
-it with `@DoNotDiscover` when both apply. No custom explicit-only purpose or alias
-is accepted at the CML boundary.
+V1 accepts SMOKE, FOCUSED, ADMISSION, FULL and HEAVY as purpose values. The
+shared authoring rule does not change that wire vocabulary.
 
-Canonical metadata inventory and exact reference resolution preserve annotated
-operations, requirements and provenance. Inventory presence is not execution
-selection. Automatic execution adapters exclude `@DoNotDiscover` before lifecycle
-setup, including FULL, ADMISSION and HEAVY. Standard explicit suite selection can
-run the annotated suite after the caller supplies its documented prerequisites.
-Explicitly selecting a harmless fixture verifies the path without running live
-DB tests. Mixed ordinary/external suites are split so embedded providers stay
-ordinary. Reserve `scripted` for the actual sbt mechanism.
+The metadata inventory and exact reference resolution preserve annotated
+operations, requirements and provenance independently of execution selection.
+Automatic execution adapters apply framework exclusions before lifecycle
+setup. Exact suite resolution can include an explicit-only suite and retains its
+execution requirements. Qualify this resolution with a harmless fixture when
+the test contract permits it.
